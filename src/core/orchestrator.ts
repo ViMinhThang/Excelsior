@@ -16,7 +16,9 @@ import { reflectAndSynthesize } from "../subagents/reflection.js";
 import { globalMemory } from "./memory-manager.js";
 
 export async function orchestrateReview(diff: string, context: string) {
-  globalMemory.addObservation("Orchestrator", `Starting review for diff length: ${diff.length}`);
+  // Reviews should always start in PLAN mode to gather context
+  globalMemory.setMode("PLAN");
+  globalMemory.addObservation("Orchestrator", `Starting review phase for diff (length: ${diff.length})`);
   
   // Parallel execution of subagents
   const [review, lint, security] = await Promise.all([

@@ -12,8 +12,10 @@ export interface Observation {
 export class MemoryManager {
   private db: Database.Database | null = null;
   private readonly dbPath: string;
+  public readonly workspaceRoot: string;
 
   constructor(workspaceRoot: string) {
+    this.workspaceRoot = workspaceRoot;
     this.dbPath = path.join(workspaceRoot, ".excelsior", "memory.db");
   }
 

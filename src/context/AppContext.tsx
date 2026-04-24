@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
-import { PullRequest } from "../core/github-client.ts";
+import { PullRequest } from "../core/github-client.js";
 
 export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "API_KEY_INPUT" | "PR_LIST";
 

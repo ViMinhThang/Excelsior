@@ -7,11 +7,11 @@ import { promisify } from "node:util";
 import { globalMemory } from "./memory-manager.js";
 
 const execAsync = promisify(exec);
-const cwd = process.cwd();
 
 function resolveWithinCwd(maybeRelative: string): string {
-  const resolved = path.resolve(cwd, maybeRelative);
-  if (!resolved.startsWith(path.resolve(cwd))) {
+  const root = globalMemory.workspaceRoot;
+  const resolved = path.resolve(root, maybeRelative);
+  if (!resolved.startsWith(path.resolve(root))) {
     throw new Error(`Path escapes working directory: ${maybeRelative}`);
   }
   return resolved;

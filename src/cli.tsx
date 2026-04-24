@@ -2,18 +2,19 @@ import React, { useState } from "react";
 import { render, Box, Text, useApp, useInput } from "ink";
 import SelectInput from "ink-select-input";
 import TextInput from "ink-text-input";
-import { saveConfig } from "./config.ts";
+import { saveConfig } from "./config.js";
 
-import { MainView } from "./components/MainView.tsx";
-import { SettingsView } from "./components/SettingsView.tsx";
-import { ProviderSelectView } from "./components/ProviderSelectView.tsx";
-import { ApiKeyInputView } from "./components/ApiKeyInputView.tsx";
-import { PRListView } from "./components/PRListView.tsx";
-import { getRepoInfo } from "./utils/git-utils.ts";
-import { fetchPRs, PullRequest, GitHubClient } from "./core/github-client.ts";
-import { orchestrateReview } from "./core/orchestrator.ts";
+import { MainView } from "./components/MainView.js";
+import { SettingsView } from "./components/SettingsView.js";
+import { ProviderSelectView } from "./components/ProviderSelectView.js";
+import { ApiKeyInputView } from "./components/ApiKeyInputView.js";
+import { PRListView } from "./components/PRListView.js";
+import { getRepoInfo } from "./utils/git-utils.js";
+import { fetchPRs, GitHubClient } from "./core/github-client.js";
+import { orchestrateReview } from "./core/orchestrator.js";
 
-import { AppProvider, useAppContext, View } from "./context/AppContext.tsx";
+import { AppProvider, useAppContext } from "./context/AppContext.js";
+import { globalMemory } from "./core/memory-manager.js";
 
 // --- Main App ---
 
@@ -157,7 +158,7 @@ const App = () => (
   </AppProvider>
 );
 
-import { globalMemory } from "./core/memory-manager.ts";
+
 
 export async function startCLI() {
   console.clear();
