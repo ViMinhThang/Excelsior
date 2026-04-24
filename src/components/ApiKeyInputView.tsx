@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
 
 import { useAppContext } from "../context/AppContext.tsx";
@@ -9,7 +9,13 @@ export const ApiKeyInputView = ({
 }: {
   onSubmit: (val: string) => void;
 }) => {
-  const { apiKey, setApiKey } = useAppContext();
+  const { apiKey, setApiKey, setView } = useAppContext();
+
+  useInput((input, key) => {
+    if (key.escape) {
+      setView("PROVIDER_SELECT");
+    }
+  });
 
   return (
   <Box flexDirection="column">
@@ -22,7 +28,7 @@ export const ApiKeyInputView = ({
     </Box>
     <Box marginTop={1}>
       <Text dimColor>
-        (Press Enter to save, or use Back in previous menus to cancel)
+        (Press Enter to save, or press Escape to go back)
       </Text>
     </Box>
   </Box>

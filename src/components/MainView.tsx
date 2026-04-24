@@ -1,10 +1,12 @@
-import React, { useState } from "react";
-import { Box, Text, useInput } from "ink";
-import SelectInput from "ink-select-input";
-import TextInput from "ink-text-input";
+import React from "react";
+import { Box, Text } from "ink";
 import { LoadingBox } from "./LoadingBox.tsx";
+import { Header } from "./MainView/Header.tsx";
+import { WorkspaceInfo } from "./MainView/WorkspaceInfo.tsx";
+import { CommandBar } from "./MainView/CommandBar.tsx";
 
 import { useAppContext } from "../context/AppContext.tsx";
+import { useCommandInput } from "../hooks/useCommandInput.ts";
 
 export const MainView = ({
   onSelect,
@@ -13,73 +15,29 @@ export const MainView = ({
   onSelect: (item: any) => void;
   onCommandSubmit: (val: string) => void;
 }) => {
-  const { command, setCommand, workspace, isLoading, loadingMessage } = useAppContext();
-  const [isInputFocused, setIsInputFocused] = useState(true);
-
-  useInput((input, key) => {
-    if (key.tab) {
-      setIsInputFocused((prev) => !prev);
-    }
-  });
+  const { isLoading } = useAppContext();
+  const commandInput = useCommandInput(onCommandSubmit);
 
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1} flexDirection="column">
-        <Text color="red">
-          {`
- ███████╗██╗  ██╗ ██████╗███████╗██╗     ███████╗██╗ ██████╗ ██████╗ 
- ██╔════╝╚██╗██╔╝██╔════╝██╔════╝██║     ██╔════╝██║██╔═══██╗██╔══██╗
- █████╗   ╚███╔╝ ██║     █████╗  ██║     ███████╗██║██║   ██║██████╔╝
- ██╔══╝   ██╔██╗ ██║     ██╔══╝  ██║     ╚════██║██║██║   ██║██╔══██╗
- ███████╗██╔╝ ██╗╚██████╗███████╗███████╗███████║██║╚██████╔╝██║  ██║
- ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚══════╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═╝
-          `}
-        </Text>
-        <Box marginTop={1}>
-          <Text dimColor>Target: </Text>
-          <Text color="cyan">{workspace}</Text>
-        </Box>
-      </Box>
+      <Header />
+      <WorkspaceInfo />
 
       {isLoading ? (
         <Box marginTop={1}>
           <LoadingBox />
         </Box>
       ) : (
-        <>
-          <Box
-            marginTop={1}
-            borderStyle="round"
-            paddingX={1}
-            flexDirection="row"
-          >
-            <Text color="red">❯ </Text>
-            <Text color="white">
-              <TextInput
-                value={command}
-                onChange={setCommand}
-                onSubmit={onCommandSubmit}
-                focus={isInputFocused}
-              />
-            </Text>
-          </Box>
-
-          <Box marginTop={1}>
-            <SelectInput
-              items={[{ label: "[Ctrl+S] Settings", value: "settings" }]}
-              onSelect={(item) => {
-                setIsInputFocused(false);
-                onSelect(item);
-              }}
-              isFocused={!isInputFocused}
-            />
-          </Box>
-        </>
+        <CommandBar
+          {...commandInput}
+          onCommandSubmit={onCommandSubmit}
+          onMenuSelect={onSelect}
+        />
       )}
 
       <Box marginTop={1}>
         <Text dimColor>
-          (Type command or press Ctrl+S, use Tab to switch focus)
+          Use <Text color="yellow">Tab</Text> to switch between input and menu
         </Text>
       </Box>
     </Box>

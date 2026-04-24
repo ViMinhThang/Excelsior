@@ -1,21 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Box, Text } from "ink";
-
+import { useSpinner } from "../hooks/useSpinner.ts";
 import { useAppContext } from "../context/AppContext.tsx";
-
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 export const LoadingBox = () => {
   const { loadingMessage } = useAppContext();
-  const [frameIndex, setFrameIndex] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setFrameIndex((prev) => (prev + 1) % SPINNER_FRAMES.length);
-    }, 80);
-
-    return () => clearInterval(timer);
-  }, []);
+  const spinner = useSpinner();
 
   return (
     <Box
@@ -26,7 +16,7 @@ export const LoadingBox = () => {
       flexDirection="row"
     >
       <Text color="red" bold>
-        {SPINNER_FRAMES[frameIndex]}
+        {spinner}
       </Text>
       <Box marginLeft={2}>
         <Text color="white">{loadingMessage || "Working..."}</Text>
