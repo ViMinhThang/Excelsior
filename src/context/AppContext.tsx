@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from "react";
 import { PullRequest } from "../core/github-client.js";
 
-export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "API_KEY_INPUT" | "PR_LIST";
+export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "API_KEY_INPUT" | "GITHUB_TOKEN_INPUT" | "PR_LIST";
 
 interface AppState {
   view: View;
@@ -12,6 +12,7 @@ interface AppState {
   pullRequests: PullRequest[];
   command: string;
   apiKey: string;
+  mode: "ACT" | "PLAN";
 }
 
 interface AppContextType extends AppState {
@@ -23,6 +24,7 @@ interface AppContextType extends AppState {
   setPullRequests: (prs: PullRequest[]) => void;
   setCommand: (cmd: string) => void;
   setApiKey: (key: string) => void;
+  setMode: (mode: "ACT" | "PLAN") => void;
   showStatus: (msg: string, duration?: number) => void;
 }
 
@@ -37,6 +39,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [pullRequests, setPullRequests] = useState<PullRequest[]>([]);
   const [command, setCommand] = useState("");
   const [apiKey, setApiKey] = useState("");
+  const [mode, setMode] = useState<"ACT" | "PLAN">("ACT");
 
   const showStatus = (msg: string, duration: number = 3000) => {
     setStatusMessage(msg);
@@ -52,6 +55,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     pullRequests, setPullRequests,
     command, setCommand,
     apiKey, setApiKey,
+    mode, setMode,
     showStatus,
   };
 

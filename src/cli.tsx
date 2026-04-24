@@ -1,156 +1,10 @@
-import React, { useState } from "react";
-import { render, Box, Text, useApp, useInput } from "ink";
-import SelectInput from "ink-select-input";
-import TextInput from "ink-text-input";
-import { saveConfig } from "./config.js";
+import React from "react";
+import { render } from "ink";
+import { AppProvider } from "./context/AppContext.js";
+import { AppContent } from "./App.js";
+import { globalMemory } from "./mem/memory-manager.js";
 
-import { MainView } from "./components/MainView.js";
-import { SettingsView } from "./components/SettingsView.js";
-import { ProviderSelectView } from "./components/ProviderSelectView.js";
-import { ApiKeyInputView } from "./components/ApiKeyInputView.js";
-import { PRListView } from "./components/PRListView.js";
-import { getRepoInfo } from "./utils/git-utils.js";
-import { fetchPRs, GitHubClient } from "./core/github-client.js";
-import { orchestrateReview } from "./core/orchestrator.js";
 
-import { AppProvider, useAppContext } from "./context/AppContext.js";
-import { globalMemory } from "./core/memory-manager.js";
-
-// --- Main App ---
-
-const AppContent = () => {
-  const { exit } = useApp();
-  const {
-    view, setView,
-    command, setCommand,
-    workspace,
-    isLoading, setIsLoading,
-    loadingMessage, setLoadingMessage,
-    pullRequests, setPullRequests,
-    statusMessage, setStatusMessage,
-    showStatus,
-    setApiKey,
-  } = useAppContext();
-
-  useInput((input, key) => {
-    if (view === "MAIN" && key.ctrl && input === "s") {
-      setView("SETTINGS");
-    }
-  });
-
-  const handleMainMenuSelect = (item: { value: string }) => {
-    if (item.value === "settings") {
-      setView("SETTINGS");
-    }
-  };
-
-  const handleCommandSubmit = async (value: string) => {
-    if (value.trim() === "/pr" || value.trim().startsWith("/review")) {
-      setIsLoading(true);
-      setLoadingMessage("Detecting repository...");
-      
-      const repoInfo = getRepoInfo();
-      if (!repoInfo) {
-        showStatus("Error: Could not detect GitHub repository.");
-        setIsLoading(false);
-        setCommand("");
-        return;
-      }
-
-      setLoadingMessage(`Fetching PRs for ${repoInfo.owner}/${repoInfo.repo}...`);
-      try {
-        const prs = await fetchPRs(repoInfo.owner, repoInfo.repo);
-        setPullRequests(prs);
-        setView("PR_LIST");
-      } catch (error: any) {
-        showStatus(`Error: ${error.message}`);
-      } finally {
-        setIsLoading(false);
-        setCommand("");
-      }
-    } else {
-      showStatus(`Unknown command: ${value}`);
-      setCommand("");
-    }
-  };
-
-  const handlePRSelect = async (pr: any) => {
-    setIsLoading(true);
-    setLoadingMessage(`Reviewing PR #${pr.number}: ${pr.title}...`);
-    setView("MAIN");
-
-    try {
-      const repoInfo = getRepoInfo();
-      if (!repoInfo) throw new Error("Could not detect repo info");
-
-      const token = process.env.GITHUB_TOKEN || "";
-      const client = new GitHubClient(token);
-      const prData = await client.getPullRequest(repoInfo.owner, repoInfo.repo, pr.number);
-
-      const result = await orchestrateReview(prData.diff, prData.body);
-      showStatus(`Review complete for PR #${pr.number}: ${result.text}`);
-    } catch (error: any) {
-      showStatus(`Error during review: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSettingsSelect = (item: { value: string }) => {
-    if (item.value === "provider") {
-      setView("PROVIDER_SELECT");
-    } else if (item.value === "back") {
-      setView("MAIN");
-    }
-  };
-
-  const handleProviderSelect = (item: { value: string }) => {
-    if (item.value === "google") {
-      setView("API_KEY_INPUT");
-    } else if (item.value === "back") {
-      setView("SETTINGS");
-    }
-  };
-
-  const handleApiKeySubmit = (value: string) => {
-    saveConfig({ GEMINI_API_KEY: value });
-    showStatus("API Key saved successfully!");
-    setView("MAIN");
-    setCommand("");
-  };
-
-  return (
-    <Box flexDirection="column" padding={1}>
-      {statusMessage && (
-        <Box marginBottom={1}>
-          <Text color="green">{statusMessage}</Text>
-        </Box>
-      )}
-
-      {view === "MAIN" && (
-        <MainView
-          onSelect={handleMainMenuSelect}
-          onCommandSubmit={handleCommandSubmit}
-        />
-      )}
-      {view === "SETTINGS" && <SettingsView onSelect={handleSettingsSelect} />}
-      {view === "PROVIDER_SELECT" && (
-        <ProviderSelectView onSelect={handleProviderSelect} />
-      )}
-      {view === "API_KEY_INPUT" && (
-        <ApiKeyInputView
-          onSubmit={handleApiKeySubmit}
-        />
-      )}
-      {view === "PR_LIST" && (
-        <PRListView
-          onSelect={handlePRSelect}
-          onBack={() => setView("MAIN")}
-        />
-      )}
-    </Box>
-  );
-};
 
 const App = () => (
   <AppProvider>
@@ -158,14 +12,20 @@ const App = () => (
   </AppProvider>
 );
 
-
-
 export async function startCLI() {
   console.clear();
-  await globalMemory.init();
-  render(<App />);
+  
+  try {
+    // Initialize long-term memory (SQLite)
+    await globalMemory.init();
+    
+    // Render the TUI
+    render(<App />);
+  } catch (error) {
+    console.error("Failed to start Excelsior CLI:", error);
+    process.exit(1);
+  }
 }
 
-startCLI().catch(err => {
-  console.error("Failed to start CLI:", err);
-});
+// Start the application
+startCLI();

@@ -13,7 +13,7 @@ import { reviewCode } from "../subagents/code-reviewer.js";
 import { lintCode } from "../subagents/linter.js";
 import { auditSecurity } from "../subagents/security.js";
 import { reflectAndSynthesize } from "../subagents/reflection.js";
-import { globalMemory } from "./memory-manager.js";
+import { globalMemory } from "../mem/memory-manager.js";
 
 export async function orchestrateReview(diff: string, context: string) {
   // Reviews should always start in PLAN mode to gather context

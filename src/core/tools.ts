@@ -4,7 +4,7 @@ import { exec } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
-import { globalMemory } from "./memory-manager.js";
+import { globalMemory } from "../mem/memory-manager.js";
 
 const execAsync = promisify(exec);
 

@@ -1,4 +1,6 @@
 import { Octokit } from "octokit";
+import { execSync } from "node:child_process";
+import { loadConfig } from "../config.js";
 
 export interface PullRequestData {
   owner: string;
@@ -16,7 +18,11 @@ export class GitHubClient {
     this.octokit = new Octokit({ auth: token });
   }
 
-  async getPullRequest(owner: string, repo: string, pull_number: number): Promise<PullRequestData> {
+  async getPullRequest(
+    owner: string,
+    repo: string,
+    pull_number: number,
+  ): Promise<PullRequestData> {
     const { data: pr } = await this.octokit.rest.pulls.get({
       owner,
       repo,
@@ -42,7 +48,12 @@ export class GitHubClient {
     };
   }
 
-  async postComment(owner: string, repo: string, pull_number: number, body: string) {
+  async postComment(
+    owner: string,
+    repo: string,
+    pull_number: number,
+    body: string,
+  ) {
     await this.octokit.rest.issues.createComment({
       owner,
       repo,
@@ -51,7 +62,15 @@ export class GitHubClient {
     });
   }
 
-  async postReviewComment(owner: string, repo: string, pull_number: number, commit_id: string, path: string, line: number, body: string) {
+  async postReviewComment(
+    owner: string,
+    repo: string,
+    pull_number: number,
+    commit_id: string,
+    path: string,
+    line: number,
+    body: string,
+  ) {
     await this.octokit.rest.pulls.createReviewComment({
       owner,
       repo,
@@ -86,8 +105,43 @@ export interface PullRequest {
   status: string;
 }
 
-export async function fetchPRs(owner: string, repo: string): Promise<PullRequest[]> {
-  const token = process.env.GITHUB_TOKEN || "";
+export interface RepoInfo {
+  owner: string;
+  repo: string;
+}
+
+export function getRepoInfo(): RepoInfo | null {
+  try {
+    const remoteUrl = execSync("git remote get-url origin", {
+      encoding: "utf8",
+    }).trim();
+    const match = remoteUrl.match(/github\.com[/:]([^/]+)\/([^.]+)(\.git)?/);
+
+    if (match) {
+      return {
+        owner: match[1],
+        repo: match[2],
+      };
+    }
+  } catch (error) {
+    // Git might not be initialized or origin might not exist
+  }
+  return null;
+}
+
+export async function fetchPRs(
+  owner: string,
+  repo: string,
+): Promise<PullRequest[]> {
+  const config = loadConfig();
+  const token = config.GITHUB_TOKEN || process.env.GITHUB_TOKEN || "";
+
+  if (!token) {
+    throw new Error(
+      "GitHub Token not found. Please set GITHUB_TOKEN in your .env or via settings.",
+    );
+  }
+
   const client = new GitHubClient(token);
   return client.fetchPRs(owner, repo);
 }

@@ -2,7 +2,7 @@ import { google } from "@ai-sdk/google";
 import { generateText, stepCountIs } from "ai";
 import { loadConfig } from "../config.js";
 import { tools } from "./tools.js";
-import { globalMemory } from "./memory-manager.js";
+import { globalMemory } from "../mem/memory-manager.js";
 import { ACT_MODE_INSTRUCTIONS, PLAN_MODE_INSTRUCTIONS } from "./prompts.js";
 
 export type ProviderName = "gemini";

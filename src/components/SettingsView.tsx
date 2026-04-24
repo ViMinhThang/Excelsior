@@ -11,6 +11,7 @@ export const SettingsView = ({ onSelect }: { onSelect: (item: any) => void }) =>
       <SelectInput
         items={[
           { label: "Provider", value: "provider" },
+          { label: "GitHub Token", value: "github_token" },
           { label: "Back", value: "back" },
         ]}
         onSelect={onSelect}

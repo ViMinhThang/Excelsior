@@ -1,7 +1,7 @@
 import React from "react";
 import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
-import { PullRequest } from "../core/github-client.ts";
+import { PullRequest } from "../core/github-client.js";
 import { useAppContext } from "../context/AppContext.tsx";
 
 export const PRListView = ({

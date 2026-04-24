@@ -14,6 +14,7 @@ import { z } from "zod";
 
 const configSchema = z.object({
   GEMINI_API_KEY: z.string().optional(),
+  GITHUB_TOKEN: z.string().optional(),
 });
 
 export type Config = z.infer<typeof configSchema>;
