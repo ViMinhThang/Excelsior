@@ -1,10 +1,14 @@
 /**
  * @file src/subagents/security.ts
- * @description The Security subagent.
- * @why To prevent known vulnerabilities from being merged by automatically checking new dependencies or insecure coding patterns.
- * @how Parses `package.json` diffs and queries a CVE Database (OSV/npm audit) tool, and flags insecure patterns in the code.
- * @input The PR diff, focusing heavily on dependency files and sensitive logic areas.
- * @output A list of high-priority security warnings or vulnerabilities.
+ * @description Security Audit subagent.
+ * @why To specifically look for vulnerabilities like SQL injection, XSS, or hardcoded secrets.
+ * @how Performs a security-focused pass over the changes, looking for dangerous patterns.
+ * @input The parsed PR diff and environment context.
+ * @output A list of security vulnerabilities and mitigation steps.
+ * 
+ * @status PLACEHOLDER - Implementation pending.
  */
 
-// Implementation will go here...
+export async function auditSecurity(diff: string) {
+  return { text: "Security audit placeholder output." };
+}

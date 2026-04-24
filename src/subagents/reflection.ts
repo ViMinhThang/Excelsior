@@ -1,10 +1,14 @@
 /**
  * @file src/subagents/reflection.ts
- * @description The Reflection/Critic subagent.
- * @why To act as the final quality gate. It ensures the aggregated feedback from all subagents is cohesive, non-contradictory, and polite.
- * @how Takes the combined raw findings of the code-reviewer, linter, and security subagents, evaluates them against review guidelines, and generates the final polished response.
- * @input The raw, aggregated array of findings from all previous subagents.
- * @output The final, polished markdown string that will be posted as the PR comment.
+ * @description The Reflection and Synthesis subagent.
+ * @why To avoid duplicate or contradictory advice from different subagents and provide a unified, high-quality review.
+ * @how Takes the outputs from all other subagents, resolves conflicts, and summarizes the findings.
+ * @input Responses from CodeReviewer, Linter, and Security subagents.
+ * @output A single, polished review comment.
+ * 
+ * @status PLACEHOLDER - Implementation pending.
  */
 
-// Implementation will go here...
+export async function reflectAndSynthesize(results: string[]) {
+  return { text: "Reflection placeholder output." };
+}

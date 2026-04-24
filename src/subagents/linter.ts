@@ -1,10 +1,14 @@
 /**
  * @file src/subagents/linter.ts
- * @description The Linter subagent.
- * @why To handle stylistic, syntax, and standard coding practices automatically, saving the main LLM context for deeper semantic review.
- * @how Invokes the ESLint tool programmatically and translates its raw JSON output into natural language feedback.
- * @input The list of changed files and the PR diff.
- * @output A structured list of stylistic and formatting comments.
+ * @description Stylistic and Linting subagent.
+ * @why To ensure code consistency and adherence to style guides without cluttering the main logic review.
+ * @how Checks the diff for formatting issues, naming convention violations, and common linter warnings.
+ * @input The parsed PR diff.
+ * @output A list of stylistic suggestions and formatting fixes.
+ * 
+ * @status PLACEHOLDER - Implementation pending.
  */
 
-// Implementation will go here...
+export async function lintCode(diff: string) {
+  return { text: "Linter placeholder output." };
+}

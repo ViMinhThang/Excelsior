@@ -1,69 +1,77 @@
-# AI Code Review & Coding Agent
+# ░▒▓ EXCELSIOR ▓▒░
 
-This project is an advanced AI Code Review Agent designed with a **hybrid architecture**. It can run automatically as a GitHub Action whenever a Pull Request is opened, or interactively as a local Terminal User Interface (TUI).
+### AI Code Review & Coding Agent
 
-The agent uses a **multi-agent orchestration pattern**, delegating tasks to specialized subagents (Linter, Security, Code Review) before using a Reflection pattern to polish the final PR comment.
+Excelsior is an advanced AI Code Review Agent designed with a **hybrid architecture**. It can run automatically as a GitHub Action or interactively as a high-performance.
+
+---
+
+## ⚡ Key Features
+
+- **Ink-Powered TUI**: A beautiful, React-based terminal interface with smooth animations and layout management.
+- **Global Portability**: Configuration is stored globally at `~/.excelsior`, allowing you to use the tool across any repository without re-authenticating.
+- **Command Intelligence**: Interactive command bar with real-time suggestions and arrow-key navigation (e.g., `/pr`, `/review`).
+- **Workspace Awareness**: Automatically detects your current git repository, owner, and open Pull Requests.
+- **Modular Architecture**: Built using React Context API and custom hooks for highly maintainable and performant code.
 
 ---
 
 ## 📂 Folder Structure
 
 ```text
-.
-├── .github/workflows/   # CI/CD pipelines (e.g., ai-review.yml)
-├── src/                 
-│   ├── action.ts        # Entry point for the GitHub Action (triggered by CI)
-│   ├── cli.ts           # Entry point for the local TUI REPL
-│   ├── core/            # Shared logic between Action and CLI modes
-│   │   ├── github-client.ts # Abstraction for GitHub API calls
-│   │   ├── orchestrator.ts  # Main logic that dispatches work to subagents
-│   │   └── provider.ts      # Vercel AI SDK LLM initialization
-│   ├── subagents/       # The specialized AI workers
-│   │   ├── code-reviewer.ts # Reviews code semantics and intent
-│   │   ├── linter.ts        # Uses ESLint for style checks
-│   │   ├── security.ts      # Uses CVE DB for vulnerability checks
-│   │   └── reflection.ts    # Final critic that polishes aggregated output
-│   ├── tools/           # Concrete implementations of external tools
-│   │   ├── eslint-runner.ts # Programmatic wrapper around ESLint
-│   │   ├── cvedb-client.ts  # OSV/GitHub Advisory API client
-│   │   └── read-file.ts     # Utility for the AI to read full files locally
-│   └── config.ts        # Environment variables and config validation
-├── package.json
-└── tsconfig.json
+src/
+├── components/          # React (Ink) TUI components
+│   ├── MainView/        # Header, CommandBar, WorkspaceInfo
+│   ├── LoadingBox.tsx   # Animated spinner component
+│   └── PRListView.tsx   # Interactive PR selection list
+├── context/             # Global state (AppContext)
+├── hooks/               # Custom logic (useCommandInput, useSpinner)
+├── core/                # Shared logic (GitHub Client, Orchestrator)
+├── utils/               # Git detection and helper utilities
+├── constants.ts         # Centralized command and UI definitions
+├── config.ts            # Global configuration management
+└── cli.tsx              # TUI Entry point
 ```
-
----
-
-## 📦 NPM Packages Used
-
-### Core Dependencies
-- **`@actions/core` & `@actions/github`**: Native GitHub SDKs used in `src/action.ts` and `src/core/github-client.ts` to get PR diffs and post comments securely inside GitHub Actions.
-- **`ai` (Vercel AI SDK)**: Used in `src/core/provider.ts` and subagents to provide a unified API to swap between different LLM providers (OpenAI, Anthropic, etc.) without rewriting code.
-- **`zod`**: Used across the project to guarantee that the LLM returns properly structured JSON and to validate environment variables (`src/config.ts`).
-- **`@clack/prompts`**: Used in `src/cli.ts` to build the interactive, visually pleasing Terminal UI REPL.
-
-### Development Dependencies
-- **`typescript` & `@types/node`**: For strongly typed development.
-- **`ts-node`**: Used to execute the `src/cli.ts` file locally without needing a build step.
-- **`@vercel/ncc`**: Used to compile the entire project (including `node_modules`) into a single file for the GitHub Action deployment.
-- **`eslint` & plugins**: The linter used both for our own code quality, and invoked programmatically by `src/tools/eslint-runner.ts`.
 
 ---
 
 ## 🚀 Getting Started
 
 1. **Install Dependencies**
+
    ```bash
    npm install
    ```
 
 2. **Run Local TUI**
+
    ```bash
    npm run start:cli
    ```
-   *Note: Ensure you have `GITHUB_TOKEN` and your LLM API keys set in your environment variables.*
 
-3. **Build GitHub Action**
-   ```bash
-   npm run build
-   ```
+   _Note: On first run, go to Settings to set your Gemini API Key. It will be saved globally._
+
+3. **Commands**
+   - Type `/pr` to list open Pull Requests for the current repo.
+   - Use `Tab` to switch focus between the command input and the settings menu.
+   - Use `Ctrl+S` as a shortcut to jump to Settings from anywhere.
+
+---
+
+## 📦 Core Technology Stack
+
+- **[Ink](https://github.com/vadimdemedes/ink)**: React for Interactive Command-line Apps.
+- **[tsx](https://github.com/privatenumber/tsx)**: Fast TypeScript execution (ESM support).
+- **[Zod](https://github.com/colinhacks/zod)**: Schema validation for global configuration.
+- **GitHub API**: Public and authenticated access to repository data.
+
+---
+
+## 🛠️ Development
+
+Excelsior is built with **Clean Code** and **React Best Practices**:
+
+- **SRP**: Every component has a single responsibility.
+- **Hooks**: UI logic is extracted into testable custom hooks.
+- **Context**: State management eliminates prop drilling.
+- **Performance**: Memoized components to ensure smooth 60fps terminal interactions.

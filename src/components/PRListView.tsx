@@ -14,7 +14,7 @@ export const PRListView = ({
   const { pullRequests: prs } = useAppContext();
   const items = [
     ...prs.map((pr) => ({
-      label: `[#${pr.number}] ${pr.title} (${pr.user.login})`,
+      label: `[#${pr.number}] ${pr.title} (${pr.author})`,
       value: pr.number.toString(),
       pr: pr,
     })),

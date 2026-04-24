@@ -10,7 +10,8 @@ import { ProviderSelectView } from "./components/ProviderSelectView.tsx";
 import { ApiKeyInputView } from "./components/ApiKeyInputView.tsx";
 import { PRListView } from "./components/PRListView.tsx";
 import { getRepoInfo } from "./utils/git-utils.ts";
-import { fetchPRs, PullRequest } from "./core/github-client.ts";
+import { fetchPRs, PullRequest, GitHubClient } from "./core/github-client.ts";
+import { orchestrateReview } from "./core/orchestrator.ts";
 
 import { AppProvider, useAppContext, View } from "./context/AppContext.tsx";
 
@@ -43,7 +44,7 @@ const AppContent = () => {
   };
 
   const handleCommandSubmit = async (value: string) => {
-    if (value.trim() === "/pr") {
+    if (value.trim() === "/pr" || value.trim().startsWith("/review")) {
       setIsLoading(true);
       setLoadingMessage("Detecting repository...");
       
@@ -72,16 +73,26 @@ const AppContent = () => {
     }
   };
 
-  const handlePRSelect = (pr: any) => {
+  const handlePRSelect = async (pr: any) => {
     setIsLoading(true);
     setLoadingMessage(`Reviewing PR #${pr.number}: ${pr.title}...`);
     setView("MAIN");
 
-    // Simulate work
-    setTimeout(() => {
+    try {
+      const repoInfo = getRepoInfo();
+      if (!repoInfo) throw new Error("Could not detect repo info");
+
+      const token = process.env.GITHUB_TOKEN || "";
+      const client = new GitHubClient(token);
+      const prData = await client.getPullRequest(repoInfo.owner, repoInfo.repo, pr.number);
+
+      const result = await orchestrateReview(prData.diff, prData.body);
+      showStatus(`Review complete for PR #${pr.number}: ${result.text}`);
+    } catch (error: any) {
+      showStatus(`Error during review: ${error.message}`);
+    } finally {
       setIsLoading(false);
-      showStatus(`Finished review for PR #${pr.number}`);
-    }, 3000);
+    }
   };
 
   const handleSettingsSelect = (item: { value: string }) => {
@@ -146,9 +157,16 @@ const App = () => (
   </AppProvider>
 );
 
-export function startCLI() {
+import { globalMemory } from "./core/memory-manager.ts";
+import { indexCodebase } from "./core/indexer.ts";
+
+export async function startCLI() {
   console.clear();
+  await globalMemory.init();
+  await indexCodebase(process.cwd());
   render(<App />);
 }
 
-startCLI();
+startCLI().catch(err => {
+  console.error("Failed to start CLI:", err);
+});
