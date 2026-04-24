@@ -1,10 +1,26 @@
-/**
- * @file src/core/github-client.ts
- * @description Provides a wrapper around the GitHub API for the AI review agent.
- * @why To abstract GitHub's specific API calls away from the core orchestrator, making the code testable and reusable between CLI and Action modes.
- * @how Uses @actions/github (Octokit) to authenticate, fetch PR diffs, list open PRs, and post comments.
- * @input GitHub PR Number, repository context, and raw comment strings.
- * @output Structured PR data, diff strings, and success/failure signals from the GitHub API.
- */
+export interface PullRequest {
+  id: number;
+  number: number;
+  title: string;
+  user: {
+    login: string;
+  };
+  created_at: string;
+}
 
-// Implementation will go here...
+export async function fetchPRs(owner: string, repo: string): Promise<PullRequest[]> {
+  const url = `https://api.github.com/repos/${owner}/${repo}/pulls?state=open`;
+  
+  const response = await fetch(url, {
+    headers: {
+      'Accept': 'application/vnd.github.v3+json',
+      'User-Agent': 'Excelsior-Agent'
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.statusText}`);
+  }
+
+  return await response.json() as PullRequest[];
+}
