@@ -4,6 +4,7 @@ import { exec } from "node:child_process";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
+import { globalMemory } from "./memory-manager.js";
 
 const execAsync = promisify(exec);
 const cwd = process.cwd();
@@ -44,16 +45,41 @@ export const tools = {
   }),
 
   write_file: createTool({
-    description: "Write a UTF-8 text file inside the workspace.",
+    description: "Write a UTF-8 text file inside the workspace. IMPORTANT: This tool is disabled in PLAN mode.",
     inputSchema: z.object({
       path: z.string().describe("Relative file path."),
       content: z.string().describe("Full file content."),
     }),
     execute: async ({ path: targetPath, content }: { path: string; content: string }) => {
+      if (globalMemory.getMode() === "PLAN") {
+        return "Error: Cannot write files in PLAN mode. Please use 'exit_plan_mode' to return to ACT mode first.";
+      }
       const fullPath = resolveWithinCwd(targetPath);
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
       await fs.writeFile(fullPath, content, "utf8");
       return `Wrote ${targetPath}`;
+    },
+  }),
+
+  enter_plan_mode: createTool({
+    description: "Switch to PLAN mode for exploration and strategy design. In this mode, file writing is disabled.",
+    inputSchema: z.object({}),
+    execute: async () => {
+      globalMemory.setMode("PLAN");
+      return "Entered PLAN mode. You should now focus on exploring the codebase and designing an implementation approach. File writing is disabled.";
+    },
+  }),
+
+  exit_plan_mode: createTool({
+    description: "Switch back to ACT mode to begin implementing the designed strategy.",
+    inputSchema: z.object({
+      plan: z.string().describe("The final implementation plan for approval."),
+    }),
+    execute: async ({ plan }: { plan: string }) => {
+      globalMemory.setMode("ACT");
+      // We could save the plan to global memory or a file here if needed
+      globalMemory.addObservation("Planning", `Strategy approved: ${plan.substring(0, 100)}...`);
+      return "Exited PLAN mode. Returning to ACT mode. You may now begin implementation.";
     },
   }),
 

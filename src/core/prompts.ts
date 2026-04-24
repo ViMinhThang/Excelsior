@@ -10,6 +10,22 @@ When you use tools, keep tool inputs minimal and precise.
 Assume the workspace root is the allowed boundary and do not request paths outside it.
 `.trim();
 
+export const PLAN_MODE_INSTRUCTIONS = `
+IN PLAN MODE:
+- You should focus on exploring the codebase and designing a strategy.
+- DO NOT write or edit any files.
+- Consider multiple approaches and their trade-offs.
+- Use 'exit_plan_mode' when you have a concrete implementation strategy ready for approval.
+`.trim();
+
+export const ACT_MODE_INSTRUCTIONS = `
+IN ACT MODE:
+- You are in implementation mode.
+- You have permission to edit files to fulfill the user request.
+- Ensure your changes are verified and build correctly.
+- Use 'enter_plan_mode' if the task is complex and requires more exploration.
+`.trim();
+
 export const PLANNING_AGENT_PROMPT = `
 ${BASE_SYSTEM_PROMPT}
 

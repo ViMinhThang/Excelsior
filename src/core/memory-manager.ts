@@ -35,13 +35,25 @@ export class MemoryManager {
         message TEXT NOT NULL
       );
 
-      CREATE TABLE IF NOT EXISTS files (
-        path TEXT PRIMARY KEY,
-        last_modified DATETIME,
-        hash TEXT,
-        summary TEXT
+      CREATE TABLE IF NOT EXISTS session_state (
+        key TEXT PRIMARY KEY,
+        value TEXT
       );
+
+      INSERT OR IGNORE INTO session_state (key, value) VALUES ('mode', 'ACT');
     `);
+  }
+
+  getMode(): "ACT" | "PLAN" {
+    if (!this.db) return "ACT";
+    const row = this.db.prepare("SELECT value FROM session_state WHERE key = 'mode'").get() as { value: string };
+    return (row?.value as "ACT" | "PLAN") || "ACT";
+  }
+
+  setMode(mode: "ACT" | "PLAN") {
+    if (!this.db) throw new Error("Database not initialized.");
+    this.db.prepare("INSERT OR REPLACE INTO session_state (key, value) VALUES ('mode', ?)").run(mode);
+    this.addObservation("System", `Changed mode to ${mode}`);
   }
 
   addObservation(agent: string, message: string) {

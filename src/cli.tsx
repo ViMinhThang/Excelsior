@@ -158,12 +158,10 @@ const App = () => (
 );
 
 import { globalMemory } from "./core/memory-manager.ts";
-import { indexCodebase } from "./core/indexer.ts";
 
 export async function startCLI() {
   console.clear();
   await globalMemory.init();
-  await indexCodebase(process.cwd());
   render(<App />);
 }
 

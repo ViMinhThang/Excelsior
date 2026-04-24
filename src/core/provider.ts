@@ -3,6 +3,7 @@ import { generateText, stepCountIs } from "ai";
 import { loadConfig } from "../config.js";
 import { tools } from "./tools.js";
 import { globalMemory } from "./memory-manager.js";
+import { ACT_MODE_INSTRUCTIONS, PLAN_MODE_INSTRUCTIONS } from "./prompts.js";
 
 export type ProviderName = "gemini";
 
@@ -22,12 +23,22 @@ export function getProvider() {
 export async function runTurn(prompt: string, systemPrompt: string) {
   const model = getProvider();
 
+  // Inject mode-specific instructions
+  const mode = globalMemory.getMode();
+  const modeInstructions =
+    mode === "PLAN" ? PLAN_MODE_INSTRUCTIONS : ACT_MODE_INSTRUCTIONS;
+
   // Inject memory into system prompt
   const memories = globalMemory.getRecentObservations();
-  const contextInjectedPrompt =
-    memories.length > 0
-      ? `${systemPrompt}\n\nRecent Observations:\n${memories.join("\n")}`
-      : systemPrompt;
+  const contextInjectedPrompt = `
+${systemPrompt}
+
+Current Mode: ${mode}
+${modeInstructions}
+
+Recent Observations:
+${memories.length > 0 ? memories.join("\n") : "(no recent observations)"}
+  `.trim();
 
   const { text, steps } = await generateText({
     model,
