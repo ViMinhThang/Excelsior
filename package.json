@@ -13,9 +13,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@actions/core": "^1.10.1",
-    "@actions/github": "^6.0.0",
-    "@clack/prompts": "^1.2.0",
     "ai": "^3.0.0",
     "ink": "^7.0.1",
     "ink-select-input": "^6.2.0",
@@ -26,7 +23,6 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/react": "^19.2.14",
-    "@types/terminal-kit": "^2.5.7",
     "@typescript-eslint/eslint-plugin": "^8.59.0",
     "@typescript-eslint/parser": "^8.59.0",
     "@vercel/ncc": "^0.38.4",

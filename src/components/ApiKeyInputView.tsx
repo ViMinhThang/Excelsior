@@ -2,22 +2,23 @@ import React from "react";
 import { Box, Text } from "ink";
 import TextInput from "ink-text-input";
 
+import { useAppContext } from "../context/AppContext.tsx";
+
 export const ApiKeyInputView = ({
-  value,
-  onChange,
   onSubmit,
 }: {
-  value: string;
-  onChange: (val: string) => void;
   onSubmit: (val: string) => void;
-}) => (
+}) => {
+  const { apiKey, setApiKey } = useAppContext();
+
+  return (
   <Box flexDirection="column">
     <Text bold color="yellow">
       Enter Gemini API Key
     </Text>
     <Box marginTop={1} flexDirection="row">
       <Text>API Key: </Text>
-      <TextInput value={value} onChange={onChange} onSubmit={onSubmit} />
+      <TextInput value={apiKey} onChange={setApiKey} onSubmit={onSubmit} />
     </Box>
     <Box marginTop={1}>
       <Text dimColor>
@@ -25,4 +26,5 @@ export const ApiKeyInputView = ({
       </Text>
     </Box>
   </Box>
-);
+  );
+};

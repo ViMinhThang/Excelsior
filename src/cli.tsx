@@ -8,18 +8,27 @@ import { MainView } from "./components/MainView.tsx";
 import { SettingsView } from "./components/SettingsView.tsx";
 import { ProviderSelectView } from "./components/ProviderSelectView.tsx";
 import { ApiKeyInputView } from "./components/ApiKeyInputView.tsx";
+import { PRListView } from "./components/PRListView.tsx";
+import { getRepoInfo } from "./utils/git-utils.ts";
+import { fetchPRs, PullRequest } from "./core/github-client.ts";
 
-type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "API_KEY_INPUT";
+import { AppProvider, useAppContext, View } from "./context/AppContext.tsx";
 
 // --- Main App ---
 
-const App = () => {
+const AppContent = () => {
   const { exit } = useApp();
-  const [view, setView] = useState<View>("MAIN");
-  const [command, setCommand] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [statusMessage, setStatusMessage] = useState("");
-  const workspace = process.cwd();
+  const {
+    view, setView,
+    command, setCommand,
+    workspace,
+    isLoading, setIsLoading,
+    loadingMessage, setLoadingMessage,
+    pullRequests, setPullRequests,
+    statusMessage, setStatusMessage,
+    showStatus,
+    setApiKey,
+  } = useAppContext();
 
   useInput((input, key) => {
     if (view === "MAIN" && key.ctrl && input === "s") {
@@ -33,11 +42,46 @@ const App = () => {
     }
   };
 
-  const handleCommandSubmit = (value: string) => {
-    // Placeholder for command handling
-    setStatusMessage(`Executed: ${value}`);
-    setCommand("");
-    setTimeout(() => setStatusMessage(""), 3000);
+  const handleCommandSubmit = async (value: string) => {
+    if (value.trim() === "/pr") {
+      setIsLoading(true);
+      setLoadingMessage("Detecting repository...");
+      
+      const repoInfo = getRepoInfo();
+      if (!repoInfo) {
+        showStatus("Error: Could not detect GitHub repository.");
+        setIsLoading(false);
+        setCommand("");
+        return;
+      }
+
+      setLoadingMessage(`Fetching PRs for ${repoInfo.owner}/${repoInfo.repo}...`);
+      try {
+        const prs = await fetchPRs(repoInfo.owner, repoInfo.repo);
+        setPullRequests(prs);
+        setView("PR_LIST");
+      } catch (error: any) {
+        showStatus(`Error: ${error.message}`);
+      } finally {
+        setIsLoading(false);
+        setCommand("");
+      }
+    } else {
+      showStatus(`Unknown command: ${value}`);
+      setCommand("");
+    }
+  };
+
+  const handlePRSelect = (pr: any) => {
+    setIsLoading(true);
+    setLoadingMessage(`Reviewing PR #${pr.number}: ${pr.title}...`);
+    setView("MAIN");
+
+    // Simulate work
+    setTimeout(() => {
+      setIsLoading(false);
+      showStatus(`Finished review for PR #${pr.number}`);
+    }, 3000);
   };
 
   const handleSettingsSelect = (item: { value: string }) => {
@@ -58,10 +102,9 @@ const App = () => {
 
   const handleApiKeySubmit = (value: string) => {
     saveConfig({ GEMINI_API_KEY: value });
-    setStatusMessage("API Key saved successfully!");
+    showStatus("API Key saved successfully!");
     setView("MAIN");
-    setApiKey("");
-    setTimeout(() => setStatusMessage(""), 3000);
+    setCommand("");
   };
 
   return (
@@ -75,10 +118,7 @@ const App = () => {
       {view === "MAIN" && (
         <MainView
           onSelect={handleMainMenuSelect}
-          commandValue={command}
-          onCommandChange={setCommand}
           onCommandSubmit={handleCommandSubmit}
-          workspace={workspace}
         />
       )}
       {view === "SETTINGS" && <SettingsView onSelect={handleSettingsSelect} />}
@@ -87,14 +127,24 @@ const App = () => {
       )}
       {view === "API_KEY_INPUT" && (
         <ApiKeyInputView
-          value={apiKey}
-          onChange={setApiKey}
           onSubmit={handleApiKeySubmit}
+        />
+      )}
+      {view === "PR_LIST" && (
+        <PRListView
+          onSelect={handlePRSelect}
+          onBack={() => setView("MAIN")}
         />
       )}
     </Box>
   );
 };
+
+const App = () => (
+  <AppProvider>
+    <AppContent />
+  </AppProvider>
+);
 
 export function startCLI() {
   console.clear();

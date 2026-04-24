@@ -2,20 +2,18 @@ import React, { useState } from "react";
 import { Box, Text, useInput } from "ink";
 import SelectInput from "ink-select-input";
 import TextInput from "ink-text-input";
+import { LoadingBox } from "./LoadingBox.tsx";
+
+import { useAppContext } from "../context/AppContext.tsx";
 
 export const MainView = ({
   onSelect,
-  commandValue,
-  onCommandChange,
   onCommandSubmit,
-  workspace,
 }: {
   onSelect: (item: any) => void;
-  commandValue: string;
-  onCommandChange: (val: string) => void;
   onCommandSubmit: (val: string) => void;
-  workspace: string;
 }) => {
+  const { command, setCommand, workspace, isLoading, loadingMessage } = useAppContext();
   const [isInputFocused, setIsInputFocused] = useState(true);
 
   useInput((input, key) => {
@@ -43,28 +41,41 @@ export const MainView = ({
         </Box>
       </Box>
 
-      <Box marginTop={1} borderStyle="round" paddingX={1} flexDirection="row">
-        <Text color="red">❯ </Text>
-        <Text color="red">
-          <TextInput
-            value={commandValue}
-            onChange={onCommandChange}
-            onSubmit={onCommandSubmit}
-            focus={isInputFocused}
-          />
-        </Text>
-      </Box>
+      {isLoading ? (
+        <Box marginTop={1}>
+          <LoadingBox />
+        </Box>
+      ) : (
+        <>
+          <Box
+            marginTop={1}
+            borderStyle="round"
+            paddingX={1}
+            flexDirection="row"
+          >
+            <Text color="red">❯ </Text>
+            <Text color="white">
+              <TextInput
+                value={command}
+                onChange={setCommand}
+                onSubmit={onCommandSubmit}
+                focus={isInputFocused}
+              />
+            </Text>
+          </Box>
 
-      <Box marginTop={1}>
-        <SelectInput
-          items={[{ label: "[Ctrl+S] Settings", value: "settings" }]}
-          onSelect={(item) => {
-            setIsInputFocused(false);
-            onSelect(item);
-          }}
-          isFocused={!isInputFocused}
-        />
-      </Box>
+          <Box marginTop={1}>
+            <SelectInput
+              items={[{ label: "[Ctrl+S] Settings", value: "settings" }]}
+              onSelect={(item) => {
+                setIsInputFocused(false);
+                onSelect(item);
+              }}
+              isFocused={!isInputFocused}
+            />
+          </Box>
+        </>
+      )}
 
       <Box marginTop={1}>
         <Text dimColor>
