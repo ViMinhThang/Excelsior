@@ -1,45 +1,61 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { LoadingBox } from "./LoadingBox.tsx";
-import { Header } from "./MainView/Header.tsx";
-import { WorkspaceInfo } from "./MainView/WorkspaceInfo.tsx";
-import { CommandBar } from "./MainView/CommandBar.tsx";
 
-import { useAppContext } from "../context/AppContext.tsx";
-import { useCommandInput } from "../hooks/useCommandInput.ts";
+import { type Config } from "../config.js";
+import { useAppContext } from "../context/AppContext.js";
+import type { ReviewMode, ReviewReport } from "../review/types.js";
+import { useCommandInput } from "../hooks/useCommandInput.js";
+import { CommandBar } from "./MainView/CommandBar.js";
+import { Header } from "./MainView/Header.js";
+import { WorkspaceInfo } from "./MainView/WorkspaceInfo.js";
 
 export const MainView = ({
-  onSelect,
+  config,
+  mode,
+  reviewReport,
   onCommandSubmit,
+  onOpenSettings,
 }: {
-  onSelect: (item: any) => void;
-  onCommandSubmit: (val: string) => void;
+  config: Config;
+  mode: ReviewMode;
+  reviewReport: ReviewReport | null;
+  onCommandSubmit: (value: string) => Promise<void>;
+  onOpenSettings: () => void;
 }) => {
   const { isLoading } = useAppContext();
-  const commandInput = useCommandInput(onCommandSubmit);
+  const commandInput = useCommandInput();
 
   return (
     <Box flexDirection="column">
       <Header />
-      <WorkspaceInfo />
+      <WorkspaceInfo config={config} mode={mode} />
 
-      {isLoading ? (
-        <Box marginTop={1}>
-          <LoadingBox />
-        </Box>
-      ) : (
-        <CommandBar
-          {...commandInput}
-          onCommandSubmit={onCommandSubmit}
-          onMenuSelect={onSelect}
-        />
-      )}
+      <Box marginTop={1} flexDirection="column">
+        {isLoading ? (
+          <Text color="yellow">Preparing review...</Text>
+        ) : (
+          <CommandBar
+            {...commandInput}
+            onCommandSubmit={onCommandSubmit}
+            onOpenSettings={onOpenSettings}
+          />
+        )}
+      </Box>
 
       <Box marginTop={1}>
-        <Text dimColor>
-          Use <Text color="yellow">Tab</Text> to switch between input and menu
-        </Text>
+        <Text dimColor>Use Tab to switch between the command input and the settings shortcut.</Text>
       </Box>
+
+      {reviewReport ? (
+        <Box marginTop={1} borderStyle="round" borderColor="cyan" paddingX={1} flexDirection="column">
+          <Text bold color="cyan">
+            Latest Review
+          </Text>
+          {reviewReport.rendered.split("\n").map((line, index) => (
+            <Text key={`${index}-${line}`}>{line}</Text>
+          ))}
+        </Box>
+      ) : null}
     </Box>
   );
 };

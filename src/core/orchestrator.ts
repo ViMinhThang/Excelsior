@@ -1,38 +1,52 @@
-/**
- * @file src/core/orchestrator.ts
- * @description The central brain of the multi-agent system.
- * @why We need a coordinator to run multiple subagents in parallel and aggregate their results rather than doing it all in one massive monolithic prompt.
- * @how Receives a PR diff, dispatches it concurrently to the linter, security, and code-review subagents. It then collects their results and passes them to the reflection agent.
- * @input The parsed PR diff and repository context.
- * @output The final, aggregated, and reflected review comment string ready to be posted.
- * 
- * @status PLACEHOLDER - Implementation pending.
- */
-
-import { reviewCode } from "../subagents/code-reviewer.js";
-import { lintCode } from "../subagents/linter.js";
-import { auditSecurity } from "../subagents/security.js";
-import { reflectAndSynthesize } from "../subagents/reflection.js";
+import { loadConfig } from "../config.js";
 import { globalMemory } from "../mem/memory-manager.js";
+import { collectWorkspaceContexts, extractChangedFiles } from "../review/diff.js";
+import { reviewCode } from "../review/stages/code-reviewer.js";
+import { lintCode } from "../review/stages/linter.js";
+import { reflectAndSynthesize } from "../review/stages/reflection.js";
+import { auditSecurity } from "../review/stages/security.js";
+import type { ReviewReport, ReviewRequest } from "../review/types.js";
+import { createReviewModelClient } from "./provider.js";
 
-export async function orchestrateReview(diff: string, context: string) {
-  // Reviews should always start in PLAN mode to gather context
-  globalMemory.setMode("PLAN");
-  globalMemory.addObservation("Orchestrator", `Starting review phase for diff (length: ${diff.length})`);
-  
-  // Parallel execution of subagents
-  const [review, lint, security] = await Promise.all([
-    reviewCode(diff, context),
-    lintCode(diff),
-    auditSecurity(diff)
+export async function orchestrateReview(request: ReviewRequest): Promise<ReviewReport> {
+  const changedFiles = extractChangedFiles(request.diff);
+  const fileContexts = await collectWorkspaceContexts(request.workspaceRoot, changedFiles);
+  const provider = createReviewModelClient(loadConfig());
+
+  globalMemory.addObservation(
+    "Review",
+    `Reviewing PR #${request.pullRequestNumber} in ${request.repository} (${changedFiles.length} changed file(s))`,
+  );
+
+  const [reviewSection, lintSection, securitySection] = await Promise.all([
+    reviewCode({
+      changedFiles,
+      fileContexts,
+      pullRequestBody: request.pullRequestBody,
+      pullRequestTitle: request.pullRequestTitle,
+      repository: request.repository,
+      workspaceRoot: request.workspaceRoot,
+      provider,
+    }),
+    lintCode({
+      changedFiles,
+      workspaceRoot: request.workspaceRoot,
+    }),
+    auditSecurity({
+      changedFiles,
+    }),
   ]);
 
-  // Synthesis pass
-  const finalResult = await reflectAndSynthesize([
-    review.text,
-    lint.text,
-    security.text
-  ]);
+  const report = await reflectAndSynthesize({
+    changedFiles: changedFiles.length,
+    mode: request.mode,
+    model: provider?.model ?? null,
+    provider: provider?.provider ?? "heuristic",
+    pullRequestTitle: request.pullRequestTitle,
+    reviewedAt: new Date().toISOString(),
+    sections: [reviewSection, lintSection, securitySection],
+  });
 
-  return finalResult;
+  globalMemory.addObservation("Review", report.summary);
+  return report;
 }

@@ -1,52 +1,113 @@
-import { google } from "@ai-sdk/google";
-import { generateText, stepCountIs } from "ai";
-import { loadConfig } from "../config.js";
-import { tools } from "./tools.js";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { generateText, stepCountIs, type LanguageModel } from "ai";
+
+import { loadConfig, type Config, type ProviderName } from "../config.js";
 import { globalMemory } from "../mem/memory-manager.js";
-import { ACT_MODE_INSTRUCTIONS, PLAN_MODE_INSTRUCTIONS } from "./prompts.js";
+import { ACT_MODE_INSTRUCTIONS, BASE_SYSTEM_PROMPT, PLAN_MODE_INSTRUCTIONS } from "./prompts.js";
 
-export type ProviderName = "gemini";
+type ProviderConfigKey = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY";
+type ModelConfigKey = "GEMINI_MODEL" | "ANTHROPIC_MODEL";
 
-export function getProvider() {
-  const config = loadConfig();
-
-  if (!config.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not set in configuration.");
-  }
-
-  // Set the API key for the Google provider
-  process.env.GOOGLE_GENERATIVE_AI_API_KEY = config.GEMINI_API_KEY;
-
-  return google("gemini-1.5-pro-latest");
+interface ProviderCatalogEntry {
+  label: string;
+  apiKeyField: ProviderConfigKey;
+  modelField: ModelConfigKey;
+  createModel: (config: Config, modelName: string) => LanguageModel;
 }
 
-export async function runTurn(prompt: string, systemPrompt: string) {
-  const model = getProvider();
+export interface ReviewModelClient {
+  provider: ProviderName;
+  label: string;
+  model: string;
+  generate(args: { system: string; prompt: string; cwd: string; maxSteps?: number }): Promise<string>;
+}
 
-  // Inject mode-specific instructions
-  const mode = globalMemory.getMode();
-  const modeInstructions =
-    mode === "PLAN" ? PLAN_MODE_INSTRUCTIONS : ACT_MODE_INSTRUCTIONS;
+export const PROVIDER_CATALOG: Record<ProviderName, ProviderCatalogEntry> = {
+  google: {
+    label: "Google Gemini",
+    apiKeyField: "GEMINI_API_KEY",
+    modelField: "GEMINI_MODEL",
+    createModel: (config, modelName) =>
+      createGoogleGenerativeAI({ apiKey: config.GEMINI_API_KEY ?? "" })(modelName),
+  },
+  anthropic: {
+    label: "Anthropic",
+    apiKeyField: "ANTHROPIC_API_KEY",
+    modelField: "ANTHROPIC_MODEL",
+    createModel: (config, modelName) =>
+      createAnthropic({ apiKey: config.ANTHROPIC_API_KEY ?? "" })(modelName),
+  },
+};
 
-  // Inject memory into system prompt
-  const memories = globalMemory.getRecentObservations();
-  const contextInjectedPrompt = `
-${systemPrompt}
+export const RECOMMENDED_MODELS: Record<ProviderName, string[]> = {
+  google: ["gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+  anthropic: [
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-sonnet-latest",
+    "claude-3-5-haiku-20241022",
+    "claude-3-opus-20240229",
+  ],
+};
 
-Current Mode: ${mode}
-${modeInstructions}
+export function getProviderLabel(provider: ProviderName): string {
+  return PROVIDER_CATALOG[provider].label;
+}
 
-Recent Observations:
-${memories.length > 0 ? memories.join("\n") : "(no recent observations)"}
-  `.trim();
-
-  const { text, steps } = await generateText({
-    model,
-    system: contextInjectedPrompt,
-    prompt,
-    tools,
-    stopWhen: stepCountIs(10),
+export function listProviderOptions(config: Config = loadConfig()): Array<{
+  label: string;
+  value: ProviderName;
+  description: string;
+}> {
+  return (Object.keys(PROVIDER_CATALOG) as ProviderName[]).map((provider) => {
+    const entry = PROVIDER_CATALOG[provider];
+    const configured = Boolean(config[entry.apiKeyField]);
+    return {
+      label: entry.label,
+      value: provider,
+      description: configured ? "configured" : "missing API key",
+    };
   });
+}
 
-  return { text, steps };
+export function createReviewModelClient(config: Config = loadConfig()): ReviewModelClient | null {
+  const provider = config.LLM_PROVIDER;
+  const entry = PROVIDER_CATALOG[provider];
+  const apiKey = config[entry.apiKeyField];
+
+  if (!apiKey) {
+    return null;
+  }
+
+  const modelName = config[entry.modelField];
+  const model = entry.createModel(config, modelName);
+
+  return {
+    provider,
+    label: entry.label,
+    model: modelName,
+    async generate({ system, prompt, cwd: _cwd, maxSteps = 5 }) {
+      const mode = globalMemory.getMode();
+      const modeInstructions =
+        mode === "PLAN" ? PLAN_MODE_INSTRUCTIONS : ACT_MODE_INSTRUCTIONS;
+      const memories = globalMemory.getRecentObservations();
+      const systemPrompt = [
+        BASE_SYSTEM_PROMPT,
+        system,
+        `Current mode: ${mode}`,
+        modeInstructions,
+        "Recent observations:",
+        memories.length > 0 ? memories.join("\n") : "(none)",
+      ].join("\n\n");
+
+      const { text } = await generateText({
+        model,
+        system: systemPrompt,
+        prompt,
+        stopWhen: stepCountIs(maxSteps),
+      });
+
+      return text.trim();
+    },
+  };
 }

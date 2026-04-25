@@ -13,6 +13,7 @@ export class MemoryManager {
   private db: Database.Database | null = null;
   private readonly dbPath: string;
   public readonly workspaceRoot: string;
+  private fallbackMode: "ACT" | "PLAN" = "ACT";
 
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
@@ -47,19 +48,20 @@ export class MemoryManager {
   }
 
   getMode(): "ACT" | "PLAN" {
-    if (!this.db) return "ACT";
+    if (!this.db) return this.fallbackMode;
     const row = this.db.prepare("SELECT value FROM session_state WHERE key = 'mode'").get() as { value: string };
     return (row?.value as "ACT" | "PLAN") || "ACT";
   }
 
   setMode(mode: "ACT" | "PLAN") {
-    if (!this.db) throw new Error("Database not initialized.");
+    this.fallbackMode = mode;
+    if (!this.db) return;
     this.db.prepare("INSERT OR REPLACE INTO session_state (key, value) VALUES ('mode', ?)").run(mode);
     this.addObservation("System", `Changed mode to ${mode}`);
   }
 
   addObservation(agent: string, message: string) {
-    if (!this.db) throw new Error("Database not initialized. Call init() first.");
+    if (!this.db) return;
     
     const stmt = this.db.prepare("INSERT INTO observations (agent, message) VALUES (?, ?)");
     stmt.run(agent, message);

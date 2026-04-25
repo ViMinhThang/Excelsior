@@ -1,18 +1,19 @@
 import React from "react";
 import { Box, Text } from "ink";
-import TextInput from "ink-text-input";
 import SelectInput from "ink-select-input";
-import { CommandSuggestions } from "./CommandSuggestions.tsx";
+import TextInput from "ink-text-input";
+
+import { CommandSuggestions } from "./CommandSuggestions.js";
 
 interface Props {
   command: string;
-  setCommand: (val: string) => void;
-  onCommandSubmit: (val: string) => void;
+  setCommand: (value: string) => void;
+  onCommandSubmit: (value: string) => Promise<void>;
   isInputFocused: boolean;
   setIsInputFocused: (focused: boolean) => void;
-  suggestions: any[];
+  suggestions: Array<{ name: string; description: string }>;
   selectedSuggestionIndex: number;
-  onMenuSelect: (item: any) => void;
+  onOpenSettings: () => void;
 }
 
 export const CommandBar = ({
@@ -23,38 +24,30 @@ export const CommandBar = ({
   setIsInputFocused,
   suggestions,
   selectedSuggestionIndex,
-  onMenuSelect,
+  onOpenSettings,
 }: Props) => {
   return (
     <>
-      <Box
-        marginTop={1}
-        borderStyle="round"
-        paddingX={1}
-        flexDirection="row"
-      >
-        <Text color="red">❯ </Text>
-        <Text color="white">
-          <TextInput
-            value={command}
-            onChange={setCommand}
-            onSubmit={onCommandSubmit}
-            focus={isInputFocused}
-          />
-        </Text>
+      <Box borderStyle="round" paddingX={1}>
+        <Text color="red">{"> "}</Text>
+        <TextInput
+          value={command}
+          onChange={setCommand}
+          onSubmit={(value) => {
+            void onCommandSubmit(value);
+          }}
+          focus={isInputFocused}
+        />
       </Box>
 
-      <CommandSuggestions
-        suggestions={suggestions}
-        selectedIndex={selectedSuggestionIndex}
-      />
+      <CommandSuggestions suggestions={suggestions} selectedIndex={selectedSuggestionIndex} />
 
       <Box marginTop={1}>
         <SelectInput
           items={[{ label: "[Ctrl+S] Settings", value: "settings" }]}
-          onSelect={(item) => {
+          onSelect={() => {
             setIsInputFocused(false);
-            onMenuSelect(item);
+            onOpenSettings();
           }}
           isFocused={!isInputFocused}
         />

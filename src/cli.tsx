@@ -1,10 +1,9 @@
 import React from "react";
 import { render } from "ink";
-import { AppProvider } from "./context/AppContext.js";
+
 import { AppContent } from "./App.js";
+import { AppProvider } from "./context/AppContext.js";
 import { globalMemory } from "./mem/memory-manager.js";
-
-
 
 const App = () => (
   <AppProvider>
@@ -12,20 +11,10 @@ const App = () => (
   </AppProvider>
 );
 
-export async function startCLI() {
+export async function startCLI(): Promise<void> {
   console.clear();
-  
-  try {
-    // Initialize long-term memory (SQLite)
-    await globalMemory.init();
-    
-    // Render the TUI
-    render(<App />);
-  } catch (error) {
-    console.error("Failed to start Excelsior CLI:", error);
-    process.exit(1);
-  }
-}
+  await globalMemory.init();
 
-// Start the application
-startCLI();
+  const instance = render(<App />);
+  await instance.waitUntilExit();
+}

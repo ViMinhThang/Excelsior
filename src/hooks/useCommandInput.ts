@@ -1,37 +1,44 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useInput } from "ink";
-import { useAppContext } from "../context/AppContext.tsx";
-import { AVAILABLE_COMMANDS } from "../constants.ts";
 
-export const useCommandInput = (onCommandSubmit: (val: string) => void) => {
+import { AVAILABLE_COMMANDS } from "../constants.js";
+import { useAppContext } from "../context/AppContext.js";
+
+export const useCommandInput = () => {
   const { command, setCommand } = useAppContext();
   const [isInputFocused, setIsInputFocused] = useState(true);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
 
   const suggestions = command.startsWith("/")
-    ? AVAILABLE_COMMANDS.filter((c) =>
-        c.name.startsWith(command.toLowerCase())
-      )
+    ? AVAILABLE_COMMANDS.filter((candidate) => candidate.name.startsWith(command.toLowerCase()))
     : [];
 
   useEffect(() => {
     setSelectedSuggestionIndex(0);
   }, [command]);
 
-  useInput((input, key) => {
+  useInput((_input, key) => {
     if (key.tab) {
-      setIsInputFocused((prev) => !prev);
+      setIsInputFocused((current) => !current);
       return;
     }
 
-    if (suggestions.length === 0 || !isInputFocused) return;
+    if (!isInputFocused || suggestions.length === 0) {
+      return;
+    }
 
     if (key.downArrow) {
-      setSelectedSuggestionIndex((prev) => (prev + 1) % suggestions.length);
-    } else if (key.upArrow) {
-      setSelectedSuggestionIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length);
-    } else if (key.return && command !== suggestions[selectedSuggestionIndex]?.name) {
-      setCommand(suggestions[selectedSuggestionIndex]!.name);
+      setSelectedSuggestionIndex((current) => (current + 1) % suggestions.length);
+      return;
+    }
+
+    if (key.upArrow) {
+      setSelectedSuggestionIndex((current) => (current - 1 + suggestions.length) % suggestions.length);
+      return;
+    }
+
+    if (key.return && command !== suggestions[selectedSuggestionIndex]?.name) {
+      setCommand(suggestions[selectedSuggestionIndex]?.name ?? command);
     }
   });
 
