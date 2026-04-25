@@ -1,4 +1,4 @@
-import { collectWorkspaceFileSnapshot } from "../tools/read-file.js";
+import { collectWorkspaceFileSnapshot } from "../tools/lib/file-ops.js";
 import type { ChangedFile, FileContext } from "./types.js";
 
 export function extractChangedFiles(diff: string): ChangedFile[] {

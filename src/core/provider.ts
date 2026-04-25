@@ -3,8 +3,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText, stepCountIs, type LanguageModel } from "ai";
 
 import { loadConfig, type Config, type ProviderName } from "../config.js";
-import { globalMemory } from "../mem/memory-manager.js";
-import { ACT_MODE_INSTRUCTIONS, BASE_SYSTEM_PROMPT, PLAN_MODE_INSTRUCTIONS } from "./prompts.js";
+import { getTools } from "../tools/index.js";
 
 type ProviderConfigKey = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY";
 type ModelConfigKey = "GEMINI_MODEL" | "ANTHROPIC_MODEL";
@@ -16,11 +15,16 @@ interface ProviderCatalogEntry {
   createModel: (config: Config, modelName: string) => LanguageModel;
 }
 
-export interface ReviewModelClient {
+export interface AgentProvider {
   provider: ProviderName;
   label: string;
   model: string;
-  generate(args: { system: string; prompt: string; cwd: string; maxSteps?: number }): Promise<string>;
+  runTurn(args: {
+    systemPrompt: string;
+    prompt: string;
+    cwd: string;
+    maxSteps?: number;
+  }): Promise<string>;
 }
 
 export const PROVIDER_CATALOG: Record<ProviderName, ProviderCatalogEntry> = {
@@ -29,7 +33,9 @@ export const PROVIDER_CATALOG: Record<ProviderName, ProviderCatalogEntry> = {
     apiKeyField: "GEMINI_API_KEY",
     modelField: "GEMINI_MODEL",
     createModel: (config, modelName) =>
-      createGoogleGenerativeAI({ apiKey: config.GEMINI_API_KEY ?? "" })(modelName),
+      createGoogleGenerativeAI({ apiKey: config.GEMINI_API_KEY ?? "" })(
+        modelName,
+      ),
   },
   anthropic: {
     label: "Anthropic",
@@ -70,7 +76,9 @@ export function listProviderOptions(config: Config = loadConfig()): Array<{
   });
 }
 
-export function createReviewModelClient(config: Config = loadConfig()): ReviewModelClient | null {
+export function createAgentProvider(
+  config: Config = loadConfig(),
+): AgentProvider | null {
   const provider = config.LLM_PROVIDER;
   const entry = PROVIDER_CATALOG[provider];
   const apiKey = config[entry.apiKeyField];
@@ -86,24 +94,12 @@ export function createReviewModelClient(config: Config = loadConfig()): ReviewMo
     provider,
     label: entry.label,
     model: modelName,
-    async generate({ system, prompt, cwd: _cwd, maxSteps = 5 }) {
-      const mode = globalMemory.getMode();
-      const modeInstructions =
-        mode === "PLAN" ? PLAN_MODE_INSTRUCTIONS : ACT_MODE_INSTRUCTIONS;
-      const memories = globalMemory.getRecentObservations();
-      const systemPrompt = [
-        BASE_SYSTEM_PROMPT,
-        system,
-        `Current mode: ${mode}`,
-        modeInstructions,
-        "Recent observations:",
-        memories.length > 0 ? memories.join("\n") : "(none)",
-      ].join("\n\n");
-
+    async runTurn({ systemPrompt, prompt, cwd, maxSteps = 5 }) {
       const { text } = await generateText({
         model,
         system: systemPrompt,
         prompt,
+        tools: getTools(cwd),
         stopWhen: stepCountIs(maxSteps),
       });
 

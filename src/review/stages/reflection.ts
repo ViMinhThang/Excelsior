@@ -1,34 +1,34 @@
-import type { ReviewReport, ReviewSection } from "../types.js";
-
 /**
- * This module acts as the final synthesis pass, aggregating findings from all previous review sections into a single report.
+ * Synthesizes findings from all review stages (code review, linting, and security)
+ * into a unified ReviewReport, including an executive summary and rendered output.
  * 
- * Implementation Details:
- * 1. Entry Point: Implement `reflectAndSynthesize` which takes `ReflectionInput` (metadata, sections).
- * 2. Aggregation: Flatten findings from all sections, then deduplicate and sort them by severity (high -> medium -> low).
- * 3. Summarization: Generate a high-level summary of the findings and determine an overview message based on whether issues were found.
- * 4. Report Construction: Build a `ReviewReport` object containing the summary, overview, sections, findings, and metadata.
- * 5. Rendering: Use a rendering utility to generate a formatted version (e.g., Markdown) of the final report.
+ * IMPLEMENTATION GUIDE:
+ * 1. Aggregation: Flatten findings from all `input.sections`.
+ * 2. Deduplication: Use `dedupeAndSortFindings` to ensure the final report is clean.
+ * 3. Summarization: Generate a high-level summary based on the total count and severity of findings.
+ * 4. Rendering: Use `renderReviewReport` to transform the structured data into the final 
+ *    Markdown or TUI-ready string.
  */
 
-interface ReflectionInput {
+import type { ReviewReport, ReviewSection } from "../types.js";
+
+export interface ReflectionInput {
   changedFiles: number;
   mode: "ACT" | "PLAN";
   model: string | null;
-  provider: ReviewReport["metadata"]["provider"];
+  provider: any;
   pullRequestTitle: string;
   reviewedAt: string;
   sections: ReviewSection[];
 }
 
 export async function reflectAndSynthesize(input: ReflectionInput): Promise<ReviewReport> {
-  // TODO: Implement synthesis logic
   return {
-    summary: "Synthesis summary placeholder.",
-    overview: "Synthesis overview placeholder.",
+    summary: "Synthesis placeholder.",
+    overview: "Workflow synthesis and reflection stage placeholder.",
     sections: input.sections,
     findings: [],
-    rendered: "Rendered report placeholder.",
+    rendered: "# Review Placeholder\nImplementation pending.",
     metadata: {
       reviewedAt: input.reviewedAt,
       changedFiles: input.changedFiles,

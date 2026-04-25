@@ -1,31 +1,28 @@
-import type { ChangedFile, ReviewSection } from "../types.js";
-
 /**
- * This module performs linting and style checks on the changed files in the workspace.
+ * Performs lightweight heuristic-based lint and style checks on changed lines
+ * to identify common anti-patterns such as debug logging or loose type usage.
  * 
- * Implementation Details:
- * 1. Entry Point: Implement `lintCode` which takes `LintInput` (changed files, workspace root).
- * 2. ESLint Integration: Use the `runESLintOnWorkspaceFiles` tool to perform official linting on the paths of all changed files.
- * 3. Heuristic Linting: Implement `collectHeuristicLintFindings` to manually scan added lines for:
- *    - `console.log` statements.
- *    - `debugger` statements.
- *    - Usage of the `any` type in TypeScript.
- *    - Suppressions like `@ts-ignore` or `eslint-disable`.
- * 4. Result Synthesis: Combine results from both ESLint and manual heuristics into a single `ReviewSection` with a summary and notes.
+ * IMPLEMENTATION GUIDE:
+ * 1. Rule Definition: Define a set of regex-based rules (e.g., /console\.log/, /: any/, /debugger/).
+ * 2. Scan: Iterate through all `addedLines` in `input.changedFiles`.
+ * 3. Match: For each line, test against all rules.
+ * 4. Finding Creation: Transform matches into `ReviewFinding` objects with appropriate 
+ *    severity and detail messages.
  */
 
-interface LintInput {
-  changedFiles: ChangedFile[];
+import type { ReviewSection } from "../types.js";
+
+export interface LintInput {
+  changedFiles: any[];
   workspaceRoot: string;
 }
 
 export async function lintCode(input: LintInput): Promise<ReviewSection> {
-  // TODO: Implement linting logic
   return {
     source: "lint",
     title: "Lint and style",
-    summary: "Lint placeholder.",
+    summary: "Heuristic linting placeholder.",
     findings: [],
-    notes: [],
+    notes: ["Stage implementation is currently a placeholder."],
   };
 }

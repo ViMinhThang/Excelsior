@@ -1,31 +1,29 @@
-import type { ChangedFile, ReviewSection } from "../types.js";
-
 /**
- * This module performs a security audit by scanning changed lines for common vulnerability patterns.
+ * Audits changed lines for high-signal security risks, including hardcoded credentials,
+ * dynamic code execution, and potential injection vulnerabilities.
  * 
- * Implementation Details:
- * 1. Entry Point: Implement `auditSecurity` which takes `SecurityInput` (changed files).
- * 2. Security Rules: Define a set of regular expressions to detect:
- *    - Hardcoded credentials (secrets, tokens, API keys).
- *    - Unsafe code execution (`eval`, `new Function`).
- *    - Unsafe HTML rendering (`innerHTML`, `dangerouslySetInnerHTML`).
- *    - Shell command execution (`exec`, `spawn`).
- *    - Potential SQL injection (SQL keywords with string concatenation).
- * 3. Scanning: Iterate through all added lines in the changed files and flag any matches as `ReviewFinding` objects.
- * 4. Output: Return a `ReviewSection` with the findings and a summary of the security scan results.
+ * IMPLEMENTATION GUIDE:
+ * 1. Security Rules: Define high-priority regex patterns for:
+ *    - Hardcoded secrets/tokens
+ *    - Unsafe functions (eval, new Function)
+ *    - Injection vectors (innerHTML, string-concatenated SQL)
+ *    - Command injection (exec, spawn)
+ * 2. Audit: Scan `addedLines` in changed files for matches.
+ * 3. Reporting: Assign "high" severity to critical issues like credentials or eval usage.
  */
 
-interface SecurityInput {
-  changedFiles: ChangedFile[];
+import type { ReviewSection } from "../types.js";
+
+export interface SecurityInput {
+  changedFiles: any[];
 }
 
 export async function auditSecurity(input: SecurityInput): Promise<ReviewSection> {
-  // TODO: Implement security audit logic
   return {
     source: "security",
     title: "Security scan",
-    summary: "Security scan placeholder.",
+    summary: "Security audit placeholder.",
     findings: [],
-    notes: [],
+    notes: ["Stage implementation is currently a placeholder."],
   };
 }

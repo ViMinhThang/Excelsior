@@ -1,6 +1,8 @@
 # Excelsior
 
-Excelsior is a terminal pull request review assistant for GitHub repositories. It lists open pull requests for the current workspace, fetches a selected diff, and produces a structured review that combines:
+Excelsior is a small terminal agent shell with a pull request review feature today. The runtime is intentionally split so the current review workflow can stay thin while the project grows into a coding agent later.
+
+The current review feature lists open pull requests for the active workspace, fetches a selected diff, and produces a structured report that combines:
 
 - Model-assisted code review when a Gemini or Anthropic API key is configured
 - Local lint/style checks against workspace files
@@ -16,12 +18,14 @@ The shipped application is organized around a small set of concrete layers:
   The Ink UI and controller layer. Views are mostly presentational; the controller owns keybindings and user actions.
 - `src/services/review-service.ts`
   Workspace-level orchestration for listing pull requests and reviewing a selected PR.
+- `src/core/agent.ts`, `src/core/provider.ts`, `src/core/prompts.ts`
+  A minimal claw-dev-style agent spine. The provider adapter is generic, and feature-specific prompting stays outside it.
 - `src/core/github-client.ts`
   GitHub API access and repository detection.
 - `src/core/orchestrator.ts`
-  Review pipeline orchestration.
+  Review pipeline orchestration that wires the review feature onto the generic agent core.
 - `src/review/`
-  Diff parsing, runtime review passes, report formatting, and review types.
+  Feature code for review-only behavior: diff parsing, review prompts, runtime review passes, report formatting, and review types.
 - `src/subagents/`
   Comment-only reference files for subagent roles. They are not imported at runtime.
 - `src/config.ts`
@@ -40,7 +44,7 @@ Supported settings:
 - `ANTHROPIC_MODEL`
 - `GITHUB_TOKEN`
 
-If no LLM API key is configured, reviews still run with deterministic lint and security checks plus heuristic code-review findings.
+If no LLM API key is configured, reviews still run with deterministic lint and security checks plus heuristic code-review findings. That keeps the feature usable while the generic agent layer stays minimal.
 
 ## Commands
 
@@ -91,6 +95,6 @@ npm run build
 
 ## Notes
 
-- The review pipeline is real and emitted in the build artifact.
-- The package `main` entry now points to an actual compiled `dist/index.js`.
-- ESLint uses flat config and ignores `.agents/` because it is reference-only.
+- The agent runtime is generic enough to host a future coding-agent flow without rewriting provider setup again.
+- `.agents/` remains reference-only and is not part of the runtime path.
+- ESLint ignores `.agents/` because it is reference-only.

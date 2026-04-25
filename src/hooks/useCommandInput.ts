@@ -18,11 +18,6 @@ export const useCommandInput = () => {
   }, [command]);
 
   useInput((_input, key) => {
-    if (key.tab) {
-      setIsInputFocused((current) => !current);
-      return;
-    }
-
     if (!isInputFocused || suggestions.length === 0) {
       return;
     }

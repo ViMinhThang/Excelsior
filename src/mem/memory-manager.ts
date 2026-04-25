@@ -20,16 +20,12 @@ export class MemoryManager {
     this.dbPath = path.join(workspaceRoot, ".excelsior", "memory.db");
   }
 
-  /**
-   * Initializes the database and creates the necessary tables.
-   */
   async init() {
     const dir = path.dirname(this.dbPath);
     await fs.mkdir(dir, { recursive: true });
 
     this.db = new Database(this.dbPath);
-    
-    // Create the observations table if it doesn't exist
+
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS observations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,43 +45,56 @@ export class MemoryManager {
 
   getMode(): "ACT" | "PLAN" {
     if (!this.db) return this.fallbackMode;
-    const row = this.db.prepare("SELECT value FROM session_state WHERE key = 'mode'").get() as { value: string };
+    const row = this.db
+      .prepare("SELECT value FROM session_state WHERE key = 'mode'")
+      .get() as { value: string };
     return (row?.value as "ACT" | "PLAN") || "ACT";
   }
 
   setMode(mode: "ACT" | "PLAN") {
     this.fallbackMode = mode;
     if (!this.db) return;
-    this.db.prepare("INSERT OR REPLACE INTO session_state (key, value) VALUES ('mode', ?)").run(mode);
+    this.db
+      .prepare(
+        "INSERT OR REPLACE INTO session_state (key, value) VALUES ('mode', ?)",
+      )
+      .run(mode);
     this.addObservation("System", `Changed mode to ${mode}`);
   }
 
   addObservation(agent: string, message: string) {
     if (!this.db) return;
-    
-    const stmt = this.db.prepare("INSERT INTO observations (agent, message) VALUES (?, ?)");
+
+    const stmt = this.db.prepare(
+      "INSERT INTO observations (agent, message) VALUES (?, ?)",
+    );
     stmt.run(agent, message);
   }
 
   getRecentObservations(limit = 10): string[] {
     if (!this.db) return [];
-    
-    const stmt = this.db.prepare("SELECT agent, timestamp, message FROM observations ORDER BY timestamp DESC LIMIT ?");
+
+    const stmt = this.db.prepare(
+      "SELECT agent, timestamp, message FROM observations ORDER BY timestamp DESC LIMIT ?",
+    );
     const rows = stmt.all(limit) as Observation[];
-    
-    // We reverse them so they are in chronological order for the prompt
+
     return rows
       .reverse()
-      .map(obs => `[${obs.agent}] (${obs.timestamp}): ${obs.message}`);
+      .map((obs) => `[${obs.agent}] (${obs.timestamp}): ${obs.message}`);
   }
 
   searchObservations(query: string, limit = 5): string[] {
     if (!this.db) return [];
-    
-    const stmt = this.db.prepare("SELECT agent, timestamp, message FROM observations WHERE message LIKE ? ORDER BY timestamp DESC LIMIT ?");
+
+    const stmt = this.db.prepare(
+      "SELECT agent, timestamp, message FROM observations WHERE message LIKE ? ORDER BY timestamp DESC LIMIT ?",
+    );
     const rows = stmt.all(`%${query}%`, limit) as Observation[];
-    
-    return rows.map(obs => `[${obs.agent}] (${obs.timestamp}): ${obs.message}`);
+
+    return rows.map(
+      (obs) => `[${obs.agent}] (${obs.timestamp}): ${obs.message}`,
+    );
   }
 
   clear() {

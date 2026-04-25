@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { reflectAndSynthesize } from "../src/review/passes/reflection.js";
+import { reflectAndSynthesize } from "../src/review/stages/reflection.js";
 
 test("reflectAndSynthesize orders and deduplicates findings", async () => {
   const report = await reflectAndSynthesize({

@@ -40,7 +40,7 @@ export function useAppController() {
       return;
     }
 
-    if (key.ctrl && input === "p") {
+    if ((key.ctrl && input === "p") || key.tab) {
       const nextMode: ReviewMode = mode === "ACT" ? "PLAN" : "ACT";
       setMode(nextMode);
       globalMemory.setMode(nextMode);

@@ -1,38 +1,36 @@
-import type { ReviewModelClient } from "../../core/provider.js";
-import type { ChangedFile, FileContext, ReviewSection } from "../types.js";
-
 /**
- * This module performs a high-level code review by combining heuristic checks with LLM-assisted analysis.
+ * Orchestrates the code review process by combining lightweight heuristic-based findings
+ * with advanced LLM-powered analysis to provide comprehensive feedback on code changes.
  * 
- * Implementation Details:
- * 1. Entry Point: Implement `reviewCode` which takes `CodeReviewInput` (changed files, context, PR metadata, provider).
- * 2. Heuristics: Implement `collectHeuristicFindings` to detect:
- *    - Substantial code additions (>120 lines) without corresponding test file updates.
- *    - New TODO or FIXME comments in the code.
- * 3. LLM Integration: If a provider is available:
- *    - Build a prompt containing the PR title, body, diff patches (truncated), and workspace context.
- *    - Use the provider to generate a structured review.
- *    - Parse the response (SUMMARY:, NOTE|, FINDING|) into a structured `ReviewSection`.
- * 4. Error Handling: Ensure the pass falls back gracefully to heuristics if the LLM provider fails or is unconfigured.
+ * IMPLEMENTATION GUIDE:
+ * 1. Heuristics Pass: Iterate through `input.changedFiles` and check for common patterns 
+ *    (e.g., TODOs, large files without tests).
+ * 2. LLM Turn: Use `input.agent.runTurn` with the `REVIEW_AGENT_PROMPT` and a formatted 
+ *    diff of the changes.
+ * 3. Parsing: Implement `parseReviewResponse` to extract structured findings (SUMMARY, NOTE, FINDING) 
+ *    from the LLM's text output.
+ * 4. Merging: Deduplicate and sort findings from both passes using `dedupeAndSortFindings`.
  */
 
-interface CodeReviewInput {
-  changedFiles: ChangedFile[];
-  fileContexts: FileContext[];
+import type { ReviewSection } from "../types.js";
+
+export interface CodeReviewInput {
+  changedFiles: any[];
+  fileContexts: any[];
   pullRequestBody: string;
   pullRequestTitle: string;
   repository: string;
   workspaceRoot: string;
-  provider: ReviewModelClient | null;
+  agent: any;
+  mode: any;
 }
 
 export async function reviewCode(input: CodeReviewInput): Promise<ReviewSection> {
-  // TODO: Implement code review logic
   return {
     source: "code-review",
     title: "Code review",
-    summary: "Code review placeholder.",
+    summary: "LLM-based code review placeholder.",
     findings: [],
-    notes: [],
+    notes: ["Stage implementation is currently a placeholder."],
   };
 }

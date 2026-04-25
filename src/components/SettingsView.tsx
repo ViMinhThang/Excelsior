@@ -3,7 +3,6 @@ import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
 
 import type { Config } from "../config.js";
-import { getProviderLabel } from "../core/provider.js";
 
 export const SettingsView = ({
   config,
