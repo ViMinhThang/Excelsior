@@ -64,6 +64,7 @@ export function useReviewActions() {
   async function handlePullRequestSelect(
     pullRequestNumber: number,
   ): Promise<void> {
+    setView("MAIN");
     await runReview(pullRequestNumber);
   }
 
