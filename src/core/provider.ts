@@ -19,6 +19,7 @@ export interface AgentProvider {
   provider: ProviderName;
   label: string;
   model: string;
+  aiModel: LanguageModel;
   runTurn(args: {
     systemPrompt: string;
     prompt: string;
@@ -94,6 +95,7 @@ export function createAgentProvider(
     provider,
     label: entry.label,
     model: modelName,
+    aiModel: model,
     async runTurn({ systemPrompt, prompt, cwd, maxSteps = 5 }) {
       const { text } = await generateText({
         model,

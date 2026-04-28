@@ -5,7 +5,12 @@ import { formatHelpText, parseCommand } from "../app/commands.js";
 import { saveConfig } from "../config.js";
 import { globalMemory } from "../mem/memory-manager.js";
 import type { ReviewMode } from "../review/types.js";
-import { listWorkspacePullRequests, reviewWorkspacePullRequest } from "../services/review-service.js";
+import {
+  listWorkspacePullRequests,
+  reviewWorkspacePullRequest,
+} from "../services/review-service.js";
+import { runChat } from "../services/chat-service.js";
+import { routePrompt } from "../services/router-service.js";
 import { useAppContext } from "../context/AppContext.js";
 
 export function useAppController() {
@@ -24,6 +29,7 @@ export function useAppController() {
     setMode,
     setPullRequests,
     setReviewReport,
+    setChatResponse,
     setView,
     showStatus,
     workspace,
@@ -54,7 +60,10 @@ export function useAppController() {
     }
 
     if (key.escape) {
-      if (state.view === "CREDENTIAL_INPUT" || state.view === "PROVIDER_SELECT") {
+      if (
+        state.view === "CREDENTIAL_INPUT" ||
+        state.view === "PROVIDER_SELECT"
+      ) {
         setView("SETTINGS");
         return;
       }
@@ -85,12 +94,39 @@ export function useAppController() {
       case "show-help":
         showStatus(formatHelpText(), 8000);
         break;
-      case "unknown":
-        showStatus(`Unknown command: ${parsed.raw}`);
+      case "prompt":
+        await handlePrompt(parsed.text);
         break;
     }
 
     setCommand("");
+  }
+
+  async function handlePrompt(promptText: string): Promise<void> {
+    setChatResponse(null);
+    setReviewReport(null);
+    setIsLoading(true);
+    setLoadingMessage("Thinking...");
+
+    try {
+      const route = await routePrompt(promptText, config);
+
+      if (route.intent === "REVIEW") {
+        if (route.prNumber !== undefined) {
+          await runReview(route.prNumber);
+        } else {
+          await loadPullRequests();
+        }
+      } else {
+        setLoadingMessage("Generating response...");
+        const response = await runChat(promptText, config, workspace);
+        setChatResponse(response);
+      }
+    } catch (error) {
+      showStatus(error instanceof Error ? error.message : String(error), 8000);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function loadPullRequests(): Promise<void> {
@@ -104,7 +140,9 @@ export function useAppController() {
       });
       setPullRequests(pullRequests);
       setView("PR_LIST");
-      showStatus(`Loaded ${pullRequests.length} pull request(s) from ${repoInfo.owner}/${repoInfo.repo}.`);
+      showStatus(
+        `Loaded ${pullRequests.length} pull request(s) from ${repoInfo.owner}/${repoInfo.repo}.`,
+      );
     } catch (error) {
       showStatus(error instanceof Error ? error.message : String(error), 8000);
     } finally {
@@ -112,7 +150,9 @@ export function useAppController() {
     }
   }
 
-  async function handlePullRequestSelect(pullRequestNumber: number): Promise<void> {
+  async function handlePullRequestSelect(
+    pullRequestNumber: number,
+  ): Promise<void> {
     await runReview(pullRequestNumber);
   }
 
@@ -129,7 +169,9 @@ export function useAppController() {
       });
       setReviewReport(report);
       setView("MAIN");
-      showStatus(`Review finished for PR #${pullRequestNumber} in ${repoInfo.owner}/${repoInfo.repo}.`);
+      showStatus(
+        `Review finished for PR #${pullRequestNumber} in ${repoInfo.owner}/${repoInfo.repo}.`,
+      );
     } catch (error) {
       showStatus(error instanceof Error ? error.message : String(error), 8000);
     } finally {
@@ -172,7 +214,9 @@ export function useAppController() {
     setView("MAIN");
   }
 
-  function handleProviderSelect(provider: "google" | "anthropic" | "back"): void {
+  function handleProviderSelect(
+    provider: "google" | "anthropic" | "back",
+  ): void {
     if (provider === "back") {
       setView("SETTINGS");
       return;
@@ -201,11 +245,12 @@ export function useAppController() {
 
     const [provider, ...modelParts] = value.split(":");
     const model = modelParts.join(":");
-    const modelField = provider === "google" ? "GEMINI_MODEL" : "ANTHROPIC_MODEL";
+    const modelField =
+      provider === "google" ? "GEMINI_MODEL" : "ANTHROPIC_MODEL";
 
-    saveConfig({ 
+    saveConfig({
       LLM_PROVIDER: provider as any,
-      [modelField]: model 
+      [modelField]: model,
     });
     refreshConfig();
     showStatus(`Switched to ${provider} / ${model}.`);

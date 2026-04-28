@@ -27,6 +27,7 @@ interface AppState {
   credentialField: CredentialField;
   config: Config;
   reviewReport: ReviewReport | null;
+  chatResponse: string | null;
   mode: ReviewMode;
 }
 
@@ -42,6 +43,7 @@ interface AppContextType extends AppState {
   setConfig: (config: Config) => void;
   refreshConfig: () => void;
   setReviewReport: (report: ReviewReport | null) => void;
+  setChatResponse: (response: string | null) => void;
   setMode: (mode: ReviewMode) => void;
   showStatus: (message: string, duration?: number) => void;
 }
@@ -59,6 +61,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [credentialField, setCredentialField] = useState<CredentialField>(null);
   const [config, setConfig] = useState<Config>(() => loadConfig());
   const [reviewReport, setReviewReport] = useState<ReviewReport | null>(null);
+  const [chatResponse, setChatResponse] = useState<string | null>(null);
   const [mode, setMode] = useState<ReviewMode>("ACT");
   const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -96,6 +99,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       credentialField,
       config,
       reviewReport,
+      chatResponse,
       mode,
       setView,
       setStatusMessage,
@@ -108,6 +112,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setConfig,
       refreshConfig,
       setReviewReport,
+      setChatResponse,
       setMode,
       showStatus,
     }),
@@ -122,6 +127,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       credentialField,
       config,
       reviewReport,
+      chatResponse,
       mode,
       refreshConfig,
       showStatus,

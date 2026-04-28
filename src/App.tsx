@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import Spinner from "ink-spinner";
 
 import { ApiKeyInputView } from "./components/ApiKeyInputView.js";
+import { Footer } from "./components/Footer.js";
 import { MainView } from "./components/MainView.js";
 import { ModelSelectView } from "./components/ModelSelectView.js";
 import { PRListView } from "./components/PRListView.js";
@@ -21,6 +22,7 @@ export const AppContent = () => {
             config={controller.config}
             mode={controller.mode}
             reviewReport={controller.reviewReport}
+            chatResponse={controller.chatResponse}
             onCommandSubmit={controller.handleCommandSubmit}
             onOpenSettings={() => controller.setView("SETTINGS")}
           />
@@ -76,25 +78,7 @@ export const AppContent = () => {
       </Box>
 
       <Box marginTop={1} paddingTop={1}>
-        {controller.isLoading ? (
-          <Box>
-            <Text color="yellow">
-              <Spinner type="dots" />
-            </Text>
-            <Text italic> {controller.loadingMessage} </Text>
-          </Box>
-        ) : (
-          <Box justifyContent="space-between" width="100%">
-            <Box>
-              <Text color={controller.mode === "ACT" ? "green" : "yellow"} bold>
-                {" "}
-                [{controller.mode}]{" "}
-              </Text>
-              <Text color="gray"> {controller.statusMessage || "Ready"} </Text>
-            </Box>
-            <Text color="dimGray"> tab: focus | ctrl+p: mode | ctrl+s: settings | ctrl+q: quit </Text>
-          </Box>
-        )}
+        <Footer mode={controller.mode} statusMessage={controller.statusMessage} />
       </Box>
     </Box>
   );

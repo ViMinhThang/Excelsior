@@ -1,11 +1,13 @@
 import React from "react";
 import { Box, Text } from "ink";
+import Spinner from "ink-spinner";
 
 import { type Config } from "../config.js";
 import { useAppContext } from "../context/AppContext.js";
 import type { ReviewMode, ReviewReport } from "../review/types.js";
 import { useCommandInput } from "../hooks/useCommandInput.js";
 import { CommandBar } from "./MainView/CommandBar.js";
+import { AssistantResponse } from "./MainView/AssistantResponse.js";
 import { Header } from "./MainView/Header.js";
 import { WorkspaceInfo } from "./MainView/WorkspaceInfo.js";
 
@@ -13,33 +15,36 @@ export const MainView = ({
   config,
   mode,
   reviewReport,
+  chatResponse,
   onCommandSubmit,
   onOpenSettings,
 }: {
   config: Config;
   mode: ReviewMode;
   reviewReport: ReviewReport | null;
+  chatResponse: string | null;
   onCommandSubmit: (value: string) => Promise<void>;
   onOpenSettings: () => void;
 }) => {
-  const { isLoading } = useAppContext();
+  const { isLoading, loadingMessage } = useAppContext();
   const commandInput = useCommandInput();
 
   return (
     <Box flexDirection="column">
       <Header />
       <WorkspaceInfo config={config} mode={mode} />
+      <AssistantResponse
+        chatResponse={chatResponse}
+        isLoading={isLoading}
+        loadingMessage={loadingMessage}
+      />
 
       <Box marginTop={1} flexDirection="column">
-        {isLoading ? (
-          <Text color="yellow">Preparing review...</Text>
-        ) : (
-          <CommandBar
-            {...commandInput}
-            onCommandSubmit={onCommandSubmit}
-            onOpenSettings={onOpenSettings}
-          />
-        )}
+        <CommandBar
+          {...commandInput}
+          onCommandSubmit={onCommandSubmit}
+          onOpenSettings={onOpenSettings}
+        />
       </Box>
 
       <Box marginTop={1}>
@@ -56,6 +61,7 @@ export const MainView = ({
           ))}
         </Box>
       ) : null}
+
     </Box>
   );
 };

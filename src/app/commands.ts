@@ -3,6 +3,7 @@ export type ParsedCommand =
   | { type: "review-pr"; prNumber?: number }
   | { type: "open-settings" }
   | { type: "show-help" }
+  | { type: "prompt"; text: string }
   | { type: "unknown"; raw: string };
 
 export function parseCommand(rawInput: string): ParsedCommand {
@@ -21,7 +22,7 @@ export function parseCommand(rawInput: string): ParsedCommand {
     if (Number.isInteger(maybeNumber) && maybeNumber > 0) {
       return { type: "review-pr", prNumber: maybeNumber };
     }
-    return { type: "unknown", raw: input };
+    return { type: "prompt", text: input };
   }
 
   if (input === "/settings") {
@@ -32,7 +33,7 @@ export function parseCommand(rawInput: string): ParsedCommand {
     return { type: "show-help" };
   }
 
-  return { type: "unknown", raw: input };
+  return { type: "prompt", text: input };
 }
 
 export function formatHelpText(): string {
