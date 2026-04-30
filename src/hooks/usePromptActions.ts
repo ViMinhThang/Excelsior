@@ -1,7 +1,8 @@
 import { useAppContext } from "../context/AppContext.js";
-import { formatHelpText, parseCommand } from "../app/commands.js";
+import { registry } from "../app/commands/index.js";
 import { routePrompt } from "../services/router-service.js";
 import { runChat } from "../services/chat-service.js";
+import type { CommandContext } from "../app/commands.js";
 
 export function usePromptActions(reviewActions: {
   loadPullRequests: () => Promise<void>;
@@ -16,6 +17,7 @@ export function usePromptActions(reviewActions: {
     showStatus,
     setView,
     setCommand,
+    setMode,
     workspace,
     memory,
   } = useAppContext();
@@ -48,33 +50,24 @@ export function usePromptActions(reviewActions: {
   }
 
   async function handleCommandSubmit(value: string): Promise<void> {
-    const parsed = parseCommand(value);
+    const ctx: CommandContext = {
+      config,
+      workspace,
+      memory,
+      setView,
+      showStatus,
+      setIsLoading,
+      setLoadingMessage,
+      setChatResponse,
+      setReviewReport,
+      setMode,
+      loadPullRequests: reviewActions.loadPullRequests,
+      runReview: reviewActions.runReview,
+      handlePrompt,
+      getHelpText: () => registry.helpText(),
+    };
 
-    switch (parsed.type) {
-      case "list-prs":
-        await reviewActions.loadPullRequests();
-        break;
-      case "review-pr":
-        if (parsed.prNumber !== undefined) {
-          await reviewActions.runReview(parsed.prNumber);
-        } else {
-          await reviewActions.loadPullRequests();
-        }
-        break;
-      case "open-settings":
-        setView("SETTINGS");
-        break;
-      case "show-help":
-        showStatus(formatHelpText(), 8000);
-        break;
-      case "prompt":
-        await handlePrompt(parsed.text);
-        break;
-      case "unknown":
-        showStatus(`Unknown command: ${parsed.raw}`, 8000);
-        break;
-    }
-
+    await registry.dispatch(value, ctx);
     setCommand("");
   }
 

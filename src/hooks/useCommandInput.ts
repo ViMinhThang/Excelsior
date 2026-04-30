@@ -32,9 +32,6 @@ export const useCommandInput = () => {
       return;
     }
 
-    if (key.return && command !== suggestions[selectedSuggestionIndex]?.name) {
-      setCommand(suggestions[selectedSuggestionIndex]?.name ?? command);
-    }
   });
 
   return {

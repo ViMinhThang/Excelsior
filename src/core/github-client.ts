@@ -39,14 +39,25 @@ export class GitHubClient {
       pull_number: pullNumber,
     });
 
-    const { data: diff } = await this.octokit.rest.pulls.get({
-      owner,
-      repo,
-      pull_number: pullNumber,
-      mediaType: {
-        format: "diff",
-      },
-    });
+    let diff: string;
+    try {
+      const response = await this.octokit.rest.pulls.get({
+        owner,
+        repo,
+        pull_number: pullNumber,
+        mediaType: {
+          format: "diff",
+        },
+      });
+      diff = response.data as unknown as string;
+    } catch (error: any) {
+      // Fallback if diff is too large for a single request
+      if (error.status === 422 || error.message?.includes("too_large")) {
+        diff = await this.fetchDiffViaFiles(owner, repo, pullNumber);
+      } else {
+        throw error;
+      }
+    }
 
     return {
       owner,
@@ -54,8 +65,45 @@ export class GitHubClient {
       pull_number: pullNumber,
       title: pr.title,
       body: pr.body ?? "",
-      diff: diff as unknown as string,
+      diff,
     };
+  }
+
+  private async fetchDiffViaFiles(owner: string, repo: string, pullNumber: number): Promise<string> {
+    const lines: string[] = [];
+    let page = 1;
+    const perPage = 100;
+
+    while (true) {
+      const { data: files } = await this.octokit.rest.pulls.listFiles({
+        owner,
+        repo,
+        pull_number: pullNumber,
+        per_page: perPage,
+        page,
+      });
+
+      if (files.length === 0) break;
+
+      for (const file of files) {
+        if (!file.patch) continue;
+        lines.push(`diff --git a/${file.filename} b/${file.filename}`);
+        lines.push(`--- a/${file.filename}`);
+        lines.push(`+++ b/${file.filename}`);
+        lines.push(file.patch);
+      }
+
+      if (files.length < perPage) break;
+      page++;
+      
+      // Safety cap to prevent infinite loops or catastrophic memory usage
+      if (page > 30) {
+        lines.push("\n[WARNING] PR is extremely large. Further file diffs were truncated.");
+        break;
+      }
+    }
+
+    return lines.join("\n");
   }
 
   async fetchPRs(owner: string, repo: string): Promise<PullRequest[]> {

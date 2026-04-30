@@ -1,21 +1,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { formatHelpText, parseCommand } from "../src/app/commands.js";
+import { listPrsCommand } from "../src/app/commands/list-prs.js";
+import { reviewCommand } from "../src/app/commands/review.js";
+import { modeCommand } from "../src/app/commands/mode.js";
 
-test("parseCommand recognizes pull request list and direct review flows", () => {
-  assert.deepEqual(parseCommand("/pr"), { type: "list-prs" });
-  assert.deepEqual(parseCommand("/review"), { type: "review-pr" });
-  assert.deepEqual(parseCommand("/review 42"), { type: "review-pr", prNumber: 42 });
+test("listPrsCommand parses /pr", () => {
+  assert.deepEqual(listPrsCommand.parse("/pr"), {});
+  assert.equal(listPrsCommand.parse("/review"), null);
 });
 
-test("parseCommand rejects malformed review numbers", () => {
-  assert.deepEqual(parseCommand("/review abc"), { type: "unknown", raw: "/review abc" });
+test("reviewCommand parses /review and /review <number>", () => {
+  assert.deepEqual(reviewCommand.parse("/review"), {});
+  assert.deepEqual(reviewCommand.parse("/review 42"), { prNumber: 42 });
+  assert.equal(reviewCommand.parse("/review abc"), null);
 });
 
-test("formatHelpText lists the supported commands", () => {
-  const help = formatHelpText();
-  assert.match(help, /\/pr/);
-  assert.match(help, /\/review <number>/);
-  assert.match(help, /\/settings/);
+test("modeCommand parses /mode", () => {
+  assert.deepEqual(modeCommand.parse("/mode PLAN"), { mode: "PLAN" });
+  assert.deepEqual(modeCommand.parse("/mode ACT"), { mode: "ACT" });
+  assert.equal(modeCommand.parse("/mode SOMETHING"), null);
 });

@@ -1,48 +1,29 @@
-export type ParsedCommand =
-  | { type: "list-prs" }
-  | { type: "review-pr"; prNumber?: number }
-  | { type: "open-settings" }
-  | { type: "show-help" }
-  | { type: "prompt"; text: string }
-  | { type: "unknown"; raw: string };
+import type { Config } from "../config.js";
+import type { MemoryManager } from "../mem/memory-manager.js";
+import type { ReviewMode, ReviewReport } from "../review/types.js";
+import type { View } from "../context/AppContext.js";
 
-export function parseCommand(rawInput: string): ParsedCommand {
-  const input = rawInput.trim();
-
-  if (input === "/pr") {
-    return { type: "list-prs" };
-  }
-
-  if (input === "/review") {
-    return { type: "review-pr" };
-  }
-
-  if (input.startsWith("/review ")) {
-    const maybeNumber = Number(input.slice("/review ".length).trim());
-    if (Number.isInteger(maybeNumber) && maybeNumber > 0) {
-      return { type: "review-pr", prNumber: maybeNumber };
-    }
-    return { type: "unknown", raw: input };
-  }
-
-  if (input === "/settings") {
-    return { type: "open-settings" };
-  }
-
-  if (input === "/help") {
-    return { type: "show-help" };
-  }
-
-  return { type: "prompt", text: input };
+export interface CommandContext {
+  config: Config;
+  workspace: string;
+  memory: MemoryManager;
+  setView(view: View): void;
+  showStatus(msg: string, duration?: number): void;
+  setIsLoading(v: boolean): void;
+  setLoadingMessage(msg: string): void;
+  setChatResponse(r: string | null): void;
+  setReviewReport(r: ReviewReport | null): void;
+  setMode(mode: ReviewMode): void;
+  loadPullRequests(): Promise<void>;
+  runReview(prNumber: number): Promise<void>;
+  handlePrompt(text: string): Promise<void>;
+  getHelpText(): string;
 }
 
-export function formatHelpText(): string {
-  return [
-    "Commands:",
-    "/pr - list open pull requests",
-    "/review - list pull requests, then choose one",
-    "/review <number> - review a pull request immediately",
-    "/settings - open configuration",
-    "/help - show this message",
-  ].join("\n");
+export interface CommandDefinition<T = any> {
+  name: string;
+  syntax: string;
+  description: string;
+  parse(input: string): T | null;
+  execute(args: T, ctx: CommandContext): Promise<void>;
 }
