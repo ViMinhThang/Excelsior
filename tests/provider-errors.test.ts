@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeProviderError, ProviderError } from "../src/core/provider-errors.js";
+import { normalizeProviderError, ProviderError } from "../src/core/llm/errors.js";
 
 test("provider errors are normalized", () => {
   assert.equal(normalizeProviderError(new Error("429 rate limit")).code, "ProviderRateLimited");

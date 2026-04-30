@@ -1,8 +1,8 @@
 import type { Config } from "../config.js";
-import { Agent } from "../core/agent.js";
-import { createAgentProvider } from "../core/provider.js";
+import { Agent } from "../core/agent/agent.js";
+import { createAgentProvider } from "../core/llm/provider.js";
 import { createRuntimeContext } from "../core/runtime.js";
-import { ProviderError } from "../core/provider-errors.js";
+import { ProviderError } from "../core/llm/errors.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
 import { z } from "zod";
 

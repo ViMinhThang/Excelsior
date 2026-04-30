@@ -1,17 +1,19 @@
 import { loadConfig, type Config } from "../config.js";
-import {
-  getRepoInfo,
-  GitHubClient,
-  resolveGitHubToken,
-  type PullRequest,
-  type RepoInfo,
-} from "../core/github-client.js";
+import { GitHubClient, resolveGitHubToken } from "../core/github/client.js";
+import { getRepoInfo } from "../core/github/git.js";
+import type { PullRequest, RepoInfo } from "../core/github/types.js";
 import { createRuntimeContext, type RuntimeContext } from "../core/runtime.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
 import type { ReviewMode, ReviewReport } from "../review/types.js";
 import { reviewAgent } from "../review/review-agent.js";
-import { extractChangedFiles, collectWorkspaceContexts } from "../review/diff.js";
-import { formatChangedFiles, formatFileContexts } from "../review/review-utils.js";
+import {
+  extractChangedFiles,
+  collectWorkspaceContexts,
+} from "../review/diff.js";
+import {
+  formatChangedFiles,
+  formatFileContexts,
+} from "../review/review-utils.js";
 import { renderReviewReport } from "../review/format.js";
 
 export async function listWorkspacePullRequests(args: {
@@ -22,7 +24,9 @@ export async function listWorkspacePullRequests(args: {
   const repoInfo = getRepoInfo(args.cwd);
 
   if (!repoInfo) {
-    throw new Error("Could not detect a GitHub repository from the current workspace.");
+    throw new Error(
+      "Could not detect a GitHub repository from the current workspace.",
+    );
   }
 
   const client = new GitHubClient(resolveGitHubToken(config));
@@ -42,24 +46,34 @@ export async function reviewWorkspacePullRequest(args: {
   const repoInfo = getRepoInfo(args.cwd);
 
   if (!repoInfo) {
-    throw new Error("Could not detect a GitHub repository from the current workspace.");
+    throw new Error(
+      "Could not detect a GitHub repository from the current workspace.",
+    );
   }
 
   const client = new GitHubClient(resolveGitHubToken(config));
-  const pullRequest = await client.getPullRequest(repoInfo.owner, repoInfo.repo, args.pullRequestNumber);
-  const runtime = args.runtime ?? createRuntimeContext({
-    config,
-    workspaceRoot: args.cwd,
-    memory: args.memory,
-  });
+  const pullRequest = await client.getPullRequest(
+    repoInfo.owner,
+    repoInfo.repo,
+    args.pullRequestNumber,
+  );
+  const runtime =
+    args.runtime ??
+    createRuntimeContext({
+      config,
+      workspaceRoot: args.cwd,
+      memory: args.memory,
+    });
 
   const changedFiles = extractChangedFiles(pullRequest.diff);
   const fileContexts = await collectWorkspaceContexts(args.cwd, changedFiles);
-  
+
   const prompt = [
     `Repository: ${repoInfo.owner}/${repoInfo.repo}`,
     `Pull request: ${pullRequest.title}`,
-    pullRequest.body ? `Description:\n${pullRequest.body}` : "Description: (none)",
+    pullRequest.body
+      ? `Description:\n${pullRequest.body}`
+      : "Description: (none)",
     "Changed files and patches:",
     formatChangedFiles(changedFiles),
     "Initial file snapshots:",
