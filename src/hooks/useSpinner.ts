@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
-import { SPINNER_FRAMES } from "../constants.ts";
+import { useEffect, useState } from "react";
 
-export const useSpinner = (speed: number = 80) => {
+import { SPINNER_FRAMES } from "../constants.js";
+
+export const useSpinner = (speed = 80) => {
   const [frameIndex, setFrameIndex] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setFrameIndex((prev) => (prev + 1) % SPINNER_FRAMES.length);
+      setFrameIndex((current) => (current + 1) % SPINNER_FRAMES.length);
     }, speed);
 
     return () => clearInterval(timer);

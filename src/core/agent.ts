@@ -1,0 +1,291 @@
+import type { MemoryManager } from "../mem/memory-manager.js";
+import type { ReviewMode } from "../review/types.js";
+import { ACT_MODE_INSTRUCTIONS, BASE_SYSTEM_PROMPT, PLAN_MODE_INSTRUCTIONS } from "./prompts.js";
+import { ProviderError, normalizeProviderError } from "./provider-errors.js";
+import type { RuntimeContext } from "./runtime.js";
+import type { z } from "zod";
+
+export interface SubagentSlot {
+  agent: Agent;
+  required?: boolean;
+}
+
+export type SubagentOutcome =
+  | { ok: true; agentName: string; durationMs: number; value: unknown }
+  | { ok: false; agentName: string; durationMs: number; error: string };
+
+export interface AgentDefinition<TOutput = unknown> {
+  name: string;
+  role: string;
+  instructions: string;
+  tools: string[];
+  outputSchema: z.ZodTypeAny;
+  maxSteps?: number;
+  requiredProvider?: boolean;
+  subagents?: SubagentSlot[];
+  synthesizer?: Agent<TOutput>;
+}
+
+export type AgentRunResult<TOutput> =
+  | { ok: true; value: TOutput; raw: string }
+  | { ok: false; reason: "missing-provider" | "invalid-output"; message: string; raw?: string };
+
+export type AgentTextResult =
+  | { ok: true; text: string }
+  | { ok: false; reason: "missing-provider" | "provider-error"; message: string };
+
+export interface AgentRunInput {
+  prompt: string;
+  runtime: RuntimeContext;
+  mode?: ReviewMode;
+  cwd?: string;
+  maxSteps?: number;
+  signal?: AbortSignal;
+}
+
+export class Agent<TOutput = unknown> {
+  readonly name: string;
+  readonly role: string;
+  readonly instructions: string;
+  readonly tools: string[];
+  readonly maxSteps: number;
+  readonly requiredProvider: boolean;
+  readonly subagents?: SubagentSlot[] | undefined;
+  readonly synthesizer?: Agent<TOutput> | undefined;
+  private readonly outputSchema: z.ZodTypeAny;
+
+  constructor(definition: AgentDefinition<TOutput>) {
+    this.name = definition.name;
+    this.role = definition.role;
+    this.instructions = definition.instructions;
+    this.tools = definition.tools;
+    this.outputSchema = definition.outputSchema;
+    this.maxSteps = definition.maxSteps ?? 6;
+    this.requiredProvider = definition.requiredProvider ?? true;
+    this.subagents = definition.subagents;
+    this.synthesizer = definition.synthesizer;
+  }
+
+  async run(input: AgentRunInput): Promise<AgentRunResult<TOutput>> {
+    if (this.subagents && this.subagents.length > 0) {
+      return this.runWithSubagents(input);
+    }
+
+    if (!input.runtime.provider) {
+      return {
+        ok: false,
+        reason: "missing-provider",
+        message: `${this.name} skipped because no LLM provider is configured.`,
+      };
+    }
+
+    const prompt = buildAgentPrompt({
+      taskPrompt: input.prompt,
+      tools: this.tools,
+    });
+
+    try {
+      const raw = await this.callProvider(input, prompt);
+
+      const parsedJson = extractJsonObject(raw);
+      if (!parsedJson) {
+        return {
+          ok: false,
+          reason: "invalid-output",
+          message: "Agent did not return a JSON object.",
+          raw,
+        };
+      }
+
+      return {
+        ok: true,
+        value: this.outputSchema.parse(JSON.parse(parsedJson)) as TOutput,
+        raw,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        reason: "invalid-output",
+        message: `Agent returned invalid output: ${message}`,
+      };
+    }
+  }
+
+  private async runWithSubagents(input: AgentRunInput): Promise<AgentRunResult<TOutput>> {
+    if (!input.runtime.provider) {
+      return {
+        ok: false,
+        reason: "missing-provider",
+        message: `${this.name} skipped because no LLM provider is configured.`,
+      };
+    }
+
+    const controller = new AbortController();
+    const combinedSignal = input.signal
+      ? AbortSignal.any([input.signal, controller.signal])
+      : controller.signal;
+
+    let outcomes: SubagentOutcome[];
+    try {
+      outcomes = await Promise.all(
+        this.subagents!.map(async (slot) => {
+          const startedAt = Date.now();
+          try {
+            const result = await slot.agent.run({
+              ...input,
+              signal: combinedSignal,
+            });
+            if (!result.ok) throw new Error(result.message);
+            return {
+              ok: true, agentName: slot.agent.name,
+              durationMs: Date.now() - startedAt, value: result.value,
+            } satisfies SubagentOutcome;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (slot.required ?? false) {
+              controller.abort();
+              throw new Error(`Subagent '${slot.agent.name}' failed: ${msg}`);
+            }
+            return {
+              ok: false, agentName: slot.agent.name,
+              durationMs: Date.now() - startedAt, error: msg,
+            } satisfies SubagentOutcome;
+          }
+        }),
+      );
+    } catch (error) {
+      controller.abort();
+      return {
+        ok: false, reason: "invalid-output",
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+
+    if (!this.synthesizer) {
+      return { ok: true, value: outcomes as unknown as TOutput, raw: JSON.stringify(outcomes) };
+    }
+
+    const synthPrompt = [
+      input.prompt,
+      "Subagent results:",
+      serializeOutcomes(outcomes)
+    ].join("\n\n");
+
+    const synthResult = await this.synthesizer.run({
+      ...input,
+      prompt: synthPrompt,
+    });
+
+    if (!synthResult.ok) {
+      return synthResult as AgentRunResult<TOutput>;
+    }
+
+    return { ok: true, value: synthResult.value as TOutput, raw: synthResult.raw };
+  }
+
+  async runText(input: AgentRunInput): Promise<AgentTextResult> {
+    if (!input.runtime.provider) {
+      return {
+        ok: false,
+        reason: "missing-provider",
+        message: `${this.name} skipped because no LLM provider is configured.`,
+      };
+    }
+
+    try {
+      const text = await this.callProvider(input, buildTextPrompt({
+        taskPrompt: input.prompt,
+        tools: this.tools,
+      }));
+      return { ok: true, text };
+    } catch (error) {
+      const providerError = error instanceof ProviderError ? error : normalizeProviderError(error);
+      return {
+        ok: false,
+        reason: "provider-error",
+        message: providerError.message,
+      };
+    }
+  }
+
+  private async callProvider(input: AgentRunInput, prompt: string): Promise<string> {
+    if (!input.runtime.provider) {
+      throw new ProviderError("MissingProvider", `${this.name} skipped because no LLM provider is configured.`);
+    }
+
+    return input.runtime.provider.runTurn({
+      systemPrompt: buildSystemPrompt(this.buildRolePrompt(), input.runtime.memory, input.mode),
+      prompt,
+      cwd: input.cwd ?? input.runtime.workspaceRoot,
+      maxSteps: input.maxSteps ?? this.maxSteps,
+      tools: this.tools,
+      signal: input.signal,
+    });
+  }
+
+  private buildRolePrompt(): string {
+    return [
+      `Agent: ${this.name}`,
+      `Role: ${this.role}`,
+      this.instructions,
+    ].join("\n\n");
+  }
+}
+
+export function buildSystemPrompt(rolePrompt: string, memory: MemoryManager, mode?: ReviewMode): string {
+  const currentMode = mode ?? memory.getMode();
+  const memories = memory.getRecentObservations();
+  const modeInstructions = currentMode === "PLAN" ? PLAN_MODE_INSTRUCTIONS : ACT_MODE_INSTRUCTIONS;
+
+  return [
+    BASE_SYSTEM_PROMPT,
+    rolePrompt,
+    `Current mode: ${currentMode}`,
+    modeInstructions,
+    "Recent observations:",
+    memories.length > 0 ? memories.join("\n") : "(none)",
+  ].join("\n\n");
+}
+
+function buildAgentPrompt(args: { taskPrompt: string; tools: string[] }): string {
+  return [
+    args.taskPrompt,
+    "Use the available tools before making findings when file inspection is needed.",
+    `Available tools: ${args.tools.join(", ") || "(none)"}.`,
+    "Return only strict JSON that matches your configured output schema. Do not wrap JSON in Markdown.",
+  ].join("\n\n");
+}
+
+function buildTextPrompt(args: { taskPrompt: string; tools: string[] }): string {
+  return [
+    args.taskPrompt,
+    "Use the available tools when file inspection is useful.",
+    `Available tools: ${args.tools.join(", ") || "(none)"}.`,
+    "Return a concise plain-text response.",
+  ].join("\n\n");
+}
+
+function extractJsonObject(response: string): string | null {
+  const trimmed = response.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return trimmed;
+  }
+
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) {
+    return null;
+  }
+
+  return trimmed.slice(start, end + 1);
+}
+
+function serializeOutcomes(outcomes: SubagentOutcome[]): string {
+  return outcomes.map((o) => {
+    if (o.ok) {
+      return `## Subagent "${o.agentName}" (${o.durationMs}ms) — SUCCESS\n${JSON.stringify(o.value, null, 2)}`;
+    }
+    return `## Subagent "${o.agentName}" (${o.durationMs}ms) — FAILED\nError: ${o.error}`;
+  }).join("\n\n");
+}

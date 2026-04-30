@@ -1,7 +1,20 @@
-import React, { createContext, useContext, useState, ReactNode } from "react";
-import { PullRequest } from "../core/github-client.ts";
+import React, {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
-export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "API_KEY_INPUT" | "PR_LIST";
+import { loadConfig, type Config } from "../config.js";
+import type { PullRequest } from "../core/github-client.js";
+import type { MemoryManager } from "../mem/memory-manager.js";
+import type { ReviewMode, ReviewReport } from "../review/types.js";
+
+export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "MODEL_SELECT" | "CREDENTIAL_INPUT" | "PR_LIST";
+export type CredentialField = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "DEEPSEEK_API_KEY" | "GITHUB_TOKEN" | null;
 
 interface AppState {
   view: View;
@@ -11,57 +24,128 @@ interface AppState {
   loadingMessage: string;
   pullRequests: PullRequest[];
   command: string;
-  apiKey: string;
+  credentialInput: string;
+  credentialField: CredentialField;
+  config: Config;
+  reviewReport: ReviewReport | null;
+  chatResponse: string | null;
+  mode: ReviewMode;
+  memory: MemoryManager;
 }
 
 interface AppContextType extends AppState {
   setView: (view: View) => void;
-  setWorkspace: (path: string) => void;
-  setStatusMessage: (msg: string) => void;
-  setIsLoading: (loading: boolean) => void;
-  setLoadingMessage: (msg: string) => void;
-  setPullRequests: (prs: PullRequest[]) => void;
-  setCommand: (cmd: string) => void;
-  setApiKey: (key: string) => void;
-  showStatus: (msg: string, duration?: number) => void;
+  setStatusMessage: (message: string) => void;
+  setIsLoading: (value: boolean) => void;
+  setLoadingMessage: (message: string) => void;
+  setPullRequests: (pullRequests: PullRequest[]) => void;
+  setCommand: (command: string) => void;
+  setCredentialInput: (value: string) => void;
+  setCredentialField: (field: CredentialField) => void;
+  setConfig: (config: Config) => void;
+  refreshConfig: () => void;
+  setReviewReport: (report: ReviewReport | null) => void;
+  setChatResponse: (response: string | null) => void;
+  setMode: (mode: ReviewMode) => void;
+  showStatus: (message: string, duration?: number) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider = ({ children }: { children: ReactNode }) => {
+export function AppProvider({ children, memory }: { children: ReactNode; memory: MemoryManager }) {
   const [view, setView] = useState<View>("MAIN");
-  const [workspace, setWorkspace] = useState(process.cwd());
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [pullRequests, setPullRequests] = useState<PullRequest[]>([]);
   const [command, setCommand] = useState("");
-  const [apiKey, setApiKey] = useState("");
+  const [credentialInput, setCredentialInput] = useState("");
+  const [credentialField, setCredentialField] = useState<CredentialField>(null);
+  const [config, setConfig] = useState<Config>(() => loadConfig());
+  const [reviewReport, setReviewReport] = useState<ReviewReport | null>(null);
+  const [chatResponse, setChatResponse] = useState<string | null>(null);
+  const [mode, setMode] = useState<ReviewMode>("ACT");
+  const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const showStatus = (msg: string, duration: number = 3000) => {
-    setStatusMessage(msg);
-    setTimeout(() => setStatusMessage(""), duration);
-  };
+  const showStatus = useCallback((message: string, duration = 4000) => {
+    if (statusTimerRef.current !== null) {
+      clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = null;
+    }
 
-  const value = {
-    view, setView,
-    workspace, setWorkspace,
-    statusMessage, setStatusMessage,
-    isLoading, setIsLoading,
-    loadingMessage, setLoadingMessage,
-    pullRequests, setPullRequests,
-    command, setCommand,
-    apiKey, setApiKey,
-    showStatus,
-  };
+    setStatusMessage(message);
+    if (duration <= 0) {
+      return;
+    }
+
+    statusTimerRef.current = setTimeout(() => {
+      setStatusMessage("");
+      statusTimerRef.current = null;
+    }, duration);
+  }, []);
+
+  const refreshConfig = useCallback(() => {
+    setConfig(loadConfig());
+  }, []);
+
+  const value = useMemo<AppContextType>(
+    () => ({
+      view,
+      workspace: memory.workspaceRoot,
+      statusMessage,
+      isLoading,
+      loadingMessage,
+      pullRequests,
+      command,
+      credentialInput,
+      credentialField,
+      config,
+      reviewReport,
+      chatResponse,
+      mode,
+      memory,
+      setView,
+      setStatusMessage,
+      setIsLoading,
+      setLoadingMessage,
+      setPullRequests,
+      setCommand,
+      setCredentialInput,
+      setCredentialField,
+      setConfig,
+      refreshConfig,
+      setReviewReport,
+      setChatResponse,
+      setMode,
+      showStatus,
+    }),
+    [
+      view,
+      statusMessage,
+      isLoading,
+      loadingMessage,
+      pullRequests,
+      command,
+      credentialInput,
+      credentialField,
+      config,
+      reviewReport,
+      chatResponse,
+      mode,
+      memory,
+      refreshConfig,
+      showStatus,
+    ],
+  );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
-};
+}
 
-export const useAppContext = () => {
+export function useAppContext(): AppContextType {
   const context = useContext(AppContext);
   if (!context) {
     throw new Error("useAppContext must be used within an AppProvider");
   }
+
   return context;
-};
+}

@@ -5,22 +5,34 @@
   "description": "AI Code Review Agent with Hybrid CLI and GitHub Action architecture",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "dev": "tsx src/index.ts",
     "lint": "eslint .",
-    "start:cli": "tsx src/cli.tsx"
+    "start:cli": "tsx src/index.ts",
+    "test": "node --import tsx --test tests/**/*.test.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "ai": "^3.0.0",
+    "@ai-sdk/anthropic": "^3.0.71",
+    "@ai-sdk/deepseek": "^2.0.30",
+    "@ai-sdk/google": "^3.0.64",
+    "ai": "^6.0.168",
+    "better-sqlite3": "^12.9.0",
+    "fast-glob": "^3.3.3",
     "ink": "^7.0.1",
     "ink-select-input": "^6.2.0",
+    "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",
+    "octokit": "^5.0.5",
     "react": "^19.2.5",
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.0.0",
     "@types/react": "^19.2.14",
     "@typescript-eslint/eslint-plugin": "^8.59.0",

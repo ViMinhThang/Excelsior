@@ -1,33 +1,25 @@
 import React from "react";
 import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
-import { PullRequest } from "../core/github-client.ts";
-import { useAppContext } from "../context/AppContext.tsx";
+
+import type { PullRequest } from "../core/github-client.js";
 
 export const PRListView = ({
-  onSelect,
+  pullRequests,
   onBack,
+  onSelect,
 }: {
-  onSelect: (pr: PullRequest) => void;
+  pullRequests: PullRequest[];
   onBack: () => void;
+  onSelect: (pullRequestNumber: number) => Promise<void>;
 }) => {
-  const { pullRequests: prs } = useAppContext();
   const items = [
-    ...prs.map((pr) => ({
-      label: `[#${pr.number}] ${pr.title} (${pr.user.login})`,
-      value: pr.number.toString(),
-      pr: pr,
+    ...pullRequests.map((pullRequest) => ({
+      label: `[#${pullRequest.number}] ${pullRequest.title} (${pullRequest.author})`,
+      value: String(pullRequest.number),
     })),
-    { label: "--- Back ---", value: "back" },
+    { label: "Back", value: "back" },
   ];
-
-  const handleSelect = (item: any) => {
-    if (item.value === "back") {
-      onBack();
-    } else {
-      onSelect(item.pr);
-    }
-  };
 
   return (
     <Box flexDirection="column">
@@ -35,17 +27,18 @@ export const PRListView = ({
         Open Pull Requests
       </Text>
       <Box marginTop={1}>
-        {prs.length === 0 ? (
-          <Text color="red">No open pull requests found.</Text>
-        ) : (
-          <SelectInput items={items} onSelect={handleSelect} />
-        )}
+        <SelectInput
+          items={items}
+          onSelect={(item) => {
+            if (item.value === "back") {
+              onBack();
+              return;
+            }
+
+            void onSelect(Number(item.value));
+          }}
+        />
       </Box>
-      {prs.length === 0 && (
-        <Box marginTop={1}>
-          <SelectInput items={[{ label: "Back", value: "back" }]} onSelect={onBack} />
-        </Box>
-      )}
     </Box>
   );
 };

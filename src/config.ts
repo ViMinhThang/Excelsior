@@ -1,98 +1,123 @@
-/**
- * @file src/config.ts
- * @description Centralized configuration and environment variable validation.
- * @why Prevents the app from running if required secrets (like API keys) are missing, ensuring fast failures.
- * @how Uses Zod or standard process.env checks to parse and validate runtime configuration for both Action and CLI modes.
- * @input process.env values.
- * @output A strongly-typed configuration object used throughout the application.
- */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-import fs from "fs";
-import path from "path";
-import os from "os";
 import { z } from "zod";
 
+export const providerSchema = z.enum(["google", "anthropic", "deepseek"]);
+
 const configSchema = z.object({
+  LLM_PROVIDER: providerSchema.default("google"),
   GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-20250514"),
+  DEEPSEEK_API_KEY: z.string().optional(),
+  DEEPSEEK_MODEL: z.string().default("deepseek-v4-flash"),
+  GITHUB_TOKEN: z.string().optional(),
 });
 
 export type Config = z.infer<typeof configSchema>;
+export type ProviderName = z.infer<typeof providerSchema>;
 
-const CONFIG_DIR = path.join(os.homedir(), ".excelsior");
-const ENV_PATH = path.join(CONFIG_DIR, ".env");
+export const CONFIG_DIR = path.join(os.homedir(), ".excelsior");
+export const ENV_PATH = path.join(CONFIG_DIR, ".env");
 
-// Ensure config directory exists
 if (!fs.existsSync(CONFIG_DIR)) {
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
 }
 
 export function loadConfig(): Config {
-  let envContent = "";
-  try {
-    envContent = fs.readFileSync(ENV_PATH, "utf-8");
-  } catch (e) {
-    // .env might not exist
-  }
-
-  const parsedConfig: Record<string, string> = {};
-
-  // Parse simple .env format
-  envContent.split("\n").forEach((line) => {
-    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-    if (match) {
-      const key = match[1];
-      let value = match[2] || "";
-      // Remove quotes if present
-      if (value.startsWith('"') && value.endsWith('"')) {
-        value = value.substring(1, value.length - 1);
-      }
-      parsedConfig[key] = value;
-    }
-  });
-
-  // Merge with process.env
+  const parsedConfig = readConfigFile();
   const merged = { ...parsedConfig, ...process.env };
+  const result = configSchema.parse(merged);
 
-  const result = configSchema.safeParse(merged);
-  if (!result.success) {
-    return {};
-  }
-  return result.data;
+  return {
+    ...result,
+    GEMINI_API_KEY: normalizeCredential(result.GEMINI_API_KEY),
+    ANTHROPIC_API_KEY: normalizeCredential(result.ANTHROPIC_API_KEY),
+    DEEPSEEK_API_KEY: normalizeCredential(result.DEEPSEEK_API_KEY),
+    GITHUB_TOKEN: normalizeCredential(result.GITHUB_TOKEN),
+  };
 }
 
 export function saveConfig(updates: Partial<Config>): void {
-  let envContent = "";
-  try {
-    envContent = fs.readFileSync(ENV_PATH, "utf-8");
-  } catch (e) {
-    // .env might not exist
+  const envContent = fs.existsSync(ENV_PATH) ? fs.readFileSync(ENV_PATH, "utf-8") : "";
+  const lines = envContent.length > 0 ? envContent.split("\n") : [];
+  const envMap = new Map<string, number>();
+
+  for (const [index, line] of lines.entries()) {
+    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+    const key = match?.[1];
+    if (key) {
+      envMap.set(key, index);
+    }
   }
 
-  const lines = envContent.split("\n");
-  const envMap = new Map<string, number>();
-  const lineKeys: string[] = [];
-
-  lines.forEach((line, index) => {
-    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
-    if (match) {
-      envMap.set(match[1], index);
-    }
-  });
-
   for (const [key, value] of Object.entries(updates)) {
-    if (value === undefined) continue;
-
-    if (envMap.has(key)) {
-      const index = envMap.get(key)!;
-      lines[index] = `${key}="${value}"`;
-    } else {
-      lines.push(`${key}="${value}"`);
+    if (value === undefined) {
+      continue;
     }
+
+    process.env[key] = value;
+
+    const existingIndex = envMap.get(key);
+    if (existingIndex === undefined) {
+      lines.push(`${key}="${value}"`);
+      continue;
+    }
+
+    lines[existingIndex] = `${key}="${value}"`;
   }
 
   fs.writeFileSync(
     ENV_PATH,
-    lines.filter((l) => l.trim().length > 0).join("\n") + "\n",
+    lines.filter((line) => line.trim().length > 0).join("\n") + "\n",
     "utf-8",
   );
+}
+
+function readConfigFile(): Record<string, string> {
+  if (!fs.existsSync(ENV_PATH)) {
+    return {};
+  }
+
+  const envContent = fs.readFileSync(ENV_PATH, "utf-8");
+  const parsedConfig: Record<string, string> = {};
+
+  for (const line of envContent.split("\n")) {
+    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+    if (!match) {
+      continue;
+    }
+
+    const key = match[1];
+    if (!key) {
+      continue;
+    }
+    let value = match[2] || "";
+    if (value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1);
+    }
+    parsedConfig[key] = value;
+  }
+
+  return parsedConfig;
+}
+
+function normalizeCredential(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const normalized = trimmed.toLowerCase();
+  const looksLikePlaceholder =
+    normalized === "changeme" ||
+    normalized.startsWith("your_") ||
+    normalized.startsWith("example_") ||
+    normalized.includes("api_key_here") ||
+    normalized.includes("token_here");
+
+  return looksLikePlaceholder ? undefined : trimmed;
 }
