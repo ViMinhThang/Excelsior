@@ -34,7 +34,8 @@ export const CommandBar = ({
           value={command}
           onChange={setCommand}
           onSubmit={(value) => {
-            void onCommandSubmit(value);
+            const finalValue = suggestions[selectedSuggestionIndex]?.name ?? value;
+            void onCommandSubmit(finalValue);
           }}
           focus={isInputFocused}
         />

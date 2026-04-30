@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { z } from "zod";
 
-import { Agent } from "../src/core/agent.js";
-import type { AgentProvider } from "../src/core/provider.js";
+import { Agent } from "../src/core/agent/agent.js";
+import type { AgentProvider } from "../src/core/llm/provider.js";
 import type { RuntimeContext } from "../src/core/runtime.js";
 import { noopLogger } from "../src/core/logger.js";
-import { subagentResultSchema, type SubagentReviewResult } from "../src/review/review-agent.js";
+import {
+  subagentResultSchema,
+  type SubagentReviewResult,
+} from "../src/review/review-agent.js";
 
 function createRuntime(response: string | null): RuntimeContext {
   const calls: any[] = [];
@@ -16,6 +19,7 @@ function createRuntime(response: string | null): RuntimeContext {
       GEMINI_MODEL: "gemini-2.5-flash",
       ANTHROPIC_MODEL: "claude-sonnet-4-20250514",
       DEEPSEEK_MODEL: "deepseek-v4-flash",
+      OPENROUTER_MODEL: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     },
     workspaceRoot: process.cwd(),
     memory: {
@@ -24,25 +28,26 @@ function createRuntime(response: string | null): RuntimeContext {
       getRecentObservations: () => [],
     } as any,
     logger: noopLogger,
-    provider: response === null
-      ? null
-      : {
-        provider: "google",
-        label: "Google",
-        model: "gemini-2.5-flash",
-        calls,
-        runTurn: async (args: {
-          systemPrompt: string;
-          prompt: string;
-          cwd?: string;
-          maxSteps?: number | undefined;
-          tools?: string[] | undefined;
-          signal?: AbortSignal | undefined;
-        }) => {
-          calls.push(args);
-          return response;
-        },
-      } as any,
+    provider:
+      response === null
+        ? null
+        : ({
+            provider: "google",
+            label: "Google",
+            model: "gemini-2.5-flash",
+            calls,
+            runTurn: async (args: {
+              systemPrompt: string;
+              prompt: string;
+              cwd?: string;
+              maxSteps?: number | undefined;
+              tools?: string[] | undefined;
+              signal?: AbortSignal | undefined;
+            }) => {
+              calls.push(args);
+              return response;
+            },
+          } as any),
   };
 }
 
@@ -69,11 +74,13 @@ test("Agent returns missing-provider when provider is required", async () => {
 });
 
 test("Agent parses valid JSON through the configured schema", async () => {
-  const runtime = createRuntime(JSON.stringify({
-    summary: "ok",
-    findings: [],
-    notes: ["done"],
-  }));
+  const runtime = createRuntime(
+    JSON.stringify({
+      summary: "ok",
+      findings: [],
+      notes: ["done"],
+    }),
+  );
   const result = await agent.run({
     prompt: "Inspect src/foo.ts",
     runtime,
@@ -85,9 +92,16 @@ test("Agent parses valid JSON through the configured schema", async () => {
     assert.equal(result.value.summary, "ok");
   }
   const provider = runtime.provider as any;
-  assert.match(provider.calls[0].prompt, /Available tools: list_files, read_file, search_files/);
+  assert.match(
+    provider.calls[0].prompt,
+    /Available tools: list_files, read_file, search_files/,
+  );
   assert.equal(provider.calls[0].maxSteps, 4);
-  assert.deepEqual(provider.calls[0].tools, ["list_files", "read_file", "search_files"]);
+  assert.deepEqual(provider.calls[0].tools, [
+    "list_files",
+    "read_file",
+    "search_files",
+  ]);
 });
 
 test("Agent reports invalid output", async () => {
@@ -125,10 +139,7 @@ test("Parent agent dispatches to subagents in parallel", async () => {
     instructions: "Coordinate",
     tools: [],
     outputSchema: z.array(z.any()),
-    subagents: [
-      { agent: child1 },
-      { agent: child2 },
-    ],
+    subagents: [{ agent: child1 }, { agent: child2 }],
   });
 
   const runtime = createRuntime(JSON.stringify({ res: "ok" }));
@@ -187,8 +198,8 @@ test("Parent with synthesizer merges subagent results", async () => {
         // First call is child, second is synthesizer
         if (calls.length === 1) return JSON.stringify({ data: "child-data" });
         return JSON.stringify({ final: "merged-data" });
-      }
-    } as any
+      },
+    } as any,
   };
 
   const result = await parent.run({
@@ -228,10 +239,7 @@ test("Required subagent failure aborts siblings", async () => {
     instructions: "Coordinate",
     tools: [],
     outputSchema: z.array(z.any()),
-    subagents: [
-      { agent: failingChild, required: true },
-      { agent: otherChild },
-    ],
+    subagents: [{ agent: failingChild, required: true }, { agent: otherChild }],
   });
 
   const runtime: RuntimeContext = {
@@ -245,10 +253,10 @@ test("Required subagent failure aborts siblings", async () => {
           throw new Error("subagent-boom");
         }
         // Give time for failing child to fail and trigger abort
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 50));
         return JSON.stringify({});
-      }
-    } as any
+      },
+    } as any,
   };
 
   const result = await parent.run({

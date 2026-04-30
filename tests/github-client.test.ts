@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseGitHubRemoteUrl } from "../src/core/github-client.js";
+import { parseGitHubRemoteUrl } from "../src/core/github/git.js";
 
 test("parseGitHubRemoteUrl handles https remotes", () => {
   assert.deepEqual(parseGitHubRemoteUrl("https://github.com/acme/review-tool.git"), {

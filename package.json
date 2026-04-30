@@ -19,6 +19,7 @@
     "@ai-sdk/anthropic": "^3.0.71",
     "@ai-sdk/deepseek": "^2.0.30",
     "@ai-sdk/google": "^3.0.64",
+    "@ai-sdk/openai": "latest",
     "ai": "^6.0.168",
     "better-sqlite3": "^12.9.0",
     "fast-glob": "^3.3.3",

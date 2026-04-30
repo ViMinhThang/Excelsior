@@ -3,19 +3,27 @@ import { Box, Text } from "ink";
 
 import type { Config } from "../../config.js";
 import type { ReviewMode } from "../../review/types.js";
-import { getProviderLabel } from "../../core/provider.js";
-import { useAppContext } from "../../context/AppContext.js";
+import { getProviderLabel, getActiveModelName } from "../../core/llm/provider.js";
+import { useConfig } from "../../context/ConfigContext.js";
 
 export const WorkspaceInfo = React.memo(({ config, mode }: { config: Config; mode: ReviewMode }) => {
-  const { workspace } = useAppContext();
+  const { workspace } = useConfig();
+  const modelName = getActiveModelName(config);
 
   return (
-    <Box flexDirection="column">
-      <Text dimColor>Workspace: {workspace}</Text>
-      <Text dimColor>
-        Provider: {getProviderLabel(config.LLM_PROVIDER)} | Model:{" "}
-        {config.LLM_PROVIDER === "google" ? config.GEMINI_MODEL : config.ANTHROPIC_MODEL} | Mode: {mode}
-      </Text>
+    <Box flexDirection="column" marginBottom={1}>
+      <Box>
+        <Text dimColor>Workspace: </Text>
+        <Text bold>{workspace}</Text>
+      </Box>
+      <Box>
+        <Text dimColor>AI Config: </Text>
+        <Text color="blue">{getProviderLabel(config.LLM_PROVIDER)}</Text>
+        <Text dimColor> / </Text>
+        <Text color="cyan">{modelName}</Text>
+        <Text dimColor> | Mode: </Text>
+        <Text color="yellow">{mode}</Text>
+      </Box>
     </Box>
   );
 });

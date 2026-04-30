@@ -1,50 +1,32 @@
-import { useAppContext } from "../context/AppContext.js";
+import { useConfig } from "../context/ConfigContext.js";
+import { useUI } from "../context/UIContext.js";
+import { useReview } from "../context/ReviewContext.js";
+import { useAsyncAction } from "./useAsyncAction.js";
 import {
   listWorkspacePullRequests,
   reviewWorkspacePullRequest,
 } from "../services/review-service.js";
 
 export function useReviewActions() {
-  const {
-    config,
-    mode,
-    setIsLoading,
-    setLoadingMessage,
-    setPullRequests,
-    setReviewReport,
-    setView,
-    showStatus,
-    workspace,
-    memory,
-  } = useAppContext();
+  const { config, workspace, memory } = useConfig();
+  const { setView, setChatResponse } = useUI();
+  const { mode, setPullRequests, setReviewReport } = useReview();
+  const { run } = useAsyncAction();
 
   async function loadPullRequests(): Promise<void> {
-    setIsLoading(true);
-    setLoadingMessage("Fetching pull requests...");
-
-    try {
-      const { repoInfo, pullRequests } = await listWorkspacePullRequests({
+    await run("Fetching pull requests...", async () => {
+      const { pullRequests } = await listWorkspacePullRequests({
         cwd: workspace,
         config,
       });
       setPullRequests(pullRequests);
       setView("PR_LIST");
-      showStatus(
-        `Loaded ${pullRequests.length} pull request(s) from ${repoInfo.owner}/${repoInfo.repo}.`,
-      );
-    } catch (error) {
-      showStatus(error instanceof Error ? error.message : String(error), 8000);
-    } finally {
-      setIsLoading(false);
-    }
+    });
   }
 
   async function runReview(pullRequestNumber: number): Promise<void> {
-    setIsLoading(true);
-    setLoadingMessage(`Reviewing PR #${pullRequestNumber}...`);
-
-    try {
-      const { repoInfo, report } = await reviewWorkspacePullRequest({
+    await run(`Reviewing PR #${pullRequestNumber}...`, async () => {
+      const { report } = await reviewWorkspacePullRequest({
         cwd: workspace,
         pullRequestNumber,
         mode,
@@ -52,15 +34,9 @@ export function useReviewActions() {
         config,
       });
       setReviewReport(report);
+      setChatResponse(report.rendered);
       setView("MAIN");
-      showStatus(
-        `Review finished for PR #${pullRequestNumber} in ${repoInfo.owner}/${repoInfo.repo}.`,
-      );
-    } catch (error) {
-      showStatus(error instanceof Error ? error.message : String(error), 8000);
-    } finally {
-      setIsLoading(false);
-    }
+    });
   }
 
   async function handlePullRequestSelect(

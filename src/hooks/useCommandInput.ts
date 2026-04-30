@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { useInput } from "ink";
 
 import { AVAILABLE_COMMANDS } from "../constants.js";
-import { useAppContext } from "../context/AppContext.js";
+import { useUI } from "../context/UIContext.js";
 
 export const useCommandInput = () => {
-  const { command, setCommand } = useAppContext();
+  const { command, setCommand } = useUI();
   const [isInputFocused, setIsInputFocused] = useState(true);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
 
@@ -32,9 +32,6 @@ export const useCommandInput = () => {
       return;
     }
 
-    if (key.return && command !== suggestions[selectedSuggestionIndex]?.name) {
-      setCommand(suggestions[selectedSuggestionIndex]?.name ?? command);
-    }
   });
 
   return {

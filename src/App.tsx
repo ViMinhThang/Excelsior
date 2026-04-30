@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Box } from "ink";
 
 import { ApiKeyInputView } from "./components/ApiKeyInputView.js";
@@ -8,63 +8,38 @@ import { ModelSelectView } from "./components/ModelSelectView.js";
 import { PRListView } from "./components/PRListView.js";
 import { ProviderSelectView } from "./components/ProviderSelectView.js";
 import { SettingsView } from "./components/SettingsView.js";
-import { useAppController } from "./hooks/useAppController.js";
+import { NotificationToast } from "./components/NotificationToast.js";
+import { useConfig } from "./context/ConfigContext.js";
+import { useUI } from "./context/UIContext.js";
+import { useReview } from "./context/ReviewContext.js";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts.js";
 
 export const AppContent = () => {
-  const controller = useAppController();
+  const { refreshConfig, memory } = useConfig();
+  const { view } = useUI();
+  const { mode, setMode } = useReview();
+
+  useKeyboardShortcuts();
+
+  useEffect(() => {
+    setMode(memory.getMode());
+    refreshConfig();
+  }, [refreshConfig, setMode, memory]);
 
   const renderView = () => {
-    switch (controller.view) {
+    switch (view) {
       case "MAIN":
-        return (
-          <MainView
-            config={controller.config}
-            mode={controller.mode}
-            reviewReport={controller.reviewReport}
-            chatResponse={controller.chatResponse}
-            onCommandSubmit={controller.handleCommandSubmit}
-            onOpenSettings={() => controller.setView("SETTINGS")}
-          />
-        );
+        return <MainView />;
       case "SETTINGS":
-        return (
-          <SettingsView
-            config={controller.config}
-            onSelect={controller.handleSettingsSelect}
-          />
-        );
+        return <SettingsView />;
       case "PROVIDER_SELECT":
-        return (
-          <ProviderSelectView
-            config={controller.config}
-            onSelect={controller.handleProviderSelect}
-          />
-        );
+        return <ProviderSelectView />;
       case "MODEL_SELECT":
-        return (
-          <ModelSelectView
-            config={controller.config}
-            onSelect={controller.handleModelSelect}
-          />
-        );
+        return <ModelSelectView />;
       case "CREDENTIAL_INPUT":
-        return (
-          <ApiKeyInputView
-            title={controller.credentialTitle}
-            value={controller.credentialInput}
-            onChange={controller.setCredentialInput}
-            onSubmit={controller.handleCredentialSubmit}
-            onBack={() => controller.setView("SETTINGS")}
-          />
-        );
+        return <ApiKeyInputView />;
       case "PR_LIST":
-        return (
-          <PRListView
-            pullRequests={controller.pullRequests}
-            onSelect={controller.handlePullRequestSelect}
-            onBack={() => controller.setView("MAIN")}
-          />
-        );
+        return <PRListView />;
       default:
         return null;
     }
@@ -76,8 +51,9 @@ export const AppContent = () => {
         {renderView()}
       </Box>
 
-      <Box marginTop={1} paddingTop={1}>
-        <Footer mode={controller.mode} statusMessage={controller.statusMessage} />
+      <Box marginTop={1} paddingTop={1} flexDirection="column">
+        <NotificationToast />
+        <Footer mode={mode} />
       </Box>
     </Box>
   );

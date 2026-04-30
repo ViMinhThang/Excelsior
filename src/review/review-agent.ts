@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Agent } from "../core/agent.js";
+import { Agent } from "../core/agent/agent.js";
 import type { ReviewReport } from "./types.js";
 
 // ── Subagent output schema (shared by all 3 children) ──
