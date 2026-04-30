@@ -37,7 +37,12 @@ export const NotificationToast = () => {
           {icon} {label}
         </Text>
       </Box>
-      <Text>{message}</Text>
+      <Box flexDirection="column">
+        <Text>{message}</Text>
+        {type === "error" && (
+          <Text dimColor>(Press Esc to dismiss)</Text>
+        )}
+      </Box>
     </Box>
   );
 };

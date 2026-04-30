@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import React, { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "MODEL_SELECT" | "CREDENTIAL_INPUT" | "PR_LIST";
 export type CredentialField = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "DEEPSEEK_API_KEY" | "OPENROUTER_API_KEY" | "GITHUB_TOKEN" | null;
@@ -74,15 +74,17 @@ export function UIProvider({ children }: { children: ReactNode }) {
     setNotification(null);
   }, []);
 
-  const notify = React.useCallback(
-    (message: string, type: NotificationType = "info", duration = 5000) => {
+  const notify = useCallback(
+    (message: string, type: NotificationType = "info", duration?: number) => {
       clearNotification();
       setNotification({ message, type });
 
-      if (duration > 0) {
+      const actualDuration = duration ?? (type === "error" ? 0 : 5000);
+
+      if (actualDuration > 0) {
         timeoutRef.current = setTimeout(() => {
           setNotification(null);
-        }, duration);
+        }, actualDuration);
       }
     },
     [clearNotification]

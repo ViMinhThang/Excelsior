@@ -10,7 +10,7 @@ import {
 export function useReviewActions() {
   const { config, workspace, memory } = useConfig();
   const { setView, setChatResponse } = useUI();
-  const { mode, setPullRequests, setReviewReport } = useReview();
+  const { mode, setPullRequests } = useReview();
   const { run } = useAsyncAction();
 
   async function loadPullRequests(): Promise<void> {
@@ -33,7 +33,6 @@ export function useReviewActions() {
         memory,
         config,
       });
-      setReviewReport(report);
       setChatResponse(report.rendered);
       setView("MAIN");
     });

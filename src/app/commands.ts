@@ -12,7 +12,6 @@ export interface CommandContext {
   startTask(id: string, message: string): void;
   endTask(id: string): void;
   setChatResponse(r: string | null): void;
-  setReviewReport(r: ReviewReport | null): void;
   setMode(mode: ReviewMode): void;
   loadPullRequests(): Promise<void>;
   runReview(prNumber: number): Promise<void>;
