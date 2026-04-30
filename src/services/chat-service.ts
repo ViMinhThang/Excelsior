@@ -1,6 +1,19 @@
 import type { Config } from "../config.js";
-import { ExcelsiorAgent } from "../core/agent.js";
+import { Agent } from "../core/agent.js";
 import { createAgentProvider } from "../core/provider.js";
+import { createRuntimeContext } from "../core/runtime.js";
+import { ProviderError } from "../core/provider-errors.js";
+import { z } from "zod";
+
+export const chatAgent = new Agent({
+  name: "chat-assistant",
+  role: "Coding assistant",
+  instructions: "Answer the user's coding and project questions clearly. Use workspace tools when they help verify the answer.",
+  tools: ["list_files", "read_file", "search_files"],
+  outputSchema: z.object({}),
+  maxSteps: 5,
+  requiredProvider: true,
+});
 
 export async function runChat(
   prompt: string,
@@ -10,17 +23,23 @@ export async function runChat(
   const provider = createAgentProvider(config);
   
   if (!provider) {
-    throw new Error("No valid LLM provider configured. Please check your settings.");
+    throw new ProviderError("MissingProvider", "No valid LLM provider configured. Please check your settings.");
   }
 
-  const agent = new ExcelsiorAgent(provider);
-
-  const response = await agent.runTurn({
-    rolePrompt: "You are a helpful coding assistant. Answer the user's questions to the best of your ability.",
-    prompt,
-    cwd,
-    maxSteps: 5,
+  const runtime = createRuntimeContext({
+    config,
+    workspaceRoot: cwd,
+    provider,
   });
 
-  return response || "No response generated.";
+  const response = await chatAgent.runText({
+    prompt,
+    runtime,
+  });
+
+  if (!response.ok) {
+    throw new ProviderError("ProviderUnavailable", response.message);
+  }
+
+  return response.text || "No response generated.";
 }

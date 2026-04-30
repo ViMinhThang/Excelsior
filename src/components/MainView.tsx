@@ -1,6 +1,5 @@
 import React from "react";
 import { Box, Text } from "ink";
-import Spinner from "ink-spinner";
 
 import { type Config } from "../config.js";
 import { useAppContext } from "../context/AppContext.js";

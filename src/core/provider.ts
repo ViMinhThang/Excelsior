@@ -4,6 +4,7 @@ import { generateText, stepCountIs, type LanguageModel } from "ai";
 
 import { loadConfig, type Config, type ProviderName } from "../config.js";
 import { getTools } from "../tools/index.js";
+import { normalizeProviderError } from "./provider-errors.js";
 
 type ProviderConfigKey = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY";
 type ModelConfigKey = "GEMINI_MODEL" | "ANTHROPIC_MODEL";
@@ -25,6 +26,7 @@ export interface AgentProvider {
     prompt: string;
     cwd: string;
     maxSteps?: number;
+    tools?: string[];
   }): Promise<string>;
 }
 
@@ -96,16 +98,21 @@ export function createAgentProvider(
     label: entry.label,
     model: modelName,
     aiModel: model,
-    async runTurn({ systemPrompt, prompt, cwd, maxSteps = 5 }) {
-      const { text } = await generateText({
-        model,
-        system: systemPrompt,
-        prompt,
-        tools: getTools(cwd),
-        stopWhen: stepCountIs(maxSteps),
-      });
+    async runTurn({ systemPrompt, prompt, cwd, maxSteps = 5, tools }) {
+      try {
+        const { text } = await generateText({
+          model,
+          system: systemPrompt,
+          prompt,
+          tools: getTools(cwd, tools),
+          stopWhen: stepCountIs(maxSteps),
+          abortSignal: AbortSignal.timeout(60_000),
+        });
 
-      return text.trim();
+        return text.trim();
+      } catch (error) {
+        throw normalizeProviderError(error);
+      }
     },
   };
 }

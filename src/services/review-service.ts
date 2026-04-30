@@ -7,6 +7,7 @@ import {
   type RepoInfo,
 } from "../core/github-client.js";
 import { orchestrateReview } from "../core/orchestrator.js";
+import { createRuntimeContext, type RuntimeContext } from "../core/runtime.js";
 import type { ReviewMode, ReviewReport } from "../review/types.js";
 
 export async function listWorkspacePullRequests(args: {
@@ -30,6 +31,7 @@ export async function reviewWorkspacePullRequest(args: {
   pullRequestNumber: number;
   mode: ReviewMode;
   config?: Config;
+  runtime?: RuntimeContext;
 }): Promise<{ repoInfo: RepoInfo; report: ReviewReport }> {
   const config = args.config ?? loadConfig();
   const repoInfo = getRepoInfo(args.cwd);
@@ -40,6 +42,10 @@ export async function reviewWorkspacePullRequest(args: {
 
   const client = new GitHubClient(resolveGitHubToken(config));
   const pullRequest = await client.getPullRequest(repoInfo.owner, repoInfo.repo, args.pullRequestNumber);
+  const runtime = args.runtime ?? createRuntimeContext({
+    config,
+    workspaceRoot: args.cwd,
+  });
   const report = await orchestrateReview({
     workspaceRoot: args.cwd,
     repository: `${repoInfo.owner}/${repoInfo.repo}`,
@@ -48,7 +54,7 @@ export async function reviewWorkspacePullRequest(args: {
     pullRequestBody: pullRequest.body,
     diff: pullRequest.diff,
     mode: args.mode,
-  });
+  }, runtime);
 
   return { repoInfo, report };
 }

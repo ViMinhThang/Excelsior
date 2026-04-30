@@ -1,101 +1,86 @@
-import { loadConfig } from "../config.js";
-import { globalMemory } from "../mem/memory-manager.js";
 import {
   collectWorkspaceContexts,
   extractChangedFiles,
 } from "../review/diff.js";
-import { reviewCode } from "../review/stages/code-reviewer.js";
-import { lintCode } from "../review/stages/linter.js";
+import { assertUniqueReviewStageIds, reviewStages } from "../review/stages/index.js";
 import { reflectAndSynthesize } from "../review/stages/reflection.js";
-import { auditSecurity } from "../review/stages/security.js";
 import type {
+  ReviewContext,
   ReviewReport,
   ReviewRequest,
   ReviewSection,
-  ChangedFile,
-  FileContext,
 } from "../review/types.js";
-import { ExcelsiorAgent } from "../core/agent.js";
-import { createAgentProvider } from "../core/provider.js";
-import type { Workflow } from "../core/workflow.js";
+import type { RuntimeContext } from "../core/runtime.js";
+import type { StageOutcome, Workflow } from "../core/workflow.js";
 
-interface ReviewContext {
-  request: ReviewRequest;
-  changedFiles: ChangedFile[];
-  fileContexts: FileContext[];
-  agent: ExcelsiorAgent;
-}
-
-export const ReviewWorkflow: Workflow<
+export function ReviewWorkflow(runtime: RuntimeContext): Workflow<
   ReviewRequest,
   ReviewReport,
   ReviewContext
-> = {
-  name: "Review Mission",
+> {
+  assertUniqueReviewStageIds();
 
-  prepare: async (request: ReviewRequest): Promise<ReviewContext> => {
-    const changedFiles = extractChangedFiles(request.diff);
-    const fileContexts = await collectWorkspaceContexts(
-      request.workspaceRoot,
-      changedFiles,
-    );
-    const agent = new ExcelsiorAgent(createAgentProvider(loadConfig()));
+  return {
+    name: "Review Mission",
 
-    globalMemory.addObservation(
-      "Review",
-      `Reviewing PR #${request.pullRequestNumber} in ${request.repository} (${changedFiles.length} changed file(s))`,
-    );
+    prepare: async (request: ReviewRequest): Promise<ReviewContext> => {
+      runtime.logger.info("Preparing review workflow", {
+        repository: request.repository,
+        pullRequestNumber: request.pullRequestNumber,
+      });
 
-    return { request, changedFiles, fileContexts, agent };
-  },
+      const changedFiles = extractChangedFiles(request.diff);
+      const fileContexts = await collectWorkspaceContexts(
+        request.workspaceRoot,
+        changedFiles,
+      );
 
-  stages: [
-    {
-      id: "code-review",
-      name: "Code Review",
-      execute: async (ctx) =>
-        reviewCode({
-          changedFiles: ctx.changedFiles,
-          fileContexts: ctx.fileContexts,
-          pullRequestBody: ctx.request.pullRequestBody,
-          pullRequestTitle: ctx.request.pullRequestTitle,
-          repository: ctx.request.repository,
-          workspaceRoot: ctx.request.workspaceRoot,
-          agent: ctx.agent,
-          mode: ctx.request.mode,
-        }),
+      runtime.memory.addObservation(
+        "Review",
+        `Reviewing PR #${request.pullRequestNumber} in ${request.repository} (${changedFiles.length} changed file(s))`,
+      );
+
+      return { request, changedFiles, fileContexts, runtime };
     },
-    {
-      id: "lint",
-      name: "Linting",
-      execute: async (ctx) =>
-        lintCode({
-          changedFiles: ctx.changedFiles,
-          workspaceRoot: ctx.request.workspaceRoot,
-        }),
-    },
-    {
-      id: "security",
-      name: "Security Audit",
-      execute: async (ctx) =>
-        auditSecurity({
-          changedFiles: ctx.changedFiles,
-        }),
-    },
-  ],
 
-  synthesize: async (results: ReviewSection[], ctx: ReviewContext) => {
-    const report = await reflectAndSynthesize({
-      changedFiles: ctx.changedFiles.length,
-      mode: ctx.request.mode,
-      model: ctx.agent.model,
-      provider: ctx.agent.providerName,
-      pullRequestTitle: ctx.request.pullRequestTitle,
-      reviewedAt: new Date().toISOString(),
-      sections: results,
-    });
+    stages: reviewStages,
 
-    globalMemory.addObservation("Review", report.summary);
-    return report;
-  },
-};
+    synthesize: async (outcomes: StageOutcome<unknown>[], ctx: ReviewContext) => {
+      const sections = outcomes.map((outcome): ReviewSection => {
+        runtime.logger.info("Review stage finished", {
+          stageId: outcome.stageId,
+          ok: outcome.ok,
+          durationMs: outcome.durationMs,
+        });
+
+        if (outcome.ok) {
+          return outcome.value as ReviewSection;
+        }
+
+        return {
+          source: "code-review",
+          title: `${outcome.stageName} skipped`,
+          summary: `${outcome.stageName} failed and was skipped.`,
+          findings: [],
+          notes: [outcome.error.message],
+        };
+      });
+
+      const report = await reflectAndSynthesize({
+        changedFiles: ctx.changedFiles.length,
+        mode: ctx.request.mode,
+        model: ctx.runtime.provider?.model ?? null,
+        provider: ctx.runtime.provider?.provider ?? "heuristic",
+        pullRequestTitle: ctx.request.pullRequestTitle,
+        reviewedAt: new Date().toISOString(),
+        sections,
+      });
+
+      runtime.memory.addObservation("Review", report.summary);
+      runtime.logger.info("Review workflow completed", {
+        findings: report.findings.length,
+      });
+      return report;
+    },
+  };
+}

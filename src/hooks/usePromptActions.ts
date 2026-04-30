@@ -69,6 +69,9 @@ export function usePromptActions(reviewActions: {
       case "prompt":
         await handlePrompt(parsed.text);
         break;
+      case "unknown":
+        showStatus(`Unknown command: ${parsed.raw}`, 8000);
+        break;
     }
 
     setCommand("");

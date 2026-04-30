@@ -1,14 +1,19 @@
 export interface Stage<TContext, TResult> {
   id: string;
   name: string;
+  required?: boolean;
   execute(context: TContext): Promise<TResult>;
 }
+
+export type StageOutcome<TResult> =
+  | { ok: true; stageId: string; stageName: string; durationMs: number; value: TResult }
+  | { ok: false; stageId: string; stageName: string; durationMs: number; error: Error };
 
 export interface Workflow<TInput, TOutput, TContext> {
   name: string;
   prepare(input: TInput): Promise<TContext>;
-  stages: Stage<TContext, any>[];
-  synthesize(results: any[], context: TContext): Promise<TOutput>;
+  stages: Stage<TContext, unknown>[];
+  synthesize(results: StageOutcome<unknown>[], context: TContext): Promise<TOutput>;
 }
 
 export class Orchestrator {
@@ -20,12 +25,29 @@ export class Orchestrator {
 
     const stageResults = await Promise.all(
       workflow.stages.map(async (stage) => {
+        const startedAt = Date.now();
         try {
-          return await stage.execute(context);
+          const value = await stage.execute(context);
+          return {
+            ok: true,
+            stageId: stage.id,
+            stageName: stage.name,
+            durationMs: Date.now() - startedAt,
+            value,
+          } satisfies StageOutcome<unknown>;
         } catch (error) {
-          throw new Error(
-            `Stage '${stage.name}' failed: ${error instanceof Error ? error.message : String(error)}`,
-          );
+          const stageError = error instanceof Error ? error : new Error(String(error));
+          if (stage.required ?? true) {
+            throw new Error(`Stage '${stage.name}' failed: ${stageError.message}`);
+          }
+
+          return {
+            ok: false,
+            stageId: stage.id,
+            stageName: stage.name,
+            durationMs: Date.now() - startedAt,
+            error: stageError,
+          } satisfies StageOutcome<unknown>;
         }
       }),
     );

@@ -8,10 +8,19 @@ export async function routePrompt(
   prompt: string,
   config: Config
 ): Promise<{ intent: "CHAT" | "REVIEW"; prNumber?: number | undefined }> {
+  const reviewMatch = prompt.match(/\b(?:review|pr|pull request)\s*#?\s*(\d+)\b/i);
+  if (reviewMatch?.[1]) {
+    return { intent: "REVIEW", prNumber: Number(reviewMatch[1]) };
+  }
+
+  if (/\b(review|pull request|pr)\b/i.test(prompt)) {
+    return { intent: "REVIEW" };
+  }
+
   const provider = createAgentProvider(config);
-  
+
   if (!provider) {
-    throw new Error("No valid LLM provider configured. Please check your settings.");
+    return { intent: "CHAT" };
   }
 
   const { object } = await generateObject({

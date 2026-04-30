@@ -22,7 +22,7 @@ export function parseCommand(rawInput: string): ParsedCommand {
     if (Number.isInteger(maybeNumber) && maybeNumber > 0) {
       return { type: "review-pr", prNumber: maybeNumber };
     }
-    return { type: "prompt", text: input };
+    return { type: "unknown", raw: input };
   }
 
   if (input === "/settings") {

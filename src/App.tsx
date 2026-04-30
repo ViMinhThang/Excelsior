@@ -1,6 +1,5 @@
 import React from "react";
-import { Box, Text } from "ink";
-import Spinner from "ink-spinner";
+import { Box } from "ink";
 
 import { ApiKeyInputView } from "./components/ApiKeyInputView.js";
 import { Footer } from "./components/Footer.js";

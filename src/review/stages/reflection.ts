@@ -1,34 +1,25 @@
-/**
- * Synthesizes findings from all review stages (code review, linting, and security)
- * into a unified ReviewReport, including an executive summary and rendered output.
- * 
- * IMPLEMENTATION GUIDE:
- * 1. Aggregation: Flatten findings from all `input.sections`.
- * 2. Deduplication: Use `dedupeAndSortFindings` to ensure the final report is clean.
- * 3. Summarization: Generate a high-level summary based on the total count and severity of findings.
- * 4. Rendering: Use `renderReviewReport` to transform the structured data into the final 
- *    Markdown or TUI-ready string.
- */
-
-import type { ReviewReport, ReviewSection } from "../types.js";
+import type { ProviderName } from "../../config.js";
+import { buildSummary, dedupeAndSortFindings, flattenSectionFindings, renderReviewReport } from "../format.js";
+import type { ReviewMode, ReviewReport, ReviewSection } from "../types.js";
 
 export interface ReflectionInput {
   changedFiles: number;
-  mode: "ACT" | "PLAN";
+  mode: ReviewMode;
   model: string | null;
-  provider: any;
+  provider: ProviderName | "heuristic";
   pullRequestTitle: string;
   reviewedAt: string;
   sections: ReviewSection[];
 }
 
 export async function reflectAndSynthesize(input: ReflectionInput): Promise<ReviewReport> {
-  return {
-    summary: "Synthesis placeholder.",
-    overview: "Workflow synthesis and reflection stage placeholder.",
+  const findings = dedupeAndSortFindings(flattenSectionFindings(input.sections));
+  const summary = buildSummary(findings);
+  const report: Omit<ReviewReport, "rendered"> = {
+    summary,
+    overview: `Reviewed ${input.changedFiles} changed file(s) across ${input.sections.length} stage(s).`,
     sections: input.sections,
-    findings: [],
-    rendered: "# Review Placeholder\nImplementation pending.",
+    findings,
     metadata: {
       reviewedAt: input.reviewedAt,
       changedFiles: input.changedFiles,
@@ -37,5 +28,10 @@ export async function reflectAndSynthesize(input: ReflectionInput): Promise<Revi
       model: input.model,
       pullRequestTitle: input.pullRequestTitle,
     },
+  };
+
+  return {
+    ...report,
+    rendered: renderReviewReport(report),
   };
 }
