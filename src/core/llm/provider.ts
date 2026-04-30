@@ -1,9 +1,9 @@
 import { generateText } from "ai";
 
-import { loadConfig, type Config, type ProviderName } from "../config.js";
-import { getTools } from "../tools/index.js";
-import { normalizeProviderError } from "./provider-errors.js";
-import { getProvider, PROVIDER_REGISTRY } from "./providers/registry.js";
+import { loadConfig, type Config, type ProviderName } from "../../config.js";
+import { getTools } from "../../tools/index.js";
+import { normalizeProviderError } from "./errors.js";
+import { getProvider, PROVIDER_REGISTRY } from "./registry.js";
 
 export interface AgentProvider {
   provider: ProviderName;

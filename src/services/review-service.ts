@@ -1,11 +1,7 @@
 import { loadConfig, type Config } from "../config.js";
-import {
-  getRepoInfo,
-  GitHubClient,
-  resolveGitHubToken,
-  type PullRequest,
-  type RepoInfo,
-} from "../core/github-client.js";
+import { GitHubClient, resolveGitHubToken } from "../core/github/client.js";
+import { getRepoInfo } from "../core/github/git.js";
+import type { PullRequest, RepoInfo } from "../core/github/types.js";
 import { createRuntimeContext, type RuntimeContext } from "../core/runtime.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
 import type { ReviewMode, ReviewReport } from "../review/types.js";

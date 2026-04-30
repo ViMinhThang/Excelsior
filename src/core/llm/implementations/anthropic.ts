@@ -1,5 +1,5 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { ProviderDefinition } from "./types.js";
+import { ProviderDefinition } from "../types.js";
 
 export const anthropicProvider: ProviderDefinition = {
   id: "anthropic",

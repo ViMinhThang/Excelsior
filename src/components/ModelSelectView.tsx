@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
 
 import type { Config } from "../config.js";
-import { PROVIDER_REGISTRY } from "../core/providers/registry.js";
+import { PROVIDER_REGISTRY } from "../core/llm/registry.js";
 
 export const ModelSelectView = ({
   config,

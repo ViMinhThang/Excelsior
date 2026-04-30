@@ -3,8 +3,8 @@ import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
 
 import type { Config, ProviderName } from "../config.js";
-import { listProviderOptions } from "../core/provider.js";
-import { getProvider } from "../core/providers/registry.js";
+import { listProviderOptions } from "../core/llm/provider.js";
+import { getProvider } from "../core/llm/registry.js";
 
 export const ProviderSelectView = ({
   config,

@@ -1,5 +1,5 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { ProviderDefinition } from "./types.js";
+import { ProviderDefinition } from "../types.js";
 
 export const googleProvider: ProviderDefinition = {
   id: "google",

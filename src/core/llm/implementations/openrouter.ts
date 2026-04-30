@@ -1,5 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { ProviderDefinition } from "./types.js";
+import { ProviderDefinition } from "../types.js";
 
 export const openrouterProvider: ProviderDefinition = {
   id: "openrouter",

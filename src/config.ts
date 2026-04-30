@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { z } from "zod";
 
-import { getProviderIds, PROVIDER_REGISTRY } from "./core/providers/registry.js";
+import { getProviderIds, PROVIDER_REGISTRY } from "./core/llm/registry.js";
 
 export const providerSchema = z.enum(getProviderIds() as [string, ...string[]]);
 

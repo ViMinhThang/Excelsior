@@ -1,6 +1,6 @@
 import { useAppContext } from "../context/AppContext.js";
 import { saveConfig, type Config, type ProviderName } from "../config.js";
-import { getProvider, PROVIDER_REGISTRY } from "../core/providers/registry.js";
+import { getProvider, PROVIDER_REGISTRY } from "../core/llm/registry.js";
 
 export function useSettingsActions() {
   const {

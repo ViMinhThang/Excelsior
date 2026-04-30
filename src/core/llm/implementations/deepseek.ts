@@ -1,5 +1,5 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
-import { ProviderDefinition } from "./types.js";
+import { ProviderDefinition } from "../types.js";
 
 export const deepseekProvider: ProviderDefinition = {
   id: "deepseek",

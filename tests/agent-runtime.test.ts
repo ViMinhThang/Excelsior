@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { z } from "zod";
 
-import { Agent } from "../src/core/agent.js";
-import type { AgentProvider } from "../src/core/provider.js";
+import { Agent } from "../src/core/agent/agent.js";
+import type { AgentProvider } from "../src/core/llm/provider.js";
 import type { RuntimeContext } from "../src/core/runtime.js";
 import { noopLogger } from "../src/core/logger.js";
 import {
