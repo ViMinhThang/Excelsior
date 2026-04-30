@@ -1,10 +1,11 @@
 import { useConfig } from "../context/ConfigContext.js";
 import { useUI } from "../context/UIContext.js";
 import { useReview } from "../context/ReviewContext.js";
+import { useAsyncAction } from "./useAsyncAction.js";
+import { useCommandContext } from "./useCommandContext.js";
 import { registry } from "../app/commands/index.js";
 import { routePrompt } from "../services/router-service.js";
 import { runChat } from "../services/chat-service.js";
-import type { CommandContext } from "../app/commands.js";
 
 export function usePromptActions(reviewActions: {
   loadPullRequests: () => Promise<void>;
@@ -12,21 +13,18 @@ export function usePromptActions(reviewActions: {
 }) {
   const { config, workspace, memory } = useConfig();
   const { 
-    setIsLoading, 
-    setLoadingMessage, 
     setChatResponse, 
     setView, 
-    setCommand 
+    setCommand
   } = useUI();
-  const { setReviewReport, setMode } = useReview();
+  const { setReviewReport } = useReview();
+  const { run } = useAsyncAction();
 
   async function handlePrompt(promptText: string): Promise<void> {
-    setChatResponse(null);
-    setReviewReport(null);
-    setIsLoading(true);
-    setLoadingMessage("Thinking...");
+    await run("Thinking...", async () => {
+      setChatResponse(null);
+      setReviewReport(null);
 
-    try {
       const route = await routePrompt(promptText, config, workspace, memory);
 
       if (route.intent === "REVIEW") {
@@ -36,37 +34,22 @@ export function usePromptActions(reviewActions: {
           await reviewActions.loadPullRequests();
         }
       } else {
-        setLoadingMessage("Generating response...");
         memory.addObservation("User", promptText);
         const response = await runChat(promptText, config, workspace, memory);
         memory.addObservation("Assistant", response);
         setChatResponse(response);
       }
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsLoading(false);
-    }
+    });
   }
 
-  async function handleCommandSubmit(value: string): Promise<void> {
-    const ctx: CommandContext = {
-      config,
-      workspace,
-      memory,
-      setView,
-      setIsLoading,
-      setLoadingMessage,
-      setChatResponse,
-      setReviewReport,
-      setMode,
-      loadPullRequests: reviewActions.loadPullRequests,
-      runReview: reviewActions.runReview,
-      handlePrompt,
-      getHelpText: () => registry.helpText(),
-    };
+  const commandCtx = useCommandContext({
+    loadPullRequests: reviewActions.loadPullRequests,
+    runReview: reviewActions.runReview,
+    handlePrompt,
+  });
 
-    await registry.dispatch(value, ctx);
+  async function handleCommandSubmit(value: string): Promise<void> {
+    await registry.dispatch(value, commandCtx);
     setCommand("");
   }
 

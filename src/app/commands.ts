@@ -1,15 +1,16 @@
 import type { Config } from "../config.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
 import type { ReviewMode, ReviewReport } from "../review/types.js";
-import type { View } from "../context/AppContext.js";
+import type { View, NotificationType } from "../context/UIContext.js";
 
 export interface CommandContext {
   config: Config;
   workspace: string;
   memory: MemoryManager;
   setView(view: View): void;
-  setIsLoading(v: boolean): void;
-  setLoadingMessage(msg: string): void;
+  notify(msg: string, type?: NotificationType, duration?: number): void;
+  startTask(id: string, message: string): void;
+  endTask(id: string): void;
   setChatResponse(r: string | null): void;
   setReviewReport(r: ReviewReport | null): void;
   setMode(mode: ReviewMode): void;
@@ -19,10 +20,10 @@ export interface CommandContext {
   getHelpText(): string;
 }
 
-export interface CommandDefinition<T = any> {
+export interface CommandDefinition<T extends Record<string, any> = {}> {
   name: string;
   syntax: string;
   description: string;
-  parse(input: string): T | null;
+  parse(args: string): T | null;
   execute(args: T, ctx: CommandContext): Promise<void>;
 }

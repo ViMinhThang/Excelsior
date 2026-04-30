@@ -1,32 +1,25 @@
 import React from "react";
 import { Box, Text } from "ink";
-
-import { type Config } from "../config.js";
+import { useConfig } from "../context/ConfigContext.js";
+import { useReview } from "../context/ReviewContext.js";
 import { useUI } from "../context/UIContext.js";
-import type { ReviewMode, ReviewReport } from "../review/types.js";
 import { useCommandInput } from "../hooks/useCommandInput.js";
 import { CommandBar } from "./MainView/CommandBar.js";
 import { AssistantResponse } from "./MainView/AssistantResponse.js";
 import { Header } from "./MainView/Header.js";
 import { WorkspaceInfo } from "./MainView/WorkspaceInfo.js";
 
-export const MainView = ({
-  config,
-  mode,
-  reviewReport,
-  chatResponse,
-  onCommandSubmit,
-  onOpenSettings,
-}: {
-  config: Config;
-  mode: ReviewMode;
-  reviewReport: ReviewReport | null;
-  chatResponse: string | null;
-  onCommandSubmit: (value: string) => Promise<void>;
-  onOpenSettings: () => void;
-}) => {
-  const { isLoading, loadingMessage } = useUI();
+import { usePromptActions } from "../hooks/usePromptActions.js";
+import { useReviewActions } from "../hooks/useReviewActions.js";
+
+export const MainView = () => {
+  const { config } = useConfig();
+  const { mode, reviewReport } = useReview();
+  const { chatResponse, isLoading, loadingMessage, setView } = useUI();
   const commandInput = useCommandInput();
+  
+  const reviewActions = useReviewActions();
+  const { handleCommandSubmit } = usePromptActions(reviewActions);
 
   return (
     <Box flexDirection="column">
@@ -41,8 +34,8 @@ export const MainView = ({
       <Box marginTop={1} flexDirection="column">
         <CommandBar
           {...commandInput}
-          onCommandSubmit={onCommandSubmit}
-          onOpenSettings={onOpenSettings}
+          onCommandSubmit={handleCommandSubmit}
+          onOpenSettings={() => setView("SETTINGS")}
         />
       </Box>
 

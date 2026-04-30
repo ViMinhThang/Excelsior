@@ -9,7 +9,8 @@ export function useSettingsActions() {
     credentialField, 
     setCredentialField, 
     setCredentialInput, 
-    setView 
+    setView,
+    notify
   } = useUI();
 
   function handleSettingsSelect(value: string): void {
@@ -54,6 +55,7 @@ export function useSettingsActions() {
 
     saveConfig({ LLM_PROVIDER: provider });
     refreshConfig();
+    notify(`Provider set to ${entry.label}.`, "success");
 
     const field = entry.apiKeyField as keyof Config;
     setCredentialField(field as any);
@@ -81,6 +83,7 @@ export function useSettingsActions() {
       [entry.modelField]: model,
     });
     refreshConfig();
+    notify(`Switched to ${entry.label} / ${model}.`, "success");
     setView("SETTINGS");
   }
 
@@ -95,6 +98,7 @@ export function useSettingsActions() {
     setCredentialInput("");
     setCredentialField(null);
     setView("SETTINGS");
+    notify("Credential saved.", "success");
   }
 
   function credentialTitle(): string {
@@ -111,11 +115,46 @@ export function useSettingsActions() {
     return "Enter value";
   }
 
+  function getProviderOptions() {
+    return [
+      ...PROVIDER_REGISTRY.map((provider) => {
+        const isConfigured = !!(config as any)[provider.apiKeyField];
+        const activeSuffix = config.LLM_PROVIDER === provider.id ? " [active]" : "";
+        const configSuffix = isConfigured ? " (configured)" : " (missing key)";
+
+        return {
+          label: `${provider.label}${configSuffix}${activeSuffix}`,
+          value: provider.id,
+        };
+      }),
+      { label: "Back", value: "back" as const },
+    ];
+  }
+
+  function getModelOptions() {
+    return [
+      ...PROVIDER_REGISTRY.flatMap((provider) =>
+        provider.recommendedModels.map((model) => {
+          const currentModel = config[provider.modelField as keyof Config] === model;
+          const isActive = config.LLM_PROVIDER === provider.id && currentModel;
+
+          return {
+            label: `[${provider.label}] ${model}${isActive ? " [active]" : ""}`,
+            value: `${provider.id}:${model}`,
+          };
+        }),
+      ),
+      { label: "Back", value: "back" },
+    ];
+  }
+
   return {
     handleSettingsSelect,
     handleProviderSelect,
     handleModelSelect,
     handleCredentialSubmit,
     credentialTitle,
+    getProviderOptions,
+    getModelOptions,
   };
 }

@@ -4,7 +4,7 @@ export const settingsCommand: CommandDefinition = {
   name: "settings",
   syntax: "/settings",
   description: "Open configuration settings",
-  parse: (input) => (input.trim() === "/settings" ? {} : null),
+  parse: (args) => (args.trim() === "" ? {} : null),
   execute: async (_args, ctx) => {
     ctx.setView("SETTINGS");
   },

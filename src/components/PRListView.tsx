@@ -1,18 +1,16 @@
 import React from "react";
 import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
+import { useReview } from "../context/ReviewContext.js";
 
-import type { PullRequest } from "../core/github/types.js";
+import { useUI } from "../context/UIContext.js";
+import { useReviewActions } from "../hooks/useReviewActions.js";
 
-export const PRListView = ({
-  pullRequests,
-  onBack,
-  onSelect,
-}: {
-  pullRequests: PullRequest[];
-  onBack: () => void;
-  onSelect: (pullRequestNumber: number) => Promise<void>;
-}) => {
+export const PRListView = () => {
+  const { pullRequests } = useReview();
+  const { handlePullRequestSelect } = useReviewActions();
+  const { setView } = useUI();
+  
   const items = [
     ...pullRequests.map((pullRequest) => ({
       label: `[#${pullRequest.number}] ${pullRequest.title} (${pullRequest.author})`,
@@ -31,11 +29,11 @@ export const PRListView = ({
           items={items}
           onSelect={(item) => {
             if (item.value === "back") {
-              onBack();
+              setView("MAIN");
               return;
             }
 
-            void onSelect(Number(item.value));
+            void handlePullRequestSelect(Number(item.value));
           }}
         />
       </Box>

@@ -2,30 +2,11 @@ import React from "react";
 import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
 
-import type { Config } from "../config.js";
-import { PROVIDER_REGISTRY } from "../core/llm/registry.js";
+import { useSettingsActions } from "../hooks/useSettingsActions.js";
 
-export const ModelSelectView = ({
-  config,
-  onSelect,
-}: {
-  config: Config;
-  onSelect: (value: string) => void;
-}) => {
-  const items = [
-    ...PROVIDER_REGISTRY.flatMap((provider) =>
-      provider.recommendedModels.map((model) => {
-        const currentModel = config[provider.modelField as keyof Config] === model;
-        const isActive = config.LLM_PROVIDER === provider.id && currentModel;
-
-        return {
-          label: `[${provider.label}] ${model}${isActive ? " [active]" : ""}`,
-          value: `${provider.id}:${model}`,
-        };
-      }),
-    ),
-    { label: "Back", value: "back" },
-  ];
+export const ModelSelectView = () => {
+  const { handleModelSelect, getModelOptions } = useSettingsActions();
+  const items = getModelOptions();
 
   return (
     <Box flexDirection="column">
@@ -35,7 +16,7 @@ export const ModelSelectView = ({
       <Box marginTop={1}>
         <SelectInput
           items={items}
-          onSelect={(item) => onSelect(item.value)}
+          onSelect={(item) => handleModelSelect(item.value)}
         />
       </Box>
     </Box>

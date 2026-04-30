@@ -7,8 +7,15 @@ export class CommandRegistry {
     const trimmedInput = input.trim();
     if (!trimmedInput) return;
 
-    for (const cmd of this.commands) {
-      const args = cmd.parse(trimmedInput);
+    const [commandPart, ...rest] = trimmedInput.split(/\s+/);
+    const argsString = rest.join(" ");
+
+    const cmd = this.commands.find(
+      (c) => c.syntax.split(/\s+/)[0] === commandPart,
+    );
+
+    if (cmd) {
+      const args = cmd.parse(argsString);
       if (args !== null) {
         await cmd.execute(args, ctx);
         return;
@@ -16,7 +23,7 @@ export class CommandRegistry {
     }
 
     if (trimmedInput.startsWith("/")) {
-      ctx.setChatResponse(`Unknown command: ${trimmedInput}`);
+      ctx.notify(`Unknown command: ${trimmedInput}`, "error");
       return;
     }
 

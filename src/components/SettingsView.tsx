@@ -1,16 +1,13 @@
 import React from "react";
 import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
+import { useConfig } from "../context/ConfigContext.js";
 
-import type { Config } from "../config.js";
+import { useSettingsActions } from "../hooks/useSettingsActions.js";
 
-export const SettingsView = ({
-  config,
-  onSelect,
-}: {
-  config: Config;
-  onSelect: (value: string) => void;
-}) => {
+export const SettingsView = () => {
+  const { config } = useConfig();
+  const { handleSettingsSelect } = useSettingsActions();
   const items = [
     {
       label: "Provider",
@@ -38,7 +35,7 @@ export const SettingsView = ({
       <Box marginTop={1}>
         <SelectInput
           items={items}
-          onSelect={(item) => onSelect(item.value)}
+          onSelect={(item) => handleSettingsSelect(item.value)}
         />
       </Box>
     </Box>

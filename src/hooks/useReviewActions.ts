@@ -1,6 +1,7 @@
 import { useConfig } from "../context/ConfigContext.js";
 import { useUI } from "../context/UIContext.js";
 import { useReview } from "../context/ReviewContext.js";
+import { useAsyncAction } from "./useAsyncAction.js";
 import {
   listWorkspacePullRequests,
   reviewWorkspacePullRequest,
@@ -8,33 +9,24 @@ import {
 
 export function useReviewActions() {
   const { config, workspace, memory } = useConfig();
-  const { setIsLoading, setLoadingMessage, setView } = useUI();
+  const { setView } = useUI();
   const { mode, setPullRequests, setReviewReport } = useReview();
+  const { run } = useAsyncAction();
 
   async function loadPullRequests(): Promise<void> {
-    setIsLoading(true);
-    setLoadingMessage("Fetching pull requests...");
-
-    try {
-      const { repoInfo, pullRequests } = await listWorkspacePullRequests({
+    await run("Fetching pull requests...", async () => {
+      const { pullRequests } = await listWorkspacePullRequests({
         cwd: workspace,
         config,
       });
       setPullRequests(pullRequests);
       setView("PR_LIST");
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsLoading(false);
-    }
+    });
   }
 
   async function runReview(pullRequestNumber: number): Promise<void> {
-    setIsLoading(true);
-    setLoadingMessage(`Reviewing PR #${pullRequestNumber}...`);
-
-    try {
-      const { repoInfo, report } = await reviewWorkspacePullRequest({
+    await run(`Reviewing PR #${pullRequestNumber}...`, async () => {
+      const { report } = await reviewWorkspacePullRequest({
         cwd: workspace,
         pullRequestNumber,
         mode,
@@ -43,11 +35,7 @@ export function useReviewActions() {
       });
       setReviewReport(report);
       setView("MAIN");
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsLoading(false);
-    }
+    });
   }
 
   async function handlePullRequestSelect(

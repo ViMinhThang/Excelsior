@@ -7,7 +7,7 @@ import type { ReviewMode } from "../review/types.js";
 export function useKeyboardShortcuts(): void {
   const { exit } = useApp();
   const { config, memory } = useConfig();
-  const { view, setView } = useUI();
+  const { view, setView, notify } = useUI();
   const { mode, setMode } = useReview();
 
   useInput((input, key) => {
@@ -20,6 +20,7 @@ export function useKeyboardShortcuts(): void {
       const nextMode: ReviewMode = mode === "ACT" ? "PLAN" : "ACT";
       setMode(nextMode);
       memory.setMode(nextMode);
+      notify(`Switched to ${nextMode} mode.`, "info", 2000);
       return;
     }
 

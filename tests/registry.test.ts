@@ -10,7 +10,7 @@ test("CommandRegistry dispatches to matching command", async () => {
     name: "test",
     syntax: "/test",
     description: "test",
-    parse: (input) => (input === "/test" ? {} : null),
+    parse: (args) => (args === "" ? {} : null),
     execute: async () => { executed = true; },
   };
 
@@ -35,12 +35,17 @@ test("CommandRegistry falls through to handlePrompt for unknown input", async ()
 });
 
 test("CommandRegistry shows error for unknown / command", async () => {
-  let chatResponse = "";
+  let notifiedMessage = "";
+  let notifiedType = "";
   const mockCtx = {
-    setChatResponse: (msg: string) => { chatResponse = msg; },
+    notify: (msg: string, type: string) => { 
+      notifiedMessage = msg;
+      notifiedType = type;
+    },
   } as any;
 
   const registry = new CommandRegistry([]);
   await registry.dispatch("/unknown", mockCtx);
-  assert.equal(chatResponse, "Unknown command: /unknown");
+  assert.equal(notifiedMessage, "Unknown command: /unknown");
+  assert.equal(notifiedType, "error");
 });

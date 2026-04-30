@@ -4,8 +4,8 @@ export const forgetCommand: CommandDefinition = {
   name: "forget",
   syntax: "/forget",
   description: "Reset session memory (coming soon)",
-  parse: (input) => (input.trim() === "/forget" ? {} : null),
+  parse: (args) => (args.trim() === "" ? {} : null),
   execute: async (_args, ctx) => {
-    ctx.setChatResponse("Memory reset coming soon.");
+    ctx.notify("Memory reset coming soon.", "info");
   },
 };
