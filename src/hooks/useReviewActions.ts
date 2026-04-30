@@ -9,7 +9,7 @@ import {
 
 export function useReviewActions() {
   const { config, workspace, memory } = useConfig();
-  const { setView } = useUI();
+  const { setView, setChatResponse } = useUI();
   const { mode, setPullRequests, setReviewReport } = useReview();
   const { run } = useAsyncAction();
 
@@ -34,6 +34,7 @@ export function useReviewActions() {
         config,
       });
       setReviewReport(report);
+      setChatResponse(report.rendered);
       setView("MAIN");
     });
   }

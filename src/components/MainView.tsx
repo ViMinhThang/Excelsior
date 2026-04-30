@@ -14,7 +14,7 @@ import { useReviewActions } from "../hooks/useReviewActions.js";
 
 export const MainView = () => {
   const { config } = useConfig();
-  const { mode, reviewReport } = useReview();
+  const { mode } = useReview();
   const { chatResponse, isLoading, loadingMessage, setView } = useUI();
   const commandInput = useCommandInput();
   
@@ -42,17 +42,6 @@ export const MainView = () => {
       <Box marginTop={1}>
         <Text dimColor>Use Tab to switch between the command input and the settings shortcut.</Text>
       </Box>
-
-      {reviewReport ? (
-        <Box marginTop={1} borderStyle="round" borderColor="cyan" paddingX={1} flexDirection="column">
-          <Text bold color="cyan">
-            Latest Review
-          </Text>
-          {reviewReport.rendered.split("\n").map((line, index) => (
-            <Text key={`${index}-${line}`}>{line}</Text>
-          ))}
-        </Box>
-      ) : null}
 
     </Box>
   );
