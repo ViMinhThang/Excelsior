@@ -6,9 +6,13 @@ import {
   type PullRequest,
   type RepoInfo,
 } from "../core/github-client.js";
-import { orchestrateReview } from "../core/orchestrator.js";
 import { createRuntimeContext, type RuntimeContext } from "../core/runtime.js";
+import type { MemoryManager } from "../mem/memory-manager.js";
 import type { ReviewMode, ReviewReport } from "../review/types.js";
+import { reviewAgent } from "../review/review-agent.js";
+import { extractChangedFiles, collectWorkspaceContexts } from "../review/diff.js";
+import { formatChangedFiles, formatFileContexts } from "../review/review-utils.js";
+import { renderReviewReport } from "../review/format.js";
 
 export async function listWorkspacePullRequests(args: {
   cwd: string;
@@ -30,6 +34,7 @@ export async function reviewWorkspacePullRequest(args: {
   cwd: string;
   pullRequestNumber: number;
   mode: ReviewMode;
+  memory: MemoryManager;
   config?: Config;
   runtime?: RuntimeContext;
 }): Promise<{ repoInfo: RepoInfo; report: ReviewReport }> {
@@ -45,16 +50,55 @@ export async function reviewWorkspacePullRequest(args: {
   const runtime = args.runtime ?? createRuntimeContext({
     config,
     workspaceRoot: args.cwd,
+    memory: args.memory,
   });
-  const report = await orchestrateReview({
-    workspaceRoot: args.cwd,
-    repository: `${repoInfo.owner}/${repoInfo.repo}`,
-    pullRequestNumber: pullRequest.pull_number,
-    pullRequestTitle: pullRequest.title,
-    pullRequestBody: pullRequest.body,
-    diff: pullRequest.diff,
-    mode: args.mode,
-  }, runtime);
 
+  const changedFiles = extractChangedFiles(pullRequest.diff);
+  const fileContexts = await collectWorkspaceContexts(args.cwd, changedFiles);
+  
+  const prompt = [
+    `Repository: ${repoInfo.owner}/${repoInfo.repo}`,
+    `Pull request: ${pullRequest.title}`,
+    pullRequest.body ? `Description:\n${pullRequest.body}` : "Description: (none)",
+    "Changed files and patches:",
+    formatChangedFiles(changedFiles),
+    "Initial file snapshots:",
+    formatFileContexts(fileContexts),
+  ].join("\n\n");
+
+  runtime.memory.addObservation(
+    "Review",
+    `Reviewing PR #${args.pullRequestNumber} (${changedFiles.length} changed file(s))`,
+  );
+
+  const result = await reviewAgent.run({
+    prompt,
+    runtime,
+    mode: args.mode,
+  });
+
+  if (!result.ok) {
+    throw new Error(result.message);
+  }
+
+  const metadata = {
+    reviewedAt: new Date().toISOString(),
+    changedFiles: changedFiles.length,
+    mode: args.mode,
+    provider: runtime.provider?.provider ?? "heuristic",
+    model: runtime.provider?.model ?? null,
+    pullRequestTitle: pullRequest.title,
+  } as const;
+
+  const report: ReviewReport = {
+    ...result.value,
+    metadata,
+    rendered: renderReviewReport({
+      ...result.value,
+      metadata,
+    }),
+  };
+
+  runtime.memory.addObservation("Review", report.summary);
   return { repoInfo, report };
 }

@@ -1,6 +1,5 @@
 import type { ProviderName } from "../config.js";
 import type { RuntimeContext } from "../core/runtime.js";
-import type { Stage } from "../core/workflow.js";
 
 export type ReviewMode = "ACT" | "PLAN";
 export type ReviewSeverity = "high" | "medium" | "low";
@@ -66,14 +65,3 @@ export interface ReviewReport {
     pullRequestTitle: string;
   };
 }
-
-export interface ReviewContext {
-  request: ReviewRequest;
-  changedFiles: ChangedFile[];
-  fileContexts: FileContext[];
-  runtime: RuntimeContext;
-}
-
-export type ReviewStage = Stage<ReviewContext, ReviewSection> & {
-  source: ReviewSource;
-};

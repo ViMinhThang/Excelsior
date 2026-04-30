@@ -37,6 +37,13 @@ export function useSettingsActions() {
       return;
     }
 
+    if (value === "deepseek_key") {
+      setCredentialField("DEEPSEEK_API_KEY");
+      setCredentialInput(config.DEEPSEEK_API_KEY ?? "");
+      setView("CREDENTIAL_INPUT");
+      return;
+    }
+
     if (value === "github_token") {
       setCredentialField("GITHUB_TOKEN");
       setCredentialInput(config.GITHUB_TOKEN ?? "");
@@ -48,7 +55,7 @@ export function useSettingsActions() {
   }
 
   function handleProviderSelect(
-    provider: "google" | "anthropic" | "back",
+    provider: "google" | "anthropic" | "deepseek" | "back",
   ): void {
     if (provider === "back") {
       setView("SETTINGS");
@@ -65,6 +72,9 @@ export function useSettingsActions() {
     } else if (provider === "anthropic") {
       setCredentialField("ANTHROPIC_API_KEY");
       setCredentialInput(config.ANTHROPIC_API_KEY ?? "");
+    } else if (provider === "deepseek") {
+      setCredentialField("DEEPSEEK_API_KEY");
+      setCredentialInput(config.DEEPSEEK_API_KEY ?? "");
     }
 
     setView("CREDENTIAL_INPUT");
@@ -79,7 +89,11 @@ export function useSettingsActions() {
     const [provider, ...modelParts] = value.split(":");
     const model = modelParts.join(":");
     const modelField =
-      provider === "google" ? "GEMINI_MODEL" : "ANTHROPIC_MODEL";
+      provider === "google"
+        ? "GEMINI_MODEL"
+        : provider === "anthropic"
+          ? "ANTHROPIC_MODEL"
+          : "DEEPSEEK_MODEL";
 
     saveConfig({
       LLM_PROVIDER: provider as any,
@@ -110,6 +124,8 @@ export function useSettingsActions() {
         return "Enter Gemini API Key";
       case "ANTHROPIC_API_KEY":
         return "Enter Anthropic API Key";
+      case "DEEPSEEK_API_KEY":
+        return "Enter DeepSeek API Key";
       case "GITHUB_TOKEN":
         return "Enter GitHub Token";
       default:

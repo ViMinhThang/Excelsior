@@ -17,6 +17,7 @@ export function usePromptActions(reviewActions: {
     setView,
     setCommand,
     workspace,
+    memory,
   } = useAppContext();
 
   async function handlePrompt(promptText: string): Promise<void> {
@@ -26,7 +27,7 @@ export function usePromptActions(reviewActions: {
     setLoadingMessage("Thinking...");
 
     try {
-      const route = await routePrompt(promptText, config);
+      const route = await routePrompt(promptText, config, workspace, memory);
 
       if (route.intent === "REVIEW") {
         if (route.prNumber !== undefined) {
@@ -36,7 +37,7 @@ export function usePromptActions(reviewActions: {
         }
       } else {
         setLoadingMessage("Generating response...");
-        const response = await runChat(promptText, config, workspace);
+        const response = await runChat(promptText, config, workspace, memory);
         setChatResponse(response);
       }
     } catch (error) {

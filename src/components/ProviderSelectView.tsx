@@ -16,7 +16,8 @@ export const ProviderSelectView = ({
     ...listProviderOptions(config).map((option) => {
       const isConfigured =
         (option.value === "google" && !!config.GEMINI_API_KEY) ||
-        (option.value === "anthropic" && !!config.ANTHROPIC_API_KEY);
+        (option.value === "anthropic" && !!config.ANTHROPIC_API_KEY) ||
+        (option.value === "deepseek" && !!config.DEEPSEEK_API_KEY);
       const activeSuffix = config.LLM_PROVIDER === option.value ? " [active]" : "";
       const configSuffix = isConfigured ? " (configured)" : " (missing key)";
 

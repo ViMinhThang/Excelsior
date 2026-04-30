@@ -1,6 +1,5 @@
 import { useApp, useInput } from "ink";
 import { useAppContext } from "../context/AppContext.js";
-import { globalMemory } from "../mem/memory-manager.js";
 import type { ReviewMode } from "../review/types.js";
 
 export function useKeyboardShortcuts(): void {
@@ -11,6 +10,7 @@ export function useKeyboardShortcuts(): void {
     setMode,
     setView,
     showStatus,
+    memory,
   } = state;
 
   useInput((input, key) => {
@@ -22,7 +22,7 @@ export function useKeyboardShortcuts(): void {
     if ((key.ctrl && input === "p") || key.tab) {
       const nextMode: ReviewMode = mode === "ACT" ? "PLAN" : "ACT";
       setMode(nextMode);
-      globalMemory.setMode(nextMode);
+      memory.setMode(nextMode);
       showStatus(`Switched to ${nextMode} mode.`);
       return;
     }

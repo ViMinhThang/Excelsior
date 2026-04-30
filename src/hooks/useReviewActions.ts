@@ -15,6 +15,7 @@ export function useReviewActions() {
     setView,
     showStatus,
     workspace,
+    memory,
   } = useAppContext();
 
   async function loadPullRequests(): Promise<void> {
@@ -47,6 +48,7 @@ export function useReviewActions() {
         cwd: workspace,
         pullRequestNumber,
         mode,
+        memory,
         config,
       });
       setReviewReport(report);

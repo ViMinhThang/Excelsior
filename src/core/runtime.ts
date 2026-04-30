@@ -1,6 +1,5 @@
 import type { Config } from "../config.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
-import { globalMemory } from "../mem/memory-manager.js";
 import { createAgentProvider, type AgentProvider } from "./provider.js";
 import { noopLogger, type Logger } from "./logger.js";
 
@@ -15,7 +14,7 @@ export interface RuntimeContext {
 export function createRuntimeContext(args: {
   config: Config;
   workspaceRoot: string;
-  memory?: MemoryManager;
+  memory: MemoryManager;
   logger?: Logger;
   provider?: AgentProvider | null;
 }): RuntimeContext {
@@ -23,7 +22,7 @@ export function createRuntimeContext(args: {
     config: args.config,
     workspaceRoot: args.workspaceRoot,
     provider: args.provider ?? createAgentProvider(args.config),
-    memory: args.memory ?? globalMemory,
+    memory: args.memory,
     logger: args.logger ?? noopLogger,
   };
 }

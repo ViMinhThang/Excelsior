@@ -10,10 +10,11 @@ import React, {
 
 import { loadConfig, type Config } from "../config.js";
 import type { PullRequest } from "../core/github-client.js";
+import type { MemoryManager } from "../mem/memory-manager.js";
 import type { ReviewMode, ReviewReport } from "../review/types.js";
 
 export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "MODEL_SELECT" | "CREDENTIAL_INPUT" | "PR_LIST";
-export type CredentialField = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "GITHUB_TOKEN" | null;
+export type CredentialField = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "DEEPSEEK_API_KEY" | "GITHUB_TOKEN" | null;
 
 interface AppState {
   view: View;
@@ -29,6 +30,7 @@ interface AppState {
   reviewReport: ReviewReport | null;
   chatResponse: string | null;
   mode: ReviewMode;
+  memory: MemoryManager;
 }
 
 interface AppContextType extends AppState {
@@ -50,7 +52,7 @@ interface AppContextType extends AppState {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export function AppProvider({ children }: { children: ReactNode }) {
+export function AppProvider({ children, memory }: { children: ReactNode; memory: MemoryManager }) {
   const [view, setView] = useState<View>("MAIN");
   const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -89,7 +91,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppContextType>(
     () => ({
       view,
-      workspace: process.cwd(),
+      workspace: memory.workspaceRoot,
       statusMessage,
       isLoading,
       loadingMessage,
@@ -101,6 +103,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reviewReport,
       chatResponse,
       mode,
+      memory,
       setView,
       setStatusMessage,
       setIsLoading,
@@ -129,6 +132,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       reviewReport,
       chatResponse,
       mode,
+      memory,
       refreshConfig,
       showStatus,
     ],

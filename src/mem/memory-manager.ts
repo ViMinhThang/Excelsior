@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import path from "node:path";
-import { promises as fs } from "node:fs";
+import fs from "node:fs";
 
 export interface Observation {
   id?: number;
@@ -10,7 +10,7 @@ export interface Observation {
 }
 
 export class MemoryManager {
-  private db: Database.Database | null = null;
+  private db: Database.Database;
   private readonly dbPath: string;
   public readonly workspaceRoot: string;
   private fallbackMode: "ACT" | "PLAN" = "ACT";
@@ -18,11 +18,11 @@ export class MemoryManager {
   constructor(workspaceRoot: string) {
     this.workspaceRoot = workspaceRoot;
     this.dbPath = path.join(workspaceRoot, ".excelsior", "memory.db");
-  }
 
-  async init() {
     const dir = path.dirname(this.dbPath);
-    await fs.mkdir(dir, { recursive: true });
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
 
     this.db = new Database(this.dbPath);
 
@@ -44,7 +44,6 @@ export class MemoryManager {
   }
 
   getMode(): "ACT" | "PLAN" {
-    if (!this.db) return this.fallbackMode;
     const row = this.db
       .prepare("SELECT value FROM session_state WHERE key = 'mode'")
       .get() as { value: string };
@@ -53,7 +52,6 @@ export class MemoryManager {
 
   setMode(mode: "ACT" | "PLAN") {
     this.fallbackMode = mode;
-    if (!this.db) return;
     this.db
       .prepare(
         "INSERT OR REPLACE INTO session_state (key, value) VALUES ('mode', ?)",
@@ -63,8 +61,6 @@ export class MemoryManager {
   }
 
   addObservation(agent: string, message: string) {
-    if (!this.db) return;
-
     const stmt = this.db.prepare(
       "INSERT INTO observations (agent, message) VALUES (?, ?)",
     );
@@ -72,8 +68,6 @@ export class MemoryManager {
   }
 
   getRecentObservations(limit = 10): string[] {
-    if (!this.db) return [];
-
     const stmt = this.db.prepare(
       "SELECT agent, timestamp, message FROM observations ORDER BY timestamp DESC LIMIT ?",
     );
@@ -85,8 +79,6 @@ export class MemoryManager {
   }
 
   searchObservations(query: string, limit = 5): string[] {
-    if (!this.db) return [];
-
     const stmt = this.db.prepare(
       "SELECT agent, timestamp, message FROM observations WHERE message LIKE ? ORDER BY timestamp DESC LIMIT ?",
     );
@@ -98,17 +90,14 @@ export class MemoryManager {
   }
 
   clear() {
-    if (!this.db) return;
     this.db.exec("DELETE FROM observations");
   }
 
   close() {
-    if (this.db) {
-      this.db.close();
-      this.db = null;
-    }
+    this.db.close();
   }
 }
 
-// Global instance for convenience
-export const globalMemory = new MemoryManager(process.cwd());
+export function createMemoryManager(workspaceRoot: string): MemoryManager {
+  return new MemoryManager(workspaceRoot);
+}

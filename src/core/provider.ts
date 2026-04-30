@@ -1,13 +1,14 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
+import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { generateText, stepCountIs, type LanguageModel } from "ai";
+import { generateText, type LanguageModel } from "ai";
 
 import { loadConfig, type Config, type ProviderName } from "../config.js";
 import { getTools } from "../tools/index.js";
 import { normalizeProviderError } from "./provider-errors.js";
 
-type ProviderConfigKey = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY";
-type ModelConfigKey = "GEMINI_MODEL" | "ANTHROPIC_MODEL";
+type ProviderConfigKey = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "DEEPSEEK_API_KEY";
+type ModelConfigKey = "GEMINI_MODEL" | "ANTHROPIC_MODEL" | "DEEPSEEK_MODEL";
 
 interface ProviderCatalogEntry {
   label: string;
@@ -20,13 +21,13 @@ export interface AgentProvider {
   provider: ProviderName;
   label: string;
   model: string;
-  aiModel: LanguageModel;
   runTurn(args: {
     systemPrompt: string;
     prompt: string;
     cwd: string;
-    maxSteps?: number;
-    tools?: string[];
+    maxSteps?: number | undefined;
+    tools?: string[] | undefined;
+    signal?: AbortSignal | undefined;
   }): Promise<string>;
 }
 
@@ -47,6 +48,13 @@ export const PROVIDER_CATALOG: Record<ProviderName, ProviderCatalogEntry> = {
     createModel: (config, modelName) =>
       createAnthropic({ apiKey: config.ANTHROPIC_API_KEY ?? "" })(modelName),
   },
+  deepseek: {
+    label: "DeepSeek",
+    apiKeyField: "DEEPSEEK_API_KEY",
+    modelField: "DEEPSEEK_MODEL",
+    createModel: (config, modelName) =>
+      createDeepSeek({ apiKey: config.DEEPSEEK_API_KEY ?? "" })(modelName),
+  },
 };
 
 export const RECOMMENDED_MODELS: Record<ProviderName, string[]> = {
@@ -56,6 +64,10 @@ export const RECOMMENDED_MODELS: Record<ProviderName, string[]> = {
     "claude-3-5-sonnet-latest",
     "claude-3-5-haiku-20241022",
     "claude-3-opus-20240229",
+  ],
+  deepseek: [
+    "deepseek-v4-pro",
+    "deepseek-v4-flash",
   ],
 };
 
@@ -97,17 +109,16 @@ export function createAgentProvider(
     provider,
     label: entry.label,
     model: modelName,
-    aiModel: model,
-    async runTurn({ systemPrompt, prompt, cwd, maxSteps = 5, tools }) {
+    async runTurn({ systemPrompt, prompt, cwd, maxSteps = 5, tools, signal }) {
       try {
         const { text } = await generateText({
           model,
           system: systemPrompt,
           prompt,
           tools: getTools(cwd, tools),
-          stopWhen: stepCountIs(maxSteps),
-          abortSignal: AbortSignal.timeout(60_000),
-        });
+          maxSteps,
+          abortSignal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
+        } as any);
 
         return text.trim();
       } catch (error) {
