@@ -39,7 +39,9 @@ export function usePromptActions(reviewActions: {
         }
       } else {
         setLoadingMessage("Generating response...");
+        memory.addObservation("User", promptText);
         const response = await runChat(promptText, config, workspace, memory);
+        memory.addObservation("Assistant", response);
         setChatResponse(response);
       }
     } catch (error) {

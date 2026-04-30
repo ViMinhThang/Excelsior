@@ -20,7 +20,8 @@ export const ModelSelectView = ({
         const currentModel =
           (provider === "google" && config.GEMINI_MODEL === model) ||
           (provider === "anthropic" && config.ANTHROPIC_MODEL === model) ||
-          (provider === "deepseek" && config.DEEPSEEK_MODEL === model);
+          (provider === "deepseek" && config.DEEPSEEK_MODEL === model) ||
+          (provider === "openrouter" && config.OPENROUTER_MODEL === model);
         const isActive = config.LLM_PROVIDER === provider && currentModel;
 
         return {

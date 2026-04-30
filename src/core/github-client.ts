@@ -32,7 +32,11 @@ export class GitHubClient {
     this.octokit = new Octokit(token ? { auth: token } : {});
   }
 
-  async getPullRequest(owner: string, repo: string, pullNumber: number): Promise<PullRequestData> {
+  async getPullRequest(
+    owner: string,
+    repo: string,
+    pullNumber: number,
+  ): Promise<PullRequestData> {
     const { data: pr } = await this.octokit.rest.pulls.get({
       owner,
       repo,
@@ -69,7 +73,11 @@ export class GitHubClient {
     };
   }
 
-  private async fetchDiffViaFiles(owner: string, repo: string, pullNumber: number): Promise<string> {
+  private async fetchDiffViaFiles(
+    owner: string,
+    repo: string,
+    pullNumber: number,
+  ): Promise<string> {
     const lines: string[] = [];
     let page = 1;
     const perPage = 100;
@@ -95,10 +103,12 @@ export class GitHubClient {
 
       if (files.length < perPage) break;
       page++;
-      
+
       // Safety cap to prevent infinite loops or catastrophic memory usage
       if (page > 30) {
-        lines.push("\n[WARNING] PR is extremely large. Further file diffs were truncated.");
+        lines.push(
+          "\n[WARNING] PR is extremely large. Further file diffs were truncated.",
+        );
         break;
       }
     }
@@ -122,14 +132,18 @@ export class GitHubClient {
   }
 }
 
-export function resolveGitHubToken(config: Config = loadConfig()): string | undefined {
+export function resolveGitHubToken(
+  config: Config = loadConfig(),
+): string | undefined {
   return config.GITHUB_TOKEN ?? (process.env.GITHUB_TOKEN?.trim() || undefined);
 }
 
 export function parseGitHubRemoteUrl(remoteUrl: string): RepoInfo | null {
   const normalized = remoteUrl.trim();
 
-  const httpsMatch = normalized.match(/^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/i);
+  const httpsMatch = normalized.match(
+    /^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/i,
+  );
   if (httpsMatch) {
     const [, owner, repo] = httpsMatch;
     if (!owner || !repo) {
@@ -141,7 +155,9 @@ export function parseGitHubRemoteUrl(remoteUrl: string): RepoInfo | null {
     };
   }
 
-  const sshMatch = normalized.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/i);
+  const sshMatch = normalized.match(
+    /^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/i,
+  );
   if (sshMatch) {
     const [, owner, repo] = sshMatch;
     if (!owner || !repo) {
@@ -153,7 +169,9 @@ export function parseGitHubRemoteUrl(remoteUrl: string): RepoInfo | null {
     };
   }
 
-  const protocolSshMatch = normalized.match(/^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/i);
+  const protocolSshMatch = normalized.match(
+    /^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/i,
+  );
   if (protocolSshMatch) {
     const [, owner, repo] = protocolSshMatch;
     if (!owner || !repo) {

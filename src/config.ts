@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { z } from "zod";
 
-export const providerSchema = z.enum(["google", "anthropic", "deepseek"]);
+export const providerSchema = z.enum(["google", "anthropic", "deepseek", "openrouter"]);
 
 const configSchema = z.object({
   LLM_PROVIDER: providerSchema.default("google"),
@@ -14,6 +14,8 @@ const configSchema = z.object({
   ANTHROPIC_MODEL: z.string().default("claude-sonnet-4-20250514"),
   DEEPSEEK_API_KEY: z.string().optional(),
   DEEPSEEK_MODEL: z.string().default("deepseek-v4-flash"),
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL: z.string().default("nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"),
   GITHUB_TOKEN: z.string().optional(),
 });
 
@@ -37,6 +39,7 @@ export function loadConfig(): Config {
     GEMINI_API_KEY: normalizeCredential(result.GEMINI_API_KEY),
     ANTHROPIC_API_KEY: normalizeCredential(result.ANTHROPIC_API_KEY),
     DEEPSEEK_API_KEY: normalizeCredential(result.DEEPSEEK_API_KEY),
+    OPENROUTER_API_KEY: normalizeCredential(result.OPENROUTER_API_KEY),
     GITHUB_TOKEN: normalizeCredential(result.GITHUB_TOKEN),
   };
 }

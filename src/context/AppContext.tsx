@@ -14,7 +14,7 @@ import type { MemoryManager } from "../mem/memory-manager.js";
 import type { ReviewMode, ReviewReport } from "../review/types.js";
 
 export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "MODEL_SELECT" | "CREDENTIAL_INPUT" | "PR_LIST";
-export type CredentialField = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "DEEPSEEK_API_KEY" | "GITHUB_TOKEN" | null;
+export type CredentialField = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "DEEPSEEK_API_KEY" | "OPENROUTER_API_KEY" | "GITHUB_TOKEN" | null;
 
 interface AppState {
   view: View;

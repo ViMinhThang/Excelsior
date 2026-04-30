@@ -14,7 +14,14 @@ export const WorkspaceInfo = React.memo(({ config, mode }: { config: Config; mod
       <Text dimColor>Workspace: {workspace}</Text>
       <Text dimColor>
         Provider: {getProviderLabel(config.LLM_PROVIDER)} | Model:{" "}
-        {config.LLM_PROVIDER === "google" ? config.GEMINI_MODEL : config.ANTHROPIC_MODEL} | Mode: {mode}
+        {config.LLM_PROVIDER === "google"
+          ? config.GEMINI_MODEL
+          : config.LLM_PROVIDER === "anthropic"
+            ? config.ANTHROPIC_MODEL
+            : config.LLM_PROVIDER === "deepseek"
+              ? config.DEEPSEEK_MODEL
+              : config.OPENROUTER_MODEL}{" "}
+        | Mode: {mode}
       </Text>
     </Box>
   );

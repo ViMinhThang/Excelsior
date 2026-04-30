@@ -1,14 +1,23 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import { generateText, type LanguageModel } from "ai";
 
 import { loadConfig, type Config, type ProviderName } from "../config.js";
 import { getTools } from "../tools/index.js";
 import { normalizeProviderError } from "./provider-errors.js";
 
-type ProviderConfigKey = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "DEEPSEEK_API_KEY";
-type ModelConfigKey = "GEMINI_MODEL" | "ANTHROPIC_MODEL" | "DEEPSEEK_MODEL";
+type ProviderConfigKey =
+  | "GEMINI_API_KEY"
+  | "ANTHROPIC_API_KEY"
+  | "DEEPSEEK_API_KEY"
+  | "OPENROUTER_API_KEY";
+type ModelConfigKey =
+  | "GEMINI_MODEL"
+  | "ANTHROPIC_MODEL"
+  | "DEEPSEEK_MODEL"
+  | "OPENROUTER_MODEL";
 
 interface ProviderCatalogEntry {
   label: string;
@@ -55,6 +64,16 @@ export const PROVIDER_CATALOG: Record<ProviderName, ProviderCatalogEntry> = {
     createModel: (config, modelName) =>
       createDeepSeek({ apiKey: config.DEEPSEEK_API_KEY ?? "" })(modelName),
   },
+  openrouter: {
+    label: "OpenRouter",
+    apiKeyField: "OPENROUTER_API_KEY",
+    modelField: "OPENROUTER_MODEL",
+    createModel: (config, modelName) =>
+      createOpenAI({
+        apiKey: config.OPENROUTER_API_KEY ?? "",
+        baseURL: "https://openrouter.ai/api/v1",
+      })(modelName),
+  },
 };
 
 export const RECOMMENDED_MODELS: Record<ProviderName, string[]> = {
@@ -65,9 +84,11 @@ export const RECOMMENDED_MODELS: Record<ProviderName, string[]> = {
     "claude-3-5-haiku-20241022",
     "claude-3-opus-20240229",
   ],
-  deepseek: [
-    "deepseek-v4-pro",
-    "deepseek-v4-flash",
+  deepseek: ["deepseek-v4-pro", "deepseek-v4-flash"],
+  openrouter: [
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "google/gemini-2.0-flash-001",
+    "anthropic/claude-3.5-sonnet",
   ],
 };
 
@@ -111,13 +132,17 @@ export function createAgentProvider(
     model: modelName,
     async runTurn({ systemPrompt, prompt, cwd, maxSteps = 5, tools, signal }) {
       try {
+        const supportsTools = !modelName.toLowerCase().includes("reasoning");
+
         const { text } = await generateText({
           model,
           system: systemPrompt,
           prompt,
-          tools: getTools(cwd, tools),
-          maxSteps,
-          abortSignal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000),
+          tools: supportsTools ? getTools(cwd, tools) : undefined,
+          maxSteps: supportsTools ? maxSteps : 1,
+          abortSignal: signal
+            ? AbortSignal.any([signal, AbortSignal.timeout(60_000)])
+            : AbortSignal.timeout(60_000),
         } as any);
 
         return text.trim();

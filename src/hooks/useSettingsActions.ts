@@ -44,6 +44,13 @@ export function useSettingsActions() {
       return;
     }
 
+    if (value === "openrouter_key") {
+      setCredentialField("OPENROUTER_API_KEY");
+      setCredentialInput(config.OPENROUTER_API_KEY ?? "");
+      setView("CREDENTIAL_INPUT");
+      return;
+    }
+
     if (value === "github_token") {
       setCredentialField("GITHUB_TOKEN");
       setCredentialInput(config.GITHUB_TOKEN ?? "");
@@ -55,7 +62,7 @@ export function useSettingsActions() {
   }
 
   function handleProviderSelect(
-    provider: "google" | "anthropic" | "deepseek" | "back",
+    provider: "google" | "anthropic" | "deepseek" | "openrouter" | "back",
   ): void {
     if (provider === "back") {
       setView("SETTINGS");
@@ -75,6 +82,9 @@ export function useSettingsActions() {
     } else if (provider === "deepseek") {
       setCredentialField("DEEPSEEK_API_KEY");
       setCredentialInput(config.DEEPSEEK_API_KEY ?? "");
+    } else if (provider === "openrouter") {
+      setCredentialField("OPENROUTER_API_KEY");
+      setCredentialInput(config.OPENROUTER_API_KEY ?? "");
     }
 
     setView("CREDENTIAL_INPUT");
@@ -93,7 +103,9 @@ export function useSettingsActions() {
         ? "GEMINI_MODEL"
         : provider === "anthropic"
           ? "ANTHROPIC_MODEL"
-          : "DEEPSEEK_MODEL";
+          : provider === "deepseek"
+            ? "DEEPSEEK_MODEL"
+            : "OPENROUTER_MODEL";
 
     saveConfig({
       LLM_PROVIDER: provider as any,
@@ -126,6 +138,8 @@ export function useSettingsActions() {
         return "Enter Anthropic API Key";
       case "DEEPSEEK_API_KEY":
         return "Enter DeepSeek API Key";
+      case "OPENROUTER_API_KEY":
+        return "Enter OpenRouter API Key";
       case "GITHUB_TOKEN":
         return "Enter GitHub Token";
       default:
