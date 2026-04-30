@@ -9,7 +9,6 @@ export function useKeyboardShortcuts(): void {
     mode,
     setMode,
     setView,
-    showStatus,
     memory,
   } = state;
 
@@ -23,7 +22,6 @@ export function useKeyboardShortcuts(): void {
       const nextMode: ReviewMode = mode === "ACT" ? "PLAN" : "ACT";
       setMode(nextMode);
       memory.setMode(nextMode);
-      showStatus(`Switched to ${nextMode} mode.`);
       return;
     }
 

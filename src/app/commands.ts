@@ -8,7 +8,6 @@ export interface CommandContext {
   workspace: string;
   memory: MemoryManager;
   setView(view: View): void;
-  showStatus(msg: string, duration?: number): void;
   setIsLoading(v: boolean): void;
   setLoadingMessage(msg: string): void;
   setChatResponse(r: string | null): void;

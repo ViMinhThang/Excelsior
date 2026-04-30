@@ -77,7 +77,7 @@ export const AppContent = () => {
       </Box>
 
       <Box marginTop={1} paddingTop={1}>
-        <Footer mode={controller.mode} statusMessage={controller.statusMessage} />
+        <Footer mode={controller.mode} />
       </Box>
     </Box>
   );

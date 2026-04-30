@@ -13,7 +13,6 @@ export function useReviewActions() {
     setPullRequests,
     setReviewReport,
     setView,
-    showStatus,
     workspace,
     memory,
   } = useAppContext();
@@ -29,11 +28,8 @@ export function useReviewActions() {
       });
       setPullRequests(pullRequests);
       setView("PR_LIST");
-      showStatus(
-        `Loaded ${pullRequests.length} pull request(s) from ${repoInfo.owner}/${repoInfo.repo}.`,
-      );
     } catch (error) {
-      showStatus(error instanceof Error ? error.message : String(error), 8000);
+      console.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoading(false);
     }
@@ -53,11 +49,8 @@ export function useReviewActions() {
       });
       setReviewReport(report);
       setView("MAIN");
-      showStatus(
-        `Review finished for PR #${pullRequestNumber} in ${repoInfo.owner}/${repoInfo.repo}.`,
-      );
     } catch (error) {
-      showStatus(error instanceof Error ? error.message : String(error), 8000);
+      console.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoading(false);
     }

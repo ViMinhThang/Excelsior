@@ -16,11 +16,10 @@ export class CommandRegistry {
     }
 
     if (trimmedInput.startsWith("/")) {
-      ctx.showStatus(`Unknown command: ${trimmedInput}`, 4000);
+      ctx.setChatResponse(`Unknown command: ${trimmedInput}`);
       return;
     }
 
-    // Fallthrough to standard LLM prompt
     await ctx.handlePrompt(trimmedInput);
   }
 

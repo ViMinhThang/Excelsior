@@ -13,6 +13,6 @@ export const modeCommand: CommandDefinition<{ mode: ReviewMode }> = {
   },
   execute: async (args, ctx) => {
     ctx.setMode(args.mode);
-    ctx.showStatus(`Mode switched to ${args.mode}`, 4000);
+    ctx.setChatResponse(`Mode switched to ${args.mode}`);
   },
 };

@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 
 import type { Config } from "../../config.js";
 import type { ReviewMode } from "../../review/types.js";
-import { getProviderLabel } from "../../core/provider.js";
+import { getProviderLabel } from "../../core/llm/provider.js";
 import { useAppContext } from "../../context/AppContext.js";
 
 export const WorkspaceInfo = React.memo(({ config, mode }: { config: Config; mode: ReviewMode }) => {

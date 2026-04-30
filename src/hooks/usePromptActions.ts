@@ -14,7 +14,6 @@ export function usePromptActions(reviewActions: {
     setLoadingMessage,
     setChatResponse,
     setReviewReport,
-    showStatus,
     setView,
     setCommand,
     setMode,
@@ -45,7 +44,7 @@ export function usePromptActions(reviewActions: {
         setChatResponse(response);
       }
     } catch (error) {
-      showStatus(error instanceof Error ? error.message : String(error), 8000);
+      console.error(error instanceof Error ? error.message : String(error));
     } finally {
       setIsLoading(false);
     }
@@ -57,7 +56,6 @@ export function usePromptActions(reviewActions: {
       workspace,
       memory,
       setView,
-      showStatus,
       setIsLoading,
       setLoadingMessage,
       setChatResponse,

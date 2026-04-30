@@ -6,6 +6,6 @@ export const helpCommand: CommandDefinition = {
   description: "Show available commands",
   parse: (input) => (input.trim() === "/help" ? {} : null),
   execute: async (_args, ctx) => {
-    ctx.showStatus(ctx.getHelpText(), 8000);
+    ctx.setChatResponse(ctx.getHelpText());
   },
 };

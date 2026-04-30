@@ -10,7 +10,6 @@ export function useSettingsActions() {
     setCredentialField,
     setCredentialInput,
     setView,
-    showStatus,
   } = useAppContext();
 
   function handleSettingsSelect(value: string): void {
@@ -55,7 +54,6 @@ export function useSettingsActions() {
 
     saveConfig({ LLM_PROVIDER: provider });
     refreshConfig();
-    showStatus(`Provider set to ${entry.label}.`);
 
     const field = entry.apiKeyField as keyof Config;
     setCredentialField(field as any);
@@ -83,7 +81,6 @@ export function useSettingsActions() {
       [entry.modelField]: model,
     });
     refreshConfig();
-    showStatus(`Switched to ${entry.label} / ${model}.`);
     setView("SETTINGS");
   }
 
@@ -98,7 +95,6 @@ export function useSettingsActions() {
     setCredentialInput("");
     setCredentialField(null);
     setView("SETTINGS");
-    showStatus("Credential saved.");
   }
 
   function credentialTitle(): string {

@@ -9,9 +9,9 @@ import React, {
 } from "react";
 
 import { loadConfig, type Config } from "../config.js";
-import type { PullRequest } from "../core/github-client.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
 import type { ReviewMode, ReviewReport } from "../review/types.js";
+import { PullRequest } from "../core/github/types.js";
 
 export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "MODEL_SELECT" | "CREDENTIAL_INPUT" | "PR_LIST";
 export type CredentialField = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "DEEPSEEK_API_KEY" | "OPENROUTER_API_KEY" | "GITHUB_TOKEN" | null;
@@ -19,7 +19,6 @@ export type CredentialField = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "DEEPSEEK
 interface AppState {
   view: View;
   workspace: string;
-  statusMessage: string;
   isLoading: boolean;
   loadingMessage: string;
   pullRequests: PullRequest[];
@@ -35,7 +34,6 @@ interface AppState {
 
 interface AppContextType extends AppState {
   setView: (view: View) => void;
-  setStatusMessage: (message: string) => void;
   setIsLoading: (value: boolean) => void;
   setLoadingMessage: (message: string) => void;
   setPullRequests: (pullRequests: PullRequest[]) => void;
@@ -47,14 +45,12 @@ interface AppContextType extends AppState {
   setReviewReport: (report: ReviewReport | null) => void;
   setChatResponse: (response: string | null) => void;
   setMode: (mode: ReviewMode) => void;
-  showStatus: (message: string, duration?: number) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children, memory }: { children: ReactNode; memory: MemoryManager }) {
   const [view, setView] = useState<View>("MAIN");
-  const [statusMessage, setStatusMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [pullRequests, setPullRequests] = useState<PullRequest[]>([]);
@@ -65,25 +61,6 @@ export function AppProvider({ children, memory }: { children: ReactNode; memory:
   const [reviewReport, setReviewReport] = useState<ReviewReport | null>(null);
   const [chatResponse, setChatResponse] = useState<string | null>(null);
   const [mode, setMode] = useState<ReviewMode>("ACT");
-  const statusTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const showStatus = useCallback((message: string, duration = 4000) => {
-    if (statusTimerRef.current !== null) {
-      clearTimeout(statusTimerRef.current);
-      statusTimerRef.current = null;
-    }
-
-    setStatusMessage(message);
-    if (duration <= 0) {
-      return;
-    }
-
-    statusTimerRef.current = setTimeout(() => {
-      setStatusMessage("");
-      statusTimerRef.current = null;
-    }, duration);
-  }, []);
-
   const refreshConfig = useCallback(() => {
     setConfig(loadConfig());
   }, []);
@@ -92,7 +69,6 @@ export function AppProvider({ children, memory }: { children: ReactNode; memory:
     () => ({
       view,
       workspace: memory.workspaceRoot,
-      statusMessage,
       isLoading,
       loadingMessage,
       pullRequests,
@@ -105,7 +81,6 @@ export function AppProvider({ children, memory }: { children: ReactNode; memory:
       mode,
       memory,
       setView,
-      setStatusMessage,
       setIsLoading,
       setLoadingMessage,
       setPullRequests,
@@ -117,11 +92,9 @@ export function AppProvider({ children, memory }: { children: ReactNode; memory:
       setReviewReport,
       setChatResponse,
       setMode,
-      showStatus,
     }),
     [
       view,
-      statusMessage,
       isLoading,
       loadingMessage,
       pullRequests,
@@ -134,7 +107,6 @@ export function AppProvider({ children, memory }: { children: ReactNode; memory:
       mode,
       memory,
       refreshConfig,
-      showStatus,
     ],
   );
 
