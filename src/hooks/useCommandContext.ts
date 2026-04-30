@@ -17,7 +17,7 @@ export function useCommandContext(extras: {
     endTask, 
     setChatResponse 
   } = useUI();
-  const { setReviewReport, setMode } = useReview();
+  const { setMode } = useReview();
 
   return {
     config,
@@ -28,7 +28,6 @@ export function useCommandContext(extras: {
     startTask,
     endTask,
     setChatResponse,
-    setReviewReport,
     setMode,
     ...extras,
     getHelpText: () => registry.helpText(),
