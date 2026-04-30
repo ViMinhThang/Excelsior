@@ -2,11 +2,12 @@ import React from "react";
 import { Box, Text, useInput } from "ink";
 import TextInput from "ink-text-input";
 
-import { useUI } from "../context/UIContext.js";
+import { useCredential, useNavigation } from "../context/index.js";
 import { useSettingsActions } from "../hooks/useSettingsActions.js";
 
 export const ApiKeyInputView = () => {
-  const { credentialInput, setCredentialInput, setView } = useUI();
+  const { credentialInput, setCredentialInput } = useCredential();
+  const { setView } = useNavigation();
   const { credentialTitle, handleCredentialSubmit } = useSettingsActions();
 
   useInput((_input, key) => {

@@ -10,13 +10,13 @@ import { ProviderSelectView } from "./components/ProviderSelectView.js";
 import { SettingsView } from "./components/SettingsView.js";
 import { NotificationToast } from "./components/NotificationToast.js";
 import { useConfig } from "./context/ConfigContext.js";
-import { useUI } from "./context/UIContext.js";
+import { useNavigation } from "./context/index.js";
 import { useReview } from "./context/ReviewContext.js";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts.js";
 
 export const AppContent = () => {
   const { refreshConfig, memory } = useConfig();
-  const { view } = useUI();
+  const { view } = useNavigation();
   const { mode, setMode } = useReview();
 
   useKeyboardShortcuts();

@@ -1,7 +1,7 @@
 import type { Config } from "../config.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
 import type { ReviewMode } from "../review/types.js";
-import type { View, NotificationType } from "../context/UIContext.js";
+import type { View, NotificationType } from "../context/ui-types.js";
 
 export interface DataContext {
   config: Config;

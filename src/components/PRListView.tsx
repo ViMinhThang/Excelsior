@@ -3,13 +3,13 @@ import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
 import { useReview } from "../context/ReviewContext.js";
 
-import { useUI } from "../context/UIContext.js";
+import { useNavigation } from "../context/index.js";
 import { useReviewActions } from "../hooks/useReviewActions.js";
 
 export const PRListView = () => {
   const { pullRequests } = useReview();
   const { handlePullRequestSelect } = useReviewActions();
-  const { setView } = useUI();
+  const { setView } = useNavigation();
   
   const items = [
     ...pullRequests.map((pullRequest) => ({

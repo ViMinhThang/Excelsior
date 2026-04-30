@@ -1,13 +1,14 @@
 import { useApp, useInput } from "ink";
 import { useConfig } from "../context/ConfigContext.js";
-import { useUI } from "../context/UIContext.js";
+import { useNavigation, useNotification } from "../context/index.js";
 import { useReview } from "../context/ReviewContext.js";
 import type { ReviewMode } from "../review/types.js";
 
 export function useKeyboardShortcuts(): void {
   const { exit } = useApp();
   const { config, memory } = useConfig();
-  const { view, setView, notify, notification, clearNotification } = useUI();
+  const { view, setView } = useNavigation();
+  const { notify, notification, clearNotification } = useNotification();
   const { mode, setMode } = useReview();
 
   useInput((input, key) => {
