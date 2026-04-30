@@ -26,7 +26,16 @@ export type SubagentReviewResult = z.infer<typeof subagentResultSchema>;
 export const codeReviewAgent = new Agent<SubagentReviewResult>({
   name: "code-reviewer",
   role: "Code reviewer",
-  instructions: "Focus on correctness, regressions, maintainability, and edge cases.",
+  instructions: [
+    "Focus on correctness, regressions, maintainability, and edge cases.",
+    "",
+    "IMPORTANT: You MUST return a JSON object with EXACTLY this structure:",
+    "{",
+    '  "summary": "Short summary",',
+    '  "findings": [ { "source": "code-review", "severity": "high|medium|low", "title": "...", "detail": "...", "file": "...", "line": 123 } ],',
+    '  "notes": [ "any extra string notes" ]',
+    "}"
+  ].join("\n"),
   tools: ["list_files", "read_file", "search_files"],
   outputSchema: subagentResultSchema,
   maxSteps: 8,
@@ -35,7 +44,16 @@ export const codeReviewAgent = new Agent<SubagentReviewResult>({
 export const lintAgent = new Agent<SubagentReviewResult>({
   name: "lint-reviewer",
   role: "Lint and maintainability reviewer",
-  instructions: "Focus on style consistency, type-safety, dead code, tests, and project lint conventions.",
+  instructions: [
+    "Focus on style consistency, type-safety, dead code, tests, and project lint conventions.",
+    "",
+    "IMPORTANT: You MUST return a JSON object with EXACTLY this structure:",
+    "{",
+    '  "summary": "Short summary",',
+    '  "findings": [ { "source": "lint", "severity": "high|medium|low", "title": "...", "detail": "...", "file": "...", "line": 123 } ],',
+    '  "notes": [ "any extra string notes" ]',
+    "}"
+  ].join("\n"),
   tools: ["list_files", "read_file", "search_files"],
   outputSchema: subagentResultSchema,
   maxSteps: 6,
@@ -44,7 +62,16 @@ export const lintAgent = new Agent<SubagentReviewResult>({
 export const securityAgent = new Agent<SubagentReviewResult>({
   name: "security-reviewer",
   role: "Security reviewer",
-  instructions: "Focus on secrets, injection, unsafe execution, authz/authn mistakes, dependency risk, and data exposure.",
+  instructions: [
+    "Focus on secrets, injection, unsafe execution, authz/authn mistakes, dependency risk, and data exposure.",
+    "",
+    "IMPORTANT: You MUST return a JSON object with EXACTLY this structure:",
+    "{",
+    '  "summary": "Short summary",',
+    '  "findings": [ { "source": "security", "severity": "high|medium|low", "title": "...", "detail": "...", "file": "...", "line": 123 } ],',
+    '  "notes": [ "any extra string notes" ]',
+    "}"
+  ].join("\n"),
   tools: ["list_files", "read_file", "search_files"],
   outputSchema: subagentResultSchema,
   maxSteps: 7,
@@ -75,6 +102,14 @@ export const reflectionAgent = new Agent<ReviewReport>({
     "Sort findings by severity (high → medium → low).",
     "Write a concise natural-language summary and overview.",
     "Group findings back into their source sections.",
+    "",
+    "IMPORTANT: You MUST return a JSON object with EXACTLY this structure:",
+    "{",
+    '  "summary": "Short 1-sentence summary",',
+    '  "overview": "Detailed paragraphs explaining the review results",',
+    '  "sections": [ { "source": "code-review|lint|security", "title": "...", "summary": "...", "findings": [...], "notes": [...] } ],',
+    '  "findings": [ { "source": "code-review|lint|security", "severity": "high|medium|low", "title": "...", "detail": "...", "file": "...", "line": 123 } ]',
+    "}"
   ].join("\n"),
   tools: [],
   outputSchema: reviewReportSchema,

@@ -5,13 +5,11 @@ import type { PullRequest } from "../core/github/types.js";
 interface ReviewState {
   mode: ReviewMode;
   pullRequests: PullRequest[];
-  reviewReport: ReviewReport | null;
 }
 
 interface ReviewContextType extends ReviewState {
   setMode: (mode: ReviewMode) => void;
   setPullRequests: (pullRequests: PullRequest[]) => void;
-  setReviewReport: (report: ReviewReport | null) => void;
 }
 
 const ReviewContext = createContext<ReviewContextType | undefined>(undefined);
@@ -19,18 +17,15 @@ const ReviewContext = createContext<ReviewContextType | undefined>(undefined);
 export function ReviewProvider({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<ReviewMode>("ACT");
   const [pullRequests, setPullRequests] = useState<PullRequest[]>([]);
-  const [reviewReport, setReviewReport] = useState<ReviewReport | null>(null);
 
   const value = useMemo<ReviewContextType>(
     () => ({
       mode,
       pullRequests,
-      reviewReport,
       setMode,
       setPullRequests,
-      setReviewReport,
     }),
-    [mode, pullRequests, reviewReport]
+    [mode, pullRequests]
   );
 
   return <ReviewContext.Provider value={value}>{children}</ReviewContext.Provider>;

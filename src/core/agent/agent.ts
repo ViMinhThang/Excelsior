@@ -1,15 +1,19 @@
 import { ProviderError, normalizeProviderError } from "../llm/errors.js";
 import type { z } from "zod";
-import { 
-  AgentDefinition, 
-  AgentRunInput, 
-  AgentRunResult, 
-  AgentTextResult, 
-  SubagentOutcome, 
-  SubagentSlot 
+import {
+  AgentDefinition,
+  AgentRunInput,
+  AgentRunResult,
+  AgentTextResult,
+  SubagentOutcome,
+  SubagentSlot,
 } from "./types.js";
 import { extractJsonObject, serializeOutcomes } from "./utils.js";
-import { buildAgentPrompt, buildSystemPrompt, buildTextPrompt } from "./prompts.js";
+import {
+  buildAgentPrompt,
+  buildSystemPrompt,
+  buildTextPrompt,
+} from "./prompts.js";
 
 export class Agent<TOutput = unknown> {
   readonly name: string;
@@ -80,14 +84,23 @@ export class Agent<TOutput = unknown> {
     }
   }
 
-  private async runWithSubagents(input: AgentRunInput): Promise<AgentRunResult<TOutput>> {
+  private async runWithSubagents(
+    input: AgentRunInput,
+  ): Promise<AgentRunResult<TOutput>> {
     this.validateProvider(input);
 
     const abortController = new AbortController();
-    const signal = this.createCombinedSignal(input.signal, abortController.signal);
+    const signal = this.createCombinedSignal(
+      input.signal,
+      abortController.signal,
+    );
 
     try {
-      const outcomes = await this.executeSubagents(input, signal, abortController);
+      const outcomes = await this.executeSubagents(
+        input,
+        signal,
+        abortController,
+      );
 
       if (!this.synthesizer) {
         return this.createDirectResult(outcomes);
@@ -102,12 +115,19 @@ export class Agent<TOutput = unknown> {
 
   private validateProvider(input: AgentRunInput): void {
     if (!input.runtime.provider) {
-      throw new Error(`${this.name} skipped because no LLM provider is configured.`);
+      throw new Error(
+        `${this.name} skipped because no LLM provider is configured.`,
+      );
     }
   }
 
-  private createCombinedSignal(inputSignal?: AbortSignal, controllerSignal?: AbortSignal): AbortSignal {
-    return inputSignal ? AbortSignal.any([inputSignal, controllerSignal!]) : controllerSignal!;
+  private createCombinedSignal(
+    inputSignal?: AbortSignal,
+    controllerSignal?: AbortSignal,
+  ): AbortSignal {
+    return inputSignal
+      ? AbortSignal.any([inputSignal, controllerSignal!])
+      : controllerSignal!;
   }
 
   private async executeSubagents(
@@ -116,7 +136,9 @@ export class Agent<TOutput = unknown> {
     abortController: AbortController,
   ): Promise<SubagentOutcome[]> {
     return Promise.all(
-      (this.subagents || []).map((slot) => this.runSingleSubagent(slot, input, signal, abortController)),
+      (this.subagents || []).map((slot) =>
+        this.runSingleSubagent(slot, input, signal, abortController),
+      ),
     );
   }
 
@@ -152,7 +174,9 @@ export class Agent<TOutput = unknown> {
     }
   }
 
-  private createDirectResult(outcomes: SubagentOutcome[]): AgentRunResult<TOutput> {
+  private createDirectResult(
+    outcomes: SubagentOutcome[],
+  ): AgentRunResult<TOutput> {
     return {
       ok: true,
       value: outcomes as unknown as TOutput,
@@ -164,8 +188,15 @@ export class Agent<TOutput = unknown> {
     input: AgentRunInput,
     outcomes: SubagentOutcome[],
   ): Promise<AgentRunResult<TOutput>> {
-    const synthPrompt = [input.prompt, "Subagent results:", serializeOutcomes(outcomes)].join("\n\n");
-    const result = await this.synthesizer!.run({ ...input, prompt: synthPrompt });
+    const synthPrompt = [
+      input.prompt,
+      "Subagent results:",
+      serializeOutcomes(outcomes),
+    ].join("\n\n");
+    const result = await this.synthesizer!.run({
+      ...input,
+      prompt: synthPrompt,
+    });
 
     if (!result.ok) return result as AgentRunResult<TOutput>;
     return { ok: true, value: result.value as TOutput, raw: result.raw };
@@ -189,13 +220,17 @@ export class Agent<TOutput = unknown> {
     }
 
     try {
-      const text = await this.callProvider(input, buildTextPrompt({
-        taskPrompt: input.prompt,
-        tools: this.tools,
-      }));
+      const text = await this.callProvider(
+        input,
+        buildTextPrompt({
+          taskPrompt: input.prompt,
+          tools: this.tools,
+        }),
+      );
       return { ok: true, text };
     } catch (error) {
-      const providerError = error instanceof ProviderError ? error : normalizeProviderError(error);
+      const providerError =
+        error instanceof ProviderError ? error : normalizeProviderError(error);
       return {
         ok: false,
         reason: "provider-error",
@@ -204,13 +239,23 @@ export class Agent<TOutput = unknown> {
     }
   }
 
-  private async callProvider(input: AgentRunInput, prompt: string): Promise<string> {
+  private async callProvider(
+    input: AgentRunInput,
+    prompt: string,
+  ): Promise<string> {
     if (!input.runtime.provider) {
-      throw new ProviderError("MissingProvider", `${this.name} skipped because no LLM provider is configured.`);
+      throw new ProviderError(
+        "MissingProvider",
+        `${this.name} skipped because no LLM provider is configured.`,
+      );
     }
 
     return input.runtime.provider.runTurn({
-      systemPrompt: buildSystemPrompt(this.buildRolePrompt(), input.runtime.memory, input.mode),
+      systemPrompt: buildSystemPrompt(
+        this.buildRolePrompt(),
+        input.runtime.memory,
+        input.mode,
+      ),
       prompt,
       cwd: input.cwd ?? input.runtime.workspaceRoot,
       maxSteps: input.maxSteps ?? this.maxSteps,

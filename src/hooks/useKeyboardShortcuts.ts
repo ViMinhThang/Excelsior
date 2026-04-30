@@ -7,10 +7,15 @@ import type { ReviewMode } from "../review/types.js";
 export function useKeyboardShortcuts(): void {
   const { exit } = useApp();
   const { config, memory } = useConfig();
-  const { view, setView, notify } = useUI();
+  const { view, setView, notify, notification, clearNotification } = useUI();
   const { mode, setMode } = useReview();
 
   useInput((input, key) => {
+    if (key.escape && notification) {
+      clearNotification();
+      return;
+    }
+
     if (key.ctrl && input === "s") {
       setView("SETTINGS");
       return;
