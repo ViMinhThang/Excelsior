@@ -4,7 +4,9 @@ import path from "node:path";
 
 import { z } from "zod";
 
-export const providerSchema = z.enum(["google", "anthropic", "deepseek", "openrouter"]);
+import { getProviderIds, PROVIDER_REGISTRY } from "./core/providers/registry.js";
+
+export const providerSchema = z.enum(getProviderIds() as [string, ...string[]]);
 
 const configSchema = z.object({
   LLM_PROVIDER: providerSchema.default("google"),
@@ -34,14 +36,14 @@ export function loadConfig(): Config {
   const merged = { ...parsedConfig, ...process.env };
   const result = configSchema.parse(merged);
 
-  return {
-    ...result,
-    GEMINI_API_KEY: normalizeCredential(result.GEMINI_API_KEY),
-    ANTHROPIC_API_KEY: normalizeCredential(result.ANTHROPIC_API_KEY),
-    DEEPSEEK_API_KEY: normalizeCredential(result.DEEPSEEK_API_KEY),
-    OPENROUTER_API_KEY: normalizeCredential(result.OPENROUTER_API_KEY),
-    GITHUB_TOKEN: normalizeCredential(result.GITHUB_TOKEN),
-  };
+  const normalized: any = { ...result };
+  for (const provider of PROVIDER_REGISTRY) {
+    const key = provider.apiKeyField as keyof Config;
+    normalized[key] = normalizeCredential(result[key] as string | undefined);
+  }
+  normalized.GITHUB_TOKEN = normalizeCredential(result.GITHUB_TOKEN);
+
+  return normalized;
 }
 
 export function saveConfig(updates: Partial<Config>): void {

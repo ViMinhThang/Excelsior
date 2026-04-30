@@ -1,5 +1,6 @@
 import { useAppContext } from "../context/AppContext.js";
-import { saveConfig } from "../config.js";
+import { saveConfig, type Config, type ProviderName } from "../config.js";
+import { getProvider, PROVIDER_REGISTRY } from "../core/providers/registry.js";
 
 export function useSettingsActions() {
   const {
@@ -23,32 +24,14 @@ export function useSettingsActions() {
       return;
     }
 
-    if (value === "gemini_key") {
-      setCredentialField("GEMINI_API_KEY");
-      setCredentialInput(config.GEMINI_API_KEY ?? "");
-      setView("CREDENTIAL_INPUT");
-      return;
-    }
-
-    if (value === "anthropic_key") {
-      setCredentialField("ANTHROPIC_API_KEY");
-      setCredentialInput(config.ANTHROPIC_API_KEY ?? "");
-      setView("CREDENTIAL_INPUT");
-      return;
-    }
-
-    if (value === "deepseek_key") {
-      setCredentialField("DEEPSEEK_API_KEY");
-      setCredentialInput(config.DEEPSEEK_API_KEY ?? "");
-      setView("CREDENTIAL_INPUT");
-      return;
-    }
-
-    if (value === "openrouter_key") {
-      setCredentialField("OPENROUTER_API_KEY");
-      setCredentialInput(config.OPENROUTER_API_KEY ?? "");
-      setView("CREDENTIAL_INPUT");
-      return;
+    for (const p of PROVIDER_REGISTRY) {
+      if (value === `${p.id}_key`) {
+        const field = p.apiKeyField as keyof Config;
+        setCredentialField(field as any);
+        setCredentialInput((config as any)[field] ?? "");
+        setView("CREDENTIAL_INPUT");
+        return;
+      }
     }
 
     if (value === "github_token") {
@@ -61,31 +44,22 @@ export function useSettingsActions() {
     setView("MAIN");
   }
 
-  function handleProviderSelect(
-    provider: "google" | "anthropic" | "deepseek" | "openrouter" | "back",
-  ): void {
+  function handleProviderSelect(provider: ProviderName | "back"): void {
     if (provider === "back") {
       setView("SETTINGS");
       return;
     }
 
+    const entry = getProvider(provider);
+    if (!entry) return;
+
     saveConfig({ LLM_PROVIDER: provider });
     refreshConfig();
-    showStatus(`Provider set to ${provider}.`);
+    showStatus(`Provider set to ${entry.label}.`);
 
-    if (provider === "google") {
-      setCredentialField("GEMINI_API_KEY");
-      setCredentialInput(config.GEMINI_API_KEY ?? "");
-    } else if (provider === "anthropic") {
-      setCredentialField("ANTHROPIC_API_KEY");
-      setCredentialInput(config.ANTHROPIC_API_KEY ?? "");
-    } else if (provider === "deepseek") {
-      setCredentialField("DEEPSEEK_API_KEY");
-      setCredentialInput(config.DEEPSEEK_API_KEY ?? "");
-    } else if (provider === "openrouter") {
-      setCredentialField("OPENROUTER_API_KEY");
-      setCredentialInput(config.OPENROUTER_API_KEY ?? "");
-    }
+    const field = entry.apiKeyField as keyof Config;
+    setCredentialField(field as any);
+    setCredentialInput((config as any)[field] ?? "");
 
     setView("CREDENTIAL_INPUT");
   }
@@ -96,23 +70,20 @@ export function useSettingsActions() {
       return;
     }
 
-    const [provider, ...modelParts] = value.split(":");
+    const [providerId, ...modelParts] = value.split(":");
+    if (!providerId) return;
+
     const model = modelParts.join(":");
-    const modelField =
-      provider === "google"
-        ? "GEMINI_MODEL"
-        : provider === "anthropic"
-          ? "ANTHROPIC_MODEL"
-          : provider === "deepseek"
-            ? "DEEPSEEK_MODEL"
-            : "OPENROUTER_MODEL";
+    const entry = getProvider(providerId);
+
+    if (!entry) return;
 
     saveConfig({
-      LLM_PROVIDER: provider as any,
-      [modelField]: model,
+      LLM_PROVIDER: providerId as ProviderName,
+      [entry.modelField]: model,
     });
     refreshConfig();
-    showStatus(`Switched to ${provider} / ${model}.`);
+    showStatus(`Switched to ${entry.label} / ${model}.`);
     setView("SETTINGS");
   }
 
@@ -131,20 +102,17 @@ export function useSettingsActions() {
   }
 
   function credentialTitle(): string {
-    switch (credentialField) {
-      case "GEMINI_API_KEY":
-        return "Enter Gemini API Key";
-      case "ANTHROPIC_API_KEY":
-        return "Enter Anthropic API Key";
-      case "DEEPSEEK_API_KEY":
-        return "Enter DeepSeek API Key";
-      case "OPENROUTER_API_KEY":
-        return "Enter OpenRouter API Key";
-      case "GITHUB_TOKEN":
-        return "Enter GitHub Token";
-      default:
-        return "Enter value";
+    if (credentialField === "GITHUB_TOKEN") {
+      return "Enter GitHub Token";
     }
+
+    for (const p of PROVIDER_REGISTRY) {
+      if (credentialField === p.apiKeyField) {
+        return `Enter ${p.label} API Key`;
+      }
+    }
+
+    return "Enter value";
   }
 
   return {

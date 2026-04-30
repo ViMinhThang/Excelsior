@@ -4,6 +4,7 @@ import SelectInput from "ink-select-input";
 
 import type { Config, ProviderName } from "../config.js";
 import { listProviderOptions } from "../core/provider.js";
+import { getProvider } from "../core/providers/registry.js";
 
 export const ProviderSelectView = ({
   config,
@@ -14,10 +15,8 @@ export const ProviderSelectView = ({
 }) => {
   const items = [
     ...listProviderOptions(config).map((option) => {
-      const isConfigured =
-        (option.value === "google" && !!config.GEMINI_API_KEY) ||
-        (option.value === "anthropic" && !!config.ANTHROPIC_API_KEY) ||
-        (option.value === "deepseek" && !!config.DEEPSEEK_API_KEY);
+      const entry = getProvider(option.value);
+      const isConfigured = entry ? !!config[entry.apiKeyField as keyof Config] : false;
       const activeSuffix = config.LLM_PROVIDER === option.value ? " [active]" : "";
       const configSuffix = isConfigured ? " (configured)" : " (missing key)";
 

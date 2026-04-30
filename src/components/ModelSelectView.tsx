@@ -2,8 +2,8 @@ import React from "react";
 import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
 
-import type { Config, ProviderName } from "../config.js";
-import { PROVIDER_CATALOG, RECOMMENDED_MODELS } from "../core/provider.js";
+import type { Config } from "../config.js";
+import { PROVIDER_REGISTRY } from "../core/providers/registry.js";
 
 export const ModelSelectView = ({
   config,
@@ -13,20 +13,14 @@ export const ModelSelectView = ({
   onSelect: (value: string) => void;
 }) => {
   const items = [
-    ...(Object.entries(RECOMMENDED_MODELS) as [ProviderName, string[]][]).flatMap(
-      ([provider, models]) =>
-      models.map((model) => {
-        const providerLabel = PROVIDER_CATALOG[provider].label;
-        const currentModel =
-          (provider === "google" && config.GEMINI_MODEL === model) ||
-          (provider === "anthropic" && config.ANTHROPIC_MODEL === model) ||
-          (provider === "deepseek" && config.DEEPSEEK_MODEL === model) ||
-          (provider === "openrouter" && config.OPENROUTER_MODEL === model);
-        const isActive = config.LLM_PROVIDER === provider && currentModel;
+    ...PROVIDER_REGISTRY.flatMap((provider) =>
+      provider.recommendedModels.map((model) => {
+        const currentModel = config[provider.modelField as keyof Config] === model;
+        const isActive = config.LLM_PROVIDER === provider.id && currentModel;
 
         return {
-          label: `[${providerLabel}] ${model}${isActive ? " [active]" : ""}`,
-          value: `${provider}:${model}`,
+          label: `[${provider.label}] ${model}${isActive ? " [active]" : ""}`,
+          value: `${provider.id}:${model}`,
         };
       }),
     ),

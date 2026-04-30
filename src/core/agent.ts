@@ -113,75 +113,102 @@ export class Agent<TOutput = unknown> {
   }
 
   private async runWithSubagents(input: AgentRunInput): Promise<AgentRunResult<TOutput>> {
+    this.validateProvider(input);
+
+    const abortController = new AbortController();
+    const signal = this.createCombinedSignal(input.signal, abortController.signal);
+
+    try {
+      const outcomes = await this.executeSubagents(input, signal, abortController);
+
+      if (!this.synthesizer) {
+        return this.createDirectResult(outcomes);
+      }
+
+      return await this.synthesizeSubagentOutcomes(input, outcomes);
+    } catch (error) {
+      abortController.abort();
+      return this.handleSubagentError(error);
+    }
+  }
+
+  private validateProvider(input: AgentRunInput): void {
     if (!input.runtime.provider) {
+      throw new Error(`${this.name} skipped because no LLM provider is configured.`);
+    }
+  }
+
+  private createCombinedSignal(inputSignal?: AbortSignal, controllerSignal?: AbortSignal): AbortSignal {
+    return inputSignal ? AbortSignal.any([inputSignal, controllerSignal!]) : controllerSignal!;
+  }
+
+  private async executeSubagents(
+    input: AgentRunInput,
+    signal: AbortSignal,
+    abortController: AbortController,
+  ): Promise<SubagentOutcome[]> {
+    return Promise.all(
+      (this.subagents || []).map((slot) => this.runSingleSubagent(slot, input, signal, abortController)),
+    );
+  }
+
+  private async runSingleSubagent(
+    slot: SubagentSlot,
+    input: AgentRunInput,
+    signal: AbortSignal,
+    abortController: AbortController,
+  ): Promise<SubagentOutcome> {
+    const startedAt = Date.now();
+    try {
+      const result = await slot.agent.run({ ...input, signal });
+      if (!result.ok) throw new Error(result.message);
+
+      return {
+        ok: true,
+        agentName: slot.agent.name,
+        durationMs: Date.now() - startedAt,
+        value: result.value,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (slot.required) {
+        abortController.abort();
+        throw new Error(`Subagent '${slot.agent.name}' failed: ${message}`);
+      }
       return {
         ok: false,
-        reason: "missing-provider",
-        message: `${this.name} skipped because no LLM provider is configured.`,
+        agentName: slot.agent.name,
+        durationMs: Date.now() - startedAt,
+        error: message,
       };
     }
+  }
 
-    const controller = new AbortController();
-    const combinedSignal = input.signal
-      ? AbortSignal.any([input.signal, controller.signal])
-      : controller.signal;
+  private createDirectResult(outcomes: SubagentOutcome[]): AgentRunResult<TOutput> {
+    return {
+      ok: true,
+      value: outcomes as unknown as TOutput,
+      raw: JSON.stringify(outcomes),
+    };
+  }
 
-    let outcomes: SubagentOutcome[];
-    try {
-      outcomes = await Promise.all(
-        this.subagents!.map(async (slot) => {
-          const startedAt = Date.now();
-          try {
-            const result = await slot.agent.run({
-              ...input,
-              signal: combinedSignal,
-            });
-            if (!result.ok) throw new Error(result.message);
-            return {
-              ok: true, agentName: slot.agent.name,
-              durationMs: Date.now() - startedAt, value: result.value,
-            } satisfies SubagentOutcome;
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            if (slot.required ?? false) {
-              controller.abort();
-              throw new Error(`Subagent '${slot.agent.name}' failed: ${msg}`);
-            }
-            return {
-              ok: false, agentName: slot.agent.name,
-              durationMs: Date.now() - startedAt, error: msg,
-            } satisfies SubagentOutcome;
-          }
-        }),
-      );
-    } catch (error) {
-      controller.abort();
-      return {
-        ok: false, reason: "invalid-output",
-        message: error instanceof Error ? error.message : String(error),
-      };
-    }
+  private async synthesizeSubagentOutcomes(
+    input: AgentRunInput,
+    outcomes: SubagentOutcome[],
+  ): Promise<AgentRunResult<TOutput>> {
+    const synthPrompt = [input.prompt, "Subagent results:", serializeOutcomes(outcomes)].join("\n\n");
+    const result = await this.synthesizer!.run({ ...input, prompt: synthPrompt });
 
-    if (!this.synthesizer) {
-      return { ok: true, value: outcomes as unknown as TOutput, raw: JSON.stringify(outcomes) };
-    }
+    if (!result.ok) return result as AgentRunResult<TOutput>;
+    return { ok: true, value: result.value as TOutput, raw: result.raw };
+  }
 
-    const synthPrompt = [
-      input.prompt,
-      "Subagent results:",
-      serializeOutcomes(outcomes)
-    ].join("\n\n");
-
-    const synthResult = await this.synthesizer.run({
-      ...input,
-      prompt: synthPrompt,
-    });
-
-    if (!synthResult.ok) {
-      return synthResult as AgentRunResult<TOutput>;
-    }
-
-    return { ok: true, value: synthResult.value as TOutput, raw: synthResult.raw };
+  private handleSubagentError(error: unknown): AgentRunResult<TOutput> {
+    return {
+      ok: false,
+      reason: "invalid-output",
+      message: error instanceof Error ? error.message : String(error),
+    };
   }
 
   async runText(input: AgentRunInput): Promise<AgentTextResult> {
