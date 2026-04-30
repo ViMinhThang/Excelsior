@@ -1,69 +1,100 @@
-# AI Code Review & Coding Agent
+# Excelsior
 
-This project is an advanced AI Code Review Agent designed with a **hybrid architecture**. It can run automatically as a GitHub Action whenever a Pull Request is opened, or interactively as a local Terminal User Interface (TUI).
+Excelsior is a small terminal agent shell with a pull request review feature today. The runtime is intentionally split so the current review workflow can stay thin while the project grows into a coding agent later.
 
-The agent uses a **multi-agent orchestration pattern**, delegating tasks to specialized subagents (Linter, Security, Code Review) before using a Reflection pattern to polish the final PR comment.
+The current review feature lists open pull requests for the active workspace, fetches a selected diff, and produces a structured report that combines:
 
----
+- Model-assisted code review when a Gemini or Anthropic API key is configured
+- Local lint/style checks against workspace files
+- Static security pattern scanning on changed lines
 
-## 📂 Folder Structure
+`.agents/` is kept as reference material only. It is not part of the runtime architecture.
 
-```text
-.
-├── .github/workflows/   # CI/CD pipelines (e.g., ai-review.yml)
-├── src/                 
-│   ├── action.ts        # Entry point for the GitHub Action (triggered by CI)
-│   ├── cli.ts           # Entry point for the local TUI REPL
-│   ├── core/            # Shared logic between Action and CLI modes
-│   │   ├── github-client.ts # Abstraction for GitHub API calls
-│   │   ├── orchestrator.ts  # Main logic that dispatches work to subagents
-│   │   └── provider.ts      # Vercel AI SDK LLM initialization
-│   ├── subagents/       # The specialized AI workers
-│   │   ├── code-reviewer.ts # Reviews code semantics and intent
-│   │   ├── linter.ts        # Uses ESLint for style checks
-│   │   ├── security.ts      # Uses CVE DB for vulnerability checks
-│   │   └── reflection.ts    # Final critic that polishes aggregated output
-│   ├── tools/           # Concrete implementations of external tools
-│   │   ├── eslint-runner.ts # Programmatic wrapper around ESLint
-│   │   ├── cvedb-client.ts  # OSV/GitHub Advisory API client
-│   │   └── read-file.ts     # Utility for the AI to read full files locally
-│   └── config.ts        # Environment variables and config validation
-├── package.json
-└── tsconfig.json
+## Runtime Architecture
+
+The shipped application is organized around a small set of concrete layers:
+
+- `src/App.tsx`, `src/components/`, `src/hooks/useAppController.ts`
+  The Ink UI and controller layer. Views are mostly presentational; the controller owns keybindings and user actions.
+- `src/services/review-service.ts`
+  Workspace-level orchestration for listing pull requests and reviewing a selected PR.
+- `src/core/agent.ts`, `src/core/provider.ts`, `src/core/prompts.ts`
+  A minimal claw-dev-style agent spine. The provider adapter is generic, and feature-specific prompting stays outside it.
+- `src/core/github-client.ts`
+  GitHub API access and repository detection.
+- `src/core/orchestrator.ts`
+  Review pipeline orchestration that wires the review feature onto the generic agent core.
+- `src/review/`
+  Feature code for review-only behavior: diff parsing, review prompts, runtime review passes, report formatting, and review types.
+- `src/subagents/`
+  Comment-only reference files for subagent roles. They are not imported at runtime.
+- `src/config.ts`
+  Global configuration stored in `~/.excelsior/.env`.
+
+## Configuration
+
+Excelsior stores user-level settings in `~/.excelsior/.env`.
+
+Supported settings:
+
+- `LLM_PROVIDER=google|anthropic`
+- `GEMINI_API_KEY`
+- `GEMINI_MODEL`
+- `ANTHROPIC_API_KEY`
+- `ANTHROPIC_MODEL`
+- `GITHUB_TOKEN`
+
+If no LLM API key is configured, reviews still run with deterministic lint and security checks plus heuristic code-review findings. That keeps the feature usable while the generic agent layer stays minimal.
+
+## Commands
+
+- `/pr`
+  List open pull requests for the current repository.
+- `/review`
+  List pull requests and choose one to review.
+- `/review <number>`
+  Review a pull request directly.
+- `/settings`
+  Open provider and token settings.
+- `/help`
+  Show the supported commands.
+
+Keybindings:
+
+- `Tab`
+  Switch focus between the command input and the settings shortcut.
+- `Ctrl+P`
+  Toggle between `ACT` and `PLAN` review modes.
+- `Ctrl+S`
+  Open settings.
+- `Ctrl+Q`
+  Quit the application.
+
+## Development
+
+Install dependencies:
+
+```bash
+npm install
 ```
 
----
+Run the CLI in development:
 
-## 📦 NPM Packages Used
+```bash
+npm run dev
+```
 
-### Core Dependencies
-- **`@actions/core` & `@actions/github`**: Native GitHub SDKs used in `src/action.ts` and `src/core/github-client.ts` to get PR diffs and post comments securely inside GitHub Actions.
-- **`ai` (Vercel AI SDK)**: Used in `src/core/provider.ts` and subagents to provide a unified API to swap between different LLM providers (OpenAI, Anthropic, etc.) without rewriting code.
-- **`zod`**: Used across the project to guarantee that the LLM returns properly structured JSON and to validate environment variables (`src/config.ts`).
-- **`@clack/prompts`**: Used in `src/cli.ts` to build the interactive, visually pleasing Terminal UI REPL.
+Quality checks:
 
-### Development Dependencies
-- **`typescript` & `@types/node`**: For strongly typed development.
-- **`ts-node`**: Used to execute the `src/cli.ts` file locally without needing a build step.
-- **`@vercel/ncc`**: Used to compile the entire project (including `node_modules`) into a single file for the GitHub Action deployment.
-- **`eslint` & plugins**: The linter used both for our own code quality, and invoked programmatically by `src/tools/eslint-runner.ts`.
+```bash
+npm run check
+npm run lint
+npm run test
+npm run build
+```
 
----
+## Notes
 
-## 🚀 Getting Started
-
-1. **Install Dependencies**
-   ```bash
-   npm install
-   ```
-
-2. **Run Local TUI**
-   ```bash
-   npm run start:cli
-   ```
-   *Note: Ensure you have `GITHUB_TOKEN` and your LLM API keys set in your environment variables.*
-
-3. **Build GitHub Action**
-   ```bash
-   npm run build
-   ```
+- The agent runtime is generic enough to host a future coding-agent flow without rewriting provider setup again.
+- `.agents/` remains reference-only and is not part of the runtime path.
+- ESLint ignores `.agents/` because it is reference-only.
