@@ -1,16 +1,14 @@
 import { useApp, useInput } from "ink";
-import { useAppContext } from "../context/AppContext.js";
+import { useConfig } from "../context/ConfigContext.js";
+import { useUI } from "../context/UIContext.js";
+import { useReview } from "../context/ReviewContext.js";
 import type { ReviewMode } from "../review/types.js";
 
 export function useKeyboardShortcuts(): void {
   const { exit } = useApp();
-  const state = useAppContext();
-  const {
-    mode,
-    setMode,
-    setView,
-    memory,
-  } = state;
+  const { config, memory } = useConfig();
+  const { view, setView } = useUI();
+  const { mode, setMode } = useReview();
 
   useInput((input, key) => {
     if (key.ctrl && input === "s") {
@@ -32,14 +30,14 @@ export function useKeyboardShortcuts(): void {
 
     if (key.escape) {
       if (
-        state.view === "CREDENTIAL_INPUT" ||
-        state.view === "PROVIDER_SELECT"
+        view === "CREDENTIAL_INPUT" ||
+        view === "PROVIDER_SELECT"
       ) {
         setView("SETTINGS");
         return;
       }
 
-      if (state.view === "PR_LIST" || state.view === "SETTINGS") {
+      if (view === "PR_LIST" || view === "SETTINGS") {
         setView("MAIN");
       }
     }

@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 
 import { type Config } from "../config.js";
-import { useAppContext } from "../context/AppContext.js";
+import { useUI } from "../context/UIContext.js";
 import type { ReviewMode, ReviewReport } from "../review/types.js";
 import { useCommandInput } from "../hooks/useCommandInput.js";
 import { CommandBar } from "./MainView/CommandBar.js";
@@ -25,7 +25,7 @@ export const MainView = ({
   onCommandSubmit: (value: string) => Promise<void>;
   onOpenSettings: () => void;
 }) => {
-  const { isLoading, loadingMessage } = useAppContext();
+  const { isLoading, loadingMessage } = useUI();
   const commandInput = useCommandInput();
 
   return (

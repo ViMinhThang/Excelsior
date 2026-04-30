@@ -2,13 +2,19 @@ import React from "react";
 import { render } from "ink";
 
 import { AppContent } from "./App.js";
-import { AppProvider } from "./context/AppContext.js";
+import { ConfigProvider } from "./context/ConfigContext.js";
+import { UIProvider } from "./context/UIContext.js";
+import { ReviewProvider } from "./context/ReviewContext.js";
 import { createMemoryManager } from "./mem/memory-manager.js";
 
 const App = ({ memory }: { memory: any }) => (
-  <AppProvider memory={memory}>
-    <AppContent />
-  </AppProvider>
+  <ConfigProvider memory={memory}>
+    <UIProvider>
+      <ReviewProvider>
+        <AppContent />
+      </ReviewProvider>
+    </UIProvider>
+  </ConfigProvider>
 );
 
 export async function startCLI(): Promise<void> {

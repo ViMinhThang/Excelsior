@@ -1,16 +1,16 @@
-import { useAppContext } from "../context/AppContext.js";
+import { useConfig } from "../context/ConfigContext.js";
+import { useUI } from "../context/UIContext.js";
 import { saveConfig, type Config, type ProviderName } from "../config.js";
 import { getProvider, PROVIDER_REGISTRY } from "../core/llm/registry.js";
 
 export function useSettingsActions() {
-  const {
-    config,
-    credentialField,
-    refreshConfig,
-    setCredentialField,
-    setCredentialInput,
-    setView,
-  } = useAppContext();
+  const { config, refreshConfig } = useConfig();
+  const { 
+    credentialField, 
+    setCredentialField, 
+    setCredentialInput, 
+    setView 
+  } = useUI();
 
   function handleSettingsSelect(value: string): void {
     if (value === "provider") {

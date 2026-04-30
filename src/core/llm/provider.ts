@@ -23,6 +23,12 @@ export function getProviderLabel(provider: ProviderName): string {
   return getProvider(provider)?.label ?? provider;
 }
 
+export function getActiveModelName(config: Config): string {
+  const entry = getProvider(config.LLM_PROVIDER);
+  if (!entry) return "Unknown";
+  return (config[entry.modelField as keyof Config] as string) ?? "Unknown";
+}
+
 export function listProviderOptions(config: Config = loadConfig()): Array<{
   label: string;
   value: ProviderName;

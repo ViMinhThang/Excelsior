@@ -1,21 +1,15 @@
-import { useAppContext } from "../context/AppContext.js";
+import { useConfig } from "../context/ConfigContext.js";
+import { useUI } from "../context/UIContext.js";
+import { useReview } from "../context/ReviewContext.js";
 import {
   listWorkspacePullRequests,
   reviewWorkspacePullRequest,
 } from "../services/review-service.js";
 
 export function useReviewActions() {
-  const {
-    config,
-    mode,
-    setIsLoading,
-    setLoadingMessage,
-    setPullRequests,
-    setReviewReport,
-    setView,
-    workspace,
-    memory,
-  } = useAppContext();
+  const { config, workspace, memory } = useConfig();
+  const { setIsLoading, setLoadingMessage, setView } = useUI();
+  const { mode, setPullRequests, setReviewReport } = useReview();
 
   async function loadPullRequests(): Promise<void> {
     setIsLoading(true);

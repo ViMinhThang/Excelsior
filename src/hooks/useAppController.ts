@@ -1,19 +1,25 @@
-import { useEffect } from "react";
-import { useAppContext } from "../context/AppContext.js";
+import React, { useEffect } from "react";
+import { useConfig } from "../context/ConfigContext.js";
+import { useUI } from "../context/UIContext.js";
+import { useReview } from "../context/ReviewContext.js";
 import { useKeyboardShortcuts } from "./useKeyboardShortcuts.js";
 import { useReviewActions } from "./useReviewActions.js";
 import { usePromptActions } from "./usePromptActions.js";
 import { useSettingsActions } from "./useSettingsActions.js";
 
 export function useAppController() {
-  const state = useAppContext();
-  const { refreshConfig, setMode, memory } = state;
+  const configState = useConfig();
+  const uiState = useUI();
+  const reviewState = useReview();
+
+  const { refreshConfig, memory } = configState;
+  const { setMode } = reviewState;
 
   // 1. Initialize global hotkeys
   useKeyboardShortcuts();
 
   // 2. Initialize app state on mount
-  useEffect(() => {
+  React.useEffect(() => {
     setMode(memory.getMode());
     refreshConfig();
   }, [refreshConfig, setMode, memory]);
@@ -24,7 +30,9 @@ export function useAppController() {
   const settingsActions = useSettingsActions();
 
   return {
-    ...state,
+    ...configState,
+    ...uiState,
+    ...reviewState,
     ...reviewActions,
     ...promptActions,
     ...settingsActions,

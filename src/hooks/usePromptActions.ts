@@ -1,4 +1,6 @@
-import { useAppContext } from "../context/AppContext.js";
+import { useConfig } from "../context/ConfigContext.js";
+import { useUI } from "../context/UIContext.js";
+import { useReview } from "../context/ReviewContext.js";
 import { registry } from "../app/commands/index.js";
 import { routePrompt } from "../services/router-service.js";
 import { runChat } from "../services/chat-service.js";
@@ -8,18 +10,15 @@ export function usePromptActions(reviewActions: {
   loadPullRequests: () => Promise<void>;
   runReview: (prNumber: number) => Promise<void>;
 }) {
-  const {
-    config,
-    setIsLoading,
-    setLoadingMessage,
-    setChatResponse,
-    setReviewReport,
-    setView,
-    setCommand,
-    setMode,
-    workspace,
-    memory,
-  } = useAppContext();
+  const { config, workspace, memory } = useConfig();
+  const { 
+    setIsLoading, 
+    setLoadingMessage, 
+    setChatResponse, 
+    setView, 
+    setCommand 
+  } = useUI();
+  const { setReviewReport, setMode } = useReview();
 
   async function handlePrompt(promptText: string): Promise<void> {
     setChatResponse(null);
