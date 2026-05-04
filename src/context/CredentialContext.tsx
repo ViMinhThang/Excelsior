@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
+import React, { createContext, useContext, useState, useMemo, type ReactNode } from "react";
 import type { CredentialField, CredentialFacade } from "./ui-types.js";
 
 const CredentialContext = createContext<CredentialFacade | undefined>(undefined);

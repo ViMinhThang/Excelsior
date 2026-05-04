@@ -1,5 +1,7 @@
+import type { PROVIDER_REGISTRY } from "../core/llm/registry.js";
+
 export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "MODEL_SELECT" | "CREDENTIAL_INPUT" | "PR_LIST";
-export type CredentialField = "GEMINI_API_KEY" | "ANTHROPIC_API_KEY" | "DEEPSEEK_API_KEY" | "OPENROUTER_API_KEY" | "GITHUB_TOKEN" | null;
+export type CredentialField = (typeof PROVIDER_REGISTRY)[number]["apiKeyField"] | "GITHUB_TOKEN" | null;
 export type NotificationType = "error" | "success" | "info";
 
 export interface Notification {
