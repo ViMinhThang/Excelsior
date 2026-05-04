@@ -2,7 +2,7 @@ import { useApp, useInput } from "ink";
 import { useConfig } from "../context/ConfigContext.js";
 import { useNavigation, useNotification } from "../context/index.js";
 import { useReview } from "../context/ReviewContext.js";
-import type { ReviewMode } from "../review/types.js";
+import type { ReviewMode } from "../core/agents/review/types.js";
 
 export function useKeyboardShortcuts(): void {
   const { exit } = useApp();

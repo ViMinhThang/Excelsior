@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import SelectInput from "ink-select-input";
 
-import type { ProviderName } from "../config.js";
+import type { ProviderName } from "../infra/config.js";
 import { useSettingsActions } from "../hooks/useSettingsActions.js";
 
 export const ProviderSelectView = () => {

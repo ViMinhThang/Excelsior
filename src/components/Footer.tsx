@@ -1,6 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
-import type { ReviewMode } from "../review/types.js";
+import type { ReviewMode } from "../core/agents/review/types.js";
 
 interface Props {
   mode: ReviewMode;

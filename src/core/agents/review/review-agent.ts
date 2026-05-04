@@ -1,8 +1,8 @@
-import { Agent } from "../core/agent/agent.js";
+import { Agent } from "../../agent/agent.js";
 import {
   plannerOutputSchema,
   type PlannerOutput,
-} from "../core/agent/dynamic.js";
+} from "../../agent/dynamic.js";
 import type { ReviewReport } from "./types.js";
 import { reviewReportSchema } from "./schemas.js";
 import { registerReviewSubagents } from "./subagents.js";

@@ -1,5 +1,5 @@
 import type { MemoryManager } from "../../mem/memory-manager.js";
-import type { ReviewMode } from "../../review/types.js";
+import type { ReviewMode } from "../agents/review/types.js";
 import { ACT_MODE_INSTRUCTIONS, BASE_SYSTEM_PROMPT, PLAN_MODE_INSTRUCTIONS } from "../prompts.js";
 
 export function buildSystemPrompt(rolePrompt: string, memory: MemoryManager, mode?: ReviewMode): string {

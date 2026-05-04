@@ -11,6 +11,40 @@ export const deepseekProvider: ProviderDefinition = {
   npm: "@ai-sdk/deepseek",
   createModel: (config, modelName) =>
     createDeepSeek({ apiKey: config.DEEPSEEK_API_KEY ?? "" })(modelName),
+  models: {
+    "deepseek-v4-pro": {
+      id: "deepseek-v4-pro",
+      name: "DeepSeek V4 Pro",
+      capabilities: {
+        temperature: true,
+        reasoning: false,
+        attachment: false,
+        toolCall: true,
+        input: ["text"],
+        output: ["text"],
+      },
+      limit: {
+        context: 128000,
+        output: 8192,
+      },
+    },
+    "deepseek-v4-flash": {
+      id: "deepseek-v4-flash",
+      name: "DeepSeek V4 Flash",
+      capabilities: {
+        temperature: true,
+        reasoning: false,
+        attachment: false,
+        toolCall: true,
+        input: ["text"],
+        output: ["text"],
+      },
+      limit: {
+        context: 128000,
+        output: 8192,
+      },
+    },
+  },
   defaultOptions: {
     maxOutputTokens: 8192,
   },

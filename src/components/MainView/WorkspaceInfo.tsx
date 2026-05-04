@@ -1,9 +1,9 @@
 import React from "react";
 import { Box, Text } from "ink";
 
-import type { Config } from "../../config.js";
-import type { ReviewMode } from "../../review/types.js";
-import { getProviderLabel, getActiveModelName } from "../../core/llm/provider.js";
+import type { Config } from "../../infra/config.js";
+import type { ReviewMode } from "../../core/agents/review/types.js";
+import { getProviderLabel, getActiveModelName } from "../../core/llm/runtime/index.js";
 import { useConfig } from "../../context/ConfigContext.js";
 
 export const WorkspaceInfo = React.memo(({ config, mode }: { config: Config; mode: ReviewMode }) => {

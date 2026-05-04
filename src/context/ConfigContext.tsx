@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo, useState, useCallback, type ReactNode } from "react";
-import { loadConfig, type Config } from "../config.js";
+import { loadConfig, type Config } from "../infra/config.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
 
 interface ConfigState {

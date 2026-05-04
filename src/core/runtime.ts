@@ -1,6 +1,6 @@
-import type { Config } from "../config.js";
+import type { Config } from "../infra/config.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
-import { createAgentProvider, type AgentProvider } from "./llm/provider.js";
+import { createAgentProvider, type AgentProvider } from "./llm/runtime/index.js";
 import { noopLogger, type Logger } from "./logger.js";
 
 export interface RuntimeContext {

@@ -1,15 +1,16 @@
-import type { Config } from "../config.js";
 import { Agent } from "../core/agent/agent.js";
-import { createAgentProvider } from "../core/llm/provider.js";
+import { createAgentProvider } from "../core/llm/runtime/index.js";
 import { createRuntimeContext } from "../core/runtime.js";
-import { ProviderError } from "../core/llm/errors.js";
+import { Config } from "../infra/config.js";
+import { ProviderError } from "../infra/errors.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
 import { z } from "zod";
 
 export const chatAgent = new Agent({
   name: "chat-assistant",
   role: "Coding assistant",
-  instructions: "Answer the user's coding and project questions clearly. Use workspace tools when they help verify the answer.",
+  instructions:
+    "Answer the user's coding and project questions clearly. Use workspace tools when they help verify the answer.",
   tools: ["list_files", "read_file", "search_files"],
   outputSchema: z.object({}),
   maxSteps: 5,
@@ -20,12 +21,15 @@ export async function runChat(
   prompt: string,
   config: Config,
   cwd: string,
-  memory: MemoryManager
+  memory: MemoryManager,
 ): Promise<string> {
   const provider = createAgentProvider(config);
-  
+
   if (!provider) {
-    throw new ProviderError("MissingProvider", "No valid LLM provider configured. Please check your settings.");
+    throw new ProviderError(
+      "MissingProvider",
+      "No valid LLM provider configured. Please check your settings.",
+    );
   }
 
   const runtime = createRuntimeContext({

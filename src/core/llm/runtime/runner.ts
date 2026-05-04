@@ -1,7 +1,7 @@
 import { generateText, type LanguageModel } from "ai";
 
 import { getTools } from "../../../tools/index.js";
-import { normalizeProviderError } from "../errors.js";
+import { normalizeProviderError } from "../../../infra/errors.js";
 import type { CallOptions } from "./options.js";
 
 interface RunnerArgs {

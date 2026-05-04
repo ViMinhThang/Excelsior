@@ -1,5 +1,5 @@
-import type { ProviderName } from "../config.js";
-import type { RuntimeContext } from "../core/runtime.js";
+import type { ProviderName } from "../../../infra/config.js";
+import type { RuntimeContext } from "../../runtime.js";
 
 export type ReviewMode = "ACT" | "PLAN";
 export type ReviewSeverity = "high" | "medium" | "low";

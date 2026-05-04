@@ -1,5 +1,5 @@
-import { loadConfig, type Config, type ProviderName } from "../../../config.js";
-import { PROVIDER_REGISTRY, getProvider } from "../registry.js";
+import { loadConfig, type Config, type ProviderName } from "../../../infra/config.js";
+import { PROVIDER_REGISTRY, getProvider } from "../registry/registry.js";
 
 export function getProviderLabel(provider: ProviderName): string {
   return getProvider(provider)?.label ?? provider;

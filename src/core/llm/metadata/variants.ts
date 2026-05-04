@@ -8,7 +8,9 @@ export interface ModelVariant {
 
 const VARIANT_EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
 
-type VariantMapper = (effort: string) => Record<string, Record<string, unknown>>;
+type VariantMapper = (
+  effort: string,
+) => Record<string, Record<string, unknown>>;
 
 const PROVIDER_VARIANT_MAP: Record<string, VariantMapper> = {
   anthropic: (effort) => {
@@ -21,7 +23,10 @@ const PROVIDER_VARIANT_MAP: Record<string, VariantMapper> = {
     };
     return {
       anthropic: {
-        thinking: { type: "enabled", budgetTokens: budgetTokens[effort] ?? 8192 },
+        thinking: {
+          type: "enabled",
+          budgetTokens: budgetTokens[effort] ?? 8192,
+        },
       },
     };
   },
@@ -81,7 +86,10 @@ export function isVariantModel(modelId: string): boolean {
   return VARIANT_EFFORTS.some((e) => modelId.endsWith(`:${e}`));
 }
 
-export function parseVariantModel(modelId: string): { baseModelId: string; effort?: string } {
+export function parseVariantModel(modelId: string): {
+  baseModelId: string;
+  effort?: string;
+} {
   for (const e of VARIANT_EFFORTS) {
     if (modelId.endsWith(`:${e}`)) {
       return { baseModelId: modelId.slice(0, -e.length - 1), effort: e };

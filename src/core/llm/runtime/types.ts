@@ -1,4 +1,4 @@
-import type { ProviderName } from "../../../config.js";
+import type { ProviderName } from "../../../infra/config.js";
 
 export interface AgentProvider {
   provider: ProviderName;

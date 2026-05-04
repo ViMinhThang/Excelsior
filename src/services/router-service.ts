@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { Config } from "../config.js";
+import type { Config } from "../infra/config.js";
 import { Agent } from "../core/agent/agent.js";
-import { createAgentProvider } from "../core/llm/provider.js";
+import { createAgentProvider } from "../core/llm/runtime/index.js";
 import { createRuntimeContext } from "../core/runtime.js";
 import type { MemoryManager } from "../mem/memory-manager.js";
 

@@ -1,5 +1,5 @@
 import type { CommandDefinition } from "../commands.js";
-import type { ReviewMode } from "../../review/types.js";
+import type { ReviewMode } from "../../core/agents/review/types.js";
 
 export const modeCommand: CommandDefinition<{ mode: ReviewMode }> = {
   name: "mode",

@@ -3,8 +3,8 @@ import fs from "node:fs";
 import { z } from "zod";
 
 import { CONFIG_DIR, ENV_PATH } from "./constants.js";
-import { getProviderIds, PROVIDER_REGISTRY } from "./core/llm/registry.js";
-import type { ProviderDefinition } from "./core/llm/types.js";
+import { getProviderIds, PROVIDER_REGISTRY } from "../core/llm/registry/registry.js";
+import type { ProviderDefinition } from "../core/llm/metadata/types.js";
 
 export const providerSchema = z.enum(getProviderIds() as [string, ...string[]]);
 

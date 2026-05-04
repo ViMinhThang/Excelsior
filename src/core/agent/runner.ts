@@ -1,4 +1,4 @@
-import { ProviderError } from "../llm/errors.js";
+import { ProviderError } from "../../infra/errors.js";
 import { buildSystemPrompt } from "./prompts.js";
 import type { AgentRunInput } from "./types.js";
 

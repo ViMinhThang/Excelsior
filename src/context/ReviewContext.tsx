@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { ReviewMode, ReviewReport } from "../review/types.js";
+import type { ReviewMode, ReviewReport } from "../core/agents/review/types.js";
 import type { PullRequest } from "../core/github/types.js";
 
 interface ReviewState {

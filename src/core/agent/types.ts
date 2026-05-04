@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { ReviewMode } from "../../review/types.js";
+import type { ReviewMode } from "../agents/review/types.js";
 import type { RuntimeContext } from "../runtime.js";
 import type { Agent } from "./agent.js";
 import type { PlannerOutput } from "./dynamic.js";

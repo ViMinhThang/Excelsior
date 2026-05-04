@@ -1,8 +1,8 @@
-import { DEFAULT_TIMEOUT } from "../../../constants.js";
+import { DEFAULT_TIMEOUT } from "../../../infra/constants.js";
 import { parseNumber } from "../../../utils/numbers.js";
-import type { ConfigJson } from "../custom-provider.js";
-import type { ProviderDefaults } from "../types.js";
-import type { Config } from "../../../config.js";
+import type { Config } from "../../../infra/config.js";
+import { ConfigJson } from "../registry/custom-provider.js";
+import { ProviderDefaults } from "../metadata/types.js";
 
 export interface CallOptions {
   temperature: number | undefined;
@@ -47,7 +47,7 @@ export function resolveOptions(
 
   const providerOptions = {
     ...(providerDefaults?.providerOptions ?? {}),
-    ...(providerId ? configJson.providerOptions?.[providerId] ?? {} : {}),
+    ...(providerId ? (configJson.providerOptions?.[providerId] ?? {}) : {}),
   } as Record<string, Record<string, unknown>>;
 
   return {
