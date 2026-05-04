@@ -1,5 +1,5 @@
 import { useConfig } from "../context/ConfigContext.js";
-import { useUI } from "../context/UIContext.js";
+import { useNavigation, useChat } from "../context/index.js";
 import { useReview } from "../context/ReviewContext.js";
 import { useAsyncAction } from "./useAsyncAction.js";
 import {
@@ -9,7 +9,8 @@ import {
 
 export function useReviewActions() {
   const { config, workspace, memory } = useConfig();
-  const { setView, setChatResponse } = useUI();
+  const { setView } = useNavigation();
+  const { setChatResponse } = useChat();
   const { mode, setPullRequests } = useReview();
   const { run } = useAsyncAction();
 

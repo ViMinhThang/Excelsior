@@ -1,7 +1,8 @@
-import { useUI } from "../context/UIContext.js";
+import { useTask, useNotification } from "../context/index.js";
 
 export function useAsyncAction() {
-  const { startTask, endTask, notify } = useUI();
+  const { startTask, endTask } = useTask();
+  const { notify } = useNotification();
 
   async function run<T>(
     message: string,

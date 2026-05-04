@@ -5,7 +5,7 @@ export const listPrsCommand: CommandDefinition = {
   syntax: "/pr",
   description: "List open pull requests",
   parse: (args) => (args.trim() === "" ? {} : null),
-  execute: async (_args, ctx) => {
-    await ctx.loadPullRequests();
+  execute: async (_args, { actions }) => {
+    await actions.loadPullRequests();
   },
 };

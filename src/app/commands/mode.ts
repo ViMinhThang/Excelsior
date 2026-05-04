@@ -11,8 +11,8 @@ export const modeCommand: CommandDefinition<{ mode: ReviewMode }> = {
     if (trimmed === "ACT") return { mode: "ACT" };
     return null;
   },
-  execute: async (args, ctx) => {
-    ctx.setMode(args.mode);
-    ctx.notify(`Mode switched to ${args.mode}`, "success");
+  execute: async (args, { ui }) => {
+    ui.setMode(args.mode);
+    ui.notify(`Mode switched to ${args.mode}`, "success");
   },
 };

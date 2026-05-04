@@ -1,9 +1,9 @@
 import React from "react";
 import { Box, Text } from "ink";
-import { useUI } from "../context/UIContext.js";
+import { useNotification } from "../context/index.js";
 
 export const NotificationToast = () => {
-  const { notification, clearNotification } = useUI();
+  const { notification } = useNotification();
 
   if (!notification) return null;
 

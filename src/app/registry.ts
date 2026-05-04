@@ -1,9 +1,10 @@
-import type { CommandContext, CommandDefinition } from "./commands.js";
+import type { CommandDeps } from "./contexts.js";
+import type { CommandDefinition } from "./commands.js";
 
 export class CommandRegistry {
   constructor(private commands: CommandDefinition[]) {}
 
-  async dispatch(input: string, ctx: CommandContext): Promise<void> {
+  async dispatch(input: string, deps: CommandDeps): Promise<void> {
     const trimmedInput = input.trim();
     if (!trimmedInput) return;
 
@@ -17,17 +18,17 @@ export class CommandRegistry {
     if (cmd) {
       const args = cmd.parse(argsString);
       if (args !== null) {
-        await cmd.execute(args, ctx);
+        await cmd.execute(args, deps);
         return;
       }
     }
 
     if (trimmedInput.startsWith("/")) {
-      ctx.notify(`Unknown command: ${trimmedInput}`, "error");
+      deps.ui.notify(`Unknown command: ${trimmedInput}`, "error");
       return;
     }
 
-    await ctx.handlePrompt(trimmedInput);
+    await deps.actions.handlePrompt(trimmedInput);
   }
 
   helpText(): string {
