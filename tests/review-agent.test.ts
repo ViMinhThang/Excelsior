@@ -35,28 +35,34 @@ function createRuntime(responses: Record<string, string>): RuntimeContext {
   };
 }
 
-test("reviewAgent has 3 subagents and a synthesizer", () => {
-  assert.equal(reviewAgent.subagents?.length, 3);
+test("reviewAgent has a planner and a synthesizer", () => {
+  assert.ok(reviewAgent.planner);
+  assert.equal(reviewAgent.planner?.name, "review-planner");
   assert.ok(reviewAgent.synthesizer);
-  assert.equal(reviewAgent.subagents?.[0]?.agent.name, "code-reviewer");
-  assert.equal(reviewAgent.subagents?.[1]?.agent.name, "lint-reviewer");
-  assert.equal(reviewAgent.subagents?.[2]?.agent.name, "security-reviewer");
   assert.equal(reviewAgent.synthesizer?.name, "reflection-synthesizer");
 });
 
 test("reviewAgent executes end-to-end review and synthesis", async () => {
   const responses = {
-    "code-reviewer": JSON.stringify({
+    "review-planner": JSON.stringify({
+      plan: "run all three review agents",
+      subagents: [
+        { name: "code-review", prompt: "Review code quality" },
+        { name: "lint", prompt: "Check lint conventions" },
+        { name: "security", prompt: "Check security issues" },
+      ],
+    }),
+    "code-review": JSON.stringify({
       summary: "code-ok",
       findings: [{ source: "code-review", severity: "low", title: "CR", detail: "D" }],
       notes: []
     }),
-    "lint-reviewer": JSON.stringify({
+    "lint": JSON.stringify({
       summary: "lint-ok",
       findings: [{ source: "lint", severity: "medium", title: "L", detail: "D" }],
       notes: []
     }),
-    "security-reviewer": JSON.stringify({
+    "security": JSON.stringify({
       summary: "sec-ok",
       findings: [],
       notes: []

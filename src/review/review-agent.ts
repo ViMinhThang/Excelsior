@@ -1,99 +1,16 @@
-import { z } from "zod";
 import { Agent } from "../core/agent/agent.js";
+import {
+  plannerOutputSchema,
+  type PlannerOutput,
+} from "../core/agent/dynamic.js";
 import type { ReviewReport } from "./types.js";
+import { reviewReportSchema } from "./schemas.js";
+import { registerReviewSubagents } from "./subagents.js";
 
-// ── Subagent output schema (shared by all 3 children) ──
-
-export const reviewFindingSchema = z.object({
-  source: z.enum(["code-review", "lint", "security"]),
-  severity: z.enum(["high", "medium", "low"]),
-  title: z.string().min(1),
-  detail: z.string().min(1),
-  file: z.string().optional(),
-  line: z.number().int().positive().optional(),
-});
-
-export const subagentResultSchema = z.object({
-  summary: z.string().min(1),
-  findings: z.array(reviewFindingSchema),
-  notes: z.array(z.string()).default([]),
-});
-
-export type SubagentReviewResult = z.infer<typeof subagentResultSchema>;
-
-// ── Factory for review subagents ──
-
-const REVIEW_TOOLS = ["list_files", "read_file", "search_files"] as const;
-
-function jsonOutputInstructions(source: string): string {
-  return [
-    "",
-    'IMPORTANT: You MUST return a JSON object with EXACTLY this structure:',
-    "{",
-    `  "summary": "Short summary",`,
-    `  "findings": [ { "source": "${source}", "severity": "high|medium|low", "title": "...", "detail": "...", "file": "...", "line": 123 } ],`,
-    `  "notes": [ "any extra string notes" ]`,
-    "}",
-  ].join("\n");
-}
-
-function createReviewSubagent(
-  name: string,
-  role: string,
-  instructions: string,
-  source: string,
-  maxSteps: number,
-): Agent<SubagentReviewResult> {
-  return new Agent<SubagentReviewResult>({
-    name,
-    role,
-    instructions: [instructions, jsonOutputInstructions(source)].join("\n"),
-    tools: [...REVIEW_TOOLS],
-    outputSchema: subagentResultSchema,
-    maxSteps,
-  });
-}
-
-// ── Child Agents ──
-
-export const codeReviewAgent = createReviewSubagent(
-  "code-reviewer",
-  "Code reviewer",
-  "Focus on correctness, regressions, maintainability, and edge cases.",
-  "code-review",
-  8,
-);
-
-export const lintAgent = createReviewSubagent(
-  "lint-reviewer",
-  "Lint and maintainability reviewer",
-  "Focus on style consistency, type-safety, dead code, tests, and project lint conventions.",
-  "lint",
-  6,
-);
-
-export const securityAgent = createReviewSubagent(
-  "security-reviewer",
-  "Security reviewer",
-  "Focus on secrets, injection, unsafe execution, authz/authn mistakes, dependency risk, and data exposure.",
-  "security",
-  7,
-);
+// Register the subagents immediately so they are available in the AgentRegistry
+registerReviewSubagents();
 
 // ── Synthesizer Agent ──
-
-export const reviewReportSchema = z.object({
-  summary: z.string().min(1),
-  overview: z.string().min(1),
-  sections: z.array(z.object({
-    source: z.enum(["code-review", "lint", "security"]),
-    title: z.string(),
-    summary: z.string(),
-    findings: z.array(reviewFindingSchema),
-    notes: z.array(z.string()),
-  })),
-  findings: z.array(reviewFindingSchema),
-});
 
 export const reflectionAgent = new Agent<ReviewReport>({
   name: "reflection-synthesizer",
@@ -119,18 +36,38 @@ export const reflectionAgent = new Agent<ReviewReport>({
   maxSteps: 1,
 });
 
-// ── Parent Review Agent ──
+// ── Planner Agent ──
+
+export const reviewPlanner = new Agent<PlannerOutput>({
+  name: "review-planner",
+  role: "Review planner",
+  instructions: [
+    "Analyze the pull request review request and decide which review subagents to invoke.",
+    "Available agents will be listed in the prompt.",
+    "Choose the most relevant subagents based on the request.",
+    "For each selected subagent, craft a targeted sub-prompt.",
+    "Only select subagents that are relevant to the request.",
+    "If the request is simple, return an empty subagents list.",
+    "",
+    "IMPORTANT: You MUST return a JSON object with EXACTLY this structure:",
+    "{",
+    '  "plan": "Brief reasoning for your choices",',
+    '  "subagents": [ { "name": "agent-name", "prompt": "specific prompt" } ]',
+    "}"
+  ].join("\n"),
+  tools: [],
+  outputSchema: plannerOutputSchema,
+  maxSteps: 1,
+});
 
 export const reviewAgent = new Agent<ReviewReport>({
   name: "pr-reviewer",
   role: "Pull request reviewer",
-  instructions: "Coordinate a comprehensive pull request review across code quality, linting, and security dimensions.",
+  instructions:
+    "Coordinate a comprehensive pull request review across code quality, linting, and security dimensions.",
   tools: [],
   outputSchema: reviewReportSchema,
-  subagents: [
-    { agent: codeReviewAgent, required: false },
-    { agent: lintAgent, required: false },
-    { agent: securityAgent, required: false },
-  ],
+  planner: reviewPlanner,
   synthesizer: reflectionAgent,
 });
+
