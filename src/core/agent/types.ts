@@ -2,11 +2,7 @@ import type { z } from "zod";
 import type { ReviewMode } from "../../review/types.js";
 import type { RuntimeContext } from "../runtime.js";
 import type { Agent } from "./agent.js";
-
-export interface SubagentSlot {
-  agent: Agent<any>;
-  required?: boolean;
-}
+import type { PlannerOutput } from "./dynamic.js";
 
 export type SubagentOutcome =
   | { ok: true; agentName: string; durationMs: number; value: unknown }
@@ -20,7 +16,7 @@ export interface AgentDefinition<TOutput = unknown> {
   outputSchema: z.ZodTypeAny;
   maxSteps?: number;
   requiredProvider?: boolean;
-  subagents?: SubagentSlot[];
+  planner?: Agent<PlannerOutput>;
   synthesizer?: Agent<TOutput>;
 }
 
