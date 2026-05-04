@@ -6,6 +6,10 @@ import { ConfigProvider } from "./context/ConfigContext.js";
 import { UIProviders } from "./context/index.js";
 import { ReviewProvider } from "./context/ReviewContext.js";
 import { createMemoryManager } from "./mem/memory-manager.js";
+import { initRegistry } from "./core/llm/registry.js";
+
+// Ensure custom providers are loaded before any config or provider lookups
+initRegistry();
 
 const App = ({ memory }: { memory: any }) => (
   <ConfigProvider memory={memory}>
