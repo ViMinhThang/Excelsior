@@ -2,8 +2,8 @@ import fs from "node:fs";
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 
-import { CONFIG_JSON_PATH } from "../../constants.js";
-import type { ProviderDefinition } from "./types.js";
+import type { ProviderDefinition } from "../metadata/types.js";
+import { CONFIG_JSON_PATH } from "../../../infra/constants.js";
 
 export interface CustomProviderEntry {
   label: string;
@@ -27,12 +27,15 @@ export interface ConfigJson {
     timeout?: number;
   };
   providerOptions?: Record<string, Record<string, unknown>>;
-  providerSettings?: Record<string, {
-    baseURL?: string;
-    timeout?: number;
-    headers?: Record<string, string>;
-    options?: Record<string, unknown>;
-  }>;
+  providerSettings?: Record<
+    string,
+    {
+      baseURL?: string;
+      timeout?: number;
+      headers?: Record<string, string>;
+      options?: Record<string, unknown>;
+    }
+  >;
 }
 
 export function loadConfigJson(): ConfigJson {
@@ -48,7 +51,10 @@ export function loadConfigJson(): ConfigJson {
   }
 }
 
-export function loadCustomProviderEntries(): Record<string, CustomProviderEntry> {
+export function loadCustomProviderEntries(): Record<
+  string,
+  CustomProviderEntry
+> {
   return loadConfigJson().customProviders ?? {};
 }
 
@@ -65,7 +71,10 @@ export function createCustomProvider(
     modelField: modelFieldKey,
     modelDefault: config.modelDefault,
     recommendedModels: config.models ?? [config.modelDefault],
-    createModel: (cfg: Record<string, string | undefined>, modelName: string) => {
+    createModel: (
+      cfg: Record<string, string | undefined>,
+      modelName: string,
+    ) => {
       const provider = createOpenAICompatible({
         name: id,
         baseURL: config.baseURL,

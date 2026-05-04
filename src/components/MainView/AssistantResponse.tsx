@@ -16,7 +16,7 @@ export const AssistantResponse = ({ chatResponse, isLoading, loadingMessage }: P
   return (
     <Box marginTop={1} flexDirection="column">
       {chatResponse && (
-        <Box borderStyle="round" paddingX={1} flexDirection="column">
+        <Box paddingX={1} flexDirection="column">
           {chatResponse.split("\n").map((line, index) => (
             <Text key={`${index}-${line}`}>{line}</Text>
           ))}

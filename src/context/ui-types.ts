@@ -1,4 +1,4 @@
-import type { PROVIDER_REGISTRY } from "../core/llm/registry.js";
+import type { PROVIDER_REGISTRY } from "../core/llm/registry/registry.js";
 
 export type View = "MAIN" | "SETTINGS" | "PROVIDER_SELECT" | "MODEL_SELECT" | "CREDENTIAL_INPUT" | "PR_LIST";
 export type CredentialField = (typeof PROVIDER_REGISTRY)[number]["apiKeyField"] | "GITHUB_TOKEN" | null;

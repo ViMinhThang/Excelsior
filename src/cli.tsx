@@ -6,11 +6,11 @@ import { ConfigProvider } from "./context/ConfigContext.js";
 import { UIProviders } from "./context/index.js";
 import { ReviewProvider } from "./context/ReviewContext.js";
 import { createMemoryManager } from "./mem/memory-manager.js";
-import { initRegistry } from "./core/llm/registry.js";
-import { startBackgroundRefresh } from "./core/llm/models-catalog.js";
+import { initRegistry } from "./core/llm/registry/registry.js";
+
 
 initRegistry();
-startBackgroundRefresh();
+
 
 const App = ({ memory }: { memory: any }) => (
   <ConfigProvider memory={memory}>

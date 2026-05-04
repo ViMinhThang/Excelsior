@@ -1,5 +1,5 @@
-import { ProviderError, normalizeProviderError } from "../llm/errors.js";
-import { DEFAULT_MAX_STEPS } from "../../constants.js";
+import { ProviderError, normalizeProviderError } from "../../infra/errors.js";
+import { DEFAULT_MAX_STEPS } from "../../infra/constants.js";
 import type { z } from "zod";
 import {
   AgentDefinition,

@@ -1,5 +1,5 @@
 import { Octokit } from "octokit";
-import { loadConfig, type Config } from "../../config.js";
+import { loadConfig, type Config } from "../../infra/config.js";
 import { PullRequest, PullRequestData } from "./types.js";
 
 export class GitHubClient {

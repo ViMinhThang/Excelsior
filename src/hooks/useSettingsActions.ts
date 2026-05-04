@@ -1,8 +1,8 @@
 import { useConfig } from "../context/ConfigContext.js";
 import { useCredential, useNavigation, useNotification } from "../context/index.js";
-import { saveConfig, type ProviderName } from "../config.js";
-import { getProvider, PROVIDER_REGISTRY } from "../core/llm/registry.js";
-import { getModelVariants, parseVariantModel } from "../core/llm/variants.js";
+import { saveConfig, type ProviderName } from "../infra/config.js";
+import { getProvider, PROVIDER_REGISTRY } from "../core/llm/registry/registry.js";
+import { getModelVariants, parseVariantModel } from "../core/llm/metadata/variants.js";
 
 function formatContextWindow(context: number): string {
   if (context >= 1_000_000) return `${(context / 1_000_000).toFixed(0)}M`;

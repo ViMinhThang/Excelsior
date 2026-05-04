@@ -1,13 +1,20 @@
 import { type LanguageModel } from "ai";
 
-import { anthropicProvider } from "./implementations/anthropic.js";
-import { deepseekProvider } from "./implementations/deepseek.js";
-import { googleProvider } from "./implementations/google.js";
-import { openaiProvider } from "./implementations/openai.js";
-import { openrouterProvider } from "./implementations/openrouter.js";
-import { createCustomProvider, loadCustomProviderEntries } from "./custom-provider.js";
-import { type ProviderDefinition, type ModelInfo, type ModelCapabilities } from "./types.js";
-import * as ModelsCatalog from "./models-catalog.js";
+import { anthropicProvider } from "../implementations/anthropic.js";
+import { deepseekProvider } from "../implementations/deepseek.js";
+import { googleProvider } from "../implementations/google.js";
+import { openaiProvider } from "../implementations/openai.js";
+import { openrouterProvider } from "../implementations/openrouter.js";
+import {
+  createCustomProvider,
+  loadCustomProviderEntries,
+} from "./custom-provider.js";
+import {
+  type ProviderDefinition,
+  type ModelInfo,
+  type ModelCapabilities,
+} from "../metadata/types.js";
+// import * as ModelsCatalog from "./models-catalog.js";
 
 // ── Built-in providers ───────────────────────────────────────────────────────
 
@@ -25,21 +32,47 @@ let _initialized = false;
 
 // ── Bundled SDK factories (lazy-loaded, cached) ──────────────────────────────
 
-type SdkFactory = (opts: Record<string, unknown>) => (modelId: string) => LanguageModel;
+type SdkFactory = (
+  opts: Record<string, unknown>,
+) => (modelId: string) => LanguageModel;
 
 const SDK_FACTORY_LOADERS: Record<string, () => Promise<SdkFactory>> = {
-  "@ai-sdk/openai": () => import("@ai-sdk/openai").then((m) => m.createOpenAI as unknown as SdkFactory),
-  "@ai-sdk/anthropic": () => import("@ai-sdk/anthropic").then((m) => m.createAnthropic as unknown as SdkFactory),
-  "@ai-sdk/google": () => import("@ai-sdk/google").then((m) => m.createGoogleGenerativeAI as unknown as SdkFactory),
-  "@ai-sdk/deepseek": () => import("@ai-sdk/deepseek").then((m) => m.createDeepSeek as unknown as SdkFactory),
-  "@ai-sdk/groq": () => import("@ai-sdk/groq").then((m) => m.createGroq as unknown as SdkFactory),
-  "@ai-sdk/mistral": () => import("@ai-sdk/mistral").then((m) => m.createMistral as unknown as SdkFactory),
-  "@ai-sdk/xai": () => import("@ai-sdk/xai").then((m) => m.createXai as unknown as SdkFactory),
-  "@ai-sdk/perplexity": () => import("@ai-sdk/perplexity").then((m) => m.createPerplexity as unknown as SdkFactory),
+  "@ai-sdk/openai": () =>
+    import("@ai-sdk/openai").then(
+      (m) => m.createOpenAI as unknown as SdkFactory,
+    ),
+  "@ai-sdk/anthropic": () =>
+    import("@ai-sdk/anthropic").then(
+      (m) => m.createAnthropic as unknown as SdkFactory,
+    ),
+  "@ai-sdk/google": () =>
+    import("@ai-sdk/google").then(
+      (m) => m.createGoogleGenerativeAI as unknown as SdkFactory,
+    ),
+  "@ai-sdk/deepseek": () =>
+    import("@ai-sdk/deepseek").then(
+      (m) => m.createDeepSeek as unknown as SdkFactory,
+    ),
+  "@ai-sdk/groq": () =>
+    import("@ai-sdk/groq").then((m) => m.createGroq as unknown as SdkFactory),
+  "@ai-sdk/mistral": () =>
+    import("@ai-sdk/mistral").then(
+      (m) => m.createMistral as unknown as SdkFactory,
+    ),
+  "@ai-sdk/xai": () =>
+    import("@ai-sdk/xai").then((m) => m.createXai as unknown as SdkFactory),
+  "@ai-sdk/perplexity": () =>
+    import("@ai-sdk/perplexity").then(
+      (m) => m.createPerplexity as unknown as SdkFactory,
+    ),
   "@ai-sdk/openai-compatible": () =>
-    import("@ai-sdk/openai-compatible").then((m) => m.createOpenAICompatible as unknown as SdkFactory),
+    import("@ai-sdk/openai-compatible").then(
+      (m) => m.createOpenAICompatible as unknown as SdkFactory,
+    ),
   "@openrouter/ai-sdk-provider": () =>
-    import("@openrouter/ai-sdk-provider").then((m) => m.createOpenRouter as unknown as SdkFactory),
+    import("@openrouter/ai-sdk-provider").then(
+      (m) => m.createOpenRouter as unknown as SdkFactory,
+    ),
 };
 
 const _sdkCache = new Map<string, SdkFactory>();
@@ -59,6 +92,7 @@ function loadSdkFactory(npm: string): Promise<SdkFactory | undefined> {
 
 // ── Catalog-to-ProviderDefinition conversion ─────────────────────────────────
 
+/*
 function catalogModelToModelInfo(catalogModel: ModelsCatalog.ModelsDevModel): ModelInfo {
   const capabilities: ModelCapabilities = {
     temperature: catalogModel.temperature,
@@ -155,6 +189,7 @@ async function createCatalogProvider(
     createModel,
   } as ProviderDefinition;
 }
+*/
 
 // ── Initialization ───────────────────────────────────────────────────────────
 
@@ -169,9 +204,10 @@ export function initRegistry(): void {
     }
   }
 
-  initCatalogProviders().catch(() => {});
+  // initCatalogProviders().catch(() => {});
 }
 
+/*
 let _catalogInited = false;
 
 async function initCatalogProviders(): Promise<void> {
@@ -198,6 +234,7 @@ async function initCatalogProviders(): Promise<void> {
     }
   }
 }
+*/
 
 initRegistry();
 

@@ -1,5 +1,5 @@
-import { Agent } from "../core/agent/agent.js";
-import { AgentRegistry } from "../core/agent/registry.js";
+import { Agent } from "../../agent/agent.js";
+import { AgentRegistry } from "../../agent/registry.js";
 import { subagentResultSchema, type SubagentReviewResult } from "./schemas.js";
 
 const REVIEW_TOOLS = ["list_files", "read_file", "search_files"] as const;

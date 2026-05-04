@@ -4,7 +4,7 @@ import SelectInput from "ink-select-input";
 
 import { useConfig } from "../context/ConfigContext.js";
 import { useSettingsActions } from "../hooks/useSettingsActions.js";
-import { getProvider } from "../core/llm/registry.js";
+import { getProvider } from "../core/llm/registry/registry.js";
 
 export const ModelSelectView = () => {
   const [showAll, setShowAll] = useState(false);
