@@ -22,7 +22,7 @@ export function buildAgentPrompt(args: { taskPrompt: string; tools: string[] }):
     args.taskPrompt,
     "Use the available tools before making findings when file inspection is needed.",
     `Available tools: ${args.tools.join(", ") || "(none)"}.`,
-    "Return only strict JSON that matches your configured output schema. Do not wrap JSON in Markdown.",
+    "FINAL RESPONSE REQUIREMENT: You MUST return a single JSON object as your final response. You may wrap the JSON in a ```json code block if needed.",
   ].join("\n\n");
 }
 
