@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { useInput } from "ink";
 
 import { AVAILABLE_COMMANDS } from "../constants.js";
-import { useUI } from "../context/UIContext.js";
+import { useChat } from "../context/index.js";
 
 export const useCommandInput = () => {
-  const { command, setCommand } = useUI();
+  const { command, setCommand } = useChat();
   const [isInputFocused, setIsInputFocused] = useState(true);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
 

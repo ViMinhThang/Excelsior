@@ -1,11 +1,11 @@
 import React from "react";
 import { Box, Text } from "ink";
 
-import { useUI } from "../context/UIContext.js";
+import { useTask } from "../context/index.js";
 import { useSpinner } from "../hooks/useSpinner.js";
 
 export const LoadingBox = () => {
-  const { loadingMessage } = useUI();
+  const { loadingMessage } = useTask();
   const spinner = useSpinner();
 
   return (

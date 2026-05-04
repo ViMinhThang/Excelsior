@@ -1,35 +1,30 @@
 import { useConfig } from "../context/ConfigContext.js";
-import { useUI } from "../context/UIContext.js";
+import { useNavigation, useTask, useNotification, useChat } from "../context/index.js";
 import { useReview } from "../context/ReviewContext.js";
 import { registry } from "../app/commands/index.js";
-import type { CommandContext } from "../app/commands.js";
+import type { CommandDeps } from "../app/contexts.js";
 
 export function useCommandContext(extras: {
   loadPullRequests: () => Promise<void>;
   runReview: (prNumber: number) => Promise<void>;
   handlePrompt: (text: string) => Promise<void>;
-}): CommandContext {
+}): CommandDeps {
   const { config, workspace, memory } = useConfig();
-  const { 
-    setView, 
-    notify, 
-    startTask, 
-    endTask, 
-    setChatResponse 
-  } = useUI();
+  const { setView } = useNavigation();
+  const { startTask, endTask } = useTask();
+  const { notify } = useNotification();
+  const { setChatResponse } = useChat();
   const { setMode } = useReview();
 
   return {
-    config,
-    workspace,
-    memory,
-    setView,
-    notify,
-    startTask,
-    endTask,
-    setChatResponse,
-    setMode,
-    ...extras,
-    getHelpText: () => registry.helpText(),
+    data: { config, workspace, memory },
+    ui: { setView, setChatResponse, setMode, notify },
+    tasks: { startTask, endTask },
+    actions: {
+      loadPullRequests: extras.loadPullRequests,
+      runReview: extras.runReview,
+      handlePrompt: extras.handlePrompt,
+      getHelpText: () => registry.helpText(),
+    },
   };
 }

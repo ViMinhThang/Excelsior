@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Text } from "ink";
 import { useConfig } from "../context/ConfigContext.js";
 import { useReview } from "../context/ReviewContext.js";
-import { useUI } from "../context/UIContext.js";
+import { useNavigation, useTask, useChat } from "../context/index.js";
 import { useCommandInput } from "../hooks/useCommandInput.js";
 import { CommandBar } from "./MainView/CommandBar.js";
 import { AssistantResponse } from "./MainView/AssistantResponse.js";
@@ -15,7 +15,9 @@ import { useReviewActions } from "../hooks/useReviewActions.js";
 export const MainView = () => {
   const { config } = useConfig();
   const { mode } = useReview();
-  const { chatResponse, isLoading, loadingMessage, setView } = useUI();
+  const { setView } = useNavigation();
+  const { isLoading, loadingMessage } = useTask();
+  const { chatResponse } = useChat();
   const commandInput = useCommandInput();
   
   const reviewActions = useReviewActions();

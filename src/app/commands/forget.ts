@@ -5,7 +5,7 @@ export const forgetCommand: CommandDefinition = {
   syntax: "/forget",
   description: "Reset session memory (coming soon)",
   parse: (args) => (args.trim() === "" ? {} : null),
-  execute: async (_args, ctx) => {
-    ctx.notify("Memory reset coming soon.", "info");
+  execute: async (_args, { ui }) => {
+    ui.notify("Memory reset coming soon.", "info");
   },
 };

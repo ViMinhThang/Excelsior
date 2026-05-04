@@ -11,11 +11,11 @@ export const reviewCommand: CommandDefinition<{ prNumber?: number }> = {
     if (!isNaN(num)) return { prNumber: num };
     return null;
   },
-  execute: async (args, ctx) => {
+  execute: async (args, { actions }) => {
     if (args.prNumber !== undefined) {
-      await ctx.runReview(args.prNumber);
+      await actions.runReview(args.prNumber);
     } else {
-      await ctx.loadPullRequests();
+      await actions.loadPullRequests();
     }
   },
 };

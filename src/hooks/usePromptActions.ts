@@ -1,5 +1,5 @@
 import { useConfig } from "../context/ConfigContext.js";
-import { useUI } from "../context/UIContext.js";
+import { useChat } from "../context/index.js";
 import { useAsyncAction } from "./useAsyncAction.js";
 import { useCommandContext } from "./useCommandContext.js";
 import { registry } from "../app/commands/index.js";
@@ -11,11 +11,7 @@ export function usePromptActions(reviewActions: {
   runReview: (prNumber: number) => Promise<void>;
 }) {
   const { config, workspace, memory } = useConfig();
-  const { 
-    setChatResponse, 
-    setView, 
-    setCommand
-  } = useUI();
+  const { setChatResponse, setCommand } = useChat();
   const { run } = useAsyncAction();
 
   async function handlePrompt(promptText: string): Promise<void> {
