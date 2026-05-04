@@ -4,17 +4,19 @@ import { getTools } from "../../../tools/index.js";
 import { normalizeProviderError } from "../errors.js";
 import type { CallOptions } from "./options.js";
 
-export async function runTurn(args: {
+interface RunnerArgs {
   model: LanguageModel;
   systemPrompt: string;
   prompt: string;
   cwd: string;
   options: CallOptions;
   maxSteps?: number;
-  tools?: string[] | undefined;
-  signal?: AbortSignal | undefined;
+  tools?: string[];
+  signal?: AbortSignal;
   supportsTools: boolean;
-}): Promise<string> {
+}
+
+export async function runTurn(args: RunnerArgs): Promise<string> {
   const { model, systemPrompt, prompt, cwd, options, maxSteps = 5, tools, signal, supportsTools } = args;
 
   try {
@@ -29,11 +31,11 @@ export async function runTurn(args: {
       tools: supportsTools ? getTools(cwd, tools) : undefined,
       maxSteps: supportsTools ? maxSteps : 1,
       abortSignal,
-      ...(options.temperature !== undefined && { temperature: options.temperature }),
-      ...(options.topP !== undefined && { topP: options.topP }),
-      ...(options.maxOutputTokens !== undefined && { maxOutputTokens: options.maxOutputTokens }),
-      ...(options.maxRetries !== undefined && { maxRetries: options.maxRetries }),
-      ...(Object.keys(options.providerOptions).length > 0 && { providerOptions: options.providerOptions }),
+      temperature: options.temperature,
+      topP: options.topP,
+      maxOutputTokens: options.maxOutputTokens,
+      maxRetries: options.maxRetries,
+      providerOptions: options.providerOptions,
     } as any);
 
     return text.trim();

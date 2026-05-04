@@ -4,6 +4,7 @@ import SelectInput from "ink-select-input";
 
 import { useConfig } from "../context/ConfigContext.js";
 import { useSettingsActions } from "../hooks/useSettingsActions.js";
+import { getProvider } from "../core/llm/registry.js";
 
 export const ModelSelectView = () => {
   const [showAll, setShowAll] = useState(false);
@@ -19,16 +20,23 @@ export const ModelSelectView = () => {
     handleModelSelect(item.value);
   };
 
+  const activeProvider = getProvider(config.LLM_PROVIDER);
+  const modelCount = activeProvider?.models
+    ? Object.keys(activeProvider.models).length
+    : activeProvider?.recommendedModels.length ?? 0;
+
   return (
     <Box flexDirection="column">
       <Text bold color="yellow">
         Select Model — {showAll ? "All Providers" : getActiveProviderLabel()}
       </Text>
+      {!showAll && modelCount > 0 && (
+        <Text dimColor>
+          {modelCount} models available{activeProvider?.models ? " (from models.dev)" : ""}
+        </Text>
+      )}
       <Box marginTop={1}>
-        <SelectInput
-          items={items}
-          onSelect={onSelect}
-        />
+        <SelectInput items={items} onSelect={onSelect} />
       </Box>
     </Box>
   );

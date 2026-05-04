@@ -2,6 +2,23 @@ import { useConfig } from "../context/ConfigContext.js";
 import { useCredential, useNavigation, useNotification } from "../context/index.js";
 import { saveConfig, type ProviderName } from "../config.js";
 import { getProvider, PROVIDER_REGISTRY } from "../core/llm/registry.js";
+import { getModelVariants, parseVariantModel } from "../core/llm/variants.js";
+
+function formatContextWindow(context: number): string {
+  if (context >= 1_000_000) return `${(context / 1_000_000).toFixed(0)}M`;
+  if (context >= 1_000) return `${(context / 1_000).toFixed(0)}K`;
+  return `${context}`;
+}
+
+function formatCost(cost: { input?: number; output?: number } | undefined): string {
+  if (!cost) return "";
+  const inCost = cost.input ?? 0;
+  const outCost = cost.output ?? 0;
+  if (inCost === 0 && outCost === 0) return "free";
+  return `$${(inCost * 1_000_000).toFixed(2)}/${(outCost * 1_000_000).toFixed(2)}/M`;
+}
+
+type CredentialApiKeyField = (typeof PROVIDER_REGISTRY)[number]["apiKeyField"];
 
 export function useSettingsActions() {
   const { config, refreshConfig } = useConfig();
@@ -17,7 +34,9 @@ export function useSettingsActions() {
   function getActiveModelLabel(): string {
     const entry = getProvider(config.LLM_PROVIDER);
     if (!entry) return "Unknown";
-    return config[entry.modelField] ?? entry.modelDefault;
+    const raw = config[entry.modelField] ?? entry.modelDefault;
+    const { baseModelId, effort } = parseVariantModel(raw);
+    return effort ? `${baseModelId} (${effort})` : raw;
   }
 
   function handleSettingsSelect(value: string): void {
@@ -33,7 +52,7 @@ export function useSettingsActions() {
 
     for (const p of PROVIDER_REGISTRY) {
       if (value === `${p.id}_key`) {
-        setCredentialField(p.apiKeyField as any);
+        setCredentialField(p.apiKeyField as CredentialApiKeyField);
         setCredentialInput(config[p.apiKeyField] ?? "");
         setView("CREDENTIAL_INPUT");
         return;
@@ -64,12 +83,11 @@ export function useSettingsActions() {
     notify(`Provider set to ${entry.label}.`, "success");
 
     if (config[entry.apiKeyField]) {
-      // API key already configured — skip credential input
       setView("MODEL_SELECT");
       return;
     }
 
-    setCredentialField(entry.apiKeyField as any);
+    setCredentialField(entry.apiKeyField as CredentialApiKeyField);
     setCredentialInput(config[entry.apiKeyField] ?? "");
 
     setView("CREDENTIAL_INPUT");
@@ -91,7 +109,6 @@ export function useSettingsActions() {
 
     const model = modelParts.join(":");
     const entry = getProvider(providerId);
-
     if (!entry) return;
 
     saveConfig({
@@ -99,7 +116,7 @@ export function useSettingsActions() {
       [entry.modelField as string]: model,
     });
     refreshConfig();
-    notify(`Switched to ${entry.label} / ${model}.`, "success");
+    notify(`Switched to ${entry.label} / ${getActiveModelLabel()}.`, "success");
     setView("SETTINGS");
   }
 
@@ -114,7 +131,6 @@ export function useSettingsActions() {
     setCredentialInput("");
     setCredentialField(null);
 
-    // Auto-advance to model selection if this was a provider API key
     for (const p of PROVIDER_REGISTRY) {
       if (credentialField === p.apiKeyField) {
         notify("Credential saved.", "success");
@@ -144,7 +160,7 @@ export function useSettingsActions() {
   function getProviderOptions() {
     return [
       ...PROVIDER_REGISTRY.map((provider) => {
-        const isConfigured = !!(config as any)[provider.apiKeyField];
+        const isConfigured = !!(config as Record<string, string | undefined>)[provider.apiKeyField];
         const activeSuffix = config.LLM_PROVIDER === provider.id ? " [active]" : "";
         const configSuffix = isConfigured ? " (configured)" : " (missing key)";
 
@@ -169,19 +185,45 @@ export function useSettingsActions() {
       return [{ label: "Back", value: "back" as const }];
     }
 
-    const items = providers.flatMap((provider) =>
-      provider.recommendedModels.map((model) => {
-        const currentModel = config[provider.modelField] === model;
-        const isActive = config.LLM_PROVIDER === provider.id && currentModel;
+    const items: Array<{ label: string; value: string }> = [];
 
-        return {
-          label: `[${provider.label}] ${model}${isActive ? " [active]" : ""}`,
-          value: `${provider.id}:${model}`,
-        };
-      }),
-    );
+    for (const provider of providers) {
+      const catalogModels = provider.models;
+      const modelIds = provider.recommendedModels;
+      const isCurrentProvider = config.LLM_PROVIDER === provider.id;
 
-    // When filtered to a provider, offer a "Show all" option at the top
+      for (const modelId of modelIds) {
+        const isActive = isCurrentProvider && config[provider.modelField] === modelId;
+        let suffix = "";
+
+        if (catalogModels?.[modelId]) {
+          const info = catalogModels[modelId];
+          const ctx = formatContextWindow(info.limit.context);
+          const cost = formatCost(info.cost);
+          const reasoningTag = info.capabilities.reasoning ? " [reasoning]" : "";
+          suffix = ` (${ctx}${cost ? `, ${cost}` : ""})${reasoningTag}${isActive ? " [active]" : ""}`;
+        } else {
+          suffix = isActive ? " [active]" : "";
+        }
+
+        items.push({
+          label: `[${provider.label}] ${modelId}${suffix}`,
+          value: `${provider.id}:${modelId}`,
+        });
+
+        if (catalogModels?.[modelId]?.capabilities.reasoning && isCurrentProvider) {
+          const variants = getModelVariants(provider.id, modelId, modelId);
+          for (const v of variants) {
+            const isVariantActive = isCurrentProvider && config[provider.modelField] === v.id;
+            items.push({
+              label: `  ${v.label}${isVariantActive ? " [active]" : ""}`,
+              value: `${provider.id}:${v.id}`,
+            });
+          }
+        }
+      }
+    }
+
     if (providerId) {
       items.unshift({ label: "Show all providers", value: "__all" as const });
     }

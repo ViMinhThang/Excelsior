@@ -1,7 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { ProviderDefinition } from "../types.js";
+import type { ProviderDefinition } from "../types.js";
 
-export const anthropicProvider = {
+export const anthropicProvider: ProviderDefinition = {
   id: "anthropic",
   label: "Anthropic",
   apiKeyField: "ANTHROPIC_API_KEY",
@@ -13,6 +13,7 @@ export const anthropicProvider = {
     "claude-3-5-haiku-20241022",
     "claude-3-opus-20240229",
   ],
+  npm: "@ai-sdk/anthropic",
   createModel: (config, modelName) =>
     createAnthropic({ apiKey: config.ANTHROPIC_API_KEY ?? "" })(modelName),
   defaultOptions: {
@@ -23,4 +24,4 @@ export const anthropicProvider = {
       },
     },
   },
-} satisfies ProviderDefinition;
+};

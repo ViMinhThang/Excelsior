@@ -1,7 +1,7 @@
-import { createOpenAI } from "@ai-sdk/openai";
-import { ProviderDefinition } from "../types.js";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import type { ProviderDefinition } from "../types.js";
 
-export const openrouterProvider = {
+export const openrouterProvider: ProviderDefinition = {
   id: "openrouter",
   label: "OpenRouter",
   apiKeyField: "OPENROUTER_API_KEY",
@@ -12,12 +12,12 @@ export const openrouterProvider = {
     "google/gemini-2.0-flash-001",
     "anthropic/claude-3.5-sonnet",
   ],
+  npm: "@openrouter/ai-sdk-provider",
   createModel: (config, modelName) =>
-    createOpenAI({
+    createOpenRouter({
       apiKey: config.OPENROUTER_API_KEY ?? "",
-      baseURL: "https://openrouter.ai/api/v1",
     })(modelName),
   defaultOptions: {
     maxOutputTokens: 4096,
   },
-} satisfies ProviderDefinition;
+};

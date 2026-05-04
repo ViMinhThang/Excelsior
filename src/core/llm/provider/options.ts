@@ -1,6 +1,6 @@
 import { DEFAULT_TIMEOUT } from "../../../constants.js";
 import { parseNumber } from "../../../utils/numbers.js";
-import { loadConfigJson, type ConfigJson } from "../custom-provider.js";
+import type { ConfigJson } from "../custom-provider.js";
 import type { ProviderDefaults } from "../types.js";
 import type { Config } from "../../../config.js";
 
