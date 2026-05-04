@@ -45,15 +45,16 @@ export const reviewPlanner = new Agent<PlannerOutput>({
     "Analyze the pull request review request and decide which review subagents to invoke.",
     "Available agents will be listed in the prompt.",
     "Choose the most relevant subagents based on the request.",
-    "For each selected subagent, craft a targeted sub-prompt.",
+    "CRITICAL: For each subagent, craft a prompt that includes the PR title,diff, description, and any specific files or areas they should focus on.",
+    "The subagents have tools to read files, so you don't need to include the full diff, but you MUST tell them what the PR is about so they know what to look for.",
     "Only select subagents that are relevant to the request.",
     "If the request is simple, return an empty subagents list.",
     "",
     "IMPORTANT: You MUST return a JSON object with EXACTLY this structure:",
     "{",
     '  "plan": "Brief reasoning for your choices",',
-    '  "subagents": [ { "name": "agent-name", "prompt": "specific prompt" } ]',
-    "}"
+    '  "subagents": [ { "name": "agent-name", "prompt": "specific prompt with PR context" } ]',
+    "}",
   ].join("\n"),
   tools: [],
   outputSchema: plannerOutputSchema,
@@ -70,4 +71,3 @@ export const reviewAgent = new Agent<ReviewReport>({
   planner: reviewPlanner,
   synthesizer: reflectionAgent,
 });
-
