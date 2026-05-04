@@ -1,4 +1,5 @@
 import { ProviderError, normalizeProviderError } from "../llm/errors.js";
+import { DEFAULT_MAX_STEPS } from "../../constants.js";
 import type { z } from "zod";
 import {
   AgentDefinition,
@@ -32,7 +33,7 @@ export class Agent<TOutput = unknown> {
     this.instructions = definition.instructions;
     this.tools = definition.tools;
     this.outputSchema = definition.outputSchema;
-    this.maxSteps = definition.maxSteps ?? 6;
+    this.maxSteps = definition.maxSteps ?? DEFAULT_MAX_STEPS;
     this.requiredProvider = definition.requiredProvider ?? true;
     this.subagents = definition.subagents;
     this.synthesizer = definition.synthesizer;
@@ -108,8 +109,9 @@ export class Agent<TOutput = unknown> {
 
       return await this.synthesizeSubagentOutcomes(input, outcomes);
     } catch (error) {
-      abortController.abort();
       return this.handleSubagentError(error);
+    } finally {
+      abortController.abort();
     }
   }
 
@@ -148,7 +150,7 @@ export class Agent<TOutput = unknown> {
     signal: AbortSignal,
     abortController: AbortController,
   ): Promise<SubagentOutcome> {
-    const startedAt = Date.now();
+    const startedAt = performance.now();
     try {
       const result = await slot.agent.run({ ...input, signal });
       if (!result.ok) throw new Error(result.message);
@@ -156,7 +158,7 @@ export class Agent<TOutput = unknown> {
       return {
         ok: true,
         agentName: slot.agent.name,
-        durationMs: Date.now() - startedAt,
+        durationMs: performance.now() - startedAt,
         value: result.value,
       };
     } catch (error) {
@@ -168,7 +170,7 @@ export class Agent<TOutput = unknown> {
       return {
         ok: false,
         agentName: slot.agent.name,
-        durationMs: Date.now() - startedAt,
+        durationMs: performance.now() - startedAt,
         error: message,
       };
     }
@@ -252,7 +254,7 @@ export class Agent<TOutput = unknown> {
 
     return input.runtime.provider.runTurn({
       systemPrompt: buildSystemPrompt(
-        this.buildRolePrompt(),
+        [`Agent: ${this.name}`, `Role: ${this.role}`, this.instructions].join("\n\n"),
         input.runtime.memory,
         input.mode,
       ),
@@ -262,13 +264,5 @@ export class Agent<TOutput = unknown> {
       tools: this.tools,
       signal: input.signal,
     });
-  }
-
-  private buildRolePrompt(): string {
-    return [
-      `Agent: ${this.name}`,
-      `Role: ${this.role}`,
-      this.instructions,
-    ].join("\n\n");
   }
 }

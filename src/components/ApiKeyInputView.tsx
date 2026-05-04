@@ -6,13 +6,19 @@ import { useCredential, useNavigation } from "../context/index.js";
 import { useSettingsActions } from "../hooks/useSettingsActions.js";
 
 export const ApiKeyInputView = () => {
-  const { credentialInput, setCredentialInput } = useCredential();
+  const { credentialInput, setCredentialInput, credentialField } = useCredential();
   const { setView } = useNavigation();
   const { credentialTitle, handleCredentialSubmit } = useSettingsActions();
 
   useInput((_input, key) => {
     if (key.escape) {
-      setView("SETTINGS");
+      // Navigate back to PROVIDER_SELECT if this was a provider API key,
+      // otherwise back to SETTINGS (for GITHUB_TOKEN)
+      if (credentialField !== "GITHUB_TOKEN") {
+        setView("PROVIDER_SELECT");
+      } else {
+        setView("SETTINGS");
+      }
     }
   });
 

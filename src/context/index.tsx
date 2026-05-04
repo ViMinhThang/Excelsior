@@ -4,28 +4,28 @@ import { TaskProvider, useTask } from "./TaskContext.js";
 import { NotificationProvider, useNotification } from "./NotificationContext.js";
 import { CredentialProvider, useCredential } from "./CredentialContext.js";
 import { ChatProvider, useChat } from "./ChatContext.js";
-import type { 
-  NavigationFacade, 
-  TaskFacade, 
-  NotificationFacade, 
-  CredentialFacade, 
+import type {
+  NavigationFacade,
+  TaskFacade,
+  NotificationFacade,
+  CredentialFacade,
   ChatFacade,
   View,
   CredentialField,
   NotificationType,
-  Notification
+  Notification,
 } from "./ui-types.js";
 
-export { 
-  NavigationProvider, 
+export {
+  NavigationProvider,
   useNavigation,
-  TaskProvider, 
+  TaskProvider,
   useTask,
-  NotificationProvider, 
+  NotificationProvider,
   useNotification,
-  CredentialProvider, 
+  CredentialProvider,
   useCredential,
-  ChatProvider, 
+  ChatProvider,
   useChat,
 };
 
@@ -38,21 +38,21 @@ export type {
   View,
   CredentialField,
   NotificationType,
-  Notification
+  Notification,
 };
 
-export function UIProviders({ children }: { children: ReactNode }) {
-  return (
-    <NavigationProvider>
-      <TaskProvider>
-        <NotificationProvider>
-          <CredentialProvider>
-            <ChatProvider>
-              {children}
-            </ChatProvider>
-          </CredentialProvider>
-        </NotificationProvider>
-      </TaskProvider>
-    </NavigationProvider>
+function composeProviders(...providers: Array<React.FC<{ children: ReactNode }>>): React.FC<{ children: ReactNode }> {
+  return providers.reduce(
+    (Accumulated, Current) =>
+      ({ children }: { children: ReactNode }) =>
+        React.createElement(Accumulated, null, React.createElement(Current, null, children)),
   );
 }
+
+export const UIProviders = composeProviders(
+  NavigationProvider,
+  TaskProvider,
+  NotificationProvider,
+  CredentialProvider,
+  ChatProvider,
+);
