@@ -1,6 +1,7 @@
 import { loadConfig, type Config } from "../../../config.js";
 import { loadConfigJson } from "../custom-provider.js";
 import { getProvider } from "../registry.js";
+import { parseVariantModel, getVariantOptions } from "../variants.js";
 import type { AgentProvider } from "./types.js";
 import { resolveOptions } from "./options.js";
 import { runTurn } from "./runner.js";
@@ -19,17 +20,27 @@ export function createAgentProvider(config: Config = loadConfig()): AgentProvide
     return null;
   }
 
-  const modelName = config[entry.modelField] ?? entry.modelDefault;
-  const model = entry.createModel(config, modelName);
+  const rawModelName = config[entry.modelField] ?? entry.modelDefault;
+  const { baseModelId, effort } = parseVariantModel(rawModelName);
+  const model = entry.createModel(config, baseModelId);
 
   return {
     provider: providerId,
     label: entry.label,
-    model: modelName,
+    model: rawModelName,
     async runTurn({ systemPrompt, prompt, cwd, maxSteps = 5, tools, signal }) {
       const configJson = loadConfigJson();
       const options = resolveOptions(config, configJson, entry.defaultOptions, entry.id);
-      const supportsTools = !modelName.toLowerCase().includes("reasoning");
+
+      if (effort) {
+        const variantOpts = getVariantOptions(entry.id, effort);
+        options.providerOptions = {
+          ...options.providerOptions,
+          ...variantOpts,
+        };
+      }
+
+      const supportsTools = !baseModelId.toLowerCase().includes("reasoning") && !effort;
 
       return runTurn({
         model,
@@ -38,11 +49,10 @@ export function createAgentProvider(config: Config = loadConfig()): AgentProvide
         cwd,
         options,
         maxSteps,
-        tools,
-        signal,
+        tools: tools ?? [],
+        ...(signal ? { signal } : {}),
         supportsTools,
       });
     },
   };
 }
-

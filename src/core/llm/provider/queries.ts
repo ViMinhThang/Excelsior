@@ -11,11 +11,12 @@ export function getActiveModelName(config: Config): string {
   return config[entry.modelField] ?? "Unknown";
 }
 
-export function listProviderOptions(config: Config = loadConfig()): Array<{
+export function listProviderOptions(): Array<{
   label: string;
   value: ProviderName;
   description: string;
 }> {
+  const config = loadConfig();
   return PROVIDER_REGISTRY.map((entry) => {
     const configured = Boolean(config[entry.apiKeyField]);
     return {

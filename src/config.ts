@@ -31,14 +31,13 @@ const configSchema = providerFieldsSchema.merge(
   z.object({
     LLM_PROVIDER: providerSchema.default("google"),
     GITHUB_TOKEN: z.string().optional(),
-    // Universal LLM call options (parsed to numbers in provider.ts)
     LLM_TEMPERATURE: z.string().optional(),
     LLM_TOP_P: z.string().optional(),
     LLM_MAX_OUTPUT_TOKENS: z.string().optional(),
     LLM_TIMEOUT: z.string().optional(),
     LLM_MAX_RETRIES: z.string().optional(),
   }),
-);
+).catchall(z.string().optional());
 
 class DotEnvFile {
   static parse(content: string): Record<string, string> {
