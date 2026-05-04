@@ -5,8 +5,8 @@ export const reviewFindingSchema = z.object({
   severity: z.enum(["high", "medium", "low"]),
   title: z.string().min(1),
   detail: z.string().min(1),
-  file: z.string().optional(),
-  line: z.number().int().positive().optional(),
+  file: z.string().nullish(),
+  line: z.number().int().min(0).nullish(),
 });
 
 export const subagentResultSchema = z.object({

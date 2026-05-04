@@ -2,17 +2,19 @@ import { SubagentOutcome } from "./types.js";
 
 export function extractJsonObject(response: string): string | null {
   const trimmed = response.trim();
-  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-    return trimmed;
-  }
 
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
+  // Try to find content within markdown blocks first
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const contentToParse = codeBlockMatch?.[1]?.trim() ?? trimmed;
+
+  const start = contentToParse.indexOf("{");
+  const end = contentToParse.lastIndexOf("}");
+
   if (start === -1 || end === -1 || end <= start) {
     return null;
   }
 
-  return trimmed.slice(start, end + 1);
+  return contentToParse.slice(start, end + 1);
 }
 
 export function serializeOutcomes(outcomes: SubagentOutcome[]): string {
