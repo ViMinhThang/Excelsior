@@ -21,61 +21,64 @@ export const subagentResultSchema = z.object({
 
 export type SubagentReviewResult = z.infer<typeof subagentResultSchema>;
 
+// ── Factory for review subagents ──
+
+const REVIEW_TOOLS = ["list_files", "read_file", "search_files"] as const;
+
+function jsonOutputInstructions(source: string): string {
+  return [
+    "",
+    'IMPORTANT: You MUST return a JSON object with EXACTLY this structure:',
+    "{",
+    `  "summary": "Short summary",`,
+    `  "findings": [ { "source": "${source}", "severity": "high|medium|low", "title": "...", "detail": "...", "file": "...", "line": 123 } ],`,
+    `  "notes": [ "any extra string notes" ]`,
+    "}",
+  ].join("\n");
+}
+
+function createReviewSubagent(
+  name: string,
+  role: string,
+  instructions: string,
+  source: string,
+  maxSteps: number,
+): Agent<SubagentReviewResult> {
+  return new Agent<SubagentReviewResult>({
+    name,
+    role,
+    instructions: [instructions, jsonOutputInstructions(source)].join("\n"),
+    tools: [...REVIEW_TOOLS],
+    outputSchema: subagentResultSchema,
+    maxSteps,
+  });
+}
+
 // ── Child Agents ──
 
-export const codeReviewAgent = new Agent<SubagentReviewResult>({
-  name: "code-reviewer",
-  role: "Code reviewer",
-  instructions: [
-    "Focus on correctness, regressions, maintainability, and edge cases.",
-    "",
-    "IMPORTANT: You MUST return a JSON object with EXACTLY this structure:",
-    "{",
-    '  "summary": "Short summary",',
-    '  "findings": [ { "source": "code-review", "severity": "high|medium|low", "title": "...", "detail": "...", "file": "...", "line": 123 } ],',
-    '  "notes": [ "any extra string notes" ]',
-    "}"
-  ].join("\n"),
-  tools: ["list_files", "read_file", "search_files"],
-  outputSchema: subagentResultSchema,
-  maxSteps: 8,
-});
+export const codeReviewAgent = createReviewSubagent(
+  "code-reviewer",
+  "Code reviewer",
+  "Focus on correctness, regressions, maintainability, and edge cases.",
+  "code-review",
+  8,
+);
 
-export const lintAgent = new Agent<SubagentReviewResult>({
-  name: "lint-reviewer",
-  role: "Lint and maintainability reviewer",
-  instructions: [
-    "Focus on style consistency, type-safety, dead code, tests, and project lint conventions.",
-    "",
-    "IMPORTANT: You MUST return a JSON object with EXACTLY this structure:",
-    "{",
-    '  "summary": "Short summary",',
-    '  "findings": [ { "source": "lint", "severity": "high|medium|low", "title": "...", "detail": "...", "file": "...", "line": 123 } ],',
-    '  "notes": [ "any extra string notes" ]',
-    "}"
-  ].join("\n"),
-  tools: ["list_files", "read_file", "search_files"],
-  outputSchema: subagentResultSchema,
-  maxSteps: 6,
-});
+export const lintAgent = createReviewSubagent(
+  "lint-reviewer",
+  "Lint and maintainability reviewer",
+  "Focus on style consistency, type-safety, dead code, tests, and project lint conventions.",
+  "lint",
+  6,
+);
 
-export const securityAgent = new Agent<SubagentReviewResult>({
-  name: "security-reviewer",
-  role: "Security reviewer",
-  instructions: [
-    "Focus on secrets, injection, unsafe execution, authz/authn mistakes, dependency risk, and data exposure.",
-    "",
-    "IMPORTANT: You MUST return a JSON object with EXACTLY this structure:",
-    "{",
-    '  "summary": "Short summary",',
-    '  "findings": [ { "source": "security", "severity": "high|medium|low", "title": "...", "detail": "...", "file": "...", "line": 123 } ],',
-    '  "notes": [ "any extra string notes" ]',
-    "}"
-  ].join("\n"),
-  tools: ["list_files", "read_file", "search_files"],
-  outputSchema: subagentResultSchema,
-  maxSteps: 7,
-});
+export const securityAgent = createReviewSubagent(
+  "security-reviewer",
+  "Security reviewer",
+  "Focus on secrets, injection, unsafe execution, authz/authn mistakes, dependency risk, and data exposure.",
+  "security",
+  7,
+);
 
 // ── Synthesizer Agent ──
 
@@ -109,7 +112,7 @@ export const reflectionAgent = new Agent<ReviewReport>({
     '  "overview": "Detailed paragraphs explaining the review results",',
     '  "sections": [ { "source": "code-review|lint|security", "title": "...", "summary": "...", "findings": [...], "notes": [...] } ],',
     '  "findings": [ { "source": "code-review|lint|security", "severity": "high|medium|low", "title": "...", "detail": "...", "file": "...", "line": 123 } ]',
-    "}"
+    "}",
   ].join("\n"),
   tools: [],
   outputSchema: reviewReportSchema,

@@ -7,14 +7,14 @@ import { useSettingsActions } from "../hooks/useSettingsActions.js";
 
 export const SettingsView = () => {
   const { config } = useConfig();
-  const { handleSettingsSelect } = useSettingsActions();
+  const { handleSettingsSelect, getActiveProviderLabel, getActiveModelLabel } = useSettingsActions();
   const items = [
     {
-      label: "Provider",
+      label: `Provider: ${getActiveProviderLabel()} [active]`,
       value: "provider",
     },
     {
-      label: "Models",
+      label: `Model: ${getActiveModelLabel()} [active]`,
       value: "model",
     },
     {
