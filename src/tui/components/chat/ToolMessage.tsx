@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { Box, Text } from 'ink';
+import StatusIndicator from './StatusIndicator.js';
 
 interface ToolMessageProps {
   toolName?: string;
@@ -8,18 +9,36 @@ interface ToolMessageProps {
   content: string;
 }
 
-const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status }) => {
+const formatArgs = (args?: string) => {
+  if (!args) return "";
+  try {
+    const parsed = JSON.parse(args);
+    if (typeof parsed !== 'object' || parsed === null) return args;
+    
+    return Object.entries(parsed)
+      .map(([k, v]) => {
+        const val = typeof v === 'string' ? `"${v}"` : JSON.stringify(v);
+        return `${k}: ${val}`;
+      })
+      .join(', ');
+  } catch {
+    return args.replace(/^{|}$/g, '').trim();
+  }
+};
+
+const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = "completed", content }) => {
   const isPending = status === "pending";
-  const isError = status === "error";
-  const tag = isPending ? "RUN" : isError ? "ERR" : "OK";
-  
-  const color = isError ? "red" : "gray"
+  const formattedArgs = formatArgs(toolArgs);
 
   return (
-    <Box marginBottom={1} paddingX={1}>
-      <Text color={color} dimColor={isPending}>
-        <Text bold>[{tag}]</Text> {toolName || "Tool"}{toolName && toolArgs ? ` (${toolArgs})` : ""}
-      </Text>
+    <Box flexDirection="column" marginBottom={1} paddingX={1}>
+      <Box>
+        <StatusIndicator status={status} />
+        <Text color="gray" dimColor={isPending}>
+          <Text bold> {toolName || "Tool"}</Text>
+          {formattedArgs ? <Text> {formattedArgs}</Text> : null}
+        </Text>
+      </Box>
     </Box>
   );
 };

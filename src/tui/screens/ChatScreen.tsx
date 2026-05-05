@@ -5,6 +5,9 @@ import { handleCommand } from '../../agent/commands/registry.js';
 import ChatHistory from '../components/chat/ChatHistory.js';
 import ChatInput from '../components/chat/ChatInput.js';
 import { useChat } from '../hooks/useChat.js';
+import ThinkingIndicator from '../components/chat/ThinkingIndicator.js';
+
+
 
 const ChatScreen = () => {
   const { navigate, goBack } = useNavigation();
@@ -108,7 +111,8 @@ const ChatScreen = () => {
 
       {isLoading && (
         <Box marginTop={1}>
-          <Text color="gray" italic>Agent is thinking... (ESC to cancel)</Text>
+          <ThinkingIndicator />
+          <Text color="gray" italic> Agent is thinking... (ESC to cancel)</Text>
         </Box>
       )}
 
