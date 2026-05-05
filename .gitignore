@@ -1,6 +1,0 @@
-node_modules
-.env
-.excelsior
-dist
-__pycache__/
-*.pyc
