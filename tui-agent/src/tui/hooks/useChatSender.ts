@@ -118,10 +118,12 @@ export function useChatSender() {
       const append = appendRef.current;
       const updateById = updateByIdRef.current;
 
-      const history = currentMessages.map((m) => ({
-        role: m.role === "tool-call" ? ("tool" as const) : m.role,
-        content: m.content,
-      }));
+      const history = currentMessages
+        .filter((m) => m.role !== "system")
+        .map((m) => ({
+          role: m.role === "tool-call" ? ("tool" as const) : m.role,
+          content: m.content,
+        }));
       history.push({ role: "user" as const, content: trimmed });
 
       const userMsg: Message = {
