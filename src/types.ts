@@ -5,12 +5,20 @@ export interface ToolCallInfo {
   status: "pending" | "completed" | "error";
 }
 
+export interface StreamCallbacks {
+  onTextDelta: (fullText: string) => void;
+  onToolCall: (toolName: string, args: string, toolCallId: string) => void;
+  onToolResult: (toolCallId: string, result: string) => void;
+  onFinish: (fullText: string, cancelled: boolean) => void;
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant" | "system" | "tool-call";
   content: string;
   timestamp?: string;
   toolCall?: ToolCallInfo;
+  toolCalls?: any[]; // For AI SDK compatibility
 }
 
 export type Screen = 'chat' | 'logs' | 'settings';

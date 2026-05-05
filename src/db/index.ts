@@ -11,6 +11,7 @@ export function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
+      metadata TEXT,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -39,12 +40,13 @@ export function logError(message: string, stack?: string) {
 export function logObservation(
   role: "user" | "assistant" | "tool" | "system",
   content: string,
+  metadata?: string,
 ) {
   const statement = db.prepare(`
-    INSERT INTO observation (role, content)
-    VALUES (?, ?)
+    INSERT INTO observation (role, content, metadata)
+    VALUES (?, ?, ?)
   `);
-  statement.run(role, content);
+  statement.run(role, content, metadata || null);
 }
 export function getSetting(key: string): string | undefined {
   const row = db
