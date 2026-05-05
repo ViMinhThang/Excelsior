@@ -1,0 +1,33 @@
+{
+  "name": "tui-agent",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@ai-sdk/deepseek": "^2.0.32",
+    "@ai-sdk/google": "^3.0.67",
+    "@ai-sdk/react": "^3.0.177",
+    "@types/react": "^19.2.14",
+    "ai": "^6.0.175",
+    "better-sqlite3": "^12.9.0",
+    "ink": "^7.0.1",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.5",
+    "sqlite-vec": "^0.1.9",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
