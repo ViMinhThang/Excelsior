@@ -1,48 +1,36 @@
 {
-  "name": "ai-code-review-agent",
+  "name": "tui-agent",
   "version": "1.0.0",
+  "description": "",
   "type": "module",
-  "description": "AI Code Review Agent with Hybrid CLI and GitHub Action architecture",
-  "main": "dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "check": "tsc --noEmit -p tsconfig.json",
     "dev": "tsx src/index.ts",
-    "lint": "eslint .",
-    "start:cli": "tsx src/index.ts",
-    "test": "node --import tsx --test tests/**/*.test.ts"
+    "start": "node dist/index.js",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.71",
-    "@ai-sdk/deepseek": "^2.0.30",
-    "@ai-sdk/google": "^3.0.64",
-    "@ai-sdk/openai": "latest",
-    "@ai-sdk/openai-compatible": "^2.0.45",
-    "ai": "^6.0.168",
+    "@ai-sdk/deepseek": "^2.0.32",
+    "@ai-sdk/google": "^3.0.67",
+    "@ai-sdk/react": "^3.0.177",
+    "@types/react": "^19.2.14",
+    "ai": "^6.0.175",
     "better-sqlite3": "^12.9.0",
-    "fast-glob": "^3.3.3",
     "ink": "^7.0.1",
-    "ink-select-input": "^6.2.0",
-    "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",
-    "octokit": "^5.0.5",
     "react": "^19.2.5",
-    "zod": "^3.22.4"
+    "sqlite-vec": "^0.1.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.1",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^20.0.0",
-    "@types/react": "^19.2.14",
-    "@typescript-eslint/eslint-plugin": "^8.59.0",
-    "@typescript-eslint/parser": "^8.59.0",
-    "@vercel/ncc": "^0.38.4",
-    "eslint": "^10.2.1",
-    "ts-node": "^10.9.2",
+    "@types/node": "^25.6.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.3.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
   }
 }
