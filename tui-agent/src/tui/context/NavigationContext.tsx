@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-
-type Screen = 'chat' | 'logs' | 'settings';
+import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
+import { Screen } from '../../types.js';
 
 interface NavigationContextType {
   currentScreen: Screen;
@@ -12,18 +11,23 @@ const NavigationContext = createContext<NavigationContextType | undefined>(undef
 
 export const NavigationProvider = ({ children }: { children: ReactNode }) => {
   const [history, setHistory] = useState<Screen[]>(['chat']);
-  
+  const historyRef = useRef(history);
+  historyRef.current = history;
+
   const currentScreen = history[history.length - 1] || 'chat';
 
-  const navigate = (screen: Screen) => {
+  const navigate = useCallback((screen: Screen) => {
     setHistory(prev => [...prev, screen]);
-  };
+  }, []);
 
-  const goBack = () => {
-    if (history.length > 1) {
-      setHistory(prev => prev.slice(0, -1));
-    }
-  };
+  const goBack = useCallback(() => {
+    setHistory(prev => {
+      if (prev.length > 1) {
+        return prev.slice(0, -1);
+      }
+      return prev;
+    });
+  }, []);
 
   return (
     <NavigationContext.Provider value={{ currentScreen, navigate, goBack }}>

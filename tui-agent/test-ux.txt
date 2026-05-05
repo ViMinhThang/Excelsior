@@ -1,3 +1,0 @@
-Hello Sam! 👋
-This is a test file to verify your UX is working perfectly.
-Timestamp: ${new Date().toISOString()}

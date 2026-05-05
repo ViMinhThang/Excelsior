@@ -16,7 +16,7 @@ export const commands: Command[] = [
     name: 'clear',
     description: 'Clear chat messages from the screen',
     execute: async (args, context) => {
-      context.setMessages([]);
+      context.clearMessages();
       context.appendMessage('system', 'Chat history cleared from UI.');
     },
   },
@@ -25,7 +25,7 @@ export const commands: Command[] = [
     description: 'Delete all conversation history from database',
     execute: async (args, context) => {
       db.prepare('DELETE FROM observation').run();
-      context.setMessages([]);
+      context.clearMessages();
       context.appendMessage('system', 'Database history reset.');
     },
   },

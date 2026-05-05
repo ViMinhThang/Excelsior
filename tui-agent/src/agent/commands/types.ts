@@ -1,8 +1,10 @@
+import { Screen } from '../../types.js';
+
 export interface CommandContext {
-  navigate: (screen: any) => void;
+  navigate: (screen: Screen) => void;
   goBack: () => void;
   appendMessage: (role: "user" | "assistant" | "system", content: string) => void;
-  setMessages: React.Dispatch<React.SetStateAction<any[]>>;
+  clearMessages: () => void;
 }
 
 export interface Command {

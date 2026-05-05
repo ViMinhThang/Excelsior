@@ -1,8 +1,0 @@
-Hello Sam!
-
-This file was created just for you. 
-Date: Today
-Status: Short-term memory is working perfectly!
-
-Cheers,
-Your Coding Assistant 🚀

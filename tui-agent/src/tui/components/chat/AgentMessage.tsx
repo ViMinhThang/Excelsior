@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Box, Text } from 'ink';
 
 interface AgentMessageProps {
@@ -16,4 +16,4 @@ const AgentMessage: React.FC<AgentMessageProps> = ({ content }) => {
   );
 };
 
-export default AgentMessage;
+export default memo(AgentMessage);
