@@ -1,30 +1,27 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Box, Text } from 'ink';
 
 interface ToolMessageProps {
+  toolName?: string;
+  toolArgs?: string;
+  status?: "pending" | "completed" | "error";
   content: string;
 }
 
-const ToolMessage: React.FC<ToolMessageProps> = ({ content }) => {
-  // Try to parse if it's JSON to make it prettier, otherwise show as text
-  let displayContent = content;
-  try {
-    const parsed = JSON.parse(content);
-    displayContent = JSON.stringify(parsed, null, 2);
-  } catch {
-    // Not JSON, use as is
-  }
+const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status }) => {
+  const isPending = status === "pending";
+  const isError = status === "error";
+  const tag = isPending ? "RUN" : isError ? "ERR" : "OK";
+  
+  const color = isError ? "red" : "gray"
 
   return (
-    <Box flexDirection="column" marginBottom={1} paddingX={1}>
-      <Box borderStyle="round" borderColor="gray" paddingX={1}>
-        <Text color="cyan" dimColor italic>Tool Output:</Text>
-        <Box marginTop={0}>
-          <Text color="gray">{displayContent}</Text>
-        </Box>
-      </Box>
+    <Box marginBottom={1} paddingX={1}>
+      <Text color={color} dimColor={isPending}>
+        <Text bold>[{tag}]</Text> {toolName || "Tool"}{toolName && toolArgs ? ` (${toolArgs})` : ""}
+      </Text>
     </Box>
   );
 };
 
-export default ToolMessage;
+export default memo(ToolMessage);

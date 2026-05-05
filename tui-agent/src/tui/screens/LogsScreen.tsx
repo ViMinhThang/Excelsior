@@ -1,11 +1,16 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
-import { db } from '../../db/index.js';
 import { useNavigation } from '../context/NavigationContext.js';
+import { useDatabase } from '../hooks/useDatabase.js';
 
 const LogsScreen = () => {
   const { navigate, goBack } = useNavigation();
-  const logs = db.prepare('SELECT * FROM observation ORDER BY timestamp DESC LIMIT 10').all() as any[];
+  const { getLogs } = useDatabase();
+  const [logs, setLogs] = useState<any[]>([]);
+
+  useEffect(() => {
+    setLogs(getLogs(10));
+  }, [getLogs]);
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -15,7 +20,7 @@ const LogsScreen = () => {
       </Box>
 
       <Box flexDirection="column" flexGrow={1}>
-        {logs.map((log) => (
+        {logs.map((log: any) => (
           <Box key={log.id} marginBottom={1} flexDirection="column">
             <Text color="dim">[{log.timestamp}] {log.role.toUpperCase()}:</Text>
             <Text>{log.content.substring(0, 100)}{log.content.length > 100 ? '...' : ''}</Text>

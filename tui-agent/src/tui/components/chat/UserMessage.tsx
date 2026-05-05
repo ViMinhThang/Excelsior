@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Box, Text } from 'ink';
 
 interface UserMessageProps {
@@ -16,4 +16,4 @@ const UserMessage: React.FC<UserMessageProps> = ({ content }) => {
   );
 };
 
-export default UserMessage;
+export default memo(UserMessage);

@@ -1,19 +1,28 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
-import { getSetting, setSetting } from '../../db/index.js';
 import { useNavigation } from '../context/NavigationContext.js';
+import { useDatabase } from '../hooks/useDatabase.js';
 import ChatInput from '../components/chat/ChatInput.js';
 
 const SettingsScreen = () => {
   const { goBack } = useNavigation();
-  const [apiKey, setApiKey] = useState(() => getSetting('DEEPSEEK_API_KEY') || '');
+  const { getApiKey, saveApiKey } = useDatabase();
+  const [apiKey, setApiKey] = useState(() => getApiKey());
   const [status, setStatus] = useState('');
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const handleSave = useCallback(() => {
-    setSetting('DEEPSEEK_API_KEY', apiKey);
+    saveApiKey(apiKey);
     setStatus('API Key saved successfully!');
-    setTimeout(() => setStatus(''), 3000);
-  }, [apiKey]);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setStatus(''), 3000);
+  }, [apiKey, saveApiKey]);
 
   return (
     <Box flexDirection="column">
