@@ -17,6 +17,7 @@
     "@ai-sdk/anthropic": "^3.0.74",
     "@ai-sdk/deepseek": "^2.0.32",
     "@ai-sdk/react": "^3.0.177",
+    "@octokit/rest": "^22.0.1",
     "@types/react": "^19.2.14",
     "ai": "^6.0.175",
     "better-sqlite3": "^12.9.0",

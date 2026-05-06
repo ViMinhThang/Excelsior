@@ -5,6 +5,7 @@ import { useNavigation } from '../../context/NavigationContext.js';
 import ChatScreen from '../../screens/ChatScreen.js';
 import LogsScreen from '../../screens/LogsScreen.js';
 import SettingsScreen from '../../screens/SettingsScreen.js';
+import ReviewScreen from '../../screens/ReviewScreen.js';
 
 interface ScreenDispatcherProps {
   screen: Screen;
@@ -18,6 +19,8 @@ const ScreenDispatcher = memo(function ScreenDispatcher({ screen }: ScreenDispat
       return <LogsScreen />;
     case 'settings':
       return <SettingsScreen />;
+    case 'review':
+      return <ReviewScreen />;
     default:
       return null;
   }
@@ -40,7 +43,10 @@ const Router = () => {
     if (key.ctrl && input === 'c') {
       exitRef.current();
     }
-    if (key.escape || key.backspace) {
+    if (key.escape && currentScreenRef.current !== 'review') {
+      goBackRef.current();
+    }
+    if (key.backspace && currentScreenRef.current !== 'review' && currentScreenRef.current !== 'settings' && currentScreenRef.current !== 'chat') {
       goBackRef.current();
     }
     if (key.ctrl && input === 'l' && currentScreenRef.current === 'chat') {
