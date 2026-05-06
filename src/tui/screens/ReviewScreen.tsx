@@ -66,6 +66,16 @@ function ReviewScreenInner() {
     }
   }, [fetchedDiff, setDiff]);
 
+  // Auto-fetch diff when selecting a PR
+  useEffect(() => {
+    const pr = prs[prIndex];
+    if (pr) {
+      fetchDiffRef.current(pr.number);
+      setViewingDiff(true);
+      selectPRRef.current(pr);
+    }
+  }, [prs, prIndex]);
+
   useInput(useCallback((input, key) => {
     if (mode === "browser") {
       if (key.upArrow) {
@@ -78,11 +88,7 @@ function ReviewScreenInner() {
       }
       if (input === "\r") {
         const pr = prs[prIndex];
-        if (pr && !viewingDiff) {
-          fetchDiffRef.current(pr.number);
-          setViewingDiff(true);
-          selectPRRef.current(pr);
-        } else if (pr && viewingDiff) {
+        if (pr) {
           startReviewRef.current();
         }
         return;
@@ -177,23 +183,52 @@ function ReviewScreenInner() {
       </Box>
 
       {mode === "browser" && (
-        <Box flexDirection="column" flexGrow={1}>
-          <Box>
-            <Text bold>PRs targeting current branch:</Text>
-          </Box>
-          {prsLoading && <Text color="yellow">Loading PRs...</Text>}
-          {prsError && <Text color="red">Error: {prsError}</Text>}
-          <PRList
-            prs={prs}
-            selectedIndex={prIndex}
-          />
-          {viewingDiff && fetchedDiff && !diffLoading && (
-            <Box marginTop={1} flexDirection="column" flexGrow={1}>
-              <DiffViewer diff={fetchedDiff} />
+        <Box flexDirection="row" flexGrow={1} marginTop={1}>
+          {/* Left Column: PR List */}
+          <Box flexDirection="column" width="35%" marginRight={1}>
+            <Box marginBottom={1}>
+              <Text bold>PRs targeting current branch:</Text>
             </Box>
-          )}
-          {diffLoading && <Text color="yellow">Loading diff...</Text>}
-          {diffError && <Text color="red">Error: {diffError}</Text>}
+            {prsLoading && <Text color="yellow">Loading PRs...</Text>}
+            {prsError && <Text color="red">Error: {prsError}</Text>}
+            <PRList
+              prs={prs}
+              selectedIndex={prIndex}
+            />
+          </Box>
+
+          {/* Right Column with Left Border: Diff or Placeholder */}
+          <Box
+            flexDirection="column"
+            flexGrow={1}
+            width="65%"
+            borderStyle="single"
+            borderLeft={true}
+            borderRight={false}
+            borderTop={false}
+            borderBottom={false}
+            borderColor="gray"
+            paddingLeft={2}
+          >
+            {viewingDiff ? (
+              <Box flexDirection="column" flexGrow={1}>
+                <Box marginBottom={1}>
+                  <Text bold color="cyan">Active PR Diff:</Text>
+                </Box>
+                {diffLoading && <Text color="yellow">Loading diff...</Text>}
+                {diffError && <Text color="red">Error: {diffError}</Text>}
+                {fetchedDiff && !diffLoading && (
+                  <Box flexDirection="column" flexGrow={1}>
+                    <DiffViewer diff={fetchedDiff} />
+                  </Box>
+                )}
+              </Box>
+            ) : (
+              <Box flexDirection="column" flexGrow={1} justifyContent="center" alignItems="center">
+                <Text color="gray" dimColor>Select a PR and press Enter to view diff</Text>
+              </Box>
+            )}
+          </Box>
         </Box>
       )}
 

@@ -11,7 +11,7 @@ const ReviewFooter: React.FC<ReviewFooterProps> = ({ mode, subMode }) => {
   if (mode === "browser") {
     return (
       <Box>
-        <Text color="dim">↑↓ select  Enter view diff  r refresh  c back to chat</Text>
+        <Text color="dim">↑↓ select  Enter start review  r refresh  c back to chat</Text>
       </Box>
     );
   }
