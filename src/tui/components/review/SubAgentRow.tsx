@@ -1,5 +1,5 @@
 import React, { memo } from "react";
-import { Text } from "ink";
+import { Box, Text } from "ink";
 import { SubAgentState } from "../../../types.js";
 
 interface SubAgentRowProps {
@@ -8,16 +8,24 @@ interface SubAgentRowProps {
 }
 
 const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, isSelected }) => {
-  const statusIcon = agent.status === "running" ? "[● running]" : "[✓ done]";
-  const prefix = isSelected ? "▶" : " ";
+  const isRunning = agent.status === "running";
+  const dotColor = isSelected ? "cyanBright" : isRunning ? "yellow" : "gray";
+  const dot = isSelected ? "▶" : "●";
 
   return (
-    <Text>
-      <Text color="cyan">{prefix} </Text>
-      <Text color="cyan" bold>{agent.role}</Text>
-      <Text color="gray"> {statusIcon}</Text>
-      <Text color="dim"> {agent.latestLine}</Text>
-    </Text>
+    <Box flexDirection="column" marginTop={1}>
+      <Box>
+        <Text color={dotColor} bold={isSelected}>{dot} </Text>
+        <Text color="gray" dimColor={!isSelected}>call_sub_agent </Text>
+        <Text color={isSelected ? "white" : "cyan"} bold>{agent.role}</Text>
+        <Text color="gray"> ({agent.status})</Text>
+      </Box>
+      {agent.latestLine && (
+        <Box paddingLeft={2}>
+          <Text color="dim">└─ {agent.latestLine}</Text>
+        </Box>
+      )}
+    </Box>
   );
 };
 
