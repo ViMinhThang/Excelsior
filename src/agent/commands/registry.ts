@@ -43,6 +43,13 @@ export const commands: Command[] = [
       context.navigate('logs');
     },
   },
+  {
+    name: 'review',
+    description: 'Review pull requests targeting the current branch',
+    execute: async (args, context) => {
+      context.navigate('review');
+    },
+  },
 ];
 
 export async function handleCommand(input: string, context: CommandContext): Promise<boolean> {
