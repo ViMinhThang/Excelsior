@@ -8,6 +8,7 @@ interface ChatInputProps {
   onSubmit: () => void;
   placeholder?: string;
   isLoading?: boolean;
+  focus?: boolean;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
@@ -16,6 +17,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   onSubmit,
   placeholder = "Type your message...",
   isLoading,
+  focus = true,
 }) => {
   return (
     <Box borderStyle="single" borderColor="cyanBright" borderLeft={false} borderRight={false} paddingX={1}>
@@ -25,6 +27,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         onChange={onChange}
         onSubmit={onSubmit}
         placeholder={placeholder}
+        focus={focus}
       />
     </Box>
   );
