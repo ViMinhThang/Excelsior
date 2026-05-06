@@ -21,7 +21,25 @@ export interface Message {
   toolCalls?: any[]; // For AI SDK compatibility
 }
 
-export type Screen = 'chat' | 'logs' | 'settings';
+export type Screen = 'chat' | 'logs' | 'settings' | 'review';
+
+export type ReviewScreenMode = "browser" | "review" | "results";
+
+export interface PullRequest {
+  number: number;
+  title: string;
+  author: string;
+  headRefName: string;
+  createdAt: string;
+}
+
+export interface SubAgentState {
+  toolCallId: string;
+  role: string;
+  status: "running" | "done";
+  latestLine: string;
+  fullOutput: string;
+}
 
 export const PAGE_SIZE = 50;
 

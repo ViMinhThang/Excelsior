@@ -16,5 +16,13 @@ export function useDatabase() {
     setSetting("DEEPSEEK_API_KEY", key);
   }, []);
 
-  return { getLogs, getApiKey, saveApiKey };
+  const getGithubToken = useCallback(() => {
+    return getSetting("GITHUB_TOKEN") || "";
+  }, []);
+
+  const saveGithubToken = useCallback((token: string) => {
+    setSetting("GITHUB_TOKEN", token);
+  }, []);
+
+  return { getLogs, getApiKey, saveApiKey, getGithubToken, saveGithubToken };
 }
