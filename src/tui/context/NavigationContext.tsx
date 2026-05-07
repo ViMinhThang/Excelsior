@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { Screen } from '../../types.js';
 
 interface NavigationContextType {
@@ -11,8 +11,6 @@ const NavigationContext = createContext<NavigationContextType | undefined>(undef
 
 export const NavigationProvider = ({ children }: { children: ReactNode }) => {
   const [history, setHistory] = useState<Screen[]>(['chat']);
-  const historyRef = useRef(history);
-  historyRef.current = history;
 
   const currentScreen = history[history.length - 1] || 'chat';
 

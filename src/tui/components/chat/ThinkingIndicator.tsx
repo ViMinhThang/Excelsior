@@ -1,8 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Text } from 'ink';
 
+function formatDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return `worked for ${parts.join(' ')}`;
+}
+
 const ThinkingIndicator = () => {
   const [frame, setFrame] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
   useEffect(() => {
@@ -12,7 +24,18 @@ const ThinkingIndicator = () => {
     return () => clearInterval(timer);
   }, []);
 
-  return <Text color="yellowBright">{frames[frame]}</Text>;
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsed(s => s + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return (
+    <Text color="yellowBright">
+      {frames[frame]} {formatDuration(elapsed)}
+    </Text>
+  );
 };
 
 export default ThinkingIndicator;

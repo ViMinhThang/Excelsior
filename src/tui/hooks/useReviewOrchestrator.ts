@@ -3,34 +3,32 @@ import { createAgent } from "../../agent/agent.js";
 import { reviewOrchestratorPrompt } from "../../agent/review/reviewPrompt.js";
 import {
   spawnSubAgentTool,
-  subAgentRegistry,
+  subAgentBus,
 } from "../../agent/review/spawnSubAgent.js";
 import { gitDiffTool } from "../../agent/tools/gitDiff/gitDiff.js";
-import { useReviewContext } from "../context/ReviewContext.js";
+import { streamAgentResponse } from "../lib/agentStream.js";
+import { usePRContext } from "../context/PRContext.js";
+import { useReviewSessionContext } from "../context/ReviewSessionContext.js";
+import { useSubAgentContext } from "../context/SubAgentContext.js";
+import { useEvent } from "./useEvent.js";
 import { postPRComment } from "../../utils/ghComment.js";
 
 export function useReviewOrchestrator() {
-  const {
-    diff,
-    selectedPR,
-    mainOutput,
-    addSubAgent,
-    updateSubAgent,
-    clearSubAgents,
-    setMainOutput,
-    setMode,
-  } = useReviewContext();
+  const { diff, selectedPR } = usePRContext();
+  const { mainOutput, setMainOutput, setMode, addTextBlock, addSubAgentBlock, addToolCallBlock, updateToolCallBlock, clearBlocks } = useReviewSessionContext();
+  const { addSubAgent, updateSubAgent, clearSubAgents } = useSubAgentContext();
 
-  const addSubAgentRef = useRef(addSubAgent);
-  addSubAgentRef.current = addSubAgent;
-  const updateSubAgentRef = useRef(updateSubAgent);
-  updateSubAgentRef.current = updateSubAgent;
-  const clearSubAgentsRef = useRef(clearSubAgents);
-  clearSubAgentsRef.current = clearSubAgents;
-  const setMainOutputRef = useRef(setMainOutput);
-  setMainOutputRef.current = setMainOutput;
-  const setModeRef = useRef(setMode);
-  setModeRef.current = setMode;
+  const onAddSubAgent = useEvent(addSubAgent);
+  const onUpdateSubAgent = useEvent(updateSubAgent);
+  const onClearSubAgents = useEvent(clearSubAgents);
+  const onAddSubAgentBlock = useEvent(addSubAgentBlock);
+  const onSetMainOutput = useEvent(setMainOutput);
+  const onSetMode = useEvent(setMode);
+  const onAddTextBlock = useEvent(addTextBlock);
+  const onAddToolCallBlock = useEvent(addToolCallBlock);
+  const onUpdateToolCallBlock = useEvent(updateToolCallBlock);
+  const onClearBlocks = useEvent(clearBlocks);
+
   const diffRef = useRef(diff);
   diffRef.current = diff;
   const selectedPRRef = useRef(selectedPR);
@@ -40,39 +38,38 @@ export function useReviewOrchestrator() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    subAgentRegistry.onSpawned = ({ toolCallId, role }) => {
-      addSubAgentRef.current({
+  useEffect(() => subAgentBus.subscribe({
+    onSpawned: ({ toolCallId, role }) => {
+      onAddSubAgent({
         toolCallId,
         role,
         status: "running",
         latestLine: "",
         fullOutput: "",
+        outputParts: [],
+        toolCalls: [],
       });
-    };
-    subAgentRegistry.onOutput = ({ toolCallId, latestLine, fullOutput }) => {
-      updateSubAgentRef.current(toolCallId, { status: "running", latestLine, fullOutput });
-    };
-    subAgentRegistry.onDone = ({ toolCallId, fullOutput }) => {
-      updateSubAgentRef.current(toolCallId, {
+      onAddSubAgentBlock(toolCallId);
+    },
+    onOutput: ({ toolCallId, latestLine, fullOutput, outputParts, toolCalls }) => {
+      onUpdateSubAgent(toolCallId, { status: "running", latestLine, fullOutput, outputParts, toolCalls });
+    },
+    onDone: ({ toolCallId, fullOutput }) => {
+      onUpdateSubAgent(toolCallId, {
         status: "done",
         latestLine: fullOutput.split("\n").filter(Boolean).pop() || "",
         fullOutput,
       });
-    };
-    return () => {
-      subAgentRegistry.onSpawned = null;
-      subAgentRegistry.onOutput = null;
-      subAgentRegistry.onDone = null;
-    };
-  }, []);
+    },
+  }), []);
 
   const startReview = useCallback(async () => {
     const currentDiff = diffRef.current;
     if (!currentDiff) return;
 
-    clearSubAgentsRef.current();
-    setModeRef.current("review");
+    onClearSubAgents();
+    onClearBlocks();
+    onSetMode("review");
 
     const mainAgent = createAgent(reviewOrchestratorPrompt, {
       gitDiff: gitDiffTool,
@@ -80,30 +77,46 @@ export function useReviewOrchestrator() {
     });
 
     abortRef.current = new AbortController();
-    let fullText = "";
+    const signal = abortRef.current.signal;
+
+    let prevText = "";
 
     try {
-      const stream = await mainAgent.stream({
-        messages: [
+      await streamAgentResponse(
+        mainAgent,
+        [
           {
             role: "user",
             content: `Review this PR diff for a pull request:\n\n\`\`\`diff\n${currentDiff}\n\`\`\``,
           },
         ],
-      });
-
-      for await (const part of stream.fullStream) {
-        if (abortRef.current?.signal.aborted) break;
-        if (part.type === "text-delta") {
-          const delta = (part as any).text ?? (part as any).textDelta ?? "";
-          fullText += delta;
-          setMainOutputRef.current(fullText);
-        }
-      }
+        {
+          onTextDelta: (fullText) => {
+            const delta = fullText.slice(prevText.length);
+            prevText = fullText;
+            onSetMainOutput(fullText);
+            onAddTextBlock(delta);
+          },
+          onToolCall: (toolName, args, toolCallId) => {
+            onAddToolCallBlock(toolCallId, toolName, args);
+          },
+          onToolResult: (toolCallId, result) => {
+            onUpdateToolCallBlock(toolCallId, result.startsWith("[Error]") ? "error" : "completed");
+          },
+          onFinish: (text, cancelled) => {
+            if (cancelled) {
+              onSetMainOutput(text + "\n\n[Cancelled]");
+            }
+            onSetMode("results");
+          },
+        },
+        signal,
+      );
     } catch (error: any) {
-      setMainOutputRef.current(`Error during review: ${error.message}`);
+      onSetMainOutput(`Error during review: ${error.message}`);
+      onAddTextBlock(`Error during review: ${error.message}`);
     } finally {
-      setModeRef.current("results");
+      onSetMode("results");
     }
   }, []);
 

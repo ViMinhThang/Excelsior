@@ -1,4 +1,4 @@
-import { Command, CommandContext } from './types.js';
+import { Command, CommandContext } from '../../types.js';
 import { db } from '../../db/index.js';
 
 export const commands: Command[] = [
@@ -34,13 +34,6 @@ export const commands: Command[] = [
     description: 'Go to Settings screen',
     execute: async (args, context) => {
       context.navigate('settings');
-    },
-  },
-  {
-    name: 'logs',
-    description: 'Go to Logs screen',
-    execute: async (args, context) => {
-      context.navigate('logs');
     },
   },
   {

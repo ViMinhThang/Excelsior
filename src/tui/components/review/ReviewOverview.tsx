@@ -1,29 +1,20 @@
 import React, { memo } from "react";
-import { Box, Text } from "ink";
-import { useReviewContext } from "../../context/ReviewContext.js";
-import SubAgentRow from "./SubAgentRow.js";
+import { Text } from "ink";
+import { useReviewSessionContext } from "../../context/ReviewSessionContext.js";
+import { useSubAgentContext } from "../../context/SubAgentContext.js";
+import ReviewBlockList from "./ReviewBlockList.js";
 
 const ReviewOverview: React.FC = () => {
-  const { mainOutput, subAgents, selectedSubAgentIndex } = useReviewContext();
+  const { blocks } = useReviewSessionContext();
+  const { subAgents, selectedSubAgentIndex } = useSubAgentContext();
 
   return (
-    <Box flexDirection="column" flexGrow={1}>
-      <Box flexDirection="column" flexGrow={1} marginBottom={1}>
-        <Box flexGrow={1} minHeight={5}>
-          <Text color="white">{mainOutput || "Waiting for main agent to start..."}</Text>
-        </Box>
-      </Box>
-
-      <Box flexDirection="column">
-        {subAgents.map((agent, i) => (
-          <SubAgentRow
-            key={agent.toolCallId}
-            agent={agent}
-            isSelected={i === selectedSubAgentIndex}
-          />
-        ))}
-      </Box>
-    </Box>
+    <ReviewBlockList
+      blocks={blocks}
+      subAgents={subAgents}
+      selectedSubAgentIndex={selectedSubAgentIndex}
+      emptyComponent={<Text color="white">Waiting for main agent to start...</Text>}
+    />
   );
 };
 

@@ -1,3 +1,43 @@
+export type StreamPart =
+  | { type: "text-delta"; text?: string; textDelta?: string; [key: string]: unknown }
+  | { type: "tool-call"; toolName?: string; name?: string; toolCallId: string; input?: unknown; [key: string]: unknown }
+  | { type: "tool-result"; toolCallId: string; output?: { type: string; value: unknown }; [key: string]: unknown }
+  | { type: "tool-error"; toolCallId: string; toolName?: string; error?: unknown; [key: string]: unknown };
+
+export function getTextDelta(part: StreamPart): string {
+  if (part.type === "text-delta") {
+    return (part as any).text ?? (part as any).textDelta ?? "";
+  }
+  return "";
+}
+
+export function getToolName(part: StreamPart): string {
+  if (part.type === "tool-call") {
+    return (part as any).toolName ?? (part as any).name ?? "unknown";
+  }
+  return "unknown";
+}
+
+export function getToolArgs(part: StreamPart): string {
+  if (part.type === "tool-call") {
+    return JSON.stringify((part as any).input ?? {});
+  }
+  return "{}";
+}
+
+export function getToolResult(part: StreamPart): string {
+  if (part.type === "tool-result") {
+    const output = (part as any).output;
+    if (!output) return "No result returned";
+    return output.type === "text" ? String(output.value) : JSON.stringify(output);
+  }
+  if (part.type === "tool-error") {
+    const error = (part as any).error;
+    return `[Error] ${typeof error === "string" ? error : JSON.stringify(error ?? "Unknown tool error")}`;
+  }
+  return "";
+}
+
 export interface ToolCallInfo {
   toolName: string;
   toolArgs: string;
@@ -21,7 +61,7 @@ export interface Message {
   toolCalls?: any[]; // For AI SDK compatibility
 }
 
-export type Screen = 'chat' | 'logs' | 'settings' | 'review';
+export type Screen = 'chat' | 'settings' | 'review';
 
 export type ReviewScreenMode = "browser" | "review" | "results";
 
@@ -33,12 +73,18 @@ export interface PullRequest {
   createdAt: string;
 }
 
+export type SubAgentOutputPart =
+  | { type: "text"; text: string }
+  | { type: "tool-call"; toolName: string; toolArgs: string; toolCallId: string; status: "pending" | "completed" | "error" };
+
 export interface SubAgentState {
   toolCallId: string;
   role: string;
-  status: "running" | "done";
+  status: "running" | "done" | "error";
   latestLine: string;
   fullOutput: string;
+  outputParts: SubAgentOutputPart[];
+  toolCalls: ToolCallInfo[];
 }
 
 export const PAGE_SIZE = 50;

@@ -7,6 +7,7 @@ interface ToolMessageProps {
   toolArgs?: string;
   status?: "pending" | "completed" | "error";
   content: string;
+  marginTop?: number;
 }
 
 const formatArgs = (args?: string) => {
@@ -26,17 +27,21 @@ const formatArgs = (args?: string) => {
   }
 };
 
-const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = "completed", content }) => {
+const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = "completed", content, marginTop }) => {
   const isPending = status === "pending";
-  const formattedArgs = formatArgs(toolArgs);
+  const isSubAgent = toolName === "spawnSubAgent";
+  const formattedArgs = isSubAgent
+    ? (() => { try { const p = JSON.parse(toolArgs || "{}"); return `→ ${p.role || "unknown"}`; } catch { return toolArgs; } })()
+    : formatArgs(toolArgs);
 
   return (
-    <Box flexDirection="column" marginBottom={1} paddingX={1}>
+    <Box flexDirection="column" marginTop={marginTop} marginBottom={1} paddingX={1}>
       <Box>
         <StatusIndicator status={status} />
         <Text color="gray" dimColor={isPending}>
           <Text bold> {toolName || "Tool"}</Text>
           {formattedArgs ? <Text> {formattedArgs}</Text> : null}
+          {isSubAgent ? <Text color="dim"> (Ctrl+O)</Text> : null}
         </Text>
       </Box>
     </Box>

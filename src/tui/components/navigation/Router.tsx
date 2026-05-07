@@ -1,9 +1,9 @@
-import React, { memo, useCallback, useRef } from 'react';
+import React, { memo } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import { Screen } from '../../../types.js';
 import { useNavigation } from '../../context/NavigationContext.js';
+import { useEvent } from '../../hooks/useEvent.js';
 import ChatScreen from '../../screens/ChatScreen.js';
-import LogsScreen from '../../screens/LogsScreen.js';
 import SettingsScreen from '../../screens/SettingsScreen.js';
 import ReviewScreen from '../../screens/ReviewScreen.js';
 
@@ -15,8 +15,6 @@ const ScreenDispatcher = memo(function ScreenDispatcher({ screen }: ScreenDispat
   switch (screen) {
     case 'chat':
       return <ChatScreen />;
-    case 'logs':
-      return <LogsScreen />;
     case 'settings':
       return <SettingsScreen />;
     case 'review':
@@ -30,42 +28,36 @@ const Router = () => {
   const { currentScreen, navigate, goBack } = useNavigation();
   const { exit } = useApp();
 
-  const navigateRef = useRef(navigate);
-  navigateRef.current = navigate;
-  const goBackRef = useRef(goBack);
-  goBackRef.current = goBack;
-  const exitRef = useRef(exit);
-  exitRef.current = exit;
-  const currentScreenRef = useRef(currentScreen);
-  currentScreenRef.current = currentScreen;
+  const onNavigate = useEvent(navigate);
+  const onGoBack = useEvent(goBack);
+  const onExit = useEvent(exit);
 
-  useInput(useCallback((input, key) => {
+  const handleInput = useEvent((input: string, key: any) => {
     if (key.ctrl && input === 'c') {
-      exitRef.current();
+      onExit();
     }
-    if (key.escape && currentScreenRef.current !== 'review') {
-      goBackRef.current();
+    if (key.escape && currentScreen !== 'review') {
+      onGoBack();
     }
-    if (key.backspace && currentScreenRef.current !== 'review' && currentScreenRef.current !== 'settings' && currentScreenRef.current !== 'chat') {
-      goBackRef.current();
+    if (key.backspace && currentScreen !== 'review' && currentScreen !== 'settings' && currentScreen !== 'chat') {
+      onGoBack();
     }
-    if (key.ctrl && input === 'l' && currentScreenRef.current === 'chat') {
-      navigateRef.current('logs');
+    if (key.ctrl && input === 's' && currentScreen === 'chat') {
+      onNavigate('settings');
     }
-    if (key.ctrl && input === 's' && currentScreenRef.current === 'chat') {
-      navigateRef.current('settings');
+    if (input === 'c' && currentScreen === 'settings') {
+      onNavigate('chat');
     }
-    if (input === 'c' && (currentScreenRef.current === 'logs' || currentScreenRef.current === 'settings')) {
-      navigateRef.current('chat');
-    }
-  }, []));
+  });
+
+  useInput(handleInput);
 
   return (
     <Box flexDirection="column" padding={1} minHeight={20}>
       <ScreenDispatcher screen={currentScreen} />
 
       <Box marginTop={1} borderTop={true} borderBottom={false} borderLeft={false} borderRight={false}>
-        <Text color="dim">Navigation: 'c' Chat | 'crtl + l' Logs | 'ctrl + s' Settings | ESC Back | Ctrl+C Exit</Text>
+        <Text color="dim">Navigation: 'c' Chat | 'ctrl + s' Settings | ESC Back | Ctrl+C Exit</Text>
       </Box>
     </Box>
   );

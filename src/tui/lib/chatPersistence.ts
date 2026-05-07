@@ -1,18 +1,20 @@
-import { db, logObservation } from "../../db/index.js";
+import Database from "better-sqlite3";
+import { getDb } from "../../db/index.js";
 import { Message, PAGE_SIZE } from "../../types.js";
 
-export function loadMessages(limit: number = PAGE_SIZE, offset: number = 0): Message[] {
-  const rows = db
+export function loadMessages(limit: number = PAGE_SIZE, offset: number = 0, db?: Database.Database): Message[] {
+  const _db = db ?? getDb();
+  const rows = _db
     .prepare(
-      "SELECT id, role, content, metadata, timestamp FROM observation ORDER BY timestamp DESC LIMIT ? OFFSET ?",
+      "SELECT id, message_id, role, content, metadata, timestamp FROM observation ORDER BY timestamp DESC, id DESC LIMIT ? OFFSET ?",
     )
     .all(limit, offset) as any[];
 
   return rows.reverse().map((row: any) => {
     const metadata = row.metadata ? JSON.parse(row.metadata) : {};
-    
+
     return {
-      id: String(row.id),
+      id: row.message_id || String(row.id),
       role: row.role === "tool" ? "tool-call" : row.role,
       content: row.content,
       timestamp: row.timestamp,
@@ -33,23 +35,31 @@ export function loadMessages(limit: number = PAGE_SIZE, offset: number = 0): Mes
   });
 }
 
-export function getMessageCount(): number {
-  const row = db.prepare("SELECT COUNT(*) as count FROM observation").get() as any;
+export function getMessageCount(db?: Database.Database): number {
+  const _db = db ?? getDb();
+  const row = _db.prepare("SELECT COUNT(*) as count FROM observation").get() as any;
   return row.count;
 }
 
-export function persistMessage(message: Message): void {
+export function persistMessage(message: Message, db?: Database.Database): void {
+  const _db = db ?? getDb();
   const dbRole = message.role === "tool-call" ? "tool" : message.role;
   if (!message.content && message.role !== "assistant") return;
-  
+
   const metadata = {
     ...(message.toolCall ? { toolCall: message.toolCall } : {}),
     ...(message.toolCalls ? { toolCalls: message.toolCalls } : {}),
   };
-  
-  logObservation(
-    dbRole as any, 
-    message.content, 
-    Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : undefined
+
+  const statement = _db.prepare(`
+    INSERT INTO observation (role, content, metadata, message_id)
+    VALUES (?, ?, ?, ?)
+  `);
+  statement.run(
+    dbRole as any,
+    message.content,
+    Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
+    message.id || null,
   );
 }
+
