@@ -29,10 +29,6 @@ export function useReviewContext() {
   const rs = useReviewSessionContext();
   const sa = useSubAgentContext();
 
-  return {
-    ...pr,
-    ...rs,
-    ...sa,
-  } as any;
+  return { ...pr, ...rs, ...sa };
 }
 

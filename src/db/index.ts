@@ -54,6 +54,13 @@ export function resetDb(): void {
   _defaultDb = null;
 }
 
+/**
+ * Lazy database proxy — allows module-level import of `db` without
+ * requiring explicit initialization. All property accesses are forwarded
+ * to the singleton returned by `getDb()`, which creates the DB on first use.
+ *
+ * Usage: `import { db } from "./db/index.js"` — works like a regular Database instance.
+ */
 export const db = new Proxy({} as Database.Database, {
   get(_, prop, receiver) {
     return Reflect.get(getDb(), prop, receiver);

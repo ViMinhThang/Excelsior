@@ -6,33 +6,33 @@ export type StreamPart =
 
 export function getTextDelta(part: StreamPart): string {
   if (part.type === "text-delta") {
-    return (part as any).text ?? (part as any).textDelta ?? "";
+    return part.text ?? part.textDelta ?? "";
   }
   return "";
 }
 
 export function getToolName(part: StreamPart): string {
   if (part.type === "tool-call") {
-    return (part as any).toolName ?? (part as any).name ?? "unknown";
+    return part.toolName ?? part.name ?? "unknown";
   }
   return "unknown";
 }
 
 export function getToolArgs(part: StreamPart): string {
   if (part.type === "tool-call") {
-    return JSON.stringify((part as any).input ?? {});
+    return JSON.stringify(part.input ?? {});
   }
   return "{}";
 }
 
 export function getToolResult(part: StreamPart): string {
   if (part.type === "tool-result") {
-    const output = (part as any).output;
+    const output = part.output;
     if (!output) return "No result returned";
     return output.type === "text" ? String(output.value) : JSON.stringify(output);
   }
   if (part.type === "tool-error") {
-    const error = (part as any).error;
+    const error = part.error;
     return `[Error] ${typeof error === "string" ? error : JSON.stringify(error ?? "Unknown tool error")}`;
   }
   return "";

@@ -50,7 +50,7 @@ export function useChatSender() {
 
     let currentId: string | null = null;
     const turnIds: string[] = [];
-    let toolBuffer: any[] = [];
+    let toolBuffer: Array<{ toolCallId: string; toolName: string; toolArgs: string }> = [];
     const toolMap = new Map<string, { msgId: string; toolName: string; toolArgs: string }>();
 
     const abortController = new AbortController();
@@ -113,10 +113,11 @@ export function useChatSender() {
           });
         },
       }, abortController.signal);
-    } catch (error: any) {
-      if (error?.name === "AbortError" || error?.message?.includes("abort")) return;
-      logError(`Agent Error: ${error.message}`, error.stack);
-      const displayError = formatErrorMessage(error);
+    } catch (error: unknown) {
+      const err = error as Error;
+      if (err?.name === "AbortError" || err?.message?.includes("abort")) return;
+      logError(`Agent Error: ${err.message}`, err.stack);
+      const displayError = formatErrorMessage(err);
       if (currentId) updateById(currentId, { content: `Error: ${displayError}` });
       else append({ id: `err_${Date.now()}`, role: "assistant", content: `Error: ${displayError}`, timestamp: new Date().toISOString() });
     } finally {
