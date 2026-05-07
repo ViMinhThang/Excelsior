@@ -2,22 +2,60 @@ import { tool } from "ai";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import { createAgent } from "../../agent/agent.js";
+import { SubAgentOutputPart, ToolCallInfo } from "../../types.js";
+import { streamAgentResponse } from "../../tui/lib/agentStream.js";
 
-export const subAgentRegistry = {
-  onSpawned: null as
-    | ((args: { toolCallId: string; role: string }) => void)
-    | null,
-  onOutput: null as
-    | ((args: {
-        toolCallId: string;
-        latestLine: string;
-        fullOutput: string;
-      }) => void)
-    | null,
-  onDone: null as
-    | ((args: { toolCallId: string; fullOutput: string }) => void)
-    | null,
+type SubListener = {
+  onSpawned: (args: { toolCallId: string; role: string }) => void;
+  onOutput: (args: { toolCallId: string; latestLine: string; fullOutput: string; outputParts: SubAgentOutputPart[]; toolCalls: ToolCallInfo[] }) => void;
+  onDone: (args: { toolCallId: string; fullOutput: string }) => void;
 };
+
+export function createSubAgentBus() {
+  const listeners = new Set<SubListener>();
+
+  return {
+    subscribe(listener: SubListener) {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    emitSpawned(args: { toolCallId: string; role: string }) {
+      listeners.forEach(l => l.onSpawned(args));
+    },
+    emitOutput(args: { toolCallId: string; latestLine: string; fullOutput: string; outputParts: SubAgentOutputPart[]; toolCalls: ToolCallInfo[] }) {
+      listeners.forEach(l => l.onOutput(args));
+    },
+    emitDone(args: { toolCallId: string; fullOutput: string }) {
+      listeners.forEach(l => l.onDone(args));
+    },
+  };
+}
+
+const defaultBus = createSubAgentBus();
+
+export const subAgentBus = defaultBus;
+
+export function resetSubAgentBus() {
+  return createSubAgentBus();
+}
+
+function emitBusOutput(
+  bus: ReturnType<typeof createSubAgentBus>,
+  toolCallId: string,
+  fullOutput: string,
+  outputParts: SubAgentOutputPart[],
+  toolCalls: ToolCallInfo[],
+  latestLine?: string,
+) {
+  const lines = fullOutput.split("\n");
+  bus.emitOutput({
+    toolCallId,
+    latestLine: latestLine ?? (lines[lines.length - 1] || lines[lines.length - 2] || ""),
+    fullOutput,
+    outputParts: [...outputParts],
+    toolCalls: [...toolCalls],
+  });
+}
 
 export const spawnSubAgentTool = tool({
   description:
@@ -34,7 +72,7 @@ export const spawnSubAgentTool = tool({
   }),
   execute: async ({ role, instruction }: { role: string; instruction: string }) => {
     const toolCallId = `sub_${randomUUID()}`;
-    subAgentRegistry.onSpawned?.({ toolCallId, role });
+    defaultBus.emitSpawned({ toolCallId, role });
 
     const subInstructions =
       `\n\n---\nROLE: ${role}\n---\n` +
@@ -46,24 +84,63 @@ export const spawnSubAgentTool = tool({
     const agent = createAgent(subInstructions);
 
     let fullOutput = "";
-    const stream = await agent.stream({
-      messages: [{ role: "user", content: instruction }],
-    });
+    const outputParts: SubAgentOutputPart[] = [];
+    const toolCalls: ToolCallInfo[] = [];
 
-    for await (const part of stream.fullStream) {
-      if (part.type === "text-delta") {
-        const delta = (part as any).text ?? (part as any).textDelta ?? "";
-        fullOutput += delta;
-        const lines = fullOutput.split("\n");
-        subAgentRegistry.onOutput?.({
-          toolCallId,
-          latestLine: lines[lines.length - 1] || lines[lines.length - 2] || "",
-          fullOutput,
-        });
+    function addTextDelta(delta: string) {
+      const partsLen = outputParts.length;
+      if (partsLen > 0 && outputParts[partsLen - 1].type === "text") {
+        const last = outputParts[partsLen - 1] as { type: "text"; text: string };
+        outputParts[partsLen - 1] = { type: "text", text: last.text + delta };
+      } else {
+        outputParts.push({ type: "text", text: delta });
       }
     }
 
-    subAgentRegistry.onDone?.({ toolCallId, fullOutput });
-    return fullOutput;
+    try {
+      await streamAgentResponse(
+        agent,
+        [{ role: "user", content: instruction }],
+        {
+          onTextDelta: (text) => {
+            const delta = text.slice(fullOutput.length);
+            fullOutput = text;
+            addTextDelta(delta);
+            emitBusOutput(defaultBus, toolCallId, fullOutput, outputParts, toolCalls);
+          },
+          onToolCall: (toolName, toolArgs, callId) => {
+            outputParts.push({ type: "tool-call", toolName, toolArgs, toolCallId: callId, status: "pending" });
+            toolCalls.push({ toolName, toolArgs, toolCallId: callId, status: "pending" });
+            emitBusOutput(defaultBus, toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${toolName}(${toolArgs})`);
+          },
+          onToolResult: (callId, result) => {
+            const isError = result.startsWith("[Error]");
+            const status = isError ? ("error" as const) : ("completed" as const);
+            outputParts.forEach((p, i) => {
+              if (p.type === "tool-call" && p.toolCallId === callId) {
+                (outputParts[i] as any).status = status;
+              }
+            });
+            toolCalls.forEach((tc, i) => {
+              if (tc.toolCallId === callId) {
+                toolCalls[i] = { ...tc, status };
+              }
+            });
+            emitBusOutput(defaultBus, toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${status}`);
+          },
+          onFinish: () => {},
+        },
+      );
+
+      defaultBus.emitDone({ toolCallId, fullOutput });
+      return fullOutput;
+    } catch (error: any) {
+      const errorMsg = `Sub-agent error: ${error.message}`;
+      fullOutput += `\n\nError: ${errorMsg}`;
+      outputParts.push({ type: "text", text: `\n\nError: ${errorMsg}` });
+      emitBusOutput(defaultBus, toolCallId, fullOutput, outputParts, toolCalls, errorMsg);
+      defaultBus.emitDone({ toolCallId, fullOutput });
+      return fullOutput;
+    }
   },
 });

@@ -9,6 +9,7 @@ interface ChatInputProps {
   placeholder?: string;
   isLoading?: boolean;
   focus?: boolean;
+  mask?: string;
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
@@ -18,6 +19,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
   placeholder = "Type your message...",
   isLoading,
   focus = true,
+  mask,
 }) => {
   return (
     <Box borderStyle="single" borderColor="cyanBright" borderLeft={false} borderRight={false} paddingX={1}>
@@ -28,6 +30,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
         onSubmit={onSubmit}
         placeholder={placeholder}
         focus={focus}
+        mask={mask}
       />
     </Box>
   );

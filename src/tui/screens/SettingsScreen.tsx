@@ -56,6 +56,7 @@ const SettingsScreen = () => {
           onSubmit={handleSaveApiKey}
           placeholder="Enter your DeepSeek API key..."
           focus={focusedField === 'apiKey'}
+          mask="*"
         />
       </Box>
 
@@ -69,6 +70,7 @@ const SettingsScreen = () => {
           onSubmit={handleSaveGithubToken}
           placeholder="Enter your GitHub personal access token..."
           focus={focusedField === 'githubToken'}
+          mask="*"
         />
       </Box>
 

@@ -1,17 +1,32 @@
 import React, { memo } from "react";
 import { Box, Text } from "ink";
-import { useReviewContext } from "../../context/ReviewContext.js";
+import { usePRContext } from "../../context/PRContext.js";
+import { useReviewSessionContext } from "../../context/ReviewSessionContext.js";
+import { useSubAgentContext } from "../../context/SubAgentContext.js";
+import ReviewBlockList from "./ReviewBlockList.js";
 
 const ReviewResults: React.FC = () => {
-  const { mainOutput, selectedPR } = useReviewContext();
+  const { selectedPR } = usePRContext();
+  const { blocks, mainOutput } = useReviewSessionContext();
+  const { subAgents } = useSubAgentContext();
   const branchInfo = selectedPR ? `PR #${selectedPR.number} ${selectedPR.title}` : "";
 
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text bold underline color="white">Results — {branchInfo}</Text>
-      <Box marginTop={1} flexDirection="column">
-        <Text color="white">{mainOutput || "No results available."}</Text>
-      </Box>
+
+      {blocks.length > 0 ? (
+        <Box marginTop={1}>
+          <ReviewBlockList
+            blocks={blocks}
+            subAgents={subAgents}
+          />
+        </Box>
+      ) : (
+        <Box marginTop={1} flexDirection="column">
+          <Text color="white">{mainOutput || "No results available."}</Text>
+        </Box>
+      )}
     </Box>
   );
 };

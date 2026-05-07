@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { readFile } from "fs/promises";
-import { join } from "path";
+import { isAbsolute, join } from "path";
 import { readFileSchema } from "./type.js";
 
 export const readFileTool = tool({
@@ -8,7 +8,7 @@ export const readFileTool = tool({
   inputSchema: readFileSchema,
   execute: async ({ path }) => {
     try {
-      const fullPath = join(process.cwd(), path);
+      const fullPath = isAbsolute(path) ? path : join(process.cwd(), path);
       const content = await readFile(fullPath, "utf-8");
       return content;
     } catch (error: any) {

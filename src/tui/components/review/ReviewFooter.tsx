@@ -20,13 +20,13 @@ const ReviewFooter: React.FC<ReviewFooterProps> = ({ mode, subMode }) => {
     if (subMode === "detail") {
       return (
         <Box>
-          <Text color="dim">Ctrl+O prev  Ctrl+P next  Ctrl+M main  ESC overview  c chat</Text>
+          <Text color="dim">↑↓ switch  ESC overview  c chat</Text>
         </Box>
       );
     }
     return (
       <Box>
-        <Text color="dim">Ctrl+O prev  Ctrl+P next  Enter drill  Ctrl+M main  c chat</Text>
+        <Text color="dim">↑↓ select  Ctrl+O drill  ESC back  c chat</Text>
       </Box>
     );
   }

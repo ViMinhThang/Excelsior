@@ -1,8 +1,11 @@
 import { useCallback, useRef, useState } from "react";
-import { Message, StreamCallbacks } from "../../types.js";
+import { Message } from "../../types.js";
 import { createAgent } from "../../agent/agent.js";
 import { logError } from "../../db/index.js";
 import { persistMessage } from "../lib/chatPersistence.js";
+import { streamAgentResponse } from "../lib/agentStream.js";
+import { spawnSubAgentTool } from "../../agent/review/spawnSubAgent.js";
+import { useEvent } from "./useEvent.js";
 import { mapMessagesToAIHistory, generateId, formatErrorMessage } from "./useChatSenderUtils.js";
 
 export function useChatSender() {
@@ -10,6 +13,7 @@ export function useChatSender() {
   const abortRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
+
   const appendRef = useRef<(msg: Message) => void>(() => {});
   const updateByIdRef = useRef<(id: string, updates: Partial<Message>) => void>(() => {});
 
@@ -27,49 +31,6 @@ export function useChatSender() {
     cancelledRef.current = true;
     abortRef.current?.abort();
     abortRef.current = null;
-  }, []);
-
-  const streamResponse = useCallback(async (
-    history: { role: string; content: string }[],
-    callbacks: StreamCallbacks,
-  ): Promise<string> => {
-    const abortController = new AbortController();
-    abortRef.current = abortController;
-
-    let fullContent = "";
-    let cancelled = false;
-
-    try {
-      const agent = createAgent();
-      const stream = await agent.stream({ messages: history as any });
-
-      for await (const part of stream.fullStream) {
-        if (abortController.signal.aborted) {
-          cancelled = true;
-          break;
-        }
-
-        if (part.type === "text-delta") {
-          fullContent += (part as any).text ?? (part as any).textDelta ?? "";
-          callbacks.onTextDelta(fullContent);
-        } else if (part.type === "tool-call") {
-          callbacks.onToolCall(
-            (part as any).toolName ?? (part as any).name ?? "unknown",
-            JSON.stringify((part as any).input ?? {}),
-            (part as any).toolCallId,
-          );
-        } else if (part.type === "tool-result") {
-          const output = (part as any).output;
-          const result = output?.type === "text" ? output.value : JSON.stringify(output ?? "No result returned");
-          callbacks.onToolResult((part as any).toolCallId, result);
-        }
-      }
-
-      callbacks.onFinish(fullContent, cancelled);
-      return fullContent;
-    } finally {
-      if (abortRef.current === abortController) abortRef.current = null;
-    }
   }, []);
 
   const sendMessage = useCallback(async (content: string) => {
@@ -92,8 +53,12 @@ export function useChatSender() {
     let toolBuffer: any[] = [];
     const toolMap = new Map<string, { msgId: string; toolName: string; toolArgs: string }>();
 
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+
     try {
-      await streamResponse(history, {
+      const agent = createAgent(undefined, { spawnSubAgent: spawnSubAgentTool });
+      await streamAgentResponse(agent, history, {
         onTextDelta: (text) => {
           if (!currentId) {
             currentId = generateId();
@@ -106,8 +71,11 @@ export function useChatSender() {
         },
         onToolCall: (name, args, callId) => {
           const msgId = generateId();
-          toolMap.set(callId, { msgId, toolName: name, toolArgs: args });
-          const newCall = { toolCallId: callId, toolName: name, toolArgs: args };
+          const shortArgs = name === "spawnSubAgent"
+            ? (() => { try { return JSON.stringify({ role: JSON.parse(args).role }); } catch { return args; } })()
+            : args;
+          toolMap.set(callId, { msgId, toolName: name, toolArgs: shortArgs });
+          const newCall = { toolCallId: callId, toolName: name, toolArgs: shortArgs };
           toolBuffer.push(newCall);
 
           if (currentId) {
@@ -116,12 +84,17 @@ export function useChatSender() {
           }
 
           currentId = null;
-          append({ id: msgId, role: "tool-call", content: args, timestamp: new Date().toISOString(), toolCall: { toolName: name, toolArgs: args, toolCallId: callId, status: "pending" } });
+          append({ id: msgId, role: "tool-call", content: shortArgs, timestamp: new Date().toISOString(), toolCall: { toolName: name, toolArgs: shortArgs, toolCallId: callId, status: "pending" } });
         },
         onToolResult: (callId, result) => {
           const info = toolMap.get(callId);
           if (!info) return;
-          const toolMsg = { id: info.msgId, role: "tool-call" as const, content: result, timestamp: new Date().toISOString(), toolCall: { toolName: info.toolName, toolArgs: info.toolArgs, toolCallId: callId, status: "completed" as const } };
+          const isError = result.startsWith("[Error]");
+          const displayContent = info.toolName === "spawnSubAgent"
+            ? result.split("\n").filter(Boolean).pop() || result
+            : result;
+          const status = isError ? "error" as const : "completed" as const;
+          const toolMsg = { id: info.msgId, role: "tool-call" as const, content: displayContent, timestamp: new Date().toISOString(), toolCall: { toolName: info.toolName, toolArgs: info.toolArgs, toolCallId: callId, status } };
           updateById(info.msgId, toolMsg);
           persistMessage(toolMsg);
         },
@@ -139,7 +112,7 @@ export function useChatSender() {
             persistMessage(updated);
           });
         },
-      });
+      }, abortController.signal);
     } catch (error: any) {
       if (error?.name === "AbortError" || error?.message?.includes("abort")) return;
       logError(`Agent Error: ${error.message}`, error.stack);
@@ -147,9 +120,10 @@ export function useChatSender() {
       if (currentId) updateById(currentId, { content: `Error: ${displayError}` });
       else append({ id: `err_${Date.now()}`, role: "assistant", content: `Error: ${displayError}`, timestamp: new Date().toISOString() });
     } finally {
+      if (abortRef.current === abortController) abortRef.current = null;
       setIsLoading(false);
     }
-  }, [streamResponse]);
+  }, []);
 
   return { isLoading, sendMessage, cancel, setCallbacks };
 }

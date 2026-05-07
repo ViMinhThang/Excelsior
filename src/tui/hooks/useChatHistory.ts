@@ -1,11 +1,7 @@
 import { useState, useCallback, useRef } from "react";
 import { Message, PAGE_SIZE } from "../../types.js";
 import { loadMessages, getMessageCount, persistMessage } from "../lib/chatPersistence.js";
-
-let _idCounter = 0;
-function createId(): string {
-  return `msg_${Date.now()}_${_idCounter++}`;
-}
+import { generateId } from "./useChatSenderUtils.js";
 
 export function useChatHistory() {
   const totalRef = useRef(getMessageCount());
@@ -35,7 +31,7 @@ export function useChatHistory() {
   const createAndAppend = useCallback(
     (role: Message["role"], content: string, extra?: Partial<Message>) => {
       const msg: Message = {
-        id: createId(),
+        id: generateId(),
         role,
         content,
         timestamp: new Date().toISOString(),
@@ -64,10 +60,6 @@ export function useChatHistory() {
     setHasMore(false);
   }, []);
 
-  const replaceAll = useCallback((msgs: Message[]) => {
-    setMessages(msgs);
-  }, []);
-
   return {
     messages,
     hasMore,
@@ -76,6 +68,5 @@ export function useChatHistory() {
     createAndAppend,
     loadMore,
     clearMessages,
-    replaceAll,
   };
 }
