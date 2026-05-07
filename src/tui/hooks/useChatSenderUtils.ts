@@ -33,7 +33,7 @@ export function generateId() {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export function formatErrorMessage(error: any): string {
+export function formatErrorMessage(error: Error & { message: string }): string {
   let displayError = error.message;
   if (error.message.includes("401") || error.message.includes("API key")) {
     return "Invalid or missing API key. Please check your settings (ctrl+s).";

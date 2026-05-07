@@ -90,7 +90,7 @@ export const spawnSubAgentTool = tool({
     function addTextDelta(delta: string) {
       const partsLen = outputParts.length;
       if (partsLen > 0 && outputParts[partsLen - 1].type === "text") {
-        const last = outputParts[partsLen - 1] as { type: "text"; text: string };
+        const last = outputParts[partsLen - 1] as SubAgentOutputPart & { type: "text" };
         outputParts[partsLen - 1] = { type: "text", text: last.text + delta };
       } else {
         outputParts.push({ type: "text", text: delta });
@@ -116,11 +116,12 @@ export const spawnSubAgentTool = tool({
           onToolResult: (callId, result) => {
             const isError = result.startsWith("[Error]");
             const status = isError ? ("error" as const) : ("completed" as const);
-            outputParts.forEach((p, i) => {
+            for (let i = 0; i < outputParts.length; i++) {
+              const p = outputParts[i];
               if (p.type === "tool-call" && p.toolCallId === callId) {
-                (outputParts[i] as any).status = status;
+                outputParts[i] = { ...p, status };
               }
-            });
+            }
             toolCalls.forEach((tc, i) => {
               if (tc.toolCallId === callId) {
                 toolCalls[i] = { ...tc, status };

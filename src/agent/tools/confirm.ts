@@ -42,33 +42,37 @@ export function createConfirmBus() {
 
 export const confirmBus = createConfirmBus();
 
-export function confirmable(originalTool: any, bus: ReturnType<typeof createConfirmBus>) {
+export function confirmable<T extends { description?: string; execute?: (...args: never[]) => unknown }>(
+  originalTool: T,
+  bus: ReturnType<typeof createConfirmBus>,
+): T {
   const originalExecute = originalTool.execute;
+  if (!originalExecute) return originalTool;
 
-  return {
-    description: originalTool.description,
-    inputSchema: originalTool.inputSchema,
-    execute: async (input: any, options?: any) => {
-      if (bus.listenerCount === 0) {
-        return originalExecute(input, options);
-      }
+  const wrappedExecute = async (...args: never[]) => {
+    if (bus.listenerCount === 0) {
+      return originalExecute.apply(originalTool, args);
+    }
 
-      const callId = randomUUID();
-      bus.emitRequest({
-        callId,
-        toolName: originalTool.description?.split(" ")[0] ?? "tool",
-        args: JSON.stringify(input),
-      });
+    const input = args[0];
+    const callId = randomUUID();
+    bus.emitRequest({
+      callId,
+      toolName: originalTool.description?.split(" ")[0] ?? "tool",
+      args: JSON.stringify(input),
+    });
 
-      const approved = await new Promise<boolean>((resolve) => {
-        bus._pending.set(callId, resolve);
-      });
+    const approved = await new Promise<boolean>((resolve) => {
+      bus._pending.set(callId, resolve);
+    });
 
-      if (!approved) {
-        return "Denied by user.";
-      }
+    if (!approved) {
+      return "Denied by user.";
+    }
 
-      return originalExecute(input, options);
-    },
+    return originalExecute.apply(originalTool, args);
   };
+
+  return { ...originalTool, execute: wrappedExecute } as T;
 }
+

@@ -19,7 +19,6 @@ export function useChatHistory() {
 
   const append = useCallback((message: Message) => {
     setMessages((prev) => [...prev, message]);
-    persistMessage(message);
   }, []);
 
   const updateById = useCallback((id: string, updates: Partial<Message>) => {

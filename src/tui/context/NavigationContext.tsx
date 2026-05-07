@@ -15,7 +15,11 @@ export const NavigationProvider = ({ children }: { children: ReactNode }) => {
   const currentScreen = history[history.length - 1] || 'chat';
 
   const navigate = useCallback((screen: Screen) => {
-    setHistory(prev => [...prev, screen]);
+    setHistory(prev => {
+      const next = [...prev, screen];
+      // Cap history to prevent unbounded growth in long sessions
+      return next.length > 50 ? next.slice(-50) : next;
+    });
   }, []);
 
   const goBack = useCallback(() => {

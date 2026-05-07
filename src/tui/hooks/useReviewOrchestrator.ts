@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { createAgent } from "../../agent/agent.js";
 import { reviewOrchestratorPrompt } from "../../agent/review/reviewPrompt.js";
 import {
   spawnSubAgentTool,
-  subAgentBus,
 } from "../../agent/review/spawnSubAgent.js";
 import { gitDiffTool } from "../../agent/tools/gitDiff/gitDiff.js";
 import { streamAgentResponse } from "../lib/agentStream.js";
@@ -11,6 +10,7 @@ import { usePRContext } from "../context/PRContext.js";
 import { useReviewSessionContext } from "../context/ReviewSessionContext.js";
 import { useSubAgentContext } from "../context/SubAgentContext.js";
 import { useEvent } from "./useEvent.js";
+import { useSubAgentListener } from "./useSubAgentListener.js";
 import { postPRComment } from "../../utils/ghComment.js";
 
 export function useReviewOrchestrator() {
@@ -38,30 +38,22 @@ export function useReviewOrchestrator() {
 
   const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => subAgentBus.subscribe({
-    onSpawned: ({ toolCallId, role }) => {
-      onAddSubAgent({
-        toolCallId,
-        role,
-        status: "running",
-        latestLine: "",
-        fullOutput: "",
-        outputParts: [],
-        toolCalls: [],
-      });
-      onAddSubAgentBlock(toolCallId);
+  useSubAgentListener({
+    onSpawned: (agent) => {
+      onAddSubAgent(agent);
+      onAddSubAgentBlock(agent.toolCallId);
     },
-    onOutput: ({ toolCallId, latestLine, fullOutput, outputParts, toolCalls }) => {
-      onUpdateSubAgent(toolCallId, { status: "running", latestLine, fullOutput, outputParts, toolCalls });
+    onOutput: (toolCallId, updates) => {
+      onUpdateSubAgent(toolCallId, { status: "running", ...updates });
     },
-    onDone: ({ toolCallId, fullOutput }) => {
+    onDone: (toolCallId, fullOutput) => {
       onUpdateSubAgent(toolCallId, {
         status: "done",
         latestLine: fullOutput.split("\n").filter(Boolean).pop() || "",
         fullOutput,
       });
     },
-  }), []);
+  });
 
   const startReview = useCallback(async () => {
     const currentDiff = diffRef.current;
