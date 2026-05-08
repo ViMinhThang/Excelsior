@@ -1,5 +1,5 @@
 import type { ToolLoopAgent } from "ai";
-import { StreamCallbacks, StreamPart, UsageInfo, getTextDelta, getToolName, getToolArgs, getToolResult } from "../../types.js";
+import { StreamCallbacks, StreamPart, getTextDelta, getToolName, getToolArgs, getToolResult } from "../types.js";
 
 export async function streamAgentResponse(
   agent: ToolLoopAgent<any, any>,
@@ -9,8 +9,6 @@ export async function streamAgentResponse(
 ): Promise<string> {
   let fullContent = "";
   let cancelled = false;
-  let accInput = 0;
-  let accOutput = 0;
 
   try {
     const stream = await agent.stream({ messages: messages } as any);
@@ -35,18 +33,7 @@ export async function streamAgentResponse(
         );
       } else if (part.type === "tool-result" || part.type === "tool-error") {
         callbacks.onToolResult(part.toolCallId, getToolResult(part));
-      } else if (part.type === "finish-step" && part.usage) {
-        accInput += part.usage.inputTokens ?? 0;
-        accOutput += part.usage.outputTokens ?? 0;
       }
-    }
-
-    if (callbacks.onUsage) {
-      callbacks.onUsage({
-        inputTokens: accInput,
-        outputTokens: accOutput,
-        totalTokens: accInput + accOutput,
-      } as UsageInfo);
     }
 
     callbacks.onFinish(fullContent, cancelled);
@@ -56,7 +43,6 @@ export async function streamAgentResponse(
       callbacks.onFinish(fullContent, true);
       return fullContent;
     }
-    callbacks.onFinish(fullContent, true);
-    throw error;
+    return fullContent;
   }
 }

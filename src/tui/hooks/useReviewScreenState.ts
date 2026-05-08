@@ -11,33 +11,25 @@ import { useReviewOrchestrator } from "./useReviewOrchestrator.js";
 
 export function useReviewScreenState() {
   const { navigate } = useNavigation();
-  const { prs, selectedPR, selectPR, setPRs, setDiff } = usePRContext();
+  const { prs, diff, selectedPR, selectPR, setPRs, setDiff } = usePRContext();
   const { mode, setMode, subMode, setSubMode } = useReviewSessionContext();
   const { subAgents, selectedSubAgentIndex, selectPrevSubAgent, selectNextSubAgent, focusMainAgent } = useSubAgentContext();
 
-  const { prs: fetchedPRs, loading: prsLoading, error: prsError, fetchPRs } = usePullRequests();
-  const { diff: fetchedDiff, loading: diffLoading, error: diffError, fetchDiff } = usePRDiff();
+  const { loading: prsLoading, error: prsError, fetchPRs } = usePullRequests(setPRs);
+  const { loading: diffLoading, error: diffError, fetchDiff } = usePRDiff(setDiff);
   const { startReview, cancelReview, postComment } = useReviewOrchestrator();
   const [commentStatus, setCommentStatus] = useState<string | null>(null);
 
   const [prIndex, setPrIndex] = useState(0);
   const [viewingDiff, setViewingDiff] = useState(false);
 
-  useEffect(() => {
-    fetchPRs();
-  }, []);
+  useEffect(() => { fetchPRs(); }, []);
 
   useEffect(() => {
-    setPRs(fetchedPRs);
-  }, [fetchedPRs, setPRs]);
-
-  useEffect(() => {
-    if (fetchedDiff) {
-      setDiff(fetchedDiff);
+    if (prIndex >= prs.length) {
+      setPrIndex(0);
+      return;
     }
-  }, [fetchedDiff, setDiff]);
-
-  useEffect(() => {
     const pr = prs[prIndex];
     if (pr) {
       fetchDiff(pr.number);
@@ -139,6 +131,7 @@ export function useReviewScreenState() {
 
   return {
     prs,
+    diff,
     selectedPR,
     mode,
     subMode,
@@ -146,7 +139,6 @@ export function useReviewScreenState() {
     selectedSubAgentIndex,
     prsLoading,
     prsError,
-    fetchedDiff,
     diffLoading,
     diffError,
     commentStatus,

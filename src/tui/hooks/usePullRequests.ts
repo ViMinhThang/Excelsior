@@ -3,8 +3,7 @@ import { execPromise } from "../../utils/execPromise.js";
 import { getOctokit, getRepoInfo } from "../../utils/octokit.js";
 import { PullRequest } from "../../types.js";
 
-export function usePullRequests() {
-  const [prs, setPrs] = useState<PullRequest[]>([]);
+export function usePullRequests(onPRs: (prs: PullRequest[]) => void) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +29,7 @@ export function usePullRequests() {
         headRefName: pr.head.ref,
         createdAt: pr.created_at,
       }));
-      setPrs(parsed);
+      onPRs(parsed);
     } catch (err: any) {
       setError(err.message || "Failed to fetch PRs");
     } finally {
@@ -38,5 +37,5 @@ export function usePullRequests() {
     }
   }, []);
 
-  return { prs, loading, error, fetchPRs };
+  return { loading, error, fetchPRs };
 }

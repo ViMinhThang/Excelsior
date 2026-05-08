@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useInput } from "ink";
 import { useNavigation } from "../context/NavigationContext.js";
 import { handleCommand } from "../../agent/commands/registry.js";
@@ -9,6 +9,30 @@ import { useCommandAutocomplete } from "./useCommandAutocomplete.js";
 import { useSubAgentListener } from "./useSubAgentListener.js";
 import { SubAgentState } from "../../types.js";
 
+function handlePendingInput(input: string, key: any, approve: () => void, deny: () => void, cancel: () => void): boolean {
+  if (input === "y" || input === "Y") { approve(); return true; }
+  if (input === "n" || input === "N" || key.escape) { deny(); if (key.escape) cancel(); return true; }
+  return true;
+}
+
+function handleSubAgentInput(key: any, subAgents: SubAgentState[], subAgentIndex: number, setSubAgentIndex: (fn: (prev: number) => number) => void, setChatMode: (mode: "input" | "subagent-detail") => void): boolean {
+  if (key.upArrow && subAgents.length > 0) { setSubAgentIndex((prev) => prev > 0 ? prev - 1 : subAgents.length - 1); return true; }
+  if (key.downArrow && subAgents.length > 0) { setSubAgentIndex((prev) => prev < subAgents.length - 1 ? prev + 1 : 0); return true; }
+  if (key.escape) { setChatMode("input"); return true; }
+  return false;
+}
+
+function handleSuggestionInput(key: any, suggestion: any, setInput: (val: string) => void): boolean {
+  if (key.upArrow) { suggestion.prev(); return true; }
+  if (key.downArrow) { suggestion.next(); return true; }
+  if (key.return) {
+    const cmd = suggestion.filtered[suggestion.selectedIndex];
+    if (cmd) { setInput(`/${cmd.name}`); }
+    return true;
+  }
+  return false;
+}
+
 export function useChatScreenState() {
   const { navigate, goBack } = useNavigation();
   const [input, setInput] = useState("");
@@ -16,9 +40,7 @@ export function useChatScreenState() {
   const [originalInput, setOriginalInput] = useState("");
   const [subAgents, setSubAgents] = useState<SubAgentState[]>([]);
   const [subAgentIndex, setSubAgentIndex] = useState(0);
-  const [chatMode, setChatMode] = useState<"input" | "subagent-detail">(
-    "input",
-  );
+  const [chatMode, setChatMode] = useState<"input" | "subagent-detail">("input");
 
   const inputRef = useRef(input);
   inputRef.current = input;
@@ -34,201 +56,59 @@ export function useChatScreenState() {
     appendSystemMessage,
   } = useChat();
 
-  const onCancel = useEvent(cancel);
-  const onLoadMore = useEvent(loadMore);
-  const onNavigate = useEvent(navigate);
-  const onGoBack = useEvent(goBack);
-  const onSendMessage = useEvent(sendMessage);
-  const onAppendSystemMessage = useEvent(appendSystemMessage);
-  const onClearMessages = useEvent(clearMessages);
-
   const { pending, approve, deny } = useToolConfirmation();
   const suggestion = useCommandAutocomplete(input);
 
   useSubAgentListener({
-    onSpawned: (agent) => {
-      setSubAgents((prev) => [...prev, agent]);
-    },
-    onOutput: (toolCallId, updates) => {
-      setSubAgents((prev) =>
-        prev.map((a) =>
-          a.toolCallId === toolCallId ? { ...a, ...updates } : a,
-        ),
-      );
-    },
-    onDone: (toolCallId, fullOutput) => {
-      setSubAgents((prev) =>
-        prev.map((a) =>
-          a.toolCallId === toolCallId
-            ? { ...a, status: "done" as const, fullOutput }
-            : a,
-        ),
-      );
-    },
+    onSpawned: (agent) => setSubAgents((prev) => [...prev, agent]),
+    onOutput: (toolCallId, updates) => setSubAgents((prev) => prev.map((a) => a.toolCallId === toolCallId ? { ...a, ...updates } : a)),
+    onDone: (toolCallId, fullOutput) => setSubAgents((prev) => prev.map((a) => a.toolCallId === toolCallId ? { ...a, status: "done" as const, fullOutput } : a)),
   });
 
-  // Reset to input mode when a tool confirmation prompt appears
-  if (pending && chatMode !== "input") {
-    setChatMode("input");
-  }
+  useEffect(() => { if (pending) setChatMode("input"); }, [pending]);
 
-  const handleInput = useEvent(
-    (
-      _input: string,
-      key: {
-        upArrow: boolean;
-        downArrow: boolean;
-        escape: boolean;
-        ctrl: boolean;
-        return: boolean;
-      },
-    ) => {
-      if (pending) {
-        if (_input === "y" || _input === "Y") {
-          approve();
-          return;
+  const handleInput = useEvent((_input: string, key: any) => {
+    if (pending) { handlePendingInput(_input, key, approve, deny, cancel); return; }
+    if (chatMode === "subagent-detail") { handleSubAgentInput(key, subAgents, subAgentIndex, setSubAgentIndex, setChatMode);
+      if (key.ctrl && _input === "o") setChatMode("input"); return; }
+    if (suggestion.show && suggestion.filtered.length > 0) { handleSuggestionInput(key, suggestion, setInput); return; }
+    if (key.escape && isLoading) cancel();
+    if (key.ctrl && _input === "u") loadMore();
+    if (key.ctrl && _input === "o" && subAgents.length > 0) { setSubAgentIndex(0); setChatMode("subagent-detail"); return; }
+    if (key.upArrow || key.downArrow) {
+      const userMessages = messages.filter((m) => m.role === "user").reverse();
+      if (key.upArrow) {
+        if (historyIndex + 1 < userMessages.length) {
+          const newIndex = historyIndex + 1;
+          if (historyIndex === -1) setOriginalInput(input);
+          setHistoryIndex(newIndex);
+          setInput(userMessages[newIndex].content);
         }
-        if (_input === "n" || _input === "N" || key.escape) {
-          deny();
-          if (key.escape) onCancel();
-          return;
-        }
-        return;
+      } else if (historyIndex >= 0) {
+        const newIndex = historyIndex - 1;
+        setHistoryIndex(newIndex);
+        setInput(newIndex === -1 ? originalInput : userMessages[newIndex].content);
       }
-
-      if (chatMode === "subagent-detail") {
-        if (key.upArrow && subAgents.length > 0) {
-          setSubAgentIndex((prev) =>
-            prev > 0 ? prev - 1 : subAgents.length - 1,
-          );
-          return;
-        }
-        if (key.downArrow && subAgents.length > 0) {
-          setSubAgentIndex((prev) =>
-            prev < subAgents.length - 1 ? prev + 1 : 0,
-          );
-          return;
-        }
-        if (key.escape) {
-          setChatMode("input");
-          return;
-        }
-        if (key.ctrl && _input === "o" && subAgents.length > 0) {
-          setChatMode("input");
-          return;
-        }
-        return;
-      }
-
-      if (suggestion.show && suggestion.filtered.length > 0) {
-        if (key.upArrow) {
-          suggestion.prev();
-          return;
-        }
-        if (key.downArrow) {
-          suggestion.next();
-          return;
-        }
-        if (key.return) {
-          const cmd = suggestion.filtered[suggestion.selectedIndex];
-          if (cmd) {
-            const cmdText = `/${cmd.name}`;
-            setInput(cmdText);
-            inputRef.current = cmdText;
-          }
-          return;
-        }
-      }
-
-      if (key.escape && isLoading) {
-        onCancel();
-      }
-      if (key.ctrl && _input === "u") {
-        onLoadMore();
-      }
-      if (key.ctrl && _input === "o" && subAgents.length > 0) {
-        setSubAgentIndex(0);
-        setChatMode("subagent-detail");
-        return;
-      }
-
-      if (key.upArrow || key.downArrow) {
-        const userMessages = messages
-          .filter((m) => m.role === "user")
-          .reverse();
-
-        if (key.upArrow) {
-          if (historyIndex + 1 < userMessages.length) {
-            const newIndex = historyIndex + 1;
-            if (historyIndex === -1) {
-              setOriginalInput(input);
-            }
-            setHistoryIndex(newIndex);
-            setInput(userMessages[newIndex].content);
-          }
-        } else if (key.downArrow) {
-          if (historyIndex >= 0) {
-            const newIndex = historyIndex - 1;
-            setHistoryIndex(newIndex);
-            if (newIndex === -1) {
-              setInput(originalInput);
-            } else {
-              setInput(userMessages[newIndex].content);
-            }
-          }
-        }
-      }
-    },
-  );
+    }
+  });
 
   useInput(handleInput);
 
   const handleSubmit = useCallback(async () => {
+    if (isLoading) return;
     const trimmed = inputRef.current.trim();
     if (!trimmed) return;
 
-    const commandContext = {
-      navigate: onNavigate,
-      goBack: onGoBack,
-      appendMessage: onAppendSystemMessage,
-      clearMessages: onClearMessages,
-    };
+    const commandContext = { navigate, goBack, appendMessage: appendSystemMessage, clearMessages };
 
     const isCommand = await handleCommand(trimmed, commandContext);
-    if (isCommand) {
-      setInput("");
-      return;
-    }
+    if (isCommand) { setInput(""); return; }
 
     setInput("");
     setHistoryIndex(-1);
     setOriginalInput("");
-    await onSendMessage(trimmed);
-  }, [
-    onNavigate,
-    onGoBack,
-    onSendMessage,
-    onAppendSystemMessage,
-    onClearMessages,
-  ]);
+    sendMessage(trimmed);
+  }, [isLoading, navigate, goBack, sendMessage, appendSystemMessage, clearMessages]);
 
-  return {
-    // State
-    input,
-    setInput,
-    chatMode,
-    subAgents,
-    subAgentIndex,
-
-    // Chat
-    messages,
-    isLoading,
-    hasMore,
-    loadMore,
-
-    // UI
-    pending,
-    suggestion,
-    handleSubmit,
-  };
+  return { input, setInput, chatMode, subAgents, subAgentIndex, messages, isLoading, hasMore, loadMore, pending, suggestion, handleSubmit };
 }

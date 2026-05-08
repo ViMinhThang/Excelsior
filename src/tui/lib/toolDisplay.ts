@@ -1,13 +1,12 @@
 export type ToolStatus = "pending" | "completed" | "error";
-export type ToolTone = "pending" | "success" | "error" | "muted";
-export type ToolRisk = "low" | "medium" | "high";
-
-export interface ToolDisplayInput {
+type ToolTone = "pending" | "success" | "error" | "muted";
+type ToolRisk = "low" | "medium" | "high";
+type ToolDisplayInput = {
   toolName?: string;
   toolArgs?: string;
   status?: ToolStatus;
   content?: string;
-}
+};
 
 export interface ToolDisplay {
   label: string;

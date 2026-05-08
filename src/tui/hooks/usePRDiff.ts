@@ -1,8 +1,7 @@
 import { useState, useCallback } from "react";
 import { getOctokit, getRepoInfo } from "../../utils/octokit.js";
 
-export function usePRDiff() {
-  const [diff, setDiff] = useState<string | null>(null);
+export function usePRDiff(onDiff: (diff: string | null) => void) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +20,7 @@ export function usePRDiff() {
           mediaType: { format: "diff" },
         },
       );
-      setDiff(response.data as unknown as string);
+      onDiff(response.data as unknown as string);
     } catch (err: any) {
       setError(err.message || "Failed to fetch diff");
     } finally {
@@ -29,5 +28,5 @@ export function usePRDiff() {
     }
   }, []);
 
-  return { diff, loading, error, fetchDiff };
+  return { loading, error, fetchDiff };
 }

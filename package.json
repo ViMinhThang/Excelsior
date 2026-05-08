@@ -19,7 +19,6 @@
     "ai": "^6.0.175",
     "better-sqlite3": "^12.9.0",
     "ink": "^7.0.1",
-    "ink-table": "^3.1.0",
     "ink-text-input": "^6.0.0",
     "marked": "^18.0.3",
     "react": "^19.2.5",

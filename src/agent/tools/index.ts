@@ -1,7 +1,5 @@
 import { runCommandTool } from "./runCommand/runCommand.js";
 
-export const allTools = {
+export const fileTools = {
   runCommand: runCommandTool,
 };
-
-export const fileTools = allTools;

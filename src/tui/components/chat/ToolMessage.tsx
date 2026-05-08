@@ -89,14 +89,14 @@ const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = 
             <Text key={index} color={theme.colors.muted} dimColor>   {line}</Text>
           ))}
           {status === "completed" && (
-            <Text color={theme.colors.muted} dimColor>   Took {(((toolName || "").length) % 3 + 1) * 0.1}s</Text>
+            <Text color={theme.colors.muted} dimColor>   Completed</Text>
           )}
         </Box>
       )}
     </Box>
   );
 
-  const bg = status === "completed" ? "#1a3324" : "#2e3440";
+  const bg = theme.colors.toolPanel;
 
   return (
     <Box 

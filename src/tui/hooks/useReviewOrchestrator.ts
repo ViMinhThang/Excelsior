@@ -5,7 +5,7 @@ import {
   spawnSubAgentTool,
 } from "../../agent/review/spawnSubAgent.js";
 import { gitDiffTool } from "../../agent/tools/gitDiff/gitDiff.js";
-import { streamAgentResponse } from "../lib/agentStream.js";
+import { streamAgentResponse } from "../../lib/agentStream.js";
 import { usePRContext } from "../context/PRContext.js";
 import { useReviewSessionContext } from "../context/ReviewSessionContext.js";
 import { useSubAgentContext } from "../context/SubAgentContext.js";
@@ -59,6 +59,7 @@ export function useReviewOrchestrator() {
     const currentDiff = diffRef.current;
     if (!currentDiff) return;
 
+    abortRef.current?.abort();
     onClearSubAgents();
     onClearBlocks();
     onSetMode("review");
