@@ -11,12 +11,6 @@ import { createToolDisplay } from '../lib/toolDisplay.js';
 import { theme } from '../theme.js';
 import Panel from '../components/shared/Panel.js';
 
-const riskColor = (risk?: string) => {
-  if (risk === "high") return theme.colors.error;
-  if (risk === "medium") return theme.colors.accent;
-  return theme.colors.success;
-};
-
 const ChatScreen = () => {
   const {
     input,

@@ -66,10 +66,16 @@ export function useChatSender() {
         onTextDelta: (text) => {
           if (!currentId) {
             currentId = generateId();
-            append({ id: currentId, role: "assistant", content: text, timestamp: new Date().toISOString(), toolCalls: [...toolBuffer] });
+            const msg: Message = { id: currentId, role: "assistant", content: text, timestamp: new Date().toISOString(), toolCalls: [...toolBuffer] };
+            append(msg);
+            assistantMessages.push(msg);
             toolBuffer = [];
           } else {
             updateById(currentId, { content: text });
+            const existing = assistantMessages.find(m => m.id === currentId);
+            if (existing) {
+              existing.content = text;
+            }
           }
         },
         onToolCall: (name, args, callId) => {
@@ -104,7 +110,9 @@ export function useChatSender() {
         onFinish: (text, cancelled) => {
           if (!currentId && (text || toolBuffer.length > 0)) {
             currentId = generateId();
-            append({ id: currentId, role: "assistant", content: text, timestamp: new Date().toISOString(), toolCalls: [...toolBuffer] });
+            const msg: Message = { id: currentId, role: "assistant", content: text, timestamp: new Date().toISOString(), toolCalls: [...toolBuffer] };
+            append(msg);
+            assistantMessages.push(msg);
           }
           assistantMessages.forEach(msg => persistMessage(msg));
           for (const toolMsg of toolMessagesToPersist) {
