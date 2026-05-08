@@ -48,6 +48,9 @@ const ToolMessage: React.FC<ToolMessageProps> = ({
           {display.resultPreview?.map((line, index) => (
             <Text key={index} color="dim">| {line}</Text>
           ))}
+          {display.omittedResultLines ? (
+            <Text color="dim">| ... {display.omittedResultLines} more line{display.omittedResultLines === 1 ? "" : "s"}</Text>
+          ) : null}
         </Box>
       )}
     </Box>

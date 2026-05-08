@@ -1,4 +1,24 @@
 import { Message } from "../../types.js";
+import { createToolDisplay } from "../lib/toolDisplay.js";
+
+function formatToolHistoryMessage(message: Message): string {
+  const display = createToolDisplay({
+    toolName: message.toolCall?.toolName,
+    toolArgs: message.toolCall?.toolArgs,
+    status: message.toolCall?.status,
+    content: message.content,
+  });
+
+  const preview = display.resultPreview?.length
+    ? `\n${display.resultPreview.map((line) => `  ${line}`).join("\n")}`
+    : "";
+  const omitted = display.omittedResultLines
+    ? `\n  ... ${display.omittedResultLines} more line${display.omittedResultLines === 1 ? "" : "s"}`
+    : "";
+  const detail = display.detail ? ` (${display.detail})` : "";
+
+  return `[Tool ${display.tone}: ${display.label} - ${display.summary}${detail}]${preview}${omitted}`;
+}
 
 export function mapMessagesToAIHistory(messages: Message[]) {
   return messages
@@ -11,18 +31,12 @@ export function mapMessagesToAIHistory(messages: Message[]) {
         return {
           role: "assistant" as const,
           content: m.content,
-          tool_calls: m.toolCalls?.map((tc) => ({
-            id: tc.toolCallId,
-            type: "function" as const,
-            function: { name: tc.toolName, arguments: tc.toolArgs },
-          })),
         };
       }
       if (m.role === "tool-call" && m.toolCall) {
         return {
-          role: "tool" as const,
-          tool_call_id: m.toolCall.toolCallId,
-          content: [{ type: "text" as const, text: m.content }],
+          role: "assistant" as const,
+          content: formatToolHistoryMessage(m),
         };
       }
       return { role: "user" as const, content: m.content };

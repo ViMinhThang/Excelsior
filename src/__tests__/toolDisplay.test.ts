@@ -50,6 +50,23 @@ describe("tool display model", () => {
     expect(display.resultPreview).toEqual(["src/a.ts:1:target one", "src/b.ts:2:target two"]);
   });
 
+  it("formats escaped listFiles output as preview lines", () => {
+    const display = createToolDisplay({
+      toolName: "listFiles",
+      toolArgs: JSON.stringify({ directory: "." }),
+      status: "completed",
+      content: '"Found 3 files:\\nREADME.md\\nsrc/\\npackage.json"',
+    });
+
+    expect(display.detail).toBe("found 3 files");
+    expect(display.resultPreview).toEqual([
+      "Found 3 files:",
+      "README.md",
+      "src/",
+    ]);
+    expect(display.omittedResultLines).toBe(1);
+  });
+
   it("summarizes runCommand risk, result, and errors", () => {
     const display = createToolDisplay({
       toolName: "runCommand",
