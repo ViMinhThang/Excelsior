@@ -24,6 +24,20 @@ const ScreenDispatcher = memo(function ScreenDispatcher({ screen }: ScreenDispat
   }
 });
 
+interface NavItemProps {
+  label: string;
+  shortcut: string;
+  active: boolean;
+}
+
+const NavItem = ({ label, shortcut, active }: NavItemProps) => (
+  <Text color={active ? "cyan" : "dim"} bold={active}>
+    {shortcut} {label}
+  </Text>
+);
+
+const NavSep = () => <Text color="dim"> · </Text>;
+
 const Router = () => {
   const { currentScreen, navigate, goBack } = useNavigation();
   const { exit } = useApp();
@@ -56,8 +70,14 @@ const Router = () => {
     <Box flexDirection="column" padding={1} minHeight={20}>
       <ScreenDispatcher screen={currentScreen} />
 
-      <Box marginTop={1} borderTop={true} borderBottom={false} borderLeft={false} borderRight={false}>
-        <Text color="dim">Navigation: 'c' Chat | 'ctrl + s' Settings | ESC Back | Ctrl+C Exit</Text>
+      <Box marginTop={1}>
+        <NavItem label="Chat" shortcut="c" active={currentScreen === 'chat'} />
+        <NavSep />
+        <NavItem label="Settings" shortcut="^S" active={currentScreen === 'settings'} />
+        <NavSep />
+        <Text color="dim">Esc Back</Text>
+        <NavSep />
+        <Text color="dim">^C Quit</Text>
       </Box>
     </Box>
   );

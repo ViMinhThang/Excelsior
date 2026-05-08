@@ -9,14 +9,14 @@ interface SubAgentDetailProps {
 }
 
 const SubAgentDetail: React.FC<SubAgentDetailProps> = ({ agent }) => {
-  const statusLabel = agent.status === "running" ? "[● running]" : agent.status === "error" ? "[✗ error]" : "[✓ done]";
-
+  const statusColor = agent.status === "running" ? "cyan" : agent.status === "error" ? "red" : "green";
+  const statusLabel = agent.status === "running" ? "running" : agent.status === "error" ? "error" : "done";
   const hasParts = agent.outputParts && agent.outputParts.length > 0;
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      <Text bold underline color="white">
-        ═══ {agent.role} {statusLabel} ════════════════════════════
+      <Text bold color="white">
+        ▸ {agent.role} <Text color={statusColor}>· {statusLabel}</Text>
       </Text>
       <Box flexGrow={1} marginTop={1} flexDirection="column">
         {hasParts ? (

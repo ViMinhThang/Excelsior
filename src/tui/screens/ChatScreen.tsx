@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import AppHeader from '../components/shared/AppHeader.js';
 import ChatHistory from '../components/chat/ChatHistory.js';
 import ChatInput from '../components/chat/ChatInput.js';
 import SubAgentDetail from '../components/review/SubAgentDetail.js';
@@ -25,14 +26,7 @@ const ChatScreen = () => {
 
   return (
     <Box flexDirection="column">
-      <Box flexDirection="column" marginBottom={1}>
-        <Text color="cyanBright">  ███████╗██╗  ██╗ ██████╗███████╗██╗     ███████╗██╗ ██████╗ ██████╗</Text>
-        <Text color="cyanBright">  ██╔════╝╚██╗██╔╝██╔════╝██╔════╝██║     ██╔════╝██║██╔═══██╗██╔══██╗</Text>
-        <Text color="cyanBright">  █████╗   ╚███╔╝ ██║     █████╗  ██║     ███████╗██║██║   ██║██████╔╝</Text>
-        <Text color="cyanBright">  ██╔══╝   ██╔██╗ ██║     ██╔══╝  ██║     ╚════██║██║██║   ██║██╔══██╗</Text>
-        <Text color="cyanBright">  ███████╗██╔╝ ██╗╚██████╗███████╗███████╗███████║██║╚██████╔╝██║  ██║</Text>
-        <Text color="cyanBright">  ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚══════╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═╝</Text>
-      </Box>
+      <AppHeader />
 
       {chatMode === "subagent-detail" && subAgents.length > 0 ? (
         <SubAgentDetail agent={subAgents[subAgentIndex]} />
@@ -41,6 +35,7 @@ const ChatScreen = () => {
           <Box flexDirection="column">
             <ChatHistory
               messages={messages}
+              subAgents={subAgents}
               hasMore={hasMore}
               onLoadMore={loadMore}
             />
@@ -49,7 +44,6 @@ const ChatScreen = () => {
           {isLoading && (
             <Box marginTop={1}>
               <ThinkingIndicator />
-              <Text color="gray" italic> Agent is thinking... (ESC to cancel)</Text>
             </Box>
           )}
 
@@ -65,10 +59,11 @@ const ChatScreen = () => {
       )}
 
           {pending && (
-            <Box marginTop={1} borderStyle="single" borderColor="yellowBright" paddingX={1} paddingY={1}>
-              <Text color="yellowBright" bold>⚠ Allow <Text color="white">{pending.toolName}</Text>?</Text>
+            <Box marginTop={1} paddingX={1}>
+              <Text color="yellow">⚠ </Text>
+              <Text color="white" bold>{pending.toolName}</Text>
               <Text color="dim"> {pending.args}</Text>
-              <Text color="yellowBright"> [y/N]</Text>
+              <Text color="yellow"> [y/N]</Text>
             </Box>
           )}
 

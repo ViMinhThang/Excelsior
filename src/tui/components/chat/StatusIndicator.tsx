@@ -24,9 +24,8 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status }) => {
     return <Text color="red">●</Text>;
   }
 
-  // White Big Dot with pulse for pending, static for completed
   return (
-    <Text color="white" dimColor={status === 'pending' ? pulse : false}>
+    <Text color={status === 'pending' ? 'cyan' : 'dim'} dimColor={status === 'pending' ? pulse : false}>
       ●
     </Text>
   );

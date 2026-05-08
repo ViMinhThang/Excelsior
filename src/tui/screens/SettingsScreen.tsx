@@ -27,14 +27,14 @@ const SettingsScreen = () => {
 
   const handleSaveApiKey = useCallback(() => {
     saveApiKey(apiKey);
-    setStatus('API Key saved successfully!');
+    setStatus('✓ API Key saved');
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setStatus(''), 3000);
   }, [apiKey, saveApiKey]);
 
   const handleSaveGithubToken = useCallback(() => {
     saveGithubToken(githubToken);
-    setStatus('GitHub Token saved successfully!');
+    setStatus('✓ GitHub Token saved');
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setStatus(''), 3000);
   }, [githubToken, saveGithubToken]);
@@ -42,13 +42,12 @@ const SettingsScreen = () => {
   return (
     <Box flexDirection="column">
       <Box marginBottom={1}>
-        <Text color="cyanBright" bold>Settings</Text>
-        <Text color="dim"> (Press Esc to go back)</Text>
+        <Text color="cyan" bold>Settings</Text>
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={focusedField === 'apiKey' ? 'cyanBright' : 'white'}>
-          {focusedField === 'apiKey' ? '● ' : '○ '}DeepSeek API Key:
+        <Text color={focusedField === 'apiKey' ? 'cyan' : 'dim'}>
+          {focusedField === 'apiKey' ? '▸ ' : '  '}DeepSeek API Key
         </Text>
         <ChatInput 
           value={apiKey} 
@@ -61,8 +60,8 @@ const SettingsScreen = () => {
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={focusedField === 'githubToken' ? 'cyanBright' : 'white'}>
-          {focusedField === 'githubToken' ? '● ' : '○ '}GitHub Token:
+        <Text color={focusedField === 'githubToken' ? 'cyan' : 'dim'}>
+          {focusedField === 'githubToken' ? '▸ ' : '  '}GitHub Token
         </Text>
         <ChatInput 
           value={githubToken} 
@@ -80,9 +79,8 @@ const SettingsScreen = () => {
         </Box>
       )}
 
-      <Box marginTop={1} flexDirection="column">
-        <Text color="dim">Press Tab to switch input fields.</Text>
-        <Text color="dim">Press Enter to save the active setting.</Text>
+      <Box marginTop={1}>
+        <Text color="dim">Tab switch · Enter save · Esc back</Text>
       </Box>
     </Box>
   );

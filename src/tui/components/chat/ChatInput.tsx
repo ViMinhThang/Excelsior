@@ -22,8 +22,8 @@ const ChatInput: React.FC<ChatInputProps> = ({
   mask,
 }) => {
   return (
-    <Box borderStyle="single" borderColor="cyanBright" borderLeft={false} borderRight={false} paddingX={1}>
-      <Text color="cyanBright" bold>{'> '} </Text>
+    <Box paddingX={1} marginTop={1}>
+      <Text color="cyan">{'> '} </Text>
       <TextInput
         value={value}
         onChange={onChange}

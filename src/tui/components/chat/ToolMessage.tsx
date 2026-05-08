@@ -38,10 +38,10 @@ const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = 
     <Box flexDirection="column" marginTop={marginTop} marginBottom={1} paddingX={1}>
       <Box>
         <StatusIndicator status={status} />
-        <Text color="gray" dimColor={isPending}>
+        <Text color="dim" dimColor={isPending}>
           <Text bold> {toolName || "Tool"}</Text>
           {formattedArgs ? <Text> {formattedArgs}</Text> : null}
-          {isSubAgent ? <Text color="dim"> (Ctrl+O)</Text> : null}
+          {isSubAgent ? <Text color="dim"> (^O)</Text> : null}
         </Text>
       </Box>
     </Box>
