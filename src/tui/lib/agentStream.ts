@@ -3,7 +3,7 @@ import { StreamCallbacks, StreamPart, getTextDelta, getToolName, getToolArgs, ge
 
 export async function streamAgentResponse(
   agent: ToolLoopAgent<any, any>,
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{ role: string; content: string | Array<{ type: string; text: string }>; tool_call_id?: string; tool_calls?: Array<{ id: string; type: string; function: { name: string; arguments: string } }> }>,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<string> {

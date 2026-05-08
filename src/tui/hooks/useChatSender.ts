@@ -50,6 +50,7 @@ export function useChatSender() {
 
     let currentId: string | null = null;
     const turnIds: string[] = [];
+    const toolMessagesToPersist: Message[] = [];
     let toolBuffer: Array<{ toolCallId: string; toolName: string; toolArgs: string }> = [];
     const toolMap = new Map<string, { msgId: string; toolName: string; toolArgs: string }>();
 
@@ -81,6 +82,7 @@ export function useChatSender() {
           if (currentId) {
             const assistant = messagesRef.current.find(m => m.id === currentId);
             updateById(currentId, { toolCalls: [...(assistant?.toolCalls || []), newCall] });
+            toolBuffer = [];
           }
 
           currentId = null;
@@ -96,7 +98,7 @@ export function useChatSender() {
           const status = isError ? "error" as const : "completed" as const;
           const toolMsg = { id: info.msgId, role: "tool-call" as const, content: displayContent, timestamp: new Date().toISOString(), toolCall: { toolName: info.toolName, toolArgs: info.toolArgs, toolCallId: callId, status } };
           updateById(info.msgId, toolMsg);
-          persistMessage(toolMsg);
+          toolMessagesToPersist.push(toolMsg);
         },
         onFinish: (text, cancelled) => {
           if (!currentId && (text || toolBuffer.length > 0)) {
@@ -111,6 +113,9 @@ export function useChatSender() {
             if (cancelled && id === currentId) updateById(id, updated);
             persistMessage(updated);
           });
+          for (const toolMsg of toolMessagesToPersist) {
+            persistMessage(toolMsg);
+          }
         },
       }, abortController.signal);
     } catch (error: unknown) {
