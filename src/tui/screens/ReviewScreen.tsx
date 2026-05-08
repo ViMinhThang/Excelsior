@@ -7,10 +7,9 @@ import ReviewOverview from "../components/review/ReviewOverview.js";
 import SubAgentDetail from "../components/review/SubAgentDetail.js";
 import ReviewFooter from "../components/review/ReviewFooter.js";
 import ReviewResults from "../components/review/ReviewResults.js";
-import { ReviewProvider } from "../context/ReviewContext.js";
 import { theme } from "../theme.js";
 
-function ReviewScreenInner() {
+export default function ReviewScreen() {
   const {
     prs,
     selectedPR,
@@ -20,7 +19,7 @@ function ReviewScreenInner() {
     selectedSubAgentIndex,
     prsLoading,
     prsError,
-    fetchedDiff,
+    diff,
     diffLoading,
     diffError,
     commentStatus,
@@ -45,7 +44,7 @@ function ReviewScreenInner() {
           viewingDiff={viewingDiff}
           diffLoading={diffLoading}
           diffError={diffError}
-          fetchedDiff={fetchedDiff}
+          fetchedDiff={diff}
         />
       )}
 
@@ -70,10 +69,4 @@ function ReviewScreenInner() {
   );
 }
 
-export default function ReviewScreen() {
-  return (
-    <ReviewProvider>
-      <ReviewScreenInner />
-    </ReviewProvider>
-  );
-}
+

@@ -12,7 +12,7 @@ export function useCommandAutocomplete(input: string) {
   const filtered = useMemo(() => {
     if (!show) return [];
     return commands.filter((c) => c.name.startsWith(query));
-  }, [input]);
+  }, [show, query]);
 
   useEffect(() => {
     setSelectedIndex(0);

@@ -30,8 +30,7 @@ const ChatInput: React.FC<ChatInputProps> = ({
       backgroundColor="transparent"
       borderTopBottomColor={focus ? theme.colors.accent : theme.colors.border}
     >
-      <Box>
-        <Text color={theme.colors.accent}>{theme.glyphs.user} </Text>
+      <Box paddingLeft={1}>
         <TextInput
           value={value}
           onChange={onChange}

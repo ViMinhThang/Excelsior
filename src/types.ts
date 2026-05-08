@@ -2,8 +2,7 @@ export type StreamPart =
   | { type: "text-delta"; text?: string; textDelta?: string; [key: string]: unknown }
   | { type: "tool-call"; toolName?: string; name?: string; toolCallId: string; input?: unknown; [key: string]: unknown }
   | { type: "tool-result"; toolCallId: string; output?: { type: string; value: unknown }; [key: string]: unknown }
-  | { type: "tool-error"; toolCallId: string; toolName?: string; error?: unknown; [key: string]: unknown };
-
+  | { type: "tool-error"; toolCallId: string; toolName?: string; error?: unknown; [key: string]: unknown }
 export function getTextDelta(part: StreamPart): string {
   if (part.type === "text-delta") {
     return part.text ?? part.textDelta ?? "";

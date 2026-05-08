@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Box, Text } from 'ink';
 import AppHeader from '../components/shared/AppHeader.js';
 import ChatHistory from '../components/chat/ChatHistory.js';
@@ -106,4 +106,4 @@ const ChatScreen = () => {
   );
 };
 
-export default ChatScreen;
+export default memo(ChatScreen);

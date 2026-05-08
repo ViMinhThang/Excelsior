@@ -2,6 +2,9 @@ import React, { ReactNode, memo } from "react";
 import { Box, Text } from "ink";
 import { theme } from "../../theme.js";
 
+const LEFT_BORDER_STYLE = { top: '', bottom: '', left: '┃', right: '', topLeft: '', topRight: '', bottomLeft: '', bottomRight: '' };
+const TOP_BOTTOM_BORDER_STYLE = { top: '─', bottom: '─', left: '', right: '', topLeft: '', topRight: '', bottomLeft: '', bottomRight: '' };
+
 interface PanelProps {
   title?: string;
   titleColor?: string;
@@ -41,25 +44,7 @@ const Panel: React.FC<PanelProps> = ({
       <Box 
         flexDirection="row" 
         backgroundColor={bgProp}
-        borderStyle={borderLeftColor ? {
-          top: '',
-          bottom: '',
-          left: '┃',
-          right: '',
-          topLeft: '',
-          topRight: '',
-          bottomLeft: '',
-          bottomRight: ''
-        } : borderTopBottomColor ? {
-          top: '─',
-          bottom: '─',
-          left: '',
-          right: '',
-          topLeft: '',
-          topRight: '',
-          bottomLeft: '',
-          bottomRight: ''
-        } : borderColor ? 'round' : undefined}
+        borderStyle={borderLeftColor ? LEFT_BORDER_STYLE : borderTopBottomColor ? TOP_BOTTOM_BORDER_STYLE : borderColor ? 'round' : undefined}
         borderColor={borderLeftColor || borderTopBottomColor || borderColor}
       >
         <Box
