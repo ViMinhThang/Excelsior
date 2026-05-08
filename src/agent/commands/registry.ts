@@ -43,6 +43,7 @@ export const commands: Command[] = [
       context.navigate('review');
     },
   },
+
 ];
 
 export async function handleCommand(input: string, context: CommandContext): Promise<boolean> {

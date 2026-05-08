@@ -1,12 +1,35 @@
 import { useCallback, useRef, useState } from "react";
-import { Message } from "../../types.js";
+import { Message, UsageInfo } from "../../types.js";
 import { createAgent } from "../../agent/agent.js";
-import { logError } from "../../db/index.js";
+import { logError, getSetting, setSetting } from "../../db/index.js";
 import { persistMessage } from "../lib/chatPersistence.js";
 import { streamAgentResponse } from "../lib/agentStream.js";
 import { spawnSubAgentTool } from "../../agent/review/spawnSubAgent.js";
 import { useEvent } from "./useEvent.js";
 import { mapMessagesToAIHistory, generateId, formatErrorMessage } from "./useChatSenderUtils.js";
+
+const INPUT_RATE = 0.00000027;
+const OUTPUT_RATE = 0.00000110;
+
+function calculateCost(usage: UsageInfo): number {
+  return (usage.inputTokens * INPUT_RATE) + (usage.outputTokens * OUTPUT_RATE);
+}
+
+function monthKey(): string {
+  const d = new Date();
+  return `MONTHLY_SPENT_${d.getFullYear()}_${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function updateTotalSpent(cost: number, usage: UsageInfo): void {
+  const current = parseFloat(getSetting("TOTAL_SPENT") || "0");
+  setSetting("TOTAL_SPENT", (current + cost).toFixed(6));
+  setSetting("TOTAL_TOKENS", String(parseInt(getSetting("TOTAL_TOKENS") || "0", 10) + usage.totalTokens));
+  setSetting("INPUT_TOKENS", String(parseInt(getSetting("INPUT_TOKENS") || "0", 10) + usage.inputTokens));
+  setSetting("OUTPUT_TOKENS", String(parseInt(getSetting("OUTPUT_TOKENS") || "0", 10) + usage.outputTokens));
+  const mk = monthKey();
+  const monthly = parseFloat(getSetting(mk) || "0");
+  setSetting(mk, (monthly + cost).toFixed(6));
+}
 
 export function useChatSender() {
   const [isLoading, setIsLoading] = useState(false);
@@ -99,6 +122,10 @@ export function useChatSender() {
           const toolMsg = { id: info.msgId, role: "tool-call" as const, content: displayContent, timestamp: new Date().toISOString(), toolCall: { toolName: info.toolName, toolArgs: info.toolArgs, toolCallId: callId, status } };
           updateById(info.msgId, toolMsg);
           toolMessagesToPersist.push(toolMsg);
+        },
+        onUsage: (usage) => {
+          const cost = calculateCost(usage);
+          updateTotalSpent(cost, usage);
         },
         onFinish: (text, cancelled) => {
           if (!currentId && (text || toolBuffer.length > 0)) {

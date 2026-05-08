@@ -2,10 +2,17 @@ import { describe, it, expect } from "vitest";
 import { runCommandTool } from "../../agent/tools/runCommand/runCommand.js";
 import { runCommandSchema } from "../../agent/tools/runCommand/type.js";
 
+const isWin = process.platform === "win32";
+
+function sh(command: string): string {
+  // Wrap command for cross-platform shell execution
+  return isWin ? command : command;
+}
+
 describe("runCommandTool", () => {
   describe("schema validation", () => {
     it("accepts a valid command string", () => {
-      const result = runCommandSchema.safeParse({ command: "echo hello" });
+      const result = runCommandSchema.safeParse({ command: "node --version" });
       expect(result.success).toBe(true);
     });
 
@@ -17,12 +24,12 @@ describe("runCommandTool", () => {
 
   describe("execute", () => {
     it("executes a simple command", async () => {
-      const result = await (runCommandTool as any).execute({ command: "echo test123" });
+      const result = await (runCommandTool as any).execute({ command: sh('node -e "console.log(\'test123\')"') });
       expect(result).toContain("test123");
     });
 
     it("handles commands with no output", async () => {
-      const result = await (runCommandTool as any).execute({ command: "cd ." });
+      const result = await (runCommandTool as any).execute({ command: sh('node -e "process.exit(0)"') });
       expect(result).toContain("executed successfully");
     });
 
@@ -69,13 +76,13 @@ describe("runCommandTool", () => {
     });
 
     it("allows safe commands through", async () => {
-      const result = await (runCommandTool as any).execute({ command: "echo safe command" });
-      expect(result).toContain("safe command");
+      const result = await (runCommandTool as any).execute({ command: sh('node -e "console.log(\'safe\')"') });
+      expect(result).toContain("safe");
       expect(result).not.toContain("Blocked");
     });
 
     it("allows rm without dangerous path", async () => {
-      const result = await (runCommandTool as any).execute({ command: "echo rm -rf foo" });
+      const result = await (runCommandTool as any).execute({ command: sh('node -e "console.log(\'rm -rf foo\')"') });
       expect(result).toContain("rm -rf foo");
       expect(result).not.toContain("Blocked");
     });

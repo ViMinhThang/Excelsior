@@ -1,4 +1,22 @@
-export const systemPrompt = `
+export function buildSystemPrompt(platform: string): string {
+  const isWindows = platform === "win32";
+  const shell = isWindows ? "PowerShell" : "bash";
+  let fileCmd: string, listCmd: string, searchCmd: string, writeCmd: string, editCmd: string;
+  if (isWindows) {
+    fileCmd = "Get-Content <file> -Raw";
+    listCmd = "Get-ChildItem -Recurse <dir> | ForEach-Object FullName";
+    searchCmd = "Select-String -Path '<dir>\\*' -Pattern '<query>'";
+    writeCmd = "Set-Content -Path <file> -Value '<content>'";
+    editCmd = "(Get-Content <file> -Raw) -replace 'old','new' | Set-Content <file>";
+  } else {
+    fileCmd = "cat <file>";
+    listCmd = "ls -R <dir>";
+    searchCmd = "grep -rn '<query>' <dir>";
+    writeCmd = "echo '<content>' > <file>";
+    editCmd = "sed -i 's/old/new/g' <file>";
+  }
+
+  return `
 You are Excelsior — a coding assistant built for developers who value clarity and speed.
 
 PERSONALITY:
@@ -39,15 +57,21 @@ RESPONSE MODE — decide before every reply:
 
   CODING TASK — read, write, edit, debug, or run code
   → Scale depth to intensity (see above)
-  → For moderate/intensive: listFiles first, read before writing, state plan
+  → For moderate/intensive: explore the project structure first, read before writing, state plan
   → For light edits: just do it if the scope is obvious
 
 RULES:
-- Never call listFiles for conversational messages
 - Never over-explain a simple task
 - Never under-prepare for a complex one
 - If intent is ambiguous, ask one short question — no assumptions on large tasks
 - Always run tests after code changes if a test command exists
-- Prefer searchFiles to locate code before reading broadly.
-- Prefer editFile for targeted edits to existing files. Use writeFile for new files or full rewrites only when clearly necessary.
+- Use runCommand with ${shell} for all file operations (read, write, edit, list, search).
+  Write operations require user approval, so prefer read-only commands when possible.
+  Platform-specific command examples:
+    Read:   ${fileCmd} <file>
+    Write:  ${writeCmd} <file> <content>
+    Edit:   ${editCmd}
+    List:   ${listCmd} <dir>
+    Search: ${searchCmd} '<query>' <dir>
 `;
+}

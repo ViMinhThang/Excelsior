@@ -110,13 +110,6 @@ function toneFor(status: ToolStatus, content?: string): ToolTone {
   return "success";
 }
 
-function countSearchMatches(content?: string): number {
-  return normalizeToolText(content)
-    .split(/\r?\n/)
-    .filter((line) => /^[^:\n]+:\d+:/.test(line.trim()))
-    .length;
-}
-
 export function createToolDisplay({
   toolName,
   toolArgs,
@@ -127,69 +120,9 @@ export function createToolDisplay({
   const args = parseArgs(toolArgs);
   const normalizedContent = normalizeToolText(content);
   const preview = previewContent(normalizedContent);
-  const path = asString(args?.path);
-  const directory = asString(args?.directory || ".");
   const tone = toneFor(status, normalizedContent);
 
   switch (name) {
-    case "readFile": {
-      const lines = normalizedContent && tone !== "error" ? countLines(normalizedContent) : 0;
-      return {
-        label: "Read file",
-        summary: path || "read file",
-        detail: lines ? `returned ${plural(lines, "line")}` : undefined,
-        tone,
-      };
-    }
-
-    case "writeFile": {
-      const contentArg = asString(args?.content);
-      return {
-        label: "Write file",
-        summary: path || "write file",
-        detail: contentArg ? `writing ${plural(countLines(contentArg), "line")}` : normalizedContent,
-        tone,
-        risk: "medium",
-      };
-    }
-
-    case "editFile": {
-      const search = asString(args?.search);
-      const replace = asString(args?.replace);
-      return {
-        label: "Edit file",
-        summary: path || "edit file",
-        detail: `replace ${plural(search.length, "char")} with ${plural(replace.length, "char")}`,
-        tone,
-        risk: "medium",
-      };
-    }
-
-    case "searchFiles": {
-      const query = asString(args?.query);
-      const matches = countSearchMatches(normalizedContent);
-      return {
-        label: "Search files",
-        summary: query ? `"${query}" in ${directory}` : `search in ${directory}`,
-        detail: normalizedContent && normalizedContent !== "No matches found." ? `found ${plural(matches, "match")}` : normalizedContent,
-        resultPreview: preview.lines,
-        omittedResultLines: preview.omitted,
-        tone,
-      };
-    }
-
-    case "listFiles": {
-      const count = normalizedContent.match(/^Found\s+(\d+)\s+files:/)?.[1];
-      return {
-        label: "List files",
-        summary: directory,
-        detail: count ? `found ${plural(Number(count), "file")}` : normalizedContent,
-        resultPreview: preview.lines,
-        omittedResultLines: preview.omitted,
-        tone,
-      };
-    }
-
     case "runCommand": {
       const command = asString(args?.command);
       return {
