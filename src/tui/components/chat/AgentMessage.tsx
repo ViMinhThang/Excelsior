@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { Box } from 'ink';
+import { Box, Text } from 'ink';
 import { MarkdownRenderer } from '../shared/MarkdownRenderer.js';
 
 interface AgentMessageProps {
@@ -11,7 +11,10 @@ const AgentMessage: React.FC<AgentMessageProps> = ({ content }) => {
   return (
     <Box flexDirection="column" marginBottom={1}>
       <Box paddingX={1}>
-        <MarkdownRenderer content={content} />
+        <Text color="dim">◇ </Text>
+        <Box flexDirection="column" flexGrow={1}>
+          <MarkdownRenderer content={content} />
+        </Box>
       </Box>
     </Box>
   );

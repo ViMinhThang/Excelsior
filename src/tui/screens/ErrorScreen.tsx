@@ -9,7 +9,7 @@ const ErrorScreen: React.FC<ErrorScreenProps> = ({ error }) => {
   const { exit } = useApp();
 
   return (
-    <Box flexDirection="column" padding={1} borderStyle="double" borderColor="red">
+    <Box flexDirection="column" padding={1} borderStyle="single" borderColor="red">
       <Box marginBottom={1}>
         <Text color="red" bold>Critical App Error</Text>
       </Box>
@@ -27,8 +27,7 @@ const ErrorScreen: React.FC<ErrorScreenProps> = ({ error }) => {
       )}
 
       <Box marginTop={1} flexDirection="column">
-        <Text color="yellow">The application has encountered a fatal error and cannot continue.</Text>
-        <Text color="cyan">Press Ctrl+C to exit and check the database logs for details.</Text>
+        <Text color="dim">Fatal error. Press ^C to exit.</Text>
       </Box>
     </Box>
   );

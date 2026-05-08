@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import { SubAgentState } from "../../../types.js";
 
@@ -7,41 +7,59 @@ interface SubAgentRowProps {
   isSelected: boolean;
 }
 
+const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
 const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, isSelected }) => {
   const isRunning = agent.status === "running";
   const isError = agent.status === "error";
-  const dotColor = isSelected ? "cyanBright" : isError ? "red" : isRunning ? "yellow" : "gray";
-  const dot = isSelected ? "►" : isError ? "✗" : "●";
+  const isDone = agent.status === "done";
 
-  const latestToolCall = agent.toolCalls && agent.toolCalls.length > 0
+  const [frame, setFrame] = useState(0);
+
+  useEffect(() => {
+    if (!isRunning) return;
+    const timer = setInterval(() => {
+      setFrame(f => (f + 1) % spinnerFrames.length);
+    }, 80);
+    return () => clearInterval(timer);
+  }, [isRunning]);
+
+  // Status glyph: spinner when running, checkmark when done, cross on error
+  const statusGlyph = isRunning
+    ? spinnerFrames[frame]
+    : isError ? "✗" : "✓";
+  const glyphColor = isRunning ? "cyan" : isError ? "red" : "green";
+
+  // Latest activity line
+  const latestToolCall = agent.toolCalls?.length
     ? agent.toolCalls[agent.toolCalls.length - 1]
     : null;
 
-  const statusColor = isSelected ? "cyanBright" : isError ? "red" : isRunning ? "yellow" : "gray";
+  const activityText = latestToolCall
+    ? latestToolCall.toolName
+    : agent.latestLine || null;
 
   return (
-    <Box flexDirection="column" marginTop={1}>
-      <Box>
-        <Text color={dotColor} bold={isSelected}>{dot} </Text>
-        <Text color={isSelected ? "cyanBright" : "gray"} bold={isSelected}>
-          call_sub_agent
-        </Text>
-        <Text color={dotColor} bold> {agent.role} </Text>
-        <Text color={statusColor} dimColor={!isSelected}>({agent.status})</Text>
-      </Box>
-      {latestToolCall && (
-        <Box paddingLeft={4}>
-          <Text color={isSelected ? "cyanBright" : "dim"} dimColor={!isSelected}>
-            └─ [{latestToolCall.status}] {latestToolCall.toolName}
-          </Text>
-        </Box>
-      )}
-      {!latestToolCall && agent.latestLine && (
-        <Box paddingLeft={4}>
-          <Text color={isSelected ? "white" : "dim"} dimColor={!isSelected}>
-            └─ {agent.latestLine}
-          </Text>
-        </Box>
+    <Box marginTop={1} paddingX={1}>
+      {/* Selection indicator */}
+      <Text color={isSelected ? "cyan" : "dim"}>
+        {isSelected ? "▸ " : "  "}
+      </Text>
+
+      {/* Status glyph */}
+      <Text color={glyphColor}>{statusGlyph} </Text>
+
+      {/* Sub-agent tag */}
+      <Text color="dim">[sub-agent] </Text>
+
+      {/* Role name — the primary info */}
+      <Text color={isSelected ? "white" : "dim"} bold={isSelected}>
+        {agent.role}
+      </Text>
+
+      {/* Activity context — what's happening right now */}
+      {activityText && (
+        <Text color="dim"> · {activityText}</Text>
       )}
     </Box>
   );

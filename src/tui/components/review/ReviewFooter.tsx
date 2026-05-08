@@ -11,7 +11,7 @@ const ReviewFooter: React.FC<ReviewFooterProps> = ({ mode, subMode }) => {
   if (mode === "browser") {
     return (
       <Box>
-        <Text color="dim">↑↓ select  Enter start review  r refresh  c back to chat</Text>
+        <Text color="dim">↑↓ select · Enter review · r refresh · c chat</Text>
       </Box>
     );
   }
@@ -20,13 +20,13 @@ const ReviewFooter: React.FC<ReviewFooterProps> = ({ mode, subMode }) => {
     if (subMode === "detail") {
       return (
         <Box>
-          <Text color="dim">↑↓ switch  ESC overview  c chat</Text>
+          <Text color="dim">↑↓ switch · Esc overview · c chat</Text>
         </Box>
       );
     }
     return (
       <Box>
-        <Text color="dim">↑↓ select  Ctrl+O drill  ESC back  c chat</Text>
+        <Text color="dim">↑↓ select · ^O drill · Esc back · c chat</Text>
       </Box>
     );
   }
@@ -34,7 +34,7 @@ const ReviewFooter: React.FC<ReviewFooterProps> = ({ mode, subMode }) => {
   if (mode === "results") {
     return (
       <Box>
-        <Text color="dim">p post PR comment  d view diff  c chat</Text>
+        <Text color="dim">p post comment · d diff · c chat</Text>
       </Box>
     );
   }

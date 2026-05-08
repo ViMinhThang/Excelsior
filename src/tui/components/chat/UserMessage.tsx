@@ -9,7 +9,8 @@ interface UserMessageProps {
 const UserMessage: React.FC<UserMessageProps> = ({ content }) => {
   return (
     <Box flexDirection="column" marginBottom={1}>
-      <Box paddingX={1} backgroundColor="#434C5E">
+      <Box paddingX={1}>
+        <Text color="dim">│ </Text>
         <Text color="white">{content}</Text>
       </Box>
     </Box>

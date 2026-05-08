@@ -1,22 +1,12 @@
 import React, { memo } from "react";
-import { Box, Text } from "ink";
+import AppHeader from "../shared/AppHeader.js";
 
 interface ReviewHeaderProps {
   title: string;
 }
 
 const ReviewHeader: React.FC<ReviewHeaderProps> = ({ title }) => {
-  return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Text color="cyanBright">  ███████╗██╗  ██╗ ██████╗███████╗██╗     ███████╗██╗ ██████╗ ██████╗</Text>
-      <Text color="cyanBright">  ██╔════╝╚██╗██╔╝██╔════╝██╔════╝██║     ██╔════╝██║██╔═══██╗██╔══██╗</Text>
-      <Text color="cyanBright">  █████╗   ╚███╔╝ ██║     █████╗  ██║     ███████╗██║██║   ██║██████╔╝</Text>
-      <Text color="cyanBright">  ██╔══╝   ██╔██╗ ██║     ██╔══╝  ██║     ╚════██║██║██║   ██║██╔══██╗</Text>
-      <Text color="cyanBright">  ███████╗██╔╝ ██╗╚██████╗███████╗███████╗███████║██║╚██████╔╝██║  ██║</Text>
-      <Text color="cyanBright">  ╚══════╝╚═╝  ╚═╝ ╚═════╝╚══════╝╚══════╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═╝</Text>
-      <Text color="white">— {title}</Text>
-    </Box>
-  );
+  return <AppHeader subtitle={title} />;
 };
 
 export default memo(ReviewHeader);

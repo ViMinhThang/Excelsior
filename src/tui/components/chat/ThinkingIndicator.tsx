@@ -9,7 +9,7 @@ function formatDuration(totalSeconds: number): string {
   if (h > 0) parts.push(`${h}h`);
   if (m > 0) parts.push(`${m}m`);
   parts.push(`${s}s`);
-  return `worked for ${parts.join(' ')}`;
+  return parts.join(' ');
 }
 
 const ThinkingIndicator = () => {
@@ -32,7 +32,7 @@ const ThinkingIndicator = () => {
   }, []);
 
   return (
-    <Text color="yellowBright">
+    <Text color="cyan">
       {frames[frame]} {formatDuration(elapsed)}
     </Text>
   );

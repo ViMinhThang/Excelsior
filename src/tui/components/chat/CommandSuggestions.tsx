@@ -12,11 +12,11 @@ function CommandSuggestionsInner({ commands: cmds, selectedIndex, maxVisibleCoun
   if (cmds.length === 0) return null;
 
   return (
-    <Box marginTop={1} borderStyle="single" borderColor="gray" flexDirection="column" paddingX={1} height={maxVisibleCount + 2}>
+    <Box marginTop={1} flexDirection="column" paddingX={2}>
       {cmds.map((cmd, i) => (
-        <Box key={cmd.name} backgroundColor={i === selectedIndex ? "#453d3d" : undefined} paddingX={1}>
-          <Text color={i === selectedIndex ? "white" : "dim"} bold={i === selectedIndex}>
-            /{cmd.name}
+        <Box key={cmd.name} paddingX={1}>
+          <Text color={i === selectedIndex ? "cyan" : "dim"} bold={i === selectedIndex}>
+            {i === selectedIndex ? "▸ " : "  "}/{cmd.name}
           </Text>
           <Text color="dim"> — {cmd.description}</Text>
         </Box>

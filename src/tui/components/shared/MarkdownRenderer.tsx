@@ -54,7 +54,7 @@ function BlockRenderer({ token, index }: BlockRendererProps) {
       const heading = token as Tokens.Heading;
       return (
         <Box key={index} marginTop={index > 0 ? 1 : 0}>
-          <Text bold color="cyanBright" underline={heading.depth <= 2}>
+          <Text bold color="cyan" underline={heading.depth <= 2}>
             {renderInline(heading.tokens)}
           </Text>
         </Box>
