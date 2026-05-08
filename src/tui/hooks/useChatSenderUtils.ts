@@ -22,7 +22,7 @@ export function mapMessagesToAIHistory(messages: Message[]) {
         return {
           role: "tool" as const,
           tool_call_id: m.toolCall.toolCallId,
-          content: m.content,
+          content: [{ type: "text" as const, text: m.content }],
         };
       }
       return { role: "user" as const, content: m.content };

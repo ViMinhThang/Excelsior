@@ -2,7 +2,7 @@ import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { SubAgentState } from "../../../types.js";
 import ToolMessage from "../chat/ToolMessage.js";
-import { TextBlock } from "../shared/FeedRenderer.js";
+import { MarkdownRenderer } from "../shared/MarkdownRenderer.js";
 
 interface SubAgentDetailProps {
   agent: SubAgentState;
@@ -22,7 +22,7 @@ const SubAgentDetail: React.FC<SubAgentDetailProps> = ({ agent }) => {
         {hasParts ? (
           agent.outputParts.map((part, i) => {
             if (part.type === "text") {
-              return <TextBlock key={i} text={part.text} />;
+              return <MarkdownRenderer key={i} content={part.text} />;
             }
             return (
               <ToolMessage
@@ -36,9 +36,7 @@ const SubAgentDetail: React.FC<SubAgentDetailProps> = ({ agent }) => {
             );
           })
         ) : (
-          agent.fullOutput.split("\n").map((line, i) => (
-            <TextBlock key={i} text={line} />
-          ))
+          <MarkdownRenderer content={agent.fullOutput} />
         )}
       </Box>
     </Box>

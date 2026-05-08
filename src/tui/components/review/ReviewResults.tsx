@@ -4,6 +4,7 @@ import { usePRContext } from "../../context/PRContext.js";
 import { useReviewSessionContext } from "../../context/ReviewSessionContext.js";
 import { useSubAgentContext } from "../../context/SubAgentContext.js";
 import ReviewBlockList from "./ReviewBlockList.js";
+import { MarkdownRenderer } from "../shared/MarkdownRenderer.js";
 
 const ReviewResults: React.FC = () => {
   const { selectedPR } = usePRContext();
@@ -24,7 +25,7 @@ const ReviewResults: React.FC = () => {
         </Box>
       ) : (
         <Box marginTop={1} flexDirection="column">
-          <Text color="white">{mainOutput || "No results available."}</Text>
+          <MarkdownRenderer content={mainOutput || "No results available."} />
         </Box>
       )}
     </Box>

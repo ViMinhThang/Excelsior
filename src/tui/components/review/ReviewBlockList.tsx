@@ -4,6 +4,7 @@ import { SubAgentState } from "../../../types.js";
 import { ReviewBlock } from "../../context/ReviewSessionContext.js";
 import SubAgentRow from "./SubAgentRow.js";
 import ToolMessage from "../chat/ToolMessage.js";
+import { MarkdownRenderer } from "../shared/MarkdownRenderer.js";
 
 interface ReviewBlockListProps {
   blocks: ReviewBlock[];
@@ -28,7 +29,7 @@ const ReviewBlockList: React.FC<ReviewBlockListProps> = ({
         if (block.type === "text") {
           return (
             <Box key={index} marginTop={index > 0 ? 1 : 0}>
-              <Text color="white">{block.text}</Text>
+              <MarkdownRenderer content={block.text} />
             </Box>
           );
         }
