@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { subAgentBus } from "../../agent/review/spawnSubAgent.js";
 import {
   SubAgentState,
@@ -20,19 +20,15 @@ interface SubAgentListenerCallbacks {
   onDone: (toolCallId: string, fullOutput: string) => void;
 }
 
-/**
- * Shared hook that subscribes to the sub-agent event bus and
- * forwards normalized events to the provided callbacks.
- *
- * Both ChatScreen (local state) and useReviewOrchestrator (context state)
- * use this instead of duplicating the subscription logic.
- */
 export function useSubAgentListener(callbacks: SubAgentListenerCallbacks) {
+  const ref = useRef(callbacks);
+  ref.current = callbacks;
+
   useEffect(
     () =>
       subAgentBus.subscribe({
         onSpawned: ({ toolCallId, role }) => {
-          callbacks.onSpawned({
+          ref.current.onSpawned({
             toolCallId,
             role,
             status: "running",
@@ -49,7 +45,7 @@ export function useSubAgentListener(callbacks: SubAgentListenerCallbacks) {
           outputParts,
           toolCalls,
         }) => {
-          callbacks.onOutput(toolCallId, {
+          ref.current.onOutput(toolCallId, {
             latestLine,
             fullOutput,
             outputParts: outputParts || [],
@@ -57,7 +53,7 @@ export function useSubAgentListener(callbacks: SubAgentListenerCallbacks) {
           });
         },
         onDone: ({ toolCallId, fullOutput }) => {
-          callbacks.onDone(toolCallId, fullOutput);
+          ref.current.onDone(toolCallId, fullOutput);
         },
       }),
     [],

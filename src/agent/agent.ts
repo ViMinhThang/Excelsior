@@ -2,9 +2,11 @@ import { ToolLoopAgent } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { fileTools } from "./tools/index.js";
 import { getSetting } from "../db/index.js";
-import { systemPrompt } from "./prompt.js";
-export { systemPrompt };
+import { buildSystemPrompt } from "./prompt.js";
+
 export function createAgent(instructions?: string, extraTools?: Record<string, any>) {
+  const platform = process.platform;
+  const systemPrompt = buildSystemPrompt(platform);
   const apiKey = getSetting("DEEPSEEK_API_KEY");
   const deepseek = createDeepSeek({
     apiKey: apiKey || process.env.DEEPSEEK_API_KEY,

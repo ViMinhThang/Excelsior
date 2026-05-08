@@ -18,28 +18,18 @@ interface ChatHistoryProps {
 interface GroupedItem {
   type: 'user' | 'assistant' | 'tool-call';
   message: Message;
-  toolCalls?: Message[];
 }
 
 const groupMessages = (msgs: Message[]): GroupedItem[] => {
-  const grouped: GroupedItem[] = [];
-  
-  for (const msg of msgs) {
+  return msgs.map(msg => {
     if (msg.role === 'user') {
-      grouped.push({ type: 'user', message: msg });
-    } else if (msg.role === 'assistant') {
-      grouped.push({ type: 'assistant', message: msg, toolCalls: [] });
-    } else if (msg.role === 'tool-call') {
-      const lastGroup = grouped[grouped.length - 1];
-      if (lastGroup && lastGroup.type === 'assistant') {
-        lastGroup.toolCalls?.push(msg);
-      } else {
-        grouped.push({ type: 'tool-call', message: msg });
-      }
+      return { type: 'user', message: msg };
     }
-  }
-  
-  return grouped;
+    if (msg.role === 'assistant') {
+      return { type: 'assistant', message: msg };
+    }
+    return { type: 'tool-call', message: msg };
+  });
 };
 
 const ChatHistory: React.FC<ChatHistoryProps> = ({ messages, subAgents = [], hasMore, onLoadMore }) => {
@@ -52,36 +42,33 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({ messages, subAgents = [], has
           <Text color="dim">··· ↑ ^U older messages</Text>
         </Box>
       )}
-      {groupedItems.length > 0 && groupedItems.map((item, index) => {
-        const { type, message, toolCalls } = item;
-        const key = message.id || index;
+      {groupedItems.length > 0 && groupedItems.map((item) => {
+        const { type, message } = item;
 
         if (type === 'user') {
-          return <UserMessage key={key} content={message.content} timestamp={message.timestamp} />;
+          return <UserMessage key={message.id} content={message.content} timestamp={message.timestamp} />;
         }
         if (type === 'assistant') {
           return (
             <AgentMessage 
-              key={key} 
+              key={message.id} 
               content={message.content} 
               timestamp={message.timestamp} 
-              toolCalls={toolCalls}
             />
           );
         }
         if (type === 'tool-call') {
-          // Render standalone ToolMessage as fallback
           if (message.toolCall?.toolName === 'spawnSubAgent') {
             let role = '';
             try { role = JSON.parse(message.toolCall.toolArgs || '{}').role || ''; } catch {}
             const agent = role ? subAgents.find(a => a.role === role) : undefined;
             if (agent) {
-              return <SubAgentRow key={key} agent={agent} isSelected={false} />;
+              return <SubAgentRow key={message.id} agent={agent} isSelected={false} />;
             }
           }
           return (
             <ToolMessage
-              key={key}
+              key={message.id}
               toolName={message.toolCall?.toolName}
               toolArgs={message.toolCall?.toolArgs}
               status={message.toolCall?.status}

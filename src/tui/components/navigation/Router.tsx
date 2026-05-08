@@ -1,12 +1,11 @@
 import React, { memo } from 'react';
-import { Box, Text, useInput, useApp } from 'ink';
+import { Box, useInput, useApp } from 'ink';
 import { Screen } from '../../../types.js';
 import { useNavigation } from '../../context/NavigationContext.js';
 import { useEvent } from '../../hooks/useEvent.js';
 import ChatScreen from '../../screens/ChatScreen.js';
 import SettingsScreen from '../../screens/SettingsScreen.js';
 import ReviewScreen from '../../screens/ReviewScreen.js';
-import { theme } from '../../theme.js';
 
 interface ScreenDispatcherProps {
   screen: Screen;
@@ -24,20 +23,6 @@ const ScreenDispatcher = memo(function ScreenDispatcher({ screen }: ScreenDispat
       return null;
   }
 });
-
-interface NavItemProps {
-  label: string;
-  shortcut: string;
-  active: boolean;
-}
-
-const NavItem = ({ label, shortcut, active }: NavItemProps) => (
-  <Text color={active ? theme.colors.accent : theme.colors.muted} bold={active}>
-    {shortcut} {label}
-  </Text>
-);
-
-const NavSep = () => <Text color={theme.colors.muted}>{theme.glyphs.separator}</Text>;
 
 const Router = () => {
   const { currentScreen, navigate, goBack } = useNavigation();
@@ -60,16 +45,6 @@ const Router = () => {
   return (
     <Box flexDirection="column" padding={1} minHeight={20}>
       <ScreenDispatcher screen={currentScreen} />
-
-      <Box marginTop={1}>
-        <NavItem label="Chat" shortcut="c" active={currentScreen === 'chat'} />
-        <NavSep />
-        <NavItem label="Settings" shortcut="^S" active={currentScreen === 'settings'} />
-        <NavSep />
-        <Text color={theme.colors.muted}>Esc Back</Text>
-        <NavSep />
-        <Text color={theme.colors.muted}>^C Quit</Text>
-      </Box>
     </Box>
   );
 };

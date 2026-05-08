@@ -1,5 +1,5 @@
 import type { ToolLoopAgent } from "ai";
-import { StreamCallbacks, StreamPart, getTextDelta, getToolName, getToolArgs, getToolResult } from "../../types.js";
+import { StreamCallbacks, StreamPart, getTextDelta, getToolName, getToolArgs, getToolResult } from "../types.js";
 
 export async function streamAgentResponse(
   agent: ToolLoopAgent<any, any>,
@@ -43,7 +43,6 @@ export async function streamAgentResponse(
       callbacks.onFinish(fullContent, true);
       return fullContent;
     }
-    callbacks.onFinish(fullContent, true);
-    throw error;
+    return fullContent;
   }
 }

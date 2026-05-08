@@ -46,7 +46,7 @@ const SettingsScreen = () => {
 
       <Box flexDirection="column" marginBottom={1}>
         <Text color={focusedField === 'apiKey' ? theme.colors.accent : theme.colors.muted}>
-          {focusedField === 'apiKey' ? `${theme.glyphs.active} ` : "  "}DeepSeek API Key
+          {focusedField === 'apiKey' ? `${theme.glyphs.active}` : " "}DeepSeek API Key
         </Text>
         <ChatInput
           value={apiKey}
@@ -60,7 +60,7 @@ const SettingsScreen = () => {
 
       <Box flexDirection="column" marginBottom={1}>
         <Text color={focusedField === 'githubToken' ? theme.colors.accent : theme.colors.muted}>
-          {focusedField === 'githubToken' ? `${theme.glyphs.active} ` : "  "}GitHub Token
+          {focusedField === 'githubToken' ? `${theme.glyphs.active}` : " "}GitHub Token
         </Text>
         <ChatInput
           value={githubToken}

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { randomUUID } from "crypto";
 import { createAgent } from "../../agent/agent.js";
 import { SubAgentOutputPart, ToolCallInfo } from "../../types.js";
-import { streamAgentResponse } from "../../tui/lib/agentStream.js";
+import { streamAgentResponse } from "../../lib/agentStream.js";
 
 type SubListener = {
   onSpawned: (args: { toolCallId: string; role: string }) => void;
@@ -34,10 +34,6 @@ export function createSubAgentBus() {
 const defaultBus = createSubAgentBus();
 
 export const subAgentBus = defaultBus;
-
-export function resetSubAgentBus() {
-  return createSubAgentBus();
-}
 
 function emitBusOutput(
   bus: ReturnType<typeof createSubAgentBus>,
