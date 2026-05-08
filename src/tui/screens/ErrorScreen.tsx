@@ -1,33 +1,32 @@
 import React from 'react';
-import { Box, Text, useApp } from 'ink';
+import { Box, Text } from 'ink';
+import { theme } from '../theme.js';
 
 interface ErrorScreenProps {
   error: Error;
 }
 
 const ErrorScreen: React.FC<ErrorScreenProps> = ({ error }) => {
-  const { exit } = useApp();
-
   return (
-    <Box flexDirection="column" padding={1} borderStyle="single" borderColor="red">
+    <Box flexDirection="column" padding={1} borderStyle="single" borderColor={theme.colors.error}>
       <Box marginBottom={1}>
-        <Text color="red" bold>Critical App Error</Text>
+        <Text color={theme.colors.error} bold>Critical App Error</Text>
       </Box>
-      
+
       <Box marginBottom={1} flexDirection="column">
-        <Text bold color="white">Message:</Text>
-        <Text color="redBright">{error.message}</Text>
+        <Text bold color={theme.colors.text}>Message:</Text>
+        <Text color={theme.colors.error}>{error.message}</Text>
       </Box>
 
       {error.stack && (
         <Box marginBottom={1} flexDirection="column">
-          <Text bold color="white">Stack Trace:</Text>
-          <Text color="gray" dimColor>{error.stack.split('\n').slice(0, 5).join('\n')}</Text>
+          <Text bold color={theme.colors.text}>Stack Trace:</Text>
+          <Text color={theme.colors.secondary} dimColor>{error.stack.split('\n').slice(0, 5).join('\n')}</Text>
         </Box>
       )}
 
       <Box marginTop={1} flexDirection="column">
-        <Text color="dim">Fatal error. Press ^C to exit.</Text>
+        <Text color={theme.colors.muted}>Fatal error. Press ^C to exit.</Text>
       </Box>
     </Box>
   );

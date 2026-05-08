@@ -1,6 +1,7 @@
 import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { PullRequest } from "../../../types.js";
+import { theme } from "../../theme.js";
 
 interface PRListProps {
   prs: PullRequest[];
@@ -20,7 +21,7 @@ const PRList: React.FC<PRListProps> = ({ prs, selectedIndex }) => {
   if (prs.length === 0) {
     return (
       <Box>
-        <Text color="dim">No PRs found targeting this branch.</Text>
+        <Text color={theme.colors.muted}>No PRs found targeting this branch.</Text>
       </Box>
     );
   }
@@ -31,16 +32,16 @@ const PRList: React.FC<PRListProps> = ({ prs, selectedIndex }) => {
         const isSelected = i === selectedIndex;
         return (
           <Box key={pr.number}>
-            <Text color={isSelected ? "cyan" : "dim"}>
-              {isSelected ? " ▶ " : "   "}
+            <Text color={isSelected ? theme.colors.accent : theme.colors.muted}>
+              {isSelected ? ` ${theme.glyphs.active} ` : "   "}
             </Text>
-            <Text color={isSelected ? "white" : "dim"}>
+            <Text color={isSelected ? theme.colors.text : theme.colors.muted}>
               #{pr.number}
             </Text>
-            <Text color={isSelected ? "white" : "dim"} wrap="truncate">
+            <Text color={isSelected ? theme.colors.text : theme.colors.muted} wrap="truncate">
               {" "}{pr.title}{" "}
             </Text>
-            <Text color="gray" dimColor>
+            <Text color={theme.colors.secondary} dimColor>
               @{pr.author} {formatTimeAgo(pr.createdAt)}
             </Text>
           </Box>

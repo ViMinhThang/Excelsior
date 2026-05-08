@@ -3,20 +3,21 @@ import { Box, Text } from "ink";
 import { SubAgentState } from "../../../types.js";
 import ToolMessage from "../chat/ToolMessage.js";
 import { MarkdownRenderer } from "../shared/MarkdownRenderer.js";
+import { theme } from "../../theme.js";
 
 interface SubAgentDetailProps {
   agent: SubAgentState;
 }
 
 const SubAgentDetail: React.FC<SubAgentDetailProps> = ({ agent }) => {
-  const statusColor = agent.status === "running" ? "cyan" : agent.status === "error" ? "red" : "green";
+  const statusColor = agent.status === "running" ? theme.colors.activity : agent.status === "error" ? theme.colors.error : theme.colors.success;
   const statusLabel = agent.status === "running" ? "running" : agent.status === "error" ? "error" : "done";
   const hasParts = agent.outputParts && agent.outputParts.length > 0;
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      <Text bold color="white">
-        ▸ {agent.role} <Text color={statusColor}>· {statusLabel}</Text>
+      <Text bold color={theme.colors.text}>
+        {theme.glyphs.active} {agent.role} <Text color={statusColor}>{theme.glyphs.section} {statusLabel}</Text>
       </Text>
       <Box flexGrow={1} marginTop={1} flexDirection="column">
         {hasParts ? (

@@ -1,18 +1,18 @@
 import React, { memo, useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import { SubAgentState } from "../../../types.js";
+import { theme } from "../../theme.js";
 
 interface SubAgentRowProps {
   agent: SubAgentState;
   isSelected: boolean;
 }
 
-const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+const spinnerFrames = ['.', '..', '...'];
 
 const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, isSelected }) => {
   const isRunning = agent.status === "running";
   const isError = agent.status === "error";
-  const isDone = agent.status === "done";
 
   const [frame, setFrame] = useState(0);
 
@@ -20,17 +20,15 @@ const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, isSelected }) => {
     if (!isRunning) return;
     const timer = setInterval(() => {
       setFrame(f => (f + 1) % spinnerFrames.length);
-    }, 80);
+    }, 300);
     return () => clearInterval(timer);
   }, [isRunning]);
 
-  // Status glyph: spinner when running, checkmark when done, cross on error
   const statusGlyph = isRunning
     ? spinnerFrames[frame]
-    : isError ? "✗" : "✓";
-  const glyphColor = isRunning ? "cyan" : isError ? "red" : "green";
+    : isError ? theme.glyphs.error : theme.glyphs.success;
+  const glyphColor = isRunning ? theme.colors.activity : isError ? theme.colors.error : theme.colors.success;
 
-  // Latest activity line
   const latestToolCall = agent.toolCalls?.length
     ? agent.toolCalls[agent.toolCalls.length - 1]
     : null;
@@ -41,25 +39,16 @@ const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, isSelected }) => {
 
   return (
     <Box marginTop={1} paddingX={1}>
-      {/* Selection indicator */}
-      <Text color={isSelected ? "cyan" : "dim"}>
-        {isSelected ? "▸ " : "  "}
+      <Text color={isSelected ? theme.colors.accent : theme.colors.muted}>
+        {isSelected ? `${theme.glyphs.active} ` : "  "}
       </Text>
-
-      {/* Status glyph */}
       <Text color={glyphColor}>{statusGlyph} </Text>
-
-      {/* Sub-agent tag */}
-      <Text color="dim">[sub-agent] </Text>
-
-      {/* Role name — the primary info */}
-      <Text color={isSelected ? "white" : "dim"} bold={isSelected}>
+      <Text color={theme.colors.muted}>[sub-agent] </Text>
+      <Text color={isSelected ? theme.colors.text : theme.colors.muted} bold={isSelected}>
         {agent.role}
       </Text>
-
-      {/* Activity context — what's happening right now */}
       {activityText && (
-        <Text color="dim"> · {activityText}</Text>
+        <Text color={theme.colors.muted}> {theme.glyphs.section} {activityText}</Text>
       )}
     </Box>
   );

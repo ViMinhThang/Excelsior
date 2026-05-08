@@ -6,6 +6,7 @@ import { useEvent } from '../../hooks/useEvent.js';
 import ChatScreen from '../../screens/ChatScreen.js';
 import SettingsScreen from '../../screens/SettingsScreen.js';
 import ReviewScreen from '../../screens/ReviewScreen.js';
+import { theme } from '../../theme.js';
 
 interface ScreenDispatcherProps {
   screen: Screen;
@@ -31,12 +32,12 @@ interface NavItemProps {
 }
 
 const NavItem = ({ label, shortcut, active }: NavItemProps) => (
-  <Text color={active ? "cyan" : "dim"} bold={active}>
+  <Text color={active ? theme.colors.accent : theme.colors.muted} bold={active}>
     {shortcut} {label}
   </Text>
 );
 
-const NavSep = () => <Text color="dim"> · </Text>;
+const NavSep = () => <Text color={theme.colors.muted}>{theme.glyphs.separator}</Text>;
 
 const Router = () => {
   const { currentScreen, navigate, goBack } = useNavigation();
@@ -47,21 +48,11 @@ const Router = () => {
   const onExit = useEvent(exit);
 
   const handleInput = useEvent((input: string, key: any) => {
-    if (key.ctrl && input === 'c') {
-      onExit();
-    }
-    if (key.escape && currentScreen !== 'review') {
-      onGoBack();
-    }
-    if (key.backspace && currentScreen !== 'review' && currentScreen !== 'settings' && currentScreen !== 'chat') {
-      onGoBack();
-    }
-    if (key.ctrl && input === 's' && currentScreen === 'chat') {
-      onNavigate('settings');
-    }
-    if (input === 'c' && currentScreen === 'settings') {
-      onNavigate('chat');
-    }
+    if (key.ctrl && input === 'c') onExit();
+    if (key.escape && currentScreen !== 'review') onGoBack();
+    if (key.backspace && currentScreen !== 'review' && currentScreen !== 'settings' && currentScreen !== 'chat') onGoBack();
+    if (key.ctrl && input === 's' && currentScreen === 'chat') onNavigate('settings');
+    if (input === 'c' && currentScreen === 'settings') onNavigate('chat');
   });
 
   useInput(handleInput);
@@ -75,9 +66,9 @@ const Router = () => {
         <NavSep />
         <NavItem label="Settings" shortcut="^S" active={currentScreen === 'settings'} />
         <NavSep />
-        <Text color="dim">Esc Back</Text>
+        <Text color={theme.colors.muted}>Esc Back</Text>
         <NavSep />
-        <Text color="dim">^C Quit</Text>
+        <Text color={theme.colors.muted}>^C Quit</Text>
       </Box>
     </Box>
   );
