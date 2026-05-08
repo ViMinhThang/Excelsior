@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Text } from 'ink';
+import { theme } from '../../theme.js';
 
 interface StatusIndicatorProps {
   status: "pending" | "completed" | "error";
@@ -18,13 +19,17 @@ const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status }) => {
     setPulse(false);
   }, [status]);
 
+  if (status === 'completed') {
+    return null;
+  }
+
   if (status === 'error') {
-    return <Text color="red">x</Text>;
+    return <Text color={theme.colors.error}>{theme.glyphs.error}</Text>;
   }
 
   return (
-    <Text color={status === 'pending' ? 'cyan' : 'dim'} dimColor={status === 'pending' ? pulse : false}>
-      {status === 'pending' ? "..." : "ok"}
+    <Text color={theme.colors.activity} dimColor={pulse}>
+      {theme.glyphs.pending}
     </Text>
   );
 };

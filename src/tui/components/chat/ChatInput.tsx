@@ -1,6 +1,8 @@
 import React, { memo } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import { theme } from '../../theme.js';
+import Panel from '../shared/Panel.js';
 
 interface ChatInputProps {
   value: string;
@@ -22,17 +24,24 @@ const ChatInput: React.FC<ChatInputProps> = ({
   mask,
 }) => {
   return (
-    <Box paddingX={1} marginTop={1}>
-      <Text color="cyan">{'> '} </Text>
-      <TextInput
-        value={value}
-        onChange={onChange}
-        onSubmit={onSubmit}
-        placeholder={placeholder}
-        focus={focus}
-        mask={mask}
-      />
-    </Box>
+    <Panel 
+      marginTop={1} 
+      marginBottom={0} 
+      backgroundColor="transparent"
+      borderTopBottomColor={focus ? theme.colors.accent : theme.colors.border}
+    >
+      <Box>
+        <Text color={theme.colors.accent}>{theme.glyphs.user} </Text>
+        <TextInput
+          value={value}
+          onChange={onChange}
+          onSubmit={onSubmit}
+          placeholder={placeholder}
+          focus={focus}
+          mask={mask}
+        />
+      </Box>
+    </Panel>
   );
 };
 

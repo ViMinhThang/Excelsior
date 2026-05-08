@@ -1,5 +1,6 @@
 import React, { memo, ReactNode } from "react";
 import { Box, Text } from "ink";
+import { theme } from "../../theme.js";
 
 interface FeedRendererProps<T> {
   items: T[];
@@ -30,5 +31,5 @@ function FeedRendererInner<T>({ items, renderItem, keyFn, emptyComponent }: Feed
 export const FeedRenderer = memo(FeedRendererInner) as typeof FeedRendererInner;
 
 export function TextBlock({ text }: { text: string }) {
-  return <Text color="white">{text}</Text>;
+  return <Text color={theme.colors.text}>{text}</Text>;
 }

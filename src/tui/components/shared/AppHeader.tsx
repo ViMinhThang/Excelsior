@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { Box, Text } from 'ink';
+import { theme } from '../../theme.js';
 
 interface AppHeaderProps {
   subtitle?: string;
@@ -8,8 +9,8 @@ interface AppHeaderProps {
 const AppHeader: React.FC<AppHeaderProps> = ({ subtitle }) => {
   return (
     <Box marginBottom={1}>
-      <Text color="cyan" bold>Excelsior</Text>
-      {subtitle && <Text color="dim"> - {subtitle}</Text>}
+      <Text color={theme.colors.accent} bold>Excelsior</Text>
+      {subtitle && <Text color={theme.colors.muted}> {theme.glyphs.section} {subtitle}</Text>}
     </Box>
   );
 };

@@ -1,11 +1,10 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { useNavigation } from '../context/NavigationContext.js';
 import { useDatabase } from '../hooks/useDatabase.js';
 import ChatInput from '../components/chat/ChatInput.js';
+import { theme } from '../theme.js';
 
 const SettingsScreen = () => {
-  const { goBack } = useNavigation();
   const { getApiKey, saveApiKey, getGithubToken, saveGithubToken } = useDatabase();
   const [apiKey, setApiKey] = useState(() => getApiKey());
   const [githubToken, setGithubToken] = useState(() => getGithubToken());
@@ -27,14 +26,14 @@ const SettingsScreen = () => {
 
   const handleSaveApiKey = useCallback(() => {
     saveApiKey(apiKey);
-    setStatus('✓ API Key saved');
+    setStatus('ok API Key saved');
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setStatus(''), 3000);
   }, [apiKey, saveApiKey]);
 
   const handleSaveGithubToken = useCallback(() => {
     saveGithubToken(githubToken);
-    setStatus('✓ GitHub Token saved');
+    setStatus('ok GitHub Token saved');
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setStatus(''), 3000);
   }, [githubToken, saveGithubToken]);
@@ -42,16 +41,16 @@ const SettingsScreen = () => {
   return (
     <Box flexDirection="column">
       <Box marginBottom={1}>
-        <Text color="cyan" bold>Settings</Text>
+        <Text color={theme.colors.accent} bold>Settings</Text>
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={focusedField === 'apiKey' ? 'cyan' : 'dim'}>
-          {focusedField === 'apiKey' ? '▸ ' : '  '}DeepSeek API Key
+        <Text color={focusedField === 'apiKey' ? theme.colors.accent : theme.colors.muted}>
+          {focusedField === 'apiKey' ? `${theme.glyphs.active} ` : "  "}DeepSeek API Key
         </Text>
-        <ChatInput 
-          value={apiKey} 
-          onChange={setApiKey} 
+        <ChatInput
+          value={apiKey}
+          onChange={setApiKey}
           onSubmit={handleSaveApiKey}
           placeholder="Enter your DeepSeek API key..."
           focus={focusedField === 'apiKey'}
@@ -60,12 +59,12 @@ const SettingsScreen = () => {
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={focusedField === 'githubToken' ? 'cyan' : 'dim'}>
-          {focusedField === 'githubToken' ? '▸ ' : '  '}GitHub Token
+        <Text color={focusedField === 'githubToken' ? theme.colors.accent : theme.colors.muted}>
+          {focusedField === 'githubToken' ? `${theme.glyphs.active} ` : "  "}GitHub Token
         </Text>
-        <ChatInput 
-          value={githubToken} 
-          onChange={setGithubToken} 
+        <ChatInput
+          value={githubToken}
+          onChange={setGithubToken}
           onSubmit={handleSaveGithubToken}
           placeholder="Enter your GitHub personal access token..."
           focus={focusedField === 'githubToken'}
@@ -75,12 +74,12 @@ const SettingsScreen = () => {
 
       {status && (
         <Box marginBottom={1}>
-          <Text color="green">{status}</Text>
+          <Text color={theme.colors.success}>{status}</Text>
         </Box>
       )}
 
       <Box marginTop={1}>
-        <Text color="dim">Tab switch · Enter save · Esc back</Text>
+        <Text color={theme.colors.muted}>Tab switch{theme.glyphs.separator}Enter save{theme.glyphs.separator}Esc back</Text>
       </Box>
     </Box>
   );

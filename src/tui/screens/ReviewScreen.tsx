@@ -8,6 +8,7 @@ import SubAgentDetail from "../components/review/SubAgentDetail.js";
 import ReviewFooter from "../components/review/ReviewFooter.js";
 import ReviewResults from "../components/review/ReviewResults.js";
 import { ReviewProvider } from "../context/ReviewContext.js";
+import { theme } from "../theme.js";
 
 function ReviewScreenInner() {
   const {
@@ -58,7 +59,7 @@ function ReviewScreenInner() {
 
       {commentStatus && (
         <Box marginTop={1}>
-          <Text color="green">{commentStatus}</Text>
+          <Text color={theme.colors.success}>{commentStatus}</Text>
         </Box>
       )}
 
