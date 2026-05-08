@@ -18,28 +18,18 @@ interface ChatHistoryProps {
 interface GroupedItem {
   type: 'user' | 'assistant' | 'tool-call';
   message: Message;
-  toolCalls?: Message[];
 }
 
 const groupMessages = (msgs: Message[]): GroupedItem[] => {
-  const grouped: GroupedItem[] = [];
-  
-  for (const msg of msgs) {
+  return msgs.map(msg => {
     if (msg.role === 'user') {
-      grouped.push({ type: 'user', message: msg });
-    } else if (msg.role === 'assistant') {
-      grouped.push({ type: 'assistant', message: msg, toolCalls: [] });
-    } else if (msg.role === 'tool-call') {
-      const lastGroup = grouped[grouped.length - 1];
-      if (lastGroup && lastGroup.type === 'assistant') {
-        lastGroup.toolCalls?.push(msg);
-      } else {
-        grouped.push({ type: 'tool-call', message: msg });
-      }
+      return { type: 'user', message: msg };
     }
-  }
-  
-  return grouped;
+    if (msg.role === 'assistant') {
+      return { type: 'assistant', message: msg };
+    }
+    return { type: 'tool-call', message: msg };
+  });
 };
 
 const ChatHistory: React.FC<ChatHistoryProps> = ({ messages, subAgents = [], hasMore, onLoadMore }) => {
@@ -53,7 +43,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({ messages, subAgents = [], has
         </Box>
       )}
       {groupedItems.length > 0 && groupedItems.map((item, index) => {
-        const { type, message, toolCalls } = item;
+        const { type, message } = item;
         const key = message.id || index;
 
         if (type === 'user') {
@@ -65,7 +55,6 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({ messages, subAgents = [], has
               key={key} 
               content={message.content} 
               timestamp={message.timestamp} 
-              toolCalls={toolCalls}
             />
           );
         }
