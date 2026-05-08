@@ -46,5 +46,10 @@ describe("readFileTool", () => {
       const result = await (readFileTool as any).execute({ path: "/nonexistent/path/file.txt" });
       expect(result).toContain("Error");
     });
+
+    it("rejects paths outside the workspace", async () => {
+      const result = await (readFileTool as any).execute({ path: "../outside.txt" });
+      expect(result).toContain("escapes workspace");
+    });
   });
 });

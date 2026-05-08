@@ -180,5 +180,14 @@ Line 5: $pecial #characters & symbols`;
       // Clean up
       await unlink(join(process.cwd(), relativePath));
     });
+
+    it("should reject paths outside the workspace", async () => {
+      const result = await writeFileTool.execute!(
+        { path: "../outside.txt", content: "nope" },
+        {} as any
+      );
+
+      expect(result).toContain("escapes workspace");
+    });
   });
 });

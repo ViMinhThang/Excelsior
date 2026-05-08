@@ -7,6 +7,13 @@ import SubAgentDetail from '../components/review/SubAgentDetail.js';
 import { CommandSuggestions } from '../components/chat/CommandSuggestions.js';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator.js';
 import { useChatScreenState } from '../hooks/useChatScreenState.js';
+import { createToolDisplay } from '../lib/toolDisplay.js';
+
+const riskColor = (risk?: string) => {
+  if (risk === "high") return "red";
+  if (risk === "medium") return "yellow";
+  return "green";
+};
 
 const ChatScreen = () => {
   const {
@@ -23,6 +30,14 @@ const ChatScreen = () => {
     suggestion,
     handleSubmit,
   } = useChatScreenState();
+
+  const pendingDisplay = pending
+    ? createToolDisplay({
+        toolName: pending.toolName,
+        toolArgs: pending.args,
+        status: "pending",
+      })
+    : null;
 
   return (
     <Box flexDirection="column">
@@ -58,22 +73,26 @@ const ChatScreen = () => {
         </>
       )}
 
-          {pending && (
-            <Box marginTop={1} paddingX={1}>
-              <Text color="yellow">⚠ </Text>
-              <Text color="white" bold>{pending.toolName}</Text>
-              <Text color="dim"> {pending.args}</Text>
-              <Text color="yellow"> [y/N]</Text>
-            </Box>
-          )}
+      {pending && pendingDisplay && (
+        <Box marginTop={1} paddingX={1} flexDirection="column">
+          <Box>
+            <Text color="yellow">! </Text>
+            <Text color="white" bold>{pendingDisplay.label}</Text>
+            <Text color="dim"> - {pendingDisplay.summary}</Text>
+            {pendingDisplay.risk ? <Text color={riskColor(pendingDisplay.risk)}> [{pendingDisplay.risk}]</Text> : null}
+          </Box>
+          <Text color="dim">  {pendingDisplay.detail || "waiting for approval"}</Text>
+          <Text color="yellow">  [y] approve  [n/Esc] deny</Text>
+        </Box>
+      )}
 
-          {suggestion.show && suggestion.filtered.length > 0 && (
-            <CommandSuggestions
-              commands={suggestion.filtered}
-              selectedIndex={suggestion.selectedIndex}
-              maxVisibleCount={suggestion.maxVisibleCount}
-            />
-          )}
+      {suggestion.show && suggestion.filtered.length > 0 && (
+        <CommandSuggestions
+          commands={suggestion.filtered}
+          selectedIndex={suggestion.selectedIndex}
+          maxVisibleCount={suggestion.maxVisibleCount}
+        />
+      )}
     </Box>
   );
 };

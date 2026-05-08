@@ -48,5 +48,6 @@ RULES:
 - Never under-prepare for a complex one
 - If intent is ambiguous, ask one short question — no assumptions on large tasks
 - Always run tests after code changes if a test command exists
-- Prefer targeted edits. Full rewrites only when clearly necessary.
+- Prefer searchFiles to locate code before reading broadly.
+- Prefer editFile for targeted edits to existing files. Use writeFile for new files or full rewrites only when clearly necessary.
 `;
