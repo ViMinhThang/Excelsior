@@ -3,6 +3,7 @@ import { Text } from "ink";
 import { useReviewSessionContext } from "../../context/ReviewSessionContext.js";
 import { useSubAgentContext } from "../../context/SubAgentContext.js";
 import ReviewBlockList from "./ReviewBlockList.js";
+import { theme } from "../../theme.js";
 
 const ReviewOverview: React.FC = () => {
   const { blocks } = useReviewSessionContext();
@@ -13,7 +14,7 @@ const ReviewOverview: React.FC = () => {
       blocks={blocks}
       subAgents={subAgents}
       selectedSubAgentIndex={selectedSubAgentIndex}
-      emptyComponent={<Text color="white">Waiting for main agent to start...</Text>}
+      emptyComponent={<Text color={theme.colors.text}>Waiting for main agent to start...</Text>}
     />
   );
 };

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Text } from 'ink';
+import { theme } from '../../theme.js';
 
 function formatDuration(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -15,12 +16,12 @@ function formatDuration(totalSeconds: number): string {
 const ThinkingIndicator = () => {
   const [frame, setFrame] = useState(0);
   const [elapsed, setElapsed] = useState(0);
-  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  const frames = ['.', '..', '...'];
 
   useEffect(() => {
     const timer = setInterval(() => {
       setFrame(f => (f + 1) % frames.length);
-    }, 80);
+    }, 300);
     return () => clearInterval(timer);
   }, []);
 
@@ -32,8 +33,8 @@ const ThinkingIndicator = () => {
   }, []);
 
   return (
-    <Text color="cyan">
-      {frames[frame]} {formatDuration(elapsed)}
+    <Text color={theme.colors.activity}>
+      thinking{frames[frame]} {formatDuration(elapsed)}
     </Text>
   );
 };

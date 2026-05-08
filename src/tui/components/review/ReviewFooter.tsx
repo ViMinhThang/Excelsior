@@ -1,6 +1,7 @@
 import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { ReviewScreenMode } from "../../../types.js";
+import { theme } from "../../theme.js";
 
 interface ReviewFooterProps {
   mode: ReviewScreenMode;
@@ -11,7 +12,7 @@ const ReviewFooter: React.FC<ReviewFooterProps> = ({ mode, subMode }) => {
   if (mode === "browser") {
     return (
       <Box>
-        <Text color="dim">↑↓ select · Enter review · r refresh · c chat</Text>
+        <Text color={theme.colors.muted}>up/down select{theme.glyphs.separator}Enter review{theme.glyphs.separator}r refresh{theme.glyphs.separator}c chat</Text>
       </Box>
     );
   }
@@ -20,13 +21,13 @@ const ReviewFooter: React.FC<ReviewFooterProps> = ({ mode, subMode }) => {
     if (subMode === "detail") {
       return (
         <Box>
-          <Text color="dim">↑↓ switch · Esc overview · c chat</Text>
+          <Text color={theme.colors.muted}>up/down switch{theme.glyphs.separator}Esc overview{theme.glyphs.separator}c chat</Text>
         </Box>
       );
     }
     return (
       <Box>
-        <Text color="dim">↑↓ select · ^O drill · Esc back · c chat</Text>
+        <Text color={theme.colors.muted}>up/down select{theme.glyphs.separator}^O drill{theme.glyphs.separator}Esc back{theme.glyphs.separator}c chat</Text>
       </Box>
     );
   }
@@ -34,7 +35,7 @@ const ReviewFooter: React.FC<ReviewFooterProps> = ({ mode, subMode }) => {
   if (mode === "results") {
     return (
       <Box>
-        <Text color="dim">p post comment · d diff · c chat</Text>
+        <Text color={theme.colors.muted}>p post comment{theme.glyphs.separator}d diff{theme.glyphs.separator}c chat</Text>
       </Box>
     );
   }

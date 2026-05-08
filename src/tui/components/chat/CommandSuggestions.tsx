@@ -1,6 +1,7 @@
 import React, { memo } from "react";
 import { Box, Text } from "ink";
 import { Command } from "../../../types.js";
+import { theme } from "../../theme.js";
 
 interface CommandSuggestionsProps {
   commands: Command[];
@@ -13,12 +14,12 @@ function CommandSuggestionsInner({ commands: cmds, selectedIndex, maxVisibleCoun
 
   return (
     <Box marginTop={1} flexDirection="column" paddingX={2}>
-      {cmds.map((cmd, i) => (
+      {cmds.slice(0, maxVisibleCount).map((cmd, i) => (
         <Box key={cmd.name} paddingX={1}>
-          <Text color={i === selectedIndex ? "cyan" : "dim"} bold={i === selectedIndex}>
-            {i === selectedIndex ? "▸ " : "  "}/{cmd.name}
+          <Text color={i === selectedIndex ? theme.colors.accent : theme.colors.muted} bold={i === selectedIndex}>
+            {i === selectedIndex ? `${theme.glyphs.active} ` : "  "}/{cmd.name}
           </Text>
-          <Text color="dim"> — {cmd.description}</Text>
+          <Text color={theme.colors.muted}> {theme.glyphs.section} {cmd.description}</Text>
         </Box>
       ))}
     </Box>

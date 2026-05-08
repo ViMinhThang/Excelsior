@@ -4,6 +4,7 @@ import UserMessage from './UserMessage.js';
 import AgentMessage from './AgentMessage.js';
 import ToolMessage from './ToolMessage.js';
 import SubAgentRow from '../review/SubAgentRow.js';
+import { theme } from '../../theme.js';
 
 import { Message, SubAgentState } from '../../../types.js';
 
@@ -14,7 +15,36 @@ interface ChatHistoryProps {
   onLoadMore?: () => void;
 }
 
+interface GroupedItem {
+  type: 'user' | 'assistant' | 'tool-call';
+  message: Message;
+  toolCalls?: Message[];
+}
+
+const groupMessages = (msgs: Message[]): GroupedItem[] => {
+  const grouped: GroupedItem[] = [];
+  
+  for (const msg of msgs) {
+    if (msg.role === 'user') {
+      grouped.push({ type: 'user', message: msg });
+    } else if (msg.role === 'assistant') {
+      grouped.push({ type: 'assistant', message: msg, toolCalls: [] });
+    } else if (msg.role === 'tool-call') {
+      const lastGroup = grouped[grouped.length - 1];
+      if (lastGroup && lastGroup.type === 'assistant') {
+        lastGroup.toolCalls?.push(msg);
+      } else {
+        grouped.push({ type: 'tool-call', message: msg });
+      }
+    }
+  }
+  
+  return grouped;
+};
+
 const ChatHistory: React.FC<ChatHistoryProps> = ({ messages, subAgents = [], hasMore, onLoadMore }) => {
+  const groupedItems = groupMessages(messages);
+
   return (
     <Box flexDirection="column">
       {hasMore && (
@@ -22,30 +52,40 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({ messages, subAgents = [], has
           <Text color="dim">··· ↑ ^U older messages</Text>
         </Box>
       )}
-      {messages.length > 0 && messages.map((msg, index) => {
-        if (msg.role === 'user') {
-          return <UserMessage key={msg.id || index} content={msg.content} timestamp={msg.timestamp} />;
+      {groupedItems.length > 0 && groupedItems.map((item, index) => {
+        const { type, message, toolCalls } = item;
+        const key = message.id || index;
+
+        if (type === 'user') {
+          return <UserMessage key={key} content={message.content} timestamp={message.timestamp} />;
         }
-        if (msg.role === 'assistant') {
-          return <AgentMessage key={msg.id || index} content={msg.content} timestamp={msg.timestamp} />;
+        if (type === 'assistant') {
+          return (
+            <AgentMessage 
+              key={key} 
+              content={message.content} 
+              timestamp={message.timestamp} 
+              toolCalls={toolCalls}
+            />
+          );
         }
-        if (msg.role === 'tool-call') {
-          // Render live SubAgentRow for spawnSubAgent calls
-          if (msg.toolCall?.toolName === 'spawnSubAgent') {
+        if (type === 'tool-call') {
+          // Render standalone ToolMessage as fallback
+          if (message.toolCall?.toolName === 'spawnSubAgent') {
             let role = '';
-            try { role = JSON.parse(msg.toolCall.toolArgs || '{}').role || ''; } catch {}
+            try { role = JSON.parse(message.toolCall.toolArgs || '{}').role || ''; } catch {}
             const agent = role ? subAgents.find(a => a.role === role) : undefined;
             if (agent) {
-              return <SubAgentRow key={msg.id || index} agent={agent} isSelected={false} />;
+              return <SubAgentRow key={key} agent={agent} isSelected={false} />;
             }
           }
           return (
             <ToolMessage
-              key={msg.id || index}
-              toolName={msg.toolCall?.toolName}
-              toolArgs={msg.toolCall?.toolArgs}
-              status={msg.toolCall?.status}
-              content={msg.content}
+              key={key}
+              toolName={message.toolCall?.toolName}
+              toolArgs={message.toolCall?.toolArgs}
+              status={message.toolCall?.status}
+              content={message.content}
             />
           );
         }
