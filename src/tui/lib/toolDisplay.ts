@@ -14,6 +14,7 @@ export interface ToolDisplay {
   summary: string;
   detail?: string;
   resultPreview?: string[];
+  omittedResultLines?: number;
   tone: ToolTone;
   risk?: ToolRisk;
 }
@@ -38,6 +39,20 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
+function normalizeToolText(text?: string): string {
+  if (!text) return "";
+  const trimmed = text.trim();
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed === "string") return parsed;
+    } catch {
+      // Fall through to lightweight escape normalization.
+    }
+  }
+  return text.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+}
+
 function plural(count: number, label: string): string {
   const suffix = label.endsWith("ch") ? "es" : "s";
   return `${count} ${label}${count === 1 ? "" : suffix}`;
@@ -53,15 +68,17 @@ function truncateLine(line: string): string {
   return `${line.slice(0, MAX_PREVIEW_LINE_LENGTH - 3)}...`;
 }
 
-function previewLines(content?: string): string[] | undefined {
-  const lines = (content ?? "")
+function previewContent(content?: string): { lines?: string[]; omitted: number } {
+  const allLines = normalizeToolText(content)
     .split(/\r?\n/)
     .map((line) => line.trimEnd())
-    .filter(Boolean)
-    .slice(0, MAX_PREVIEW_LINES)
-    .map(truncateLine);
+    .filter(Boolean);
+  const lines = allLines.slice(0, MAX_PREVIEW_LINES).map(truncateLine);
 
-  return lines.length ? lines : undefined;
+  return {
+    lines: lines.length ? lines : undefined,
+    omitted: Math.max(0, allLines.length - lines.length),
+  };
 }
 
 function genericSummary(args: Record<string, unknown> | null, rawArgs?: string): string {
@@ -87,13 +104,14 @@ export function getCommandRisk(command: string): ToolRisk {
 }
 
 function toneFor(status: ToolStatus, content?: string): ToolTone {
+  const normalized = normalizeToolText(content);
   if (status === "pending") return "pending";
-  if (status === "error" || content?.startsWith("[Error]") || content === "Denied by user.") return "error";
+  if (status === "error" || normalized.startsWith("[Error]") || normalized === "Denied by user.") return "error";
   return "success";
 }
 
 function countSearchMatches(content?: string): number {
-  return (content ?? "")
+  return normalizeToolText(content)
     .split(/\r?\n/)
     .filter((line) => /^[^:\n]+:\d+:/.test(line.trim()))
     .length;
@@ -107,13 +125,15 @@ export function createToolDisplay({
 }: ToolDisplayInput): ToolDisplay {
   const name = toolName || "Tool";
   const args = parseArgs(toolArgs);
+  const normalizedContent = normalizeToolText(content);
+  const preview = previewContent(normalizedContent);
   const path = asString(args?.path);
   const directory = asString(args?.directory || ".");
-  const tone = toneFor(status, content);
+  const tone = toneFor(status, normalizedContent);
 
   switch (name) {
     case "readFile": {
-      const lines = content && tone !== "error" ? countLines(content) : 0;
+      const lines = normalizedContent && tone !== "error" ? countLines(normalizedContent) : 0;
       return {
         label: "Read file",
         summary: path || "read file",
@@ -127,7 +147,7 @@ export function createToolDisplay({
       return {
         label: "Write file",
         summary: path || "write file",
-        detail: contentArg ? `writing ${plural(countLines(contentArg), "line")}` : content,
+        detail: contentArg ? `writing ${plural(countLines(contentArg), "line")}` : normalizedContent,
         tone,
         risk: "medium",
       };
@@ -147,22 +167,25 @@ export function createToolDisplay({
 
     case "searchFiles": {
       const query = asString(args?.query);
-      const matches = countSearchMatches(content);
+      const matches = countSearchMatches(normalizedContent);
       return {
         label: "Search files",
         summary: query ? `"${query}" in ${directory}` : `search in ${directory}`,
-        detail: content && content !== "No matches found." ? `found ${plural(matches, "match")}` : content,
-        resultPreview: previewLines(content),
+        detail: normalizedContent && normalizedContent !== "No matches found." ? `found ${plural(matches, "match")}` : normalizedContent,
+        resultPreview: preview.lines,
+        omittedResultLines: preview.omitted,
         tone,
       };
     }
 
     case "listFiles": {
-      const count = content?.match(/^Found\s+(\d+)\s+files:/)?.[1];
+      const count = normalizedContent.match(/^Found\s+(\d+)\s+files:/)?.[1];
       return {
         label: "List files",
         summary: directory,
-        detail: count ? `found ${plural(Number(count), "file")}` : content,
+        detail: count ? `found ${plural(Number(count), "file")}` : normalizedContent,
+        resultPreview: preview.lines,
+        omittedResultLines: preview.omitted,
         tone,
       };
     }
@@ -172,14 +195,15 @@ export function createToolDisplay({
       return {
         label: "Run command",
         summary: command || "shell command",
-        detail: content?.startsWith("Error executing command")
+        detail: normalizedContent.startsWith("Error executing command")
           ? "command failed"
-          : content === "Command timed out"
+          : normalizedContent === "Command timed out"
             ? "timed out"
             : status === "pending"
               ? "waiting for approval or execution"
               : "completed",
-        resultPreview: previewLines(content),
+        resultPreview: preview.lines,
+        omittedResultLines: preview.omitted,
         tone,
         risk: getCommandRisk(command),
       };
@@ -189,8 +213,9 @@ export function createToolDisplay({
       return {
         label: "Git diff",
         summary: genericSummary(args, toolArgs) || "working tree diff",
-        detail: content ? `${plural(countLines(content), "line")} of diff output` : undefined,
-        resultPreview: previewLines(content),
+        detail: normalizedContent ? `${plural(countLines(normalizedContent), "line")} of diff output` : undefined,
+        resultPreview: preview.lines,
+        omittedResultLines: preview.omitted,
         tone,
       };
     }
@@ -201,7 +226,8 @@ export function createToolDisplay({
         label: "Sub-agent",
         summary: role || "spawn sub-agent",
         detail: status === "pending" ? "starting" : "press ^O for detail",
-        resultPreview: previewLines(content),
+        resultPreview: preview.lines,
+        omittedResultLines: preview.omitted,
         tone,
       };
     }
@@ -210,8 +236,9 @@ export function createToolDisplay({
       return {
         label: name,
         summary: genericSummary(args, toolArgs),
-        detail: content && content.length < 140 ? content : undefined,
-        resultPreview: content && content.length >= 140 ? previewLines(content) : undefined,
+        detail: normalizedContent && normalizedContent.length < 140 ? normalizedContent : undefined,
+        resultPreview: normalizedContent && normalizedContent.length >= 140 ? preview.lines : undefined,
+        omittedResultLines: normalizedContent && normalizedContent.length >= 140 ? preview.omitted : undefined,
         tone,
       };
   }
