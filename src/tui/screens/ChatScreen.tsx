@@ -8,11 +8,13 @@ import { CommandSuggestions } from '../components/chat/CommandSuggestions.js';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator.js';
 import { useChatScreenState } from '../hooks/useChatScreenState.js';
 import { createToolDisplay } from '../lib/toolDisplay.js';
+import { theme } from '../theme.js';
+import Panel from '../components/shared/Panel.js';
 
 const riskColor = (risk?: string) => {
-  if (risk === "high") return "red";
-  if (risk === "medium") return "yellow";
-  return "green";
+  if (risk === "high") return theme.colors.error;
+  if (risk === "medium") return theme.colors.accent;
+  return theme.colors.success;
 };
 
 const ChatScreen = () => {
@@ -74,16 +76,23 @@ const ChatScreen = () => {
       )}
 
       {pending && pendingDisplay && (
-        <Box marginTop={1} paddingX={1} flexDirection="column">
-          <Box>
-            <Text color="yellow">! </Text>
-            <Text color="white" bold>{pendingDisplay.label}</Text>
-            <Text color="dim"> - {pendingDisplay.summary}</Text>
-            {pendingDisplay.risk ? <Text color={riskColor(pendingDisplay.risk)}> [{pendingDisplay.risk}]</Text> : null}
+        <Panel 
+          title="Action Required" 
+          backgroundColor="transparent" 
+          titleColor={theme.colors.accent}
+          marginTop={1}
+        >
+          <Box flexDirection="column">
+            <Box>
+              <Text color={theme.colors.text} bold>{pendingDisplay.label}</Text>
+              <Text color={theme.colors.text}> {theme.glyphs.section} {pendingDisplay.summary}</Text>
+            </Box>
+            <Box flexDirection="column" paddingLeft={theme.spacing.toolIndent}>
+              <Text color={theme.colors.text}>  {pendingDisplay.detail || "waiting for approval"}</Text>
+              <Text color={theme.colors.text} bold>  [y] approve  [n/Esc] deny</Text>
+            </Box>
           </Box>
-          <Text color="dim">  {pendingDisplay.detail || "waiting for approval"}</Text>
-          <Text color="yellow">  [y] approve  [n/Esc] deny</Text>
-        </Box>
+        </Panel>
       )}
 
       {suggestion.show && suggestion.filtered.length > 0 && (

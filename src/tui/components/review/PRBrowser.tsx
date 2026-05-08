@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import PRList from "./PRList.js";
 import DiffViewer from "./DiffViewer.js";
 import { PullRequest } from "../../../types.js";
+import { theme } from "../../theme.js";
 
 interface PRBrowserProps {
   prs: PullRequest[];
@@ -27,17 +28,15 @@ const PRBrowser: React.FC<PRBrowserProps> = ({
 }) => {
   return (
     <Box flexDirection="row" flexGrow={1} marginTop={1}>
-      {/* Left Column: PR List */}
       <Box flexDirection="column" width="35%" marginRight={1}>
         <Box marginBottom={1}>
-          <Text bold>PRs targeting current branch:</Text>
+          <Text bold color={theme.colors.text}>PRs targeting current branch:</Text>
         </Box>
-        {prsLoading && <Text color="cyan">Loading PRs...</Text>}
-        {prsError && <Text color="red">Error: {prsError}</Text>}
+        {prsLoading && <Text color={theme.colors.activity}>Loading PRs...</Text>}
+        {prsError && <Text color={theme.colors.error}>Error: {prsError}</Text>}
         <PRList prs={prs} selectedIndex={prIndex} />
       </Box>
 
-      {/* Right Column with Left Border: Diff or Placeholder */}
       <Box
         flexDirection="column"
         flexGrow={1}
@@ -47,18 +46,16 @@ const PRBrowser: React.FC<PRBrowserProps> = ({
         borderRight={false}
         borderTop={false}
         borderBottom={false}
-        borderColor="gray"
+        borderColor={theme.colors.border}
         paddingLeft={2}
       >
         {viewingDiff ? (
           <Box flexDirection="column" flexGrow={1}>
             <Box marginBottom={1}>
-              <Text bold color="cyan">
-                Active PR Diff:
-              </Text>
+              <Text bold color={theme.colors.accent}>Active PR Diff:</Text>
             </Box>
-            {diffLoading && <Text color="cyan">Loading diff...</Text>}
-            {diffError && <Text color="red">Error: {diffError}</Text>}
+            {diffLoading && <Text color={theme.colors.activity}>Loading diff...</Text>}
+            {diffError && <Text color={theme.colors.error}>Error: {diffError}</Text>}
             {fetchedDiff && !diffLoading && (
               <Box flexDirection="column" flexGrow={1}>
                 <DiffViewer diff={fetchedDiff} />
@@ -67,7 +64,7 @@ const PRBrowser: React.FC<PRBrowserProps> = ({
           </Box>
         ) : (
           <Box flexDirection="column" flexGrow={1} justifyContent="center" alignItems="center">
-            <Text color="gray" dimColor>
+            <Text color={theme.colors.secondary} dimColor>
               Select a PR and press Enter to view diff
             </Text>
           </Box>
