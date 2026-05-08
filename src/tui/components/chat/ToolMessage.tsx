@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { Box, Text } from 'ink';
 import StatusIndicator from './StatusIndicator.js';
+import { createToolDisplay } from '../../lib/toolDisplay.js';
 
 interface ToolMessageProps {
   toolName?: string;
@@ -10,40 +11,45 @@ interface ToolMessageProps {
   marginTop?: number;
 }
 
-const formatArgs = (args?: string) => {
-  if (!args) return "";
-  try {
-    const parsed = JSON.parse(args);
-    if (typeof parsed !== 'object' || parsed === null) return args;
-    
-    return Object.entries(parsed)
-      .map(([k, v]) => {
-        const val = typeof v === 'string' ? `"${v}"` : JSON.stringify(v);
-        return `${k}: ${val}`;
-      })
-      .join(', ');
-  } catch {
-    return args.replace(/^{|}$/g, '').trim();
-  }
+const riskColor = (risk?: string) => {
+  if (risk === "high") return "red";
+  if (risk === "medium") return "yellow";
+  return "green";
 };
 
-const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = "completed", content, marginTop }) => {
-  const isPending = status === "pending";
-  const isSubAgent = toolName === "spawnSubAgent";
-  const formattedArgs = isSubAgent
-    ? (() => { try { const p = JSON.parse(toolArgs || "{}"); return `→ ${p.role || "unknown"}`; } catch { return toolArgs; } })()
-    : formatArgs(toolArgs);
+const labelColor = (tone: string) => {
+  if (tone === "error") return "red";
+  if (tone === "pending") return "cyan";
+  return "white";
+};
+
+const ToolMessage: React.FC<ToolMessageProps> = ({
+  toolName,
+  toolArgs,
+  status = "completed",
+  content,
+  marginTop,
+}) => {
+  const display = createToolDisplay({ toolName, toolArgs, status, content });
 
   return (
     <Box flexDirection="column" marginTop={marginTop} marginBottom={1} paddingX={1}>
       <Box>
         <StatusIndicator status={status} />
-        <Text color="dim" dimColor={isPending}>
-          <Text bold> {toolName || "Tool"}</Text>
-          {formattedArgs ? <Text> {formattedArgs}</Text> : null}
-          {isSubAgent ? <Text color="dim"> (^O)</Text> : null}
+        <Text color={labelColor(display.tone)}>
+          <Text bold> {display.label}</Text>
+          <Text color="dim"> - {display.summary}</Text>
+          {display.risk ? <Text color={riskColor(display.risk)}> [{display.risk}]</Text> : null}
         </Text>
       </Box>
+      {(display.detail || display.resultPreview?.length) && (
+        <Box flexDirection="column" paddingLeft={3}>
+          {display.detail ? <Text color="dim">{display.detail}</Text> : null}
+          {display.resultPreview?.map((line, index) => (
+            <Text key={index} color="dim">| {line}</Text>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 };

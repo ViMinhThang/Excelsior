@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { readdir } from "fs/promises";
 import { join, relative } from "path";
 import { listFilesSchema } from "./type.js";
+import { resolveWorkspacePath } from "../pathSafety.js";
 
 async function walk(dir: string, baseDir: string, recursive: boolean): Promise<string[]> {
   const files = await readdir(dir, { withFileTypes: true });
@@ -33,7 +34,7 @@ export const listFilesTool = tool({
   execute: async ({ directory = ".", recursive = true }) => {
     try {
       const baseDir = process.cwd();
-      const targetDir = join(baseDir, directory);
+      const targetDir = resolveWorkspacePath(directory);
       const files = await walk(targetDir, baseDir, recursive);
       
       if (files.length === 0) return "No files found in this directory.";

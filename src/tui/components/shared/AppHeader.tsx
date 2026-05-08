@@ -8,8 +8,8 @@ interface AppHeaderProps {
 const AppHeader: React.FC<AppHeaderProps> = ({ subtitle }) => {
   return (
     <Box marginBottom={1}>
-      <Text color="cyan" bold>◆ Excelsior</Text>
-      {subtitle && <Text color="dim"> · {subtitle}</Text>}
+      <Text color="cyan" bold>Excelsior</Text>
+      {subtitle && <Text color="dim"> - {subtitle}</Text>}
     </Box>
   );
 };
