@@ -114,10 +114,15 @@ export function useChatSender() {
             append(msg);
             assistantMessages.push(msg);
           }
-          assistantMessages.forEach(msg => persistMessage(msg));
-          for (const toolMsg of toolMessagesToPersist) {
-            persistMessage(toolMsg);
-          }
+          const allToPersist = [...assistantMessages, ...toolMessagesToPersist];
+          allToPersist.sort((a, b) => {
+            const timeA = a.timestamp ? new Date(a.timestamp).getTime() : Date.now();
+            const timeB = b.timestamp ? new Date(b.timestamp).getTime() : Date.now();
+            return timeA - timeB;
+          });
+          allToPersist.forEach(msg => {
+            persistMessage(msg);
+          });
         },
       }, abortController.signal);
     } catch (error: unknown) {
