@@ -3,9 +3,6 @@ export type StreamPart =
   | { type: "tool-call"; toolName?: string; name?: string; toolCallId: string; input?: unknown; [key: string]: unknown }
   | { type: "tool-result"; toolCallId: string; output?: { type: string; value: unknown }; [key: string]: unknown }
   | { type: "tool-error"; toolCallId: string; toolName?: string; error?: unknown; [key: string]: unknown }
-  | { type: "finish-step"; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }; [key: string]: unknown }
-  | { type: "finish"; totalUsage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }; [key: string]: unknown };
-
 export function getTextDelta(part: StreamPart): string {
   if (part.type === "text-delta") {
     return part.text ?? part.textDelta ?? "";
@@ -47,17 +44,10 @@ export interface ToolCallInfo {
   status: "pending" | "completed" | "error";
 }
 
-export interface UsageInfo {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-}
-
 export interface StreamCallbacks {
   onTextDelta: (fullText: string) => void;
   onToolCall: (toolName: string, args: string, toolCallId: string) => void;
   onToolResult: (toolCallId: string, result: string) => void;
-  onUsage?: (usage: UsageInfo) => void;
   onFinish: (fullText: string, cancelled: boolean) => void;
 }
 

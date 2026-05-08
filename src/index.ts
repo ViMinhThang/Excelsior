@@ -23,4 +23,5 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason) => {
   logError(`Unhandled Rejection: ${String(reason)}`);
+  process.exit(1);
 });

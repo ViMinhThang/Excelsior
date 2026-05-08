@@ -10,7 +10,7 @@ interface UserMessageProps {
 const UserMessage: React.FC<UserMessageProps> = ({ content }) => {
   return (
     <Box 
-      backgroundColor="#5F5F5F"
+      backgroundColor={theme.colors.userPanel}
       paddingX={2} 
       paddingY={1}
       marginBottom={1}

@@ -42,35 +42,33 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({ messages, subAgents = [], has
           <Text color="dim">··· ↑ ^U older messages</Text>
         </Box>
       )}
-      {groupedItems.length > 0 && groupedItems.map((item, index) => {
+      {groupedItems.length > 0 && groupedItems.map((item) => {
         const { type, message } = item;
-        const key = message.id || index;
 
         if (type === 'user') {
-          return <UserMessage key={key} content={message.content} timestamp={message.timestamp} />;
+          return <UserMessage key={message.id} content={message.content} timestamp={message.timestamp} />;
         }
         if (type === 'assistant') {
           return (
             <AgentMessage 
-              key={key} 
+              key={message.id} 
               content={message.content} 
               timestamp={message.timestamp} 
             />
           );
         }
         if (type === 'tool-call') {
-          // Render standalone ToolMessage as fallback
           if (message.toolCall?.toolName === 'spawnSubAgent') {
             let role = '';
             try { role = JSON.parse(message.toolCall.toolArgs || '{}').role || ''; } catch {}
             const agent = role ? subAgents.find(a => a.role === role) : undefined;
             if (agent) {
-              return <SubAgentRow key={key} agent={agent} isSelected={false} />;
+              return <SubAgentRow key={message.id} agent={agent} isSelected={false} />;
             }
           }
           return (
             <ToolMessage
-              key={key}
+              key={message.id}
               toolName={message.toolCall?.toolName}
               toolArgs={message.toolCall?.toolArgs}
               status={message.toolCall?.status}

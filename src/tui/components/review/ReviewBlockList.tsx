@@ -1,5 +1,5 @@
-import React, { memo } from "react";
-import { Box, Text } from "ink";
+import React, { memo, useMemo } from "react";
+import { Box } from "ink";
 import { SubAgentState } from "../../../types.js";
 import { ReviewBlock } from "../../context/ReviewSessionContext.js";
 import SubAgentRow from "./SubAgentRow.js";
@@ -23,12 +23,14 @@ const ReviewBlockList: React.FC<ReviewBlockListProps> = ({
     return <Box>{emptyComponent}</Box>;
   }
 
+  let textKey = 0;
+
   return (
     <Box flexDirection="column" flexGrow={1}>
       {blocks.map((block, index) => {
         if (block.type === "text") {
           return (
-            <Box key={index} marginTop={index > 0 ? 1 : 0}>
+            <Box key={`text_${++textKey}`} marginTop={index > 0 ? 1 : 0}>
               <MarkdownRenderer content={block.text} />
             </Box>
           );
@@ -45,13 +47,12 @@ const ReviewBlockList: React.FC<ReviewBlockListProps> = ({
             </Box>
           );
         }
-        const agent = subAgents.find((a) => a.toolCallId === block.toolCallId);
-        if (!agent) return null;
-        const agentIndex = subAgents.indexOf(agent);
+        const agentIndex = subAgents.findIndex((a) => a.toolCallId === block.toolCallId);
+        if (agentIndex < 0) return null;
         return (
           <SubAgentRow
             key={block.toolCallId}
-            agent={agent}
+            agent={subAgents[agentIndex]}
             isSelected={selectedSubAgentIndex >= 0 && agentIndex === selectedSubAgentIndex}
           />
         );

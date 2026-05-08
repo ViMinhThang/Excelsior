@@ -20,7 +20,7 @@ export const gitDiffTool = tool({
       );
       return (response.data as unknown as string) || "No diff available.";
     } catch (error: any) {
-      return `Error fetching diff: ${error.message}`;
+      return "Error fetching diff";
     }
   },
 });

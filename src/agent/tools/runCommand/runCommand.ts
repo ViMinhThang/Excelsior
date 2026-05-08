@@ -78,14 +78,10 @@ export const runCommandTool = tool({
     if (danger) return danger;
 
     if (isWriteCommand(command) && confirmBus.listenerCount > 0) {
-      const callId = randomUUID();
-      const approved = await new Promise<boolean>((resolve) => {
-        confirmBus.emitRequest({
-          callId,
-          toolName: "runCommand",
-          args: JSON.stringify({ command }),
-        });
-        confirmBus._pending.set(callId, resolve);
+      const approved = await confirmBus.requestConfirmation({
+        callId: randomUUID(),
+        toolName: "runCommand",
+        args: JSON.stringify({ command }),
       });
       if (!approved) return "Denied by user.";
     }
@@ -104,7 +100,7 @@ export const runCommandTool = tool({
       return output;
     } catch (error: any) {
       if (error.killed) return "Command timed out";
-      return `Error executing command: ${error.message}`;
+      return "Error executing command: command failed or timed out";
     }
   },
 });

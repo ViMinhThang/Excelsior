@@ -6,8 +6,12 @@ interface DiffViewerProps {
   diff: string;
 }
 
+const MAX_DIFF_LINES = 200;
+
 const DiffViewer: React.FC<DiffViewerProps> = ({ diff }) => {
-  const lines = diff.split("\n").slice(0, 200);
+  const allLines = diff.split("\n");
+  const truncated = allLines.length > MAX_DIFF_LINES;
+  const lines = allLines.slice(0, MAX_DIFF_LINES);
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -39,6 +43,11 @@ const DiffViewer: React.FC<DiffViewerProps> = ({ diff }) => {
           </Box>
         );
       })}
+      {truncated && (
+        <Box>
+          <Text color={theme.colors.muted} dimColor>... (diff truncated at {MAX_DIFF_LINES} lines)</Text>
+        </Box>
+      )}
     </Box>
   );
 };
