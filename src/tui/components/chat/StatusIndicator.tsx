@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Text } from 'ink';
 import { theme } from '../../theme.js';
 
@@ -7,30 +7,16 @@ interface StatusIndicatorProps {
 }
 
 const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status }) => {
-  const [pulse, setPulse] = useState(false);
-
-  useEffect(() => {
-    if (status === 'pending') {
-      const timer = setInterval(() => {
-        setPulse(prev => !prev);
-      }, 600);
-      return () => clearInterval(timer);
-    }
-    setPulse(false);
-  }, [status]);
-
   if (status === 'completed') {
-    return null;
+    return <Text color={theme.colors.success}>•</Text>;
   }
 
   if (status === 'error') {
-    return <Text color={theme.colors.error}>{theme.glyphs.error}</Text>;
+    return <Text color={theme.colors.error}>•</Text>;
   }
 
   return (
-    <Text color={theme.colors.activity} dimColor={pulse}>
-      {theme.glyphs.pending}
-    </Text>
+    <Text color={theme.colors.border}>•</Text>
   );
 };
 

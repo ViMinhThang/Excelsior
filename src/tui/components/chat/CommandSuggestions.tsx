@@ -16,7 +16,7 @@ function CommandSuggestionsInner({ commands: cmds, selectedIndex, maxVisibleCoun
     <Box marginTop={1} flexDirection="column" paddingLeft={1}>
       {cmds.slice(0, maxVisibleCount).map((cmd, i) => (
         <Box key={cmd.name} paddingLeft={0}>
-          <Text color={i === selectedIndex ? theme.colors.accent : theme.colors.muted} bold={i === selectedIndex}>
+          <Text color={i === selectedIndex ? "#5e81ac" : theme.colors.muted} bold={i === selectedIndex}>
             {i === selectedIndex ? `${theme.glyphs.active} ` : "  "}/{cmd.name}
           </Text>
           <Text color={theme.colors.muted}> {theme.glyphs.section} {cmd.description}</Text>
