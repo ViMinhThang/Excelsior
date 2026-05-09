@@ -9,11 +9,229 @@ function escapeXml(text: string): string {
   return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+interface Segment {
+  text: string;
+  type: "raw" | "comment" | "string" | "keyword" | "number" | "structural" | "customType" | "function";
+}
+
+export function highlightCode(code: string, lang?: string): ReactNode {
+  const rawLines = code.split("\n");
+  const normalizedLang = lang ? lang.toLowerCase() : "";
+
+  // 1. Resolve normalized language & keywords
+  let normalized: "ts" | "py" | "json" | null = null;
+  let keywords: Set<string> = new Set();
+
+  if (["js", "javascript", "jsx", "ts", "typescript", "tsx", "cjs", "mjs"].includes(normalizedLang)) {
+    normalized = "ts";
+    keywords = new Set([
+      'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'class', 
+      'import', 'export', 'from', 'default', 'new', 'this', 'async', 'await', 'try', 'catch', 
+      'interface', 'type', 'as', 'any', 'string', 'number', 'boolean', 'true', 'false', 'null', 'undefined'
+    ]);
+  } else if (["py", "python"].includes(normalizedLang)) {
+    normalized = "py";
+    keywords = new Set([
+      'def', 'class', 'return', 'if', 'elif', 'else', 'for', 'while', 'import', 'from', 'as', 
+      'in', 'is', 'not', 'and', 'or', 'try', 'except', 'finally', 'raise', 'with', 'lambda', 
+      'global', 'nonlocal', 'None', 'True', 'False'
+    ]);
+  } else if (["json", "jsonc"].includes(normalizedLang)) {
+    normalized = "json";
+  }
+
+  // If no syntax highlighting language matched, fall back to simple unhighlighted escapeXml rendering
+  if (!normalized) {
+    return (
+      <Box flexDirection="column">
+        {rawLines.map((line, i) => (
+          <Box key={i}>
+            <Text>{escapeXml(line)}</Text>
+          </Box>
+        ))}
+      </Box>
+    );
+  }
+
+  // Helper to slice a "raw" segment by regex and mark matches with a specific type
+  const processRawSegments = (
+    segments: Segment[],
+    regex: RegExp,
+    type: Segment["type"]
+  ): Segment[] => {
+    return segments.flatMap((segment) => {
+      if (segment.type !== "raw") return [segment];
+
+      const result: Segment[] = [];
+      let lastIndex = 0;
+      let match;
+
+      regex.lastIndex = 0;
+
+      while ((match = regex.exec(segment.text)) !== null) {
+        if (match.index > lastIndex) {
+          result.push({ text: segment.text.slice(lastIndex, match.index), type: "raw" });
+        }
+        result.push({ text: match[0], type });
+        lastIndex = regex.lastIndex;
+
+        if (regex.lastIndex === match.index) {
+          regex.lastIndex++;
+        }
+      }
+
+      if (lastIndex < segment.text.length) {
+        result.push({ text: segment.text.slice(lastIndex), type: "raw" });
+      }
+
+      return result;
+    });
+  };
+
+  const lines = rawLines.map((line, lineIndex) => {
+    let segments: Segment[] = [{ text: line, type: "raw" }];
+
+    // --- Phase 1: Comments (if not JSON) ---
+    if (normalized !== "json") {
+      const commentRegex = normalized === "py" ? /(#.*)/g : /(\/\/.*)/g;
+      segments = processRawSegments(segments, commentRegex, "comment");
+    }
+
+    // --- Phase 2: Strings ---
+    const stringRegex = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/g;
+    segments = processRawSegments(segments, stringRegex, "string");
+
+    // --- Phase 3: Structural Delimiters (JSON) ---
+    if (normalized === "json") {
+      const jsonStructuralRegex = /([{}[\]:])/g;
+      segments = processRawSegments(segments, jsonStructuralRegex, "structural");
+    }
+
+    // --- Phase 4: Keywords (guarded with word-boundaries) ---
+    if (keywords.size > 0) {
+      segments = segments.flatMap((seg) => {
+        if (seg.type !== "raw") return [seg];
+
+        const res: Segment[] = [];
+        const wordRegex = /\b(\w+)\b/g;
+        let lastIndex = 0;
+        let match;
+
+        while ((match = wordRegex.exec(seg.text)) !== null) {
+          if (keywords.has(match[1])) {
+            if (match.index > lastIndex) {
+              res.push({ text: seg.text.slice(lastIndex, match.index), type: "raw" });
+            }
+            res.push({ text: match[0], type: "keyword" });
+            lastIndex = wordRegex.lastIndex;
+          }
+        }
+
+        if (lastIndex < seg.text.length) {
+          res.push({ text: seg.text.slice(lastIndex), type: "raw" });
+        }
+
+        return res;
+      });
+    }
+
+    // --- Phase 4.5: Types & Hooks ---
+    if (normalized !== "json") {
+      const typeHookRegex = /\b(useState|useCallback|useEffect|useRef|useInput|useMemo|useSettingValidator|useDatabase|[A-Z]\w*)\b/g;
+      segments = processRawSegments(segments, typeHookRegex, "customType");
+    }
+
+    // --- Phase 4.6: Functions ---
+    if (normalized !== "json") {
+      const functionRegex = /\b(\w+)(?=\s*\()/g;
+      segments = processRawSegments(segments, functionRegex, "function");
+    }
+
+    // --- Phase 5: Numbers ---
+    const numberRegex = /\b(\d+)\b/g;
+    segments = processRawSegments(segments, numberRegex, "number");
+
+    const renderedLine = segments.map((seg, segIndex) => {
+      let color: string | undefined;
+      let bold = false;
+
+      switch (seg.type) {
+        case "comment":
+          color = "#4c566a";
+          break;
+        case "string":
+          color = "#a3be8c";
+          break;
+        case "keyword":
+          color = "#81a1c1";
+          bold = true;
+          break;
+        case "customType":
+          color = "#8fbcbb";
+          break;
+        case "function":
+          color = "#ebcb8b";
+          break;
+        case "number":
+          color = "#b48ead";
+          break;
+        case "structural":
+          color = "#81a1c1";
+          break;
+        default:
+          color = theme.colors.text;
+          break;
+      }
+
+      return (
+        <Text key={segIndex} color={color} bold={bold}>
+          {seg.text}
+        </Text>
+      );
+    });
+
+    return (
+      <Box key={lineIndex}>
+        <Text>{renderedLine}</Text>
+      </Box>
+    );
+  });
+
+  return <Box flexDirection="column">{lines}</Box>;
+}
+
+
+export function highlightFilenames(text: string): ReactNode {
+  const filenameRegex = /\b([\w-]+\.(?:ts|tsx|js|jsx|json|py|md|css|html|yml|yaml|sh))\b/g;
+  const segments: { text: string; isFile: boolean }[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = filenameRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ text: text.slice(lastIndex, match.index), isFile: false });
+    }
+    segments.push({ text: match[0], isFile: true });
+    lastIndex = filenameRegex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ text: text.slice(lastIndex), isFile: false });
+  }
+
+  return segments.map((seg, idx) => (
+    <Text key={idx} color={seg.isFile ? "#88c0d0" : undefined} bold={seg.isFile}>
+      {escapeXml(seg.text)}
+    </Text>
+  ));
+}
+
+
 function renderInline(tokens: Token[]): ReactNode {
   return tokens.map((token, i) => {
     switch (token.type) {
       case "text":
-        return <Text key={i}>{escapeXml(token.text)}</Text>;
+        return <Text key={i}>{highlightFilenames(token.text)}</Text>;
       case "strong":
         return <Text key={i} bold>{renderInline((token as Tokens.Strong).tokens)}</Text>;
       case "em":
@@ -129,7 +347,7 @@ function BlockRenderer({ token, index }: BlockRendererProps) {
             </Box>
           )}
           <Box>
-            <Text>{escapeXml(formatPipeTable(code.text))}</Text>
+            {highlightCode(formatPipeTable(code.text), code.lang)}
           </Box>
         </Box>
       );
