@@ -46,6 +46,35 @@ function formatCliCommand(toolName?: string, argsStr?: string): string {
   }
 }
 
+function renderCommandWithPathHighlight(cmdText: string): React.ReactNode {
+  const pathRegex = /\b([\w-]+\/(?:[\w-]+\/)*[\w-]+\.(?:ts|tsx|js|jsx|json|py|md|css|html|yml|yaml|sh))\b/g;
+  const segments: { text: string; isPath: boolean }[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = pathRegex.exec(cmdText)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ text: cmdText.slice(lastIndex, match.index), isPath: false });
+    }
+    segments.push({ text: match[0], isPath: true });
+    lastIndex = pathRegex.lastIndex;
+  }
+
+  if (lastIndex < cmdText.length) {
+    segments.push({ text: cmdText.slice(lastIndex), isPath: false });
+  }
+
+  if (segments.length === 0) {
+    return cmdText;
+  }
+
+  return segments.map((seg, idx) => (
+    <Text key={idx} color={seg.isPath ? "#88c0d0" : undefined} bold={seg.isPath}>
+      {seg.text}
+    </Text>
+  ));
+}
+
 const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = "completed", content, marginTop, nested = false }) => {
   const display = createToolDisplay({ toolName, toolArgs, status, content });
 
@@ -56,7 +85,7 @@ const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = 
       <Box flexDirection="row" gap={1}>
         <StatusIndicator status={status} />
         <Text color={theme.colors.muted}>
-          {cmd}
+          {renderCommandWithPathHighlight(cmd)}
         </Text>
       </Box>
       {(display.detail || display.resultPreview?.length || status === "completed") && (

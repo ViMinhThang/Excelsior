@@ -31,7 +31,7 @@ export const commands: Command[] = [
   },
   {
     name: 'settings',
-    description: 'Go to Settings screen',
+    description: 'View or set configuration settings (e.g. apiKey, githubToken)',
     execute: async (args, context) => {
       context.navigate('settings');
     },
@@ -43,7 +43,6 @@ export const commands: Command[] = [
       context.navigate('review');
     },
   },
-
 ];
 
 export async function handleCommand(input: string, context: CommandContext): Promise<boolean> {

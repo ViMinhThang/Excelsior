@@ -41,6 +41,13 @@ export function useChatScreenState() {
   const [subAgents, setSubAgents] = useState<SubAgentState[]>([]);
   const [subAgentIndex, setSubAgentIndex] = useState(0);
   const [chatMode, setChatMode] = useState<"input" | "subagent-detail">("input");
+  const [commandResult, setCommandResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (input) {
+      setCommandResult(null);
+    }
+  }, [input]);
 
   const inputRef = useRef(input);
   inputRef.current = input;
@@ -99,7 +106,18 @@ export function useChatScreenState() {
     const trimmed = inputRef.current.trim();
     if (!trimmed) return;
 
-    const commandContext = { navigate, goBack, appendMessage: appendSystemMessage, clearMessages };
+    const commandContext = {
+      navigate,
+      goBack,
+      appendMessage: (role: "user" | "assistant" | "system", content: string) => {
+        appendSystemMessage(content);
+        setCommandResult(content);
+      },
+      clearMessages: () => {
+        clearMessages();
+        setCommandResult(null);
+      }
+    };
 
     const isCommand = await handleCommand(trimmed, commandContext);
     if (isCommand) { setInput(""); return; }
@@ -110,5 +128,5 @@ export function useChatScreenState() {
     sendMessage(trimmed);
   }, [isLoading, navigate, goBack, sendMessage, appendSystemMessage, clearMessages]);
 
-  return { input, setInput, chatMode, subAgents, subAgentIndex, messages, isLoading, hasMore, loadMore, pending, suggestion, handleSubmit };
+  return { input, setInput, chatMode, subAgents, subAgentIndex, messages, isLoading, hasMore, loadMore, pending, suggestion, handleSubmit, commandResult };
 }

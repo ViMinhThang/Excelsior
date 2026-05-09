@@ -38,7 +38,7 @@ describe("mapMessagesToAIHistory", () => {
       { role: "user", content: "list the directory" },
       {
         role: "assistant",
-        content: "[Tool success: Run command - ls -la (completed)]\n  README.md\n  src/\n  package.json",
+        content: "[Tool success: Run command - ls -la]\n  README.md\n  src/\n  package.json",
       },
       { role: "assistant", content: "Done." },
     ]);

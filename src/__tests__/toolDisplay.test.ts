@@ -18,7 +18,7 @@ describe("tool display model", () => {
 
     expect(display.summary).toBe("npm test");
     expect(display.risk).toBe("low");
-    expect(display.detail).toBe("completed");
+    expect(display.detail).toBeUndefined();
     expect(display.resultPreview).toEqual(["Tests passed", "More output"]);
     expect(errorDisplay.tone).toBe("error");
   });

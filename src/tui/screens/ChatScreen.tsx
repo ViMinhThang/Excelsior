@@ -25,6 +25,7 @@ const ChatScreen = () => {
     pending,
     suggestion,
     handleSubmit,
+    commandResult,
   } = useChatScreenState();
 
   const pendingDisplay = pending
@@ -66,6 +67,11 @@ const ChatScreen = () => {
             isLoading={isLoading}
             focus={!pending}
           />
+          {commandResult && (
+            <Box marginTop={1} paddingLeft={1} flexDirection="column">
+              <Text color={theme.colors.secondary}>{commandResult}</Text>
+            </Box>
+          )}
         </>
       )}
 

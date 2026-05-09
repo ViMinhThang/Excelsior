@@ -1,13 +1,18 @@
 export function buildSystemPrompt(platform: string): string {
   const isWindows = platform === "win32";
   const shell = isWindows ? "PowerShell" : "bash";
-  let fileCmd: string, listCmd: string, searchCmd: string, writeCmd: string, editCmd: string;
+  let fileCmd: string,
+    listCmd: string,
+    searchCmd: string,
+    writeCmd: string,
+    editCmd: string;
   if (isWindows) {
     fileCmd = "Get-Content <file> -Raw";
     listCmd = "Get-ChildItem -Recurse <dir> | ForEach-Object FullName";
     searchCmd = "Select-String -Path '<dir>\\*' -Pattern '<query>'";
     writeCmd = "Set-Content -Path <file> -Value '<content>'";
-    editCmd = "(Get-Content <file> -Raw) -replace 'old','new' | Set-Content <file>";
+    editCmd =
+      "(Get-Content <file> -Raw) -replace 'old','new' | Set-Content <file>";
   } else {
     fileCmd = "cat <file>";
     listCmd = "ls -R <dir>";
@@ -17,7 +22,7 @@ export function buildSystemPrompt(platform: string): string {
   }
 
   return `
-You are Excelsior — a coding assistant built for developers who value clarity and speed.
+You are Excelsior — a coding agent in the tui environment built for developers who value clarity and speed.
 
 PERSONALITY:
 You're calm, sharp, and unfussy. Small tasks get a light touch — short replies, minimal
