@@ -10,6 +10,7 @@ import { useChatScreenState } from '../hooks/useChatScreenState.js';
 import { createToolDisplay } from '../lib/toolDisplay.js';
 import { theme } from '../theme.js';
 import Panel from '../components/shared/Panel.js';
+import { DisplayBlock } from '../../lib/eventTypes.js';
 
 const ChatScreen = () => {
   const {
@@ -35,6 +36,8 @@ const ChatScreen = () => {
       })
     : null;
 
+  const displayBlocks = messages as DisplayBlock[];
+
   return (
     <Box flexDirection="column">
       <AppHeader />
@@ -45,10 +48,8 @@ const ChatScreen = () => {
         <>
           <Box flexDirection="column">
             <ChatHistory
-              messages={messages}
-              subAgents={subAgents}
+              blocks={displayBlocks}
               hasMore={hasMore}
-              onLoadMore={loadMore}
             />
           </Box>
 

@@ -11,14 +11,29 @@ export function createDb(dbPath?: string): Database.Database {
   db.pragma("journal_mode = WAL");
 
   db.exec(`
-    CREATE TABLE IF NOT EXISTS observation (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      message_id TEXT,
-      role TEXT NOT NULL,
-      content TEXT NOT NULL,
-      metadata TEXT,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      started_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      metadata TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS agent_events (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      data TEXT NOT NULL,
+      parent_event_id TEXT,
+      related_tool_call_id TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_agent_events_session
+      ON agent_events(session_id, sequence);
+
+    CREATE INDEX IF NOT EXISTS idx_agent_events_parent
+      ON agent_events(parent_event_id);
 
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
@@ -31,13 +46,9 @@ export function createDb(dbPath?: string): Database.Database {
       stack TEXT,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-  `);
 
-  try {
-    db.exec("ALTER TABLE observation ADD COLUMN message_id TEXT");
-  } catch {
-    // column already exists — ignore
-  }
+    DROP TABLE IF EXISTS observation;
+  `);
 
   return db;
 }
@@ -54,13 +65,6 @@ export function resetDb(): void {
   _defaultDb = null;
 }
 
-/**
- * Lazy database proxy — allows module-level import of `db` without
- * requiring explicit initialization. All property accesses are forwarded
- * to the singleton returned by `getDb()`, which creates the DB on first use.
- *
- * Usage: `import { db } from "./db/index.js"` — works like a regular Database instance.
- */
 export const db = new Proxy({} as Database.Database, {
   get(_, prop, receiver) {
     return Reflect.get(getDb(), prop, receiver);

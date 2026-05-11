@@ -1,5 +1,5 @@
 import { Command, CommandContext } from '../../types.js';
-import { db } from '../../db/index.js';
+import { deleteAllSessions } from '../../lib/eventPersistence.js';
 
 export const commands: Command[] = [
   {
@@ -24,7 +24,7 @@ export const commands: Command[] = [
     name: 'reset',
     description: 'Delete all conversation history from database',
     execute: async (args, context) => {
-      db.prepare('DELETE FROM observation').run();
+      deleteAllSessions();
       context.clearMessages();
       context.appendMessage('system', 'Database history reset.');
     },

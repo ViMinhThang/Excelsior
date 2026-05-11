@@ -1,39 +1,56 @@
 import React, { memo } from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, Static } from 'ink';
 import UserMessage from './UserMessage.js';
 import AgentMessage from './AgentMessage.js';
 import ToolMessage from './ToolMessage.js';
 import SubAgentRow from '../review/SubAgentRow.js';
-import { theme } from '../../theme.js';
 
-import { Message, SubAgentState } from '../../../types.js';
+import { DisplayBlock } from '../../../lib/eventTypes.js';
 
 interface ChatHistoryProps {
-  messages: Message[];
-  subAgents?: SubAgentState[];
+  blocks: DisplayBlock[];
   hasMore?: boolean;
-  onLoadMore?: () => void;
 }
 
-interface GroupedItem {
-  type: 'user' | 'assistant' | 'tool-call';
-  message: Message;
+function renderBlock(block: DisplayBlock): React.ReactNode {
+  if (block.type === 'user') {
+    return <UserMessage key={block.id} content={block.content} timestamp={block.timestamp} />;
+  }
+  if (block.type === 'assistant') {
+    return (
+      <AgentMessage
+        key={block.id}
+        content={block.content}
+        timestamp={block.timestamp}
+      />
+    );
+  }
+  if (block.type === 'tool-call') {
+    return (
+      <ToolMessage
+        key={block.id}
+        toolName={block.toolName}
+        toolArgs={block.toolArgs}
+        status={block.status}
+        content={block.content}
+      />
+    );
+  }
+  if (block.type === 'sub-agent') {
+    return <SubAgentRow key={block.id} agent={block.state} role={block.role} isSelected={false} />;
+  }
+  return null;
 }
 
-const groupMessages = (msgs: Message[]): GroupedItem[] => {
-  return msgs.map(msg => {
-    if (msg.role === 'user') {
-      return { type: 'user', message: msg };
-    }
-    if (msg.role === 'assistant') {
-      return { type: 'assistant', message: msg };
-    }
-    return { type: 'tool-call', message: msg };
-  });
-};
+const LIVED_TAIL = 3;
 
-const ChatHistory: React.FC<ChatHistoryProps> = ({ messages, subAgents = [], hasMore, onLoadMore }) => {
-  const groupedItems = groupMessages(messages);
+const ChatHistory: React.FC<ChatHistoryProps> = ({ blocks, hasMore }) => {
+  // Split blocks into frozen (never updated) and live (may still be streaming).
+  // Frozen blocks go inside <Static> so Ink renders them once and never re-touches them.
+  // Live blocks are the last LIVED_TAIL blocks that may still update.
+  const frozenCount = Math.max(0, blocks.length - LIVED_TAIL);
+  const frozenBlocks = blocks.slice(0, frozenCount);
+  const liveBlocks = blocks.slice(frozenCount);
 
   return (
     <Box flexDirection="column">
@@ -42,42 +59,14 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({ messages, subAgents = [], has
           <Text color="dim">··· ↑ ^U older messages</Text>
         </Box>
       )}
-      {groupedItems.length > 0 && groupedItems.map((item) => {
-        const { type, message } = item;
-
-        if (type === 'user') {
-          return <UserMessage key={message.id} content={message.content} timestamp={message.timestamp} />;
-        }
-        if (type === 'assistant') {
-          return (
-            <AgentMessage 
-              key={message.id} 
-              content={message.content} 
-              timestamp={message.timestamp} 
-            />
-          );
-        }
-        if (type === 'tool-call') {
-          if (message.toolCall?.toolName === 'spawnSubAgent') {
-            let role = '';
-            try { role = JSON.parse(message.toolCall.toolArgs || '{}').role || ''; } catch {}
-            const agent = role ? subAgents.find(a => a.role === role) : undefined;
-            if (agent) {
-              return <SubAgentRow key={message.id} agent={agent} isSelected={false} />;
-            }
-          }
-          return (
-            <ToolMessage
-              key={message.id}
-              toolName={message.toolCall?.toolName}
-              toolArgs={message.toolCall?.toolArgs}
-              status={message.toolCall?.status}
-              content={message.content}
-            />
-          );
-        }
-        return null;
-      })}
+      <Static items={frozenBlocks}>
+        {(block: DisplayBlock) => (
+          <Box key={block.id} flexDirection="column">
+            {renderBlock(block)}
+          </Box>
+        )}
+      </Static>
+      {liveBlocks.map((block) => renderBlock(block))}
     </Box>
   );
 };

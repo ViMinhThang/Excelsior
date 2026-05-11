@@ -1,14 +1,18 @@
-import { useState, useCallback, useRef } from "react";
-import { Message, PAGE_SIZE } from "../../types.js";
-import { loadMessages, getMessageCount, persistMessage } from "../lib/chatPersistence.js";
-import { generateId } from "./useChatSenderUtils.js";
+import { useState, useCallback, useRef, useSyncExternalStore, useMemo } from "react";
+import { AgentSession } from "../../lib/agentSession.js";
+import { AgentEvent, DisplayBlock, Session } from "../../lib/eventTypes.js";
+import { loadSessions, loadSessionEvents, getSessionCount } from "../../lib/eventPersistence.js";
+import { groupEventsForDisplay } from "../../lib/projectEvents.js";
+import { PAGE_SIZE } from "../../types.js";
+
+const EMPTY_EVENTS: readonly AgentEvent[] = [];
 
 export function useChatHistory() {
-  const totalRef = useRef(getMessageCount());
+  const totalRef = useRef(getSessionCount());
   const loadedRef = useRef(0);
 
-  const [messages, setMessages] = useState<Message[]>(() => {
-    const initial = loadMessages(PAGE_SIZE, 0);
+  const [sessions, setSessions] = useState<Session[]>(() => {
+    const initial = loadSessions(PAGE_SIZE, 0);
     loadedRef.current = initial.length;
     return initial;
   });
@@ -17,55 +21,96 @@ export function useChatHistory() {
     () => loadedRef.current < totalRef.current,
   );
 
-  const append = useCallback((message: Message) => {
-    setMessages((prev) => [...prev, message]);
+  const [persistedEvents, setPersistedEvents] = useState<AgentEvent[]>(() => {
+    const all: AgentEvent[] = [];
+    for (const session of sessions) {
+      const evts = loadSessionEvents(session.id);
+      all.push(...evts);
+    }
+    return all;
+  });
+
+  const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
+  const prevSessionRef = useRef<AgentSession | null>(null);
+
+  const liveEvents = useSyncExternalStore(
+    useCallback(
+      (cb: () => void) => {
+        if (!activeSession) return () => {};
+        return activeSession.subscribe(cb);
+      },
+      [activeSession],
+    ),
+    useCallback(() => {
+      if (!activeSession) return EMPTY_EVENTS;
+      return activeSession.getSnapshot();
+    }, [activeSession]),
+  );
+
+  const attachSession = useCallback((newSession: AgentSession | null) => {
+    const oldSession = prevSessionRef.current;
+    if (oldSession && oldSession !== newSession) {
+      const events = oldSession.getSnapshot();
+      if (events.length > 0) {
+        setPersistedEvents((prev) => [...prev, ...events]);
+      }
+    }
+    prevSessionRef.current = newSession;
+    setActiveSession(newSession);
   }, []);
 
-  const updateById = useCallback((id: string, updates: Partial<Message>) => {
-    setMessages((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, ...updates } : m)),
-    );
-  }, []);
+  // Deduplicate: events from activeSession's snapshot might also be in persistedEvents
+  // if the session was completed and persisted. Filter them out.
+  const displayEvents = useMemo((): AgentEvent[] => {
+    if (liveEvents.length === 0) return persistedEvents;
+    const liveIds = new Set(liveEvents.map((e) => e.id));
+    const filtered = persistedEvents.filter((e) => !liveIds.has(e.id));
+    if (filtered.length === persistedEvents.length) {
+      return [...persistedEvents, ...liveEvents];
+    }
+    return [...filtered, ...liveEvents];
+  }, [persistedEvents, liveEvents]);
 
-  const createAndAppend = useCallback(
-    (role: Message["role"], content: string, extra?: Partial<Message>) => {
-      const msg: Message = {
-        id: generateId(),
-        role,
-        content,
-        timestamp: new Date().toISOString(),
-        ...extra,
-      };
-      append(msg);
-      return msg;
-    },
-    [append],
+  const displayBlocks: DisplayBlock[] = useMemo(
+    () => groupEventsForDisplay(displayEvents),
+    [displayEvents],
   );
 
   const loadMore = useCallback((count: number = PAGE_SIZE) => {
-    const older = loadMessages(count, loadedRef.current);
+    const older = loadSessions(count, loadedRef.current);
     if (older.length > 0) {
       loadedRef.current += older.length;
-      totalRef.current = getMessageCount();
+      totalRef.current = getSessionCount();
       setHasMore(loadedRef.current < totalRef.current);
-      setMessages((prev) => [...older, ...prev]);
+      setSessions((prev) => [...prev, ...older]);
+      const moreEvents: AgentEvent[] = [];
+      for (const session of older) {
+        const evts = loadSessionEvents(session.id);
+        moreEvents.push(...evts);
+      }
+      if (moreEvents.length > 0) {
+        setPersistedEvents((prev) => [...moreEvents, ...prev]);
+      }
     }
   }, []);
 
   const clearMessages = useCallback(() => {
-    setMessages([]);
+    setSessions([]);
+    setPersistedEvents([]);
+    setActiveSession(null);
     loadedRef.current = 0;
     totalRef.current = 0;
     setHasMore(false);
   }, []);
 
   return {
-    messages,
+    displayBlocks,
     hasMore,
-    append,
-    updateById,
-    createAndAppend,
+    attachSession,
     loadMore,
     clearMessages,
+    sessions,
+    liveEvents,
+    persistedEvents,
   };
 }

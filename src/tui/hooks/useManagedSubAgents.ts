@@ -1,16 +1,11 @@
 import { useState, useCallback } from "react";
 import { useSubAgentListener } from "./useSubAgentListener.js";
-import { SubAgentState } from "../../types.js";
+import { SubAgentState } from "../../lib/eventTypes.js";
 
-/**
- * Unified hook grouping live reactive SubAgent array state, 
- * real-time event listener patching, and localized list index controls.
- */
 export function useManagedSubAgents() {
   const [subAgents, setSubAgents] = useState<SubAgentState[]>([]);
   const [subAgentIndex, setSubAgentIndex] = useState(0);
 
-  // Attach the lifecycle listener automatically upon hook instantiation
   useSubAgentListener({
     onSpawned: (agent) => setSubAgents((prev) => [...prev, agent]),
     
