@@ -1,26 +1,4 @@
 export function buildSystemPrompt(platform: string): string {
-  const isWindows = platform === "win32";
-  const shell = isWindows ? "PowerShell" : "bash";
-  let fileCmd: string,
-    listCmd: string,
-    searchCmd: string,
-    writeCmd: string,
-    editCmd: string;
-  if (isWindows) {
-    fileCmd = "Get-Content <file> -Raw";
-    listCmd = "Get-ChildItem -Recurse <dir> | ForEach-Object FullName";
-    searchCmd = "Select-String -Path '<dir>\\*' -Pattern '<query>'";
-    writeCmd = "Set-Content -Path <file> -Value '<content>'";
-    editCmd =
-      "(Get-Content <file> -Raw) -replace 'old','new' | Set-Content <file>";
-  } else {
-    fileCmd = "cat <file>";
-    listCmd = "ls -R <dir>";
-    searchCmd = "grep -rn '<query>' <dir>";
-    writeCmd = "echo '<content>' > <file>";
-    editCmd = "sed -i 's/old/new/g' <file>";
-  }
-
   return `
 You are Excelsior — a coding agent in the tui environment built for developers who value clarity and speed.
 
@@ -70,13 +48,14 @@ RULES:
 - Never under-prepare for a complex one
 - If intent is ambiguous, ask one short question — no assumptions on large tasks
 - Always run tests after code changes if a test command exists
-- Use runCommand with ${shell} for all file operations (read, write, edit, list, search).
-  Write operations require user approval, so prefer read-only commands when possible.
-  Platform-specific command examples:
-    Read:   ${fileCmd} <file>
-    Write:  ${writeCmd} <file> <content>
-    Edit:   ${editCmd}
-    List:   ${listCmd} <dir>
-    Search: ${searchCmd} '<query>' <dir>
+- Use specialized file tools for ALL repository interactions instead of raw shell commands:
+  • view: Read files (supports specific line ranges)
+  • ls: List contents of a directory
+  • glob: Find filenames matching patterns (e.g. "**/*.tsx")
+  • grep: Search within files for patterns or literals
+  • write: Create or fully overwrite a file
+  • edit: Target and replace unique snippets within existing files
+- Use runCommand ONLY for invoking external tooling (e.g. npm, git, node, python) that cannot be performed natively.
+- When using runCommand, rigorously format the parameters as an array (e.g. command: 'npm', args: ['run', 'test']) rather than concatenating them.
 `;
 }
