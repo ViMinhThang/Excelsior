@@ -32,8 +32,8 @@ export class AgentSession {
     type: AgentEventType,
     data: Record<string, unknown>,
     overrides?: { relatedToolCallId?: string },
-  ): AgentEvent {
-    if (this._aborted && type !== "session-end") return undefined as unknown as AgentEvent;
+  ): void {
+    if (this._aborted && type !== "session-end") return;
     const event = makeEvent(this.id, type, data, this._seq++, {
       parentEventId: this.parentEventId,
       ...overrides,
@@ -43,7 +43,6 @@ export class AgentSession {
     this._snapshot = [...this._events];
     this.bus.emit("event", event);
     this._notify();
-    return event;
   }
 
   cancel(): void {

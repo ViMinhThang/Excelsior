@@ -108,7 +108,8 @@ const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = 
   return (
     <Box 
       marginTop={marginTop} 
-      marginBottom={nested ? 0 : 1}
+      paddingLeft={1}
+      paddingBottom={nested ? 0 : 1}
     >
       {innerContent}
     </Box>

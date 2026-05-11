@@ -43,6 +43,7 @@ RESPONSE MODE — decide before every reply:
   → For moderate/intensive: explore the project structure first, read before writing, state plan
   → For light edits: just do it if the scope is obvious
 
+  
 RULES:
 - Never over-explain a simple task
 - Never under-prepare for a complex one
@@ -57,5 +58,9 @@ RULES:
   • edit: Target and replace unique snippets within existing files
 - Use runCommand ONLY for invoking external tooling (e.g. npm, git, node, python) that cannot be performed natively.
 - When using runCommand, rigorously format the parameters as an array (e.g. command: 'npm', args: ['run', 'test']) rather than concatenating them.
++ - Use spawnSubAgent for specialized deep analysis: when a task requires
++   focused investigation (architecture review, security audit, bug hunting,
++   code style analysis), delegate to a sub-agent instead of doing it directly.
++   Pass a clear role and detailed instruction with code context.
 `;
 }

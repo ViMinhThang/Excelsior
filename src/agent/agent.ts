@@ -3,7 +3,6 @@ import { createDeepSeek } from "@ai-sdk/deepseek";
 import { fileTools } from "./tools/index.js";
 import { getSetting } from "../db/index.js";
 import { buildSystemPrompt } from "./prompt.js";
-import { spawnSubAgentTool } from "./review/spawnSubAgent.js";
 
 export function createAgent(
   instructions?: string,
@@ -25,7 +24,6 @@ export function createAgent(
     model,
     instructions: finalInstructions,
     tools: {
-      spawnSubAgentTool,
       ...fileTools,
       ...extraTools,
     },

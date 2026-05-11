@@ -1,9 +1,7 @@
 import { useCallback, useRef } from "react";
 import { createAgent } from "../../agent/agent.js";
 import { reviewOrchestratorPrompt } from "../../agent/review/reviewPrompt.js";
-import {
-  spawnSubAgentTool,
-} from "../../agent/review/spawnSubAgent.js";
+import { createSpawnSubAgentTool } from "../../agent/review/spawnSubAgent.js";
 import { gitDiffTool } from "../../agent/tools/gitDiff/gitDiff.js";
 import { streamAgentResponse } from "../../lib/agentStream.js";
 import { AgentSession } from "../../lib/agentSession.js";
@@ -38,6 +36,7 @@ export function useReviewOrchestrator() {
   mainOutputRef.current = mainOutput;
 
   const abortRef = useRef<AbortController | null>(null);
+  const childSessionsRef = useRef(new Map<string, AgentSession>());
 
   useSubAgentListener({
     onSpawned: (agent) => {
@@ -65,15 +64,18 @@ export function useReviewOrchestrator() {
     onClearBlocks();
     onSetMode("review");
 
-    const mainAgent = createAgent(reviewOrchestratorPrompt, {
-      gitDiff: gitDiffTool,
-      spawnSubAgent: spawnSubAgentTool,
-    });
+    const childSessions = childSessionsRef.current;
+    childSessions.clear();
 
     const session = new AgentSession();
     const abortController = new AbortController();
     abortRef.current = abortController;
     session.abortController = abortController;
+
+    const mainAgent = createAgent(reviewOrchestratorPrompt, {
+      gitDiff: gitDiffTool,
+      spawnSubAgent: createSpawnSubAgentTool(session, childSessions),
+    });
 
     let prevText = "";
 
@@ -116,6 +118,7 @@ export function useReviewOrchestrator() {
       onAddTextBlock(`Error during review: ${error.message}`);
     } finally {
       unsub();
+      childSessions.clear();
       onSetMode("results");
     }
   }, []);

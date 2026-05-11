@@ -43,7 +43,7 @@ const Router = () => {
   useInput(handleInput);
 
   return (
-    <Box flexDirection="column" padding={1} minHeight={20}>
+    <Box flexDirection="column" minHeight={20}>
       <ScreenDispatcher screen={currentScreen} />
     </Box>
   );

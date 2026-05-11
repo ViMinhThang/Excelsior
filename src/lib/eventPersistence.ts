@@ -140,7 +140,7 @@ export function projectEventsToAIHistory(
       flushAssistant();
       history.push({ role: "user", content: evt.data.content as string });
     } else if (evt.type === "text-delta") {
-      assistantBuf = evt.data.fullText as string;
+      assistantBuf += evt.data.delta as string;
     } else if (evt.type === "tool-call-start" || evt.type === "tool-call-end") {
       flushAssistant();
       if (evt.type === "tool-call-end") {
@@ -155,16 +155,8 @@ export function projectEventsToAIHistory(
           content: `[Tool: ${toolName}(${args})] ${label}\n${result ?? ""}`,
         });
       }
-    } else if (evt.type === "sub-agent-spawned") {
+    } else if (evt.type === "child-session-attached") {
       flushAssistant();
-    } else if (evt.type === "sub-agent-done") {
-      const role = evt.data.role as string;
-      const fullOutput = evt.data.fullOutput as string;
-      const lastLine = fullOutput.split("\n").filter(Boolean).pop() || fullOutput;
-      history.push({
-        role: "assistant",
-        content: `[Sub-agent: ${role}] ${lastLine}`,
-      });
     }
   }
   flushAssistant();
