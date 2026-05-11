@@ -13,12 +13,6 @@ interface ToolMessageProps {
   nested?: boolean;
 }
 
-const riskColor = (risk?: string) => {
-  if (risk === "high") return theme.colors.error;
-  if (risk === "medium") return theme.colors.accent;
-  return theme.colors.success;
-};
-
 function formatCliCommand(toolName?: string, argsStr?: string): string {
   const name = toolName || "tool";
   let args: Record<string, any> = {};
@@ -28,26 +22,7 @@ function formatCliCommand(toolName?: string, argsStr?: string): string {
     } catch {}
   }
 
-  const path = args.path || args.AbsolutePath || args.TargetFile || args.directory || args.DirectoryPath || args.Path || "";
-
   switch (name) {
-    case "readFile":
-    case "view_file":
-    case "read_file":
-      return `read ${path}`;
-    case "writeFile":
-    case "write_to_file":
-      return `write ${path}`;
-    case "editFile":
-    case "replace_file_content":
-    case "multi_replace_file_content":
-      return `edit ${path}`;
-    case "listFiles":
-    case "list_dir":
-      return `ls ${path || "."}`;
-    case "searchFiles":
-    case "grep_search":
-      return `grep "${args.query || args.Query || ""}"`;
     case "runCommand":
     case "run_command": {
       const command = args.command || args.CommandLine || "";
@@ -65,44 +40,73 @@ function formatCliCommand(toolName?: string, argsStr?: string): string {
   }
 }
 
+function renderCommandWithPathHighlight(cmdText: string): React.ReactNode {
+  const pathRegex = /\b([\w-]+\/(?:[\w-]+\/)*[\w-]+\.(?:ts|tsx|js|jsx|json|py|md|css|html|yml|yaml|sh))\b/g;
+  const segments: { text: string; isPath: boolean }[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = pathRegex.exec(cmdText)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ text: cmdText.slice(lastIndex, match.index), isPath: false });
+    }
+    segments.push({ text: match[0], isPath: true });
+    lastIndex = pathRegex.lastIndex;
+  }
+
+  if (lastIndex < cmdText.length) {
+    segments.push({ text: cmdText.slice(lastIndex), isPath: false });
+  }
+
+  if (segments.length === 0) {
+    return cmdText;
+  }
+
+  return segments.map((seg, idx) => (
+    <Text key={idx} color={seg.isPath ? "#88c0d0" : undefined} bold={seg.isPath}>
+      {seg.text}
+    </Text>
+  ));
+}
+
 const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = "completed", content, marginTop, nested = false }) => {
   const display = createToolDisplay({ toolName, toolArgs, status, content });
 
   const cmd = formatCliCommand(toolName, toolArgs);
-  const header = cmd.startsWith("PS ") || cmd.startsWith("$") ? cmd : ` $ ${cmd}`;
 
   const innerContent = (
     <Box flexDirection="column">
       <Box flexDirection="row" gap={1}>
-        {status === "pending" && <StatusIndicator status={status} />}
+        <StatusIndicator status={status} />
         <Text color={theme.colors.muted}>
-          {header}
+          {renderCommandWithPathHighlight(cmd)}
         </Text>
       </Box>
       {(display.detail || display.resultPreview?.length || status === "completed") && (
-        <Box flexDirection="column" paddingLeft={0}>
-          {display.detail ? <Text color={theme.colors.muted} dimColor>   {display.detail}</Text> : null}
-          {display.omittedResultLines ? (
-            <Text color={theme.colors.muted} dimColor>   ... ({display.omittedResultLines} earlier lines)</Text>
+        <Box flexDirection="column" paddingLeft={2}>
+          {display.detail ? (
+            <Text color={theme.colors.muted} dimColor>↳ {display.detail}</Text>
           ) : null}
-          {display.resultPreview?.map((line, index) => (
-            <Text key={index} color={theme.colors.muted} dimColor>   {line}</Text>
-          ))}
+          {display.resultPreview?.map((line, index) => {
+            const key = `preview_line_${index}`;
+            const prefix = (!display.detail && index === 0) ? "↳ " : "  ";
+            return (
+              <Text key={key} color={theme.colors.muted} dimColor>{prefix}{line}</Text>
+            );
+          })}
+          {display.omittedResultLines ? (
+            <Text color={theme.colors.muted} dimColor>  … ({display.omittedResultLines} more lines)</Text>
+          ) : null}
           {status === "completed" && (
-            <Text color={theme.colors.muted} dimColor>   Completed</Text>
+            <Text color={theme.colors.muted} dimColor>{(!display.detail && (!display.resultPreview || display.resultPreview.length === 0)) ? "↳ " : "  "}Completed</Text>
           )}
         </Box>
       )}
     </Box>
   );
 
-  const bg = theme.colors.toolPanel;
-
   return (
     <Box 
-      backgroundColor={bg} 
-      paddingX={1} 
-      paddingY={1}
       marginTop={marginTop} 
       marginBottom={nested ? 0 : 1}
     >

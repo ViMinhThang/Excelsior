@@ -133,7 +133,7 @@ export function createToolDisplay({
             ? "timed out"
             : status === "pending"
               ? "waiting for approval or execution"
-              : "completed",
+              : undefined,
         resultPreview: preview.lines,
         omittedResultLines: preview.omitted,
         tone,

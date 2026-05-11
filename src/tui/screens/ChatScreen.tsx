@@ -11,12 +11,6 @@ import { createToolDisplay } from '../lib/toolDisplay.js';
 import { theme } from '../theme.js';
 import Panel from '../components/shared/Panel.js';
 
-const riskColor = (risk?: string) => {
-  if (risk === "high") return theme.colors.error;
-  if (risk === "medium") return theme.colors.accent;
-  return theme.colors.success;
-};
-
 const ChatScreen = () => {
   const {
     input,
@@ -30,7 +24,7 @@ const ChatScreen = () => {
     loadMore,
     pending,
     suggestion,
-    handleSubmit,
+    commandResult,
   } = useChatScreenState();
 
   const pendingDisplay = pending
@@ -45,7 +39,7 @@ const ChatScreen = () => {
     <Box flexDirection="column">
       <AppHeader />
 
-      {chatMode === "subagent-detail" && subAgents.length > 0 ? (
+      {chatMode === "subagent-detail" && subAgents.length > 0 && subAgents[subAgentIndex] ? (
         <SubAgentDetail agent={subAgents[subAgentIndex]} />
       ) : (
         <>
@@ -67,11 +61,16 @@ const ChatScreen = () => {
           <ChatInput
             value={input}
             onChange={setInput}
-            onSubmit={handleSubmit}
+            onSubmit={() => {}}
             placeholder="Type your coding task here..."
             isLoading={isLoading}
             focus={!pending}
           />
+          {commandResult && (
+            <Box marginTop={1} paddingLeft={1} flexDirection="column">
+              <Text color={theme.colors.secondary}>{commandResult}</Text>
+            </Box>
+          )}
         </>
       )}
 
@@ -89,7 +88,11 @@ const ChatScreen = () => {
             </Box>
             <Box flexDirection="column" paddingLeft={theme.spacing.toolIndent}>
               <Text color={theme.colors.text}>  {pendingDisplay.detail || "waiting for approval"}</Text>
-              <Text color={theme.colors.text} bold>  [y] approve  [n/Esc] deny</Text>
+              <Box flexDirection="column" marginTop={1} paddingLeft={2} borderTop>
+                <Text color={theme.colors.text} bold>(y) accept</Text>
+                <Text color={theme.colors.text} bold>(a) accept all edits (for this session)</Text>
+                <Text color={theme.colors.text} bold>[(n) deny</Text>
+              </Box>
             </Box>
           </Box>
         </Panel>

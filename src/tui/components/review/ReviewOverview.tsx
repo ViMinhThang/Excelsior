@@ -14,7 +14,7 @@ const ReviewOverview: React.FC = () => {
       blocks={blocks}
       subAgents={subAgents}
       selectedSubAgentIndex={selectedSubAgentIndex}
-      emptyComponent={<Text color={theme.colors.text}>Waiting for main agent to start...</Text>}
+      emptyComponent={<Text color={theme.colors.text}>Waiting for main agent to start…</Text>}
     />
   );
 };

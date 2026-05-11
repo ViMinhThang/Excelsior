@@ -8,48 +8,73 @@ interface SubAgentRowProps {
   isSelected: boolean;
 }
 
-const spinnerFrames = ['.', '..', '...'];
+
+const formatDuration = (ms: number) => {
+  const secs = Math.max(0, ms / 1000);
+  if (secs < 60) return `${secs.toFixed(1)}s`;
+  const mins = Math.floor(secs / 60);
+  const remSecs = Math.floor(secs % 60);
+  return `${mins}m ${remSecs}s`;
+};
 
 const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, isSelected }) => {
   const isRunning = agent.status === "running";
-  const isError = agent.status === "error";
-
-  const [frame, setFrame] = useState(0);
-
+  
+  // Real-time duration polling toggle
+  const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!isRunning) return;
-    const timer = setInterval(() => {
-      setFrame(f => (f + 1) % spinnerFrames.length);
-    }, 300);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [isRunning]);
 
-  const statusGlyph = isRunning
-    ? spinnerFrames[frame]
-    : isError ? theme.glyphs.error : theme.glyphs.success;
-  const glyphColor = isRunning ? theme.colors.activity : isError ? theme.colors.error : theme.colors.success;
+  // Calculate runtime logic
+  const start = agent.startTime || now;
+  const end = agent.endTime || now;
+  const durationStr = formatDuration(end - start);
 
+  // Content Normalization per User Prompt ("except the Task")
+  const rawRole = agent.role || "SubAgent";
+  // Replace "Task" case-insensitive and clean any resulting double-spacing/hanging-hyphens
+  const cleanRole = rawRole
+    .replace(/\bTask\b/gi, "")
+    .replace(/\s+/g, " ")
+    .replace(/^[-–—\s]+|[-–—\s]+$/g, "")
+    .trim();
+
+  // Dynamic Activity Feeds
   const latestToolCall = agent.toolCalls?.length
     ? agent.toolCalls[agent.toolCalls.length - 1]
     : null;
+  
+  const activityStatusLine = isRunning && latestToolCall
+    ? `${latestToolCall.toolName} ${latestToolCall.toolArgs ? String(latestToolCall.toolArgs).substring(0, 40) : ""}`
+    : `${agent.toolCalls?.length || 0} toolcalls · ${durationStr}`;
 
-  const activityText = latestToolCall
-    ? latestToolCall.toolName
-    : agent.latestLine || null;
+  // Icon Tree System
+  const topPrefix = isRunning ? "∴" : "│";
+  const bottomPrefix = isRunning ? "↳" : "└";
 
   return (
-    <Box marginTop={1} paddingX={1}>
-      <Text color={isSelected ? theme.colors.accent : theme.colors.muted}>
-        {isSelected ? `${theme.glyphs.active} ` : "  "}
-      </Text>
-      <Text color={glyphColor}>{statusGlyph} </Text>
-      <Text color={theme.colors.muted}>[sub-agent] </Text>
-      <Text color={isSelected ? theme.colors.text : theme.colors.muted} bold={isSelected}>
-        {agent.role}
-      </Text>
-      {activityText && (
-        <Text color={theme.colors.muted}> {theme.glyphs.section} {activityText}</Text>
-      )}
+    <Box flexDirection="column" marginTop={1} paddingLeft={1}>
+      {/* Row 1: ID/Name Line */}
+      <Box flexDirection="row">
+        <Text color={theme.colors.muted}>{topPrefix} </Text>
+        <Text 
+          bold={isSelected} 
+          color={isSelected ? theme.colors.text : theme.colors.muted}
+        >
+          {cleanRole}
+        </Text>
+      </Box>
+
+      {/* Row 2: Metrics or Activity Feeder */}
+      <Box flexDirection="row">
+        <Text color={theme.colors.muted}>{bottomPrefix} </Text>
+        <Text color={theme.colors.muted} dimColor={!isRunning}>
+          {activityStatusLine}
+        </Text>
+      </Box>
     </Box>
   );
 };

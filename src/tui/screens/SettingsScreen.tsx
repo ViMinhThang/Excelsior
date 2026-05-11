@@ -1,11 +1,17 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useDatabase } from '../hooks/useDatabase.js';
+import { useNavigation } from '../context/NavigationContext.js';
 import ChatInput from '../components/chat/ChatInput.js';
 import { theme } from '../theme.js';
 
-const SettingsScreen = () => {
+interface SettingsScreenProps {
+  onClose?: () => void;
+}
+
+const SettingsScreen: React.FC<SettingsScreenProps> = ({ onClose }) => {
   const { getApiKey, saveApiKey, getGithubToken, saveGithubToken } = useDatabase();
+  const { goBack } = useNavigation();
   const [apiKey, setApiKey] = useState(() => getApiKey());
   const [githubToken, setGithubToken] = useState(() => getGithubToken());
   const [status, setStatus] = useState('');
@@ -22,7 +28,11 @@ const SettingsScreen = () => {
     if (key.tab) {
       setFocusedField(prev => prev === 'apiKey' ? 'githubToken' : 'apiKey');
     }
-  }, []));
+    if (key.escape) {
+      if (onClose) onClose();
+      else goBack();
+    }
+  }, [onClose, goBack]));
 
   const handleSaveApiKey = useCallback(() => {
     saveApiKey(apiKey);
@@ -41,11 +51,11 @@ const SettingsScreen = () => {
   return (
     <Box flexDirection="column">
       <Box marginBottom={1}>
-        <Text color={theme.colors.accent} bold>Settings</Text>
+        <Text color="#5e81ac" bold>Settings</Text>
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={focusedField === 'apiKey' ? theme.colors.accent : theme.colors.muted}>
+        <Text color={focusedField === 'apiKey' ? "#5e81ac" : theme.colors.muted}>
           {focusedField === 'apiKey' ? `${theme.glyphs.active}` : " "}DeepSeek API Key
         </Text>
         <ChatInput
@@ -59,7 +69,7 @@ const SettingsScreen = () => {
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={focusedField === 'githubToken' ? theme.colors.accent : theme.colors.muted}>
+        <Text color={focusedField === 'githubToken' ? "#5e81ac" : theme.colors.muted}>
           {focusedField === 'githubToken' ? `${theme.glyphs.active}` : " "}GitHub Token
         </Text>
         <ChatInput

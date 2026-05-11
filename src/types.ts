@@ -84,6 +84,8 @@ export interface SubAgentState {
   fullOutput: string;
   outputParts: SubAgentOutputPart[];
   toolCalls: ToolCallInfo[];
+  startTime?: number;
+  endTime?: number;
 }
 
 export const PAGE_SIZE = 50;

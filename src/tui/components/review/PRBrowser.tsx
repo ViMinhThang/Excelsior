@@ -32,7 +32,7 @@ const PRBrowser: React.FC<PRBrowserProps> = ({
         <Box marginBottom={1}>
           <Text bold color={theme.colors.text}>PRs targeting current branch:</Text>
         </Box>
-        {prsLoading && <Text color={theme.colors.activity}>Loading PRs...</Text>}
+        {prsLoading && <Text color={theme.colors.activity}>Loading PRs…</Text>}
         {prsError && <Text color={theme.colors.error}>Error: {prsError}</Text>}
         <PRList prs={prs} selectedIndex={prIndex} />
       </Box>
@@ -54,7 +54,7 @@ const PRBrowser: React.FC<PRBrowserProps> = ({
             <Box marginBottom={1}>
               <Text bold color={theme.colors.accent}>Active PR Diff:</Text>
             </Box>
-            {diffLoading && <Text color={theme.colors.activity}>Loading diff...</Text>}
+            {diffLoading && <Text color={theme.colors.activity}>Loading diff…</Text>}
             {diffError && <Text color={theme.colors.error}>Error: {diffError}</Text>}
             {fetchedDiff && !diffLoading && (
               <Box flexDirection="column" flexGrow={1}>
