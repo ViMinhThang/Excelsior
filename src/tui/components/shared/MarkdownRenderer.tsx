@@ -11,7 +11,7 @@ function escapeXml(text: string): string {
 
 interface Segment {
   text: string;
-  type: "raw" | "comment" | "string" | "keyword" | "number" | "structural" | "customType" | "function";
+  type: "raw" | "comment" | "string" | "keyword" | "number" | "structural" | "customType" | "function" | "operator" | "boolean" | "tag" | "attribute";
 }
 
 export function highlightCode(code: string, lang?: string): ReactNode {
@@ -27,14 +27,15 @@ export function highlightCode(code: string, lang?: string): ReactNode {
     keywords = new Set([
       'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'class', 
       'import', 'export', 'from', 'default', 'new', 'this', 'async', 'await', 'try', 'catch', 
-      'interface', 'type', 'as', 'any', 'string', 'number', 'boolean', 'true', 'false', 'null', 'undefined'
+      'interface', 'type', 'as', 'any', 'string', 'number', 'boolean', 'void', 'unknown', 
+      'never', 'readonly', 'static', 'public', 'private', 'protected'
     ]);
   } else if (["py", "python"].includes(normalizedLang)) {
     normalized = "py";
     keywords = new Set([
       'def', 'class', 'return', 'if', 'elif', 'else', 'for', 'while', 'import', 'from', 'as', 
       'in', 'is', 'not', 'and', 'or', 'try', 'except', 'finally', 'raise', 'with', 'lambda', 
-      'global', 'nonlocal', 'None', 'True', 'False'
+      'global', 'nonlocal'
     ]);
   } else if (["json", "jsonc"].includes(normalizedLang)) {
     normalized = "json";
@@ -98,6 +99,10 @@ export function highlightCode(code: string, lang?: string): ReactNode {
     if (normalized !== "json") {
       const commentRegex = normalized === "py" ? /(#.*)/g : /(\/\/.*)/g;
       segments = processRawSegments(segments, commentRegex, "comment");
+      
+      // JSX Comments
+      const jsxCommentRegex = /(\{\/\*[\s\S]*?\*\/\})/g;
+      segments = processRawSegments(segments, jsxCommentRegex, "comment");
     }
 
     // --- Phase 2: Strings ---
@@ -108,6 +113,21 @@ export function highlightCode(code: string, lang?: string): ReactNode {
     if (normalized === "json") {
       const jsonStructuralRegex = /([{}[\]:])/g;
       segments = processRawSegments(segments, jsonStructuralRegex, "structural");
+    }
+
+    // --- Phase 3.5: Operators (if not JSON) ---
+    if (normalized !== "json") {
+      const operatorRegex = /(===|!==|=>|&&|\|\||[?+\-*/:!=])/g;
+      segments = processRawSegments(segments, operatorRegex, "operator");
+    }
+
+    // --- Phase 3.6: TSX/JSX Tags and Brackets ---
+    if (normalized !== "json") {
+      const jsxTagRegex = /(<\/?[a-zA-Z]\w*|\/?>)/g;
+      segments = processRawSegments(segments, jsxTagRegex, "tag");
+
+      const jsxAttrRegex = /\b(\w+)(?=\s*=)/g;
+      segments = processRawSegments(segments, jsxAttrRegex, "attribute");
     }
 
     // --- Phase 4: Keywords (guarded with word-boundaries) ---
@@ -150,6 +170,10 @@ export function highlightCode(code: string, lang?: string): ReactNode {
       segments = processRawSegments(segments, functionRegex, "function");
     }
 
+    // --- Phase 4.7: Booleans & Nulls ---
+    const booleanRegex = /\b(true|false|null|undefined|None|True|False)\b/g;
+    segments = processRawSegments(segments, booleanRegex, "boolean");
+
     // --- Phase 5: Numbers ---
     const numberRegex = /\b(\d+)\b/g;
     segments = processRawSegments(segments, numberRegex, "number");
@@ -178,8 +202,21 @@ export function highlightCode(code: string, lang?: string): ReactNode {
         case "number":
           color = "#b48ead";
           break;
+        case "boolean":
+          color = "#b48ead";
+          break;
         case "structural":
           color = "#81a1c1";
+          break;
+        case "operator":
+          color = "#81a1c1";
+          bold = true;
+          break;
+        case "tag":
+          color = "#81a1c1";
+          break;
+        case "attribute":
+          color = "#8fbcbb";
           break;
         default:
           color = theme.colors.text;

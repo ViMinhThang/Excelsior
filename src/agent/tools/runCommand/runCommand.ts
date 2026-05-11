@@ -1,11 +1,8 @@
 import { tool } from "ai";
 import { randomUUID } from "crypto";
-import { exec } from "child_process";
-import { promisify } from "util";
+import { spawn } from "child_process";
 import { runCommandSchema } from "./type.js";
-import { confirmBus } from "../confirm.js";
-
-const execPromise = promisify(exec);
+import { confirmBus } from "../../../lib/confirmBus.js";
 
 const MAX_OUTPUT_LENGTH = 100_000;
 const DEFAULT_TIMEOUT = 30_000;
@@ -26,13 +23,15 @@ const DANGEROUS_PATTERNS = [
   /halt/i,
   /poweroff/i,
   // Windows-specific dangerous patterns
-  ...(isWindows ? [
-    /rmdir\s+\/s\s+\\/i,
-    /del\s+\/[fqs]\s+\\/i,
-    /format\s+\w:|format\s+\/q/i,
-    /diskpart/i,
-    /reg\s+(delete|add)\s+/i,
-  ] : []),
+  ...(isWindows
+    ? [
+        /rmdir\s+\/s\s+\\/i,
+        /del\s+\/[fqs]\s+\\/i,
+        /format\s+\w:|format\s+\/q/i,
+        /diskpart/i,
+        /reg\s+(delete|add)\s+/i,
+      ]
+    : []),
 ];
 
 const baseWritePatterns: RegExp[] = [
@@ -57,50 +56,102 @@ if (isWindows) {
 
 const WRITE_PATTERNS = baseWritePatterns;
 
-function isDangerous(command: string): string | null {
+function isDangerous(commandString: string): string | null {
   for (const pattern of DANGEROUS_PATTERNS) {
-    if (pattern.test(command)) {
+    if (pattern.test(commandString)) {
       return `Blocked dangerous command matching pattern: ${pattern}`;
     }
   }
   return null;
 }
 
-function isWriteCommand(command: string): boolean {
-  return WRITE_PATTERNS.some((pattern) => pattern.test(command));
+function isWriteCommand(commandString: string): boolean {
+  return WRITE_PATTERNS.some((pattern) => pattern.test(commandString));
 }
 
 export const runCommandTool = tool({
-  description: "Run a shell command in the current directory",
+  description: "Run an executable with distinct parameters in the current directory",
   inputSchema: runCommandSchema,
-  execute: async ({ command }) => {
-    const danger = isDangerous(command);
+  execute: async ({ command, args }) => {
+    const fullString = [command, ...(args || [])].join(" ");
+    const danger = isDangerous(fullString);
     if (danger) return danger;
 
-    if (isWriteCommand(command) && confirmBus.listenerCount > 0) {
-      const approved = await confirmBus.requestConfirmation({
-        callId: randomUUID(),
-        toolName: "runCommand",
-        args: JSON.stringify({ command }),
+    if (isWriteCommand(fullString) && confirmBus.getListenerCount("request") > 0) {
+      const callId = randomUUID();
+      const approved = await new Promise<boolean>((resolve) => {
+        const unsub = confirmBus.on("response", (resp) => {
+          if (resp.callId === callId) {
+            unsub();
+            resolve(resp.approved);
+          }
+        });
+        confirmBus.emit("request", {
+          callId,
+          toolName: "runCommand",
+          args: JSON.stringify({ command, args }),
+        });
       });
       if (!approved) return "Denied by user.";
     }
 
-    try {
-      const { stdout, stderr } = await execPromise(command, {
+    return new Promise<string>((resolve) => {
+      let stdout = "";
+      let stderr = "";
+      let totalLength = 0;
+
+      const child = spawn(command, args || [], {
         cwd: process.cwd(),
-        timeout: DEFAULT_TIMEOUT,
-        maxBuffer: MAX_OUTPUT_LENGTH,
-        shell: isWindows ? "powershell.exe" : "/bin/sh",
+        shell: false, // Crucial security step
       });
-      const output = stdout || stderr || "Command executed successfully (no output)";
-      if (output.length > MAX_OUTPUT_LENGTH) {
-        return output.slice(0, MAX_OUTPUT_LENGTH) + "\n[Output truncated]";
-      }
-      return output;
-    } catch (error: any) {
-      if (error.killed) return "Command timed out";
-      return "Error executing command: command failed or timed out";
-    }
+
+      const killAndResolve = (msg: string) => {
+        try { child.kill(); } catch {}
+        resolve(msg);
+      };
+
+      const timeoutTimer = setTimeout(() => {
+        killAndResolve("Command timed out");
+      }, DEFAULT_TIMEOUT);
+
+      child.stdout?.on("data", (data) => {
+        const chunk = data.toString();
+        if (totalLength < MAX_OUTPUT_LENGTH) {
+          stdout += chunk;
+          totalLength += chunk.length;
+        } else {
+           child.kill();
+        }
+      });
+
+      child.stderr?.on("data", (data) => {
+        const chunk = data.toString();
+        if (totalLength < MAX_OUTPUT_LENGTH) {
+          stderr += chunk;
+          totalLength += chunk.length;
+        } else {
+          child.kill();
+        }
+      });
+
+      child.on("error", (err: any) => {
+        clearTimeout(timeoutTimer);
+        if (err.code === 'ENOENT') {
+          resolve(`Error: Executable not found: ${command}`);
+        } else {
+          resolve(`Error executing command: ${err.message}`);
+        }
+      });
+
+      child.on("close", (code) => {
+        clearTimeout(timeoutTimer);
+        const output = stdout || stderr || (code === 0 ? "Command executed successfully (no output)" : `Command failed with exit code ${code}`);
+        if (totalLength >= MAX_OUTPUT_LENGTH) {
+           resolve(output.slice(0, MAX_OUTPUT_LENGTH) + "\n[Output truncated]");
+        } else {
+           resolve(output);
+        }
+      });
+    });
   },
 });

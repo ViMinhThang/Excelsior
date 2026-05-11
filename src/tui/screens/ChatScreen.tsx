@@ -24,7 +24,6 @@ const ChatScreen = () => {
     loadMore,
     pending,
     suggestion,
-    handleSubmit,
     commandResult,
   } = useChatScreenState();
 
@@ -62,7 +61,7 @@ const ChatScreen = () => {
           <ChatInput
             value={input}
             onChange={setInput}
-            onSubmit={handleSubmit}
+            onSubmit={() => {}}
             placeholder="Type your coding task here..."
             isLoading={isLoading}
             focus={!pending}
@@ -89,7 +88,11 @@ const ChatScreen = () => {
             </Box>
             <Box flexDirection="column" paddingLeft={theme.spacing.toolIndent}>
               <Text color={theme.colors.text}>  {pendingDisplay.detail || "waiting for approval"}</Text>
-              <Text color={theme.colors.text} bold>  [y] approve  [n/Esc] deny</Text>
+              <Box flexDirection="column" marginTop={1} paddingLeft={2} borderTop>
+                <Text color={theme.colors.text} bold>[y] approve</Text>
+                <Text color={theme.colors.text} bold>[a] approve all (for this session)</Text>
+                <Text color={theme.colors.text} bold>[n/Esc] deny</Text>
+              </Box>
             </Box>
           </Box>
         </Panel>

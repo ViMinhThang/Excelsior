@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { subAgentBus } from "../../agent/review/spawnSubAgent.js";
+import { subAgentBus } from "../../lib/subAgentBus.js";
 import {
   SubAgentState,
   SubAgentOutputPart,
@@ -24,38 +24,42 @@ export function useSubAgentListener(callbacks: SubAgentListenerCallbacks) {
   const ref = useRef(callbacks);
   ref.current = callbacks;
 
-  useEffect(
-    () =>
-      subAgentBus.subscribe({
-        onSpawned: ({ toolCallId, role }) => {
-          ref.current.onSpawned({
-            toolCallId,
-            role,
-            status: "running",
-            latestLine: "",
-            fullOutput: "",
-            outputParts: [],
-            toolCalls: [],
-          });
-        },
-        onOutput: ({
-          toolCallId,
-          latestLine,
-          fullOutput,
-          outputParts,
-          toolCalls,
-        }) => {
-          ref.current.onOutput(toolCallId, {
-            latestLine,
-            fullOutput,
-            outputParts: outputParts || [],
-            toolCalls: toolCalls || [],
-          });
-        },
-        onDone: ({ toolCallId, fullOutput }) => {
-          ref.current.onDone(toolCallId, fullOutput);
-        },
-      }),
-    [],
-  );
+  useEffect(() => {
+    const unsub1 = subAgentBus.on("spawned", ({ toolCallId, role }) => {
+      ref.current.onSpawned({
+        toolCallId,
+        role,
+        status: "running",
+        latestLine: "",
+        fullOutput: "",
+        outputParts: [],
+        toolCalls: [],
+      });
+    });
+
+    const unsub2 = subAgentBus.on("output", ({
+      toolCallId,
+      latestLine,
+      fullOutput,
+      outputParts,
+      toolCalls,
+    }) => {
+      ref.current.onOutput(toolCallId, {
+        latestLine,
+        fullOutput,
+        outputParts: outputParts || [],
+        toolCalls: toolCalls || [],
+      });
+    });
+
+    const unsub3 = subAgentBus.on("done", ({ toolCallId, fullOutput }) => {
+      ref.current.onDone(toolCallId, fullOutput);
+    });
+
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+    };
+  }, []);
 }

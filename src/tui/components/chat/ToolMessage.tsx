@@ -13,12 +13,6 @@ interface ToolMessageProps {
   nested?: boolean;
 }
 
-const riskColor = (risk?: string) => {
-  if (risk === "high") return theme.colors.error;
-  if (risk === "medium") return theme.colors.accent;
-  return theme.colors.success;
-};
-
 function formatCliCommand(toolName?: string, argsStr?: string): string {
   const name = toolName || "tool";
   let args: Record<string, any> = {};
@@ -90,15 +84,21 @@ const ToolMessage: React.FC<ToolMessageProps> = ({ toolName, toolArgs, status = 
       </Box>
       {(display.detail || display.resultPreview?.length || status === "completed") && (
         <Box flexDirection="column" paddingLeft={2}>
-          {display.detail ? <Text color={theme.colors.muted} dimColor>  {display.detail}</Text> : null}
-          {display.resultPreview?.map((line, index) => (
-            <Text key={index} color={theme.colors.muted} dimColor>  {line}</Text>
-          ))}
+          {display.detail ? (
+            <Text color={theme.colors.muted} dimColor>↳ {display.detail}</Text>
+          ) : null}
+          {display.resultPreview?.map((line, index) => {
+            const key = `preview_line_${index}`;
+            const prefix = (!display.detail && index === 0) ? "↳ " : "  ";
+            return (
+              <Text key={key} color={theme.colors.muted} dimColor>{prefix}{line}</Text>
+            );
+          })}
           {display.omittedResultLines ? (
-            <Text color={theme.colors.muted} dimColor>  ... ({display.omittedResultLines} more lines)</Text>
+            <Text color={theme.colors.muted} dimColor>  … ({display.omittedResultLines} more lines)</Text>
           ) : null}
           {status === "completed" && (
-            <Text color={theme.colors.muted} dimColor>  Completed</Text>
+            <Text color={theme.colors.muted} dimColor>{(!display.detail && (!display.resultPreview || display.resultPreview.length === 0)) ? "↳ " : "  "}Completed</Text>
           )}
         </Box>
       )}
