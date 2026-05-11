@@ -1,6 +1,6 @@
 import React, { memo, useMemo } from "react";
 import { Box } from "ink";
-import { SubAgentState } from "../../../types.js";
+import { SubAgentState } from "../../../lib/eventTypes.js";
 import { ReviewBlock } from "../../context/ReviewSessionContext.js";
 import SubAgentRow from "./SubAgentRow.js";
 import ToolMessage from "../chat/ToolMessage.js";
@@ -49,10 +49,20 @@ const ReviewBlockList: React.FC<ReviewBlockListProps> = ({
         }
         const agentIndex = subAgents.findIndex((a) => a.toolCallId === block.toolCallId);
         if (agentIndex < 0) return null;
+        const agent = subAgents[agentIndex];
         return (
           <SubAgentRow
             key={block.toolCallId}
-            agent={subAgents[agentIndex]}
+            agent={{
+              status: agent.status,
+              latestLine: agent.latestLine,
+              fullOutput: agent.fullOutput,
+              toolCalls: agent.toolCalls,
+              parts: agent.outputParts,
+              startTime: agent.startTime,
+              endTime: agent.endTime,
+            }}
+            role={agent.role}
             isSelected={selectedSubAgentIndex >= 0 && agentIndex === selectedSubAgentIndex}
           />
         );

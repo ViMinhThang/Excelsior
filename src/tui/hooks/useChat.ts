@@ -1,36 +1,30 @@
-import { useEffect } from "react";
 import { useChatHistory } from "./useChatHistory.js";
 import { useChatSender } from "./useChatSender.js";
 
 export function useChat() {
   const {
-    messages,
+    displayBlocks,
     hasMore,
-    append,
-    updateById,
-    createAndAppend,
+    attachSession,
     loadMore,
     clearMessages,
   } = useChatHistory();
 
-  const { isLoading, sendMessage, cancel, setCallbacks } = useChatSender();
+  const { isLoading, sendMessage, cancel } = useChatSender();
 
-  useEffect(() => {
-    setCallbacks({ messages, append, updateById });
-  }, [messages, append, updateById, setCallbacks]);
-
-  const appendSystemMessage = (content: string) => {
-    createAndAppend("system", content);
+  const appendSystemMessage = (_content: string) => {
+    // System messages are transient UI notifications, not events
   };
 
   return {
-    messages,
+    displayBlocks,
     isLoading,
     hasMore,
     sendMessage,
     cancel,
     loadMore,
     clearMessages,
+    attachSession,
     appendSystemMessage,
   };
 }

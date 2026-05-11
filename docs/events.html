@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Architecture - Excelsior</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav class="sidebar">
+    <div class="logo">
+      <span class="logo-icon">&#9889;</span>
+      <span class="logo-text">Excelsior</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="events.html" class="active">Event Architecture</a></li>
+      <li><a href="evolution.html">Evolution</a></li>
+    </ul>
+    <div class="nav-footer">
+      <span>Terminal-based AI coding assistant</span>
+    </div>
+  </nav>
+
+  <main class="content">
+
+    <section id="intro">
+      <h1>Event-Stream Architecture</h1>
+      <p class="tagline">The core insight: AI execution is a continuous event stream, not discrete chat bubbles. The architecture makes events explicit, session-scoped, and the single source of truth.</p>
+    </section>
+
+    <!-- ═══════════════════════════ CORE CONCEPT ═══════════════════════════ -->
+    <section id="core-concept">
+      <h2>1. Core Concept: AgentSession</h2>
+      <p>Every agent execution is encapsulated in an <code>AgentSession</code>&mdash;a self-contained runtime that owns its <strong>event bus</strong> (transport) and <strong>append-only event log</strong> (source of truth). The class exposes three concerns independently: bus for live distribution, log for replay/projection, and snapshot for React integration.</p>
+
+      <div class="diagram-box">
+        <svg width="780" height="420" viewBox="0 0 780 420">
+          <defs>
+            <marker id="arrowEv" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent)"/>
+            </marker>
+            <style>
+              .session-border { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 7,3; }
+              .box-bg { fill: var(--bg-tertiary); }
+              .box-border { stroke: var(--border); stroke-width: 1.5; }
+              .title-text { fill: var(--accent); font-weight: bold; font-size: 14px; }
+              .sub-text { fill: var(--text-muted); font-size: 11px; }
+              .diagram-label { fill: var(--text-secondary); font-size: 12px; }
+              .sub-box { fill: var(--bg-primary); stroke: var(--border); stroke-width: 1; rx: 6; }
+            </style>
+          </defs>
+
+          <rect x="30" y="10" width="720" height="410" class="session-border" rx="14"/>
+          <text x="390" y="38" text-anchor="middle" class="title-text">AgentSession</text>
+
+          <rect x="55" y="65" width="290" height="130" class="box-bg box-border" rx="10"/>
+          <text x="200" y="92" text-anchor="middle" class="title-text" fill="var(--accent)" font-size="13">Event Bus (transport)</text>
+          <text x="200" y="112" text-anchor="middle" class="sub-text">createBus&lt;{ event: AgentEvent }&gt;()</text>
+          <text x="200" y="132" text-anchor="middle" class="sub-text">session.bus.emit("event", event)</text>
+          <text x="200" y="152" text-anchor="middle" class="sub-text">session.bus.on("event", handler)</text>
+          <text x="200" y="178" text-anchor="middle" fill="var(--nord9)" font-size="10">&#9679; Distributor &mdash; not state</text>
+
+          <rect x="430" y="65" width="290" height="130" class="box-bg box-border" rx="10"/>
+          <text x="575" y="92" text-anchor="middle" fill="var(--nord8)" font-weight="bold" font-size="13">Event Log (source of truth)</text>
+          <text x="575" y="112" text-anchor="middle" class="sub-text">_events: AgentEvent[] (append-only)</text>
+          <text x="575" y="132" text-anchor="middle" class="sub-text">_snapshot = [..._events] (cached)</text>
+          <text x="575" y="152" text-anchor="middle" class="sub-text">getSnapshot() &rarr; frozen copy</text>
+          <text x="575" y="178" text-anchor="middle" fill="var(--nord8)" font-size="10">&#9679; Source of truth</text>
+
+          <line x1="345" y1="130" x2="430" y2="130" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrowEv)"/>
+          <text x="388" y="118" text-anchor="middle" fill="var(--accent)" font-size="10">emit() appends + snapshots</text>
+
+          <text x="55" y="240" class="diagram-label">Independent subscribers (each receives events via bus)</text>
+
+          <rect x="55" y="258" width="200" height="60" class="sub-box"/>
+          <text x="155" y="282" text-anchor="middle" fill="var(--nord9)" font-weight="bold" font-size="12">React UI</text>
+          <text x="155" y="300" text-anchor="middle" class="sub-text">useSyncExternalStore</text>
+          <line x1="200" y1="195" x2="155" y2="258" stroke="var(--nord9)" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+          <rect x="290" y="258" width="190" height="60" class="sub-box"/>
+          <text x="385" y="282" text-anchor="middle" fill="var(--success)" font-weight="bold" font-size="12">Persistence</text>
+          <text x="385" y="300" text-anchor="middle" class="sub-text">Batch persist at session-end</text>
+          <line x1="430" y1="195" x2="385" y2="258" stroke="var(--success)" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+          <rect x="515" y="258" width="200" height="60" class="sub-box"/>
+          <text x="615" y="282" text-anchor="middle" fill="var(--accent)" font-weight="bold" font-size="12">Debugger / Trace</text>
+          <text x="615" y="300" text-anchor="middle" class="sub-text">Future: replay, analytics</text>
+          <line x1="575" y1="195" x2="615" y2="258" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4,3"/>
+
+          <rect x="55" y="345" width="660" height="50" class="sub-box"/>
+          <text x="385" y="363" text-anchor="middle" class="sub-text">Lifecycle: create &rarr; attach subscribers &rarr; session.start() &rarr; emit events &rarr; session completes</text>
+          <text x="385" y="380" text-anchor="middle" class="sub-text" font-size="10">session.cancel() aborts via AbortController, cancels pending notification</text>
+        </svg>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">typescript</span></div>
+        <pre><code>class AgentSession {
+  readonly id: string;
+  readonly bus = createBus&lt;{ event: AgentEvent }&gt;();  // transport only
+  readonly parentEventId?: string;
+  abortController?: AbortController;
+
+  constructor(parentEventId?: string)
+
+  emit(type, data, overrides?): AgentEvent     // appends + snapshots + bus notifies
+  cancel(): void                                // aborts + clears pending
+  flushNotify(): void                           // force immediate React notification
+
+  getSnapshot(): readonly AgentEvent[]          // cached copy, stable between emits
+  subscribe(cb): () => void                     // for useSyncExternalStore
+}</code></pre>
+      </div>
+
+      <div class="callout callout-info">
+        <span class="callout-icon">&#8505;</span>
+        <div class="callout-content">
+          <p><strong>Bus vs Log:</strong> The bus <em>distributes</em> events. The log <em>stores</em> them. Subscribers use the bus for live updates. Replay, persistence, and projections read from the log. This separation means the bus can be synchronous (emit fires immediately) while notifications to React can be batched via <code>setTimeout(0)</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ EVENT TYPES ═══════════════════════════ -->
+    <section id="event-types">
+      <h2>2. Event Vocabulary</h2>
+      <p>Events are the atoms of execution. Each represents a single, immutable fact. Events are never mutated&mdash;<code>Object.freeze(event)</code> enforces this at runtime.</p>
+
+      <table class="event-table">
+        <thead>
+          <tr><th>Type</th><th>Data</th><th>When</th><th>Semantic Role</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>session-start</td><td><code>{}</code></td><td>Before first await in agent.stream()</td><td>Bookends the execution frame</td></tr>
+          <tr><td>user-input</td><td><code>{ content }</code></td><td>Caller emits before streamAgentResponse</td><td>Marks the turn boundary</td></tr>
+          <tr><td>text-delta</td><td><code>{ delta }</code></td><td>Per token from AI SDK</td><td>Raw provider artifact; delta only (not fullText)</td></tr>
+          <tr><td>tool-call-start</td><td><code>{ toolName, toolArgs, toolCallId }</code></td><td>AI SDK tool-call part</td><td>Correlated to end via relatedToolCallId</td></tr>
+          <tr><td>tool-call-end</td><td><code>{ toolCallId, result, status }</code></td><td>AI SDK tool-result / tool-error</td><td>status: &ldquo;success&rdquo; or &ldquo;error&rdquo;</td></tr>
+          <tr><td>error</td><td><code>{ message }</code></td><td>Catch in streamAgentResponse</td><td>Non-abort errors</td></tr>
+          <tr><td>session-end</td><td><code>{ cancelled }</code></td><td>Stream loop completes or catches abort</td><td>Terminal event; triggers flushNotify</td></tr>
+        </tbody>
+      </table>
+
+      <div class="principle-card">
+        <strong>Design Rule:</strong> Events are execution facts, not UI artifacts. <code>text-delta</code> records what the provider sent. Semantic events like <code>assistant-message-complete</code> are deliberately NOT stored&mdash;they are derived by the projection at render time.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ DATA FLOW ═══════════════════════════ -->
+    <section id="data-flow">
+      <h2>3. sendMessage() Data Flow</h2>
+      <p>The critical architectural change: <code>sendMessage()</code> is <strong>synchronous</strong>. It returns the session immediately. The caller attaches React subscribers before any async streaming begins.</p>
+
+      <div class="flow-step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Create Session</h3>
+          <p><code>new AgentSession()</code> &rarr; bus and internal event log are created. No I/O, no async work.</p>
+        </div>
+      </div>
+      <div class="flow-connector"></div>
+
+      <div class="flow-step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>Attach Subscribers</h3>
+          <p><code>session.bus.on("event", collector)</code> &rarr; collects all events for batch persistence at session-end. The bus subscriber runs synchronously for every emit&mdash;no batching on the bus, only on React notifications.</p>
+        </div>
+      </div>
+      <div class="flow-connector"></div>
+
+      <div class="flow-step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Emit User Input</h3>
+          <p><code>session.emit("user-input", { content })</code> &rarr; appended to log, bus distributes, snapshot updated. Persisted to DB immediately (not batched).</p>
+        </div>
+      </div>
+      <div class="flow-connector"></div>
+
+      <div class="flow-step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <h3>Return Session</h3>
+          <p><code>return session</code> &rarr; callers (React via <code>attachSession</code>) subscribe to the session via <code>useSyncExternalStore</code>. From this point forward, all events flow to React.</p>
+        </div>
+      </div>
+      <div class="flow-connector"></div>
+
+      <div class="flow-step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <h3>Fire-and-Forget Streaming</h3>
+          <p><code>streamAgentResponse(agent, messages, session, signal)</code> &rarr; runs asynchronously. Each AI SDK stream part becomes a <code>session.emit()</code> call. The Promise is not awaited by the caller; it completes in the background.</p>
+        </div>
+      </div>
+      <div class="flow-connector"></div>
+
+      <div class="flow-step">
+        <div class="step-number">6</div>
+        <div class="step-content">
+          <h3>Batch Persist on Completion</h3>
+          <p><code>.then(() &rArr; persistEvents(allEvents))</code> &rarr; single bulk write at session-end. No per-event DB writes during streaming. Events include text-deltas (needed by projection for assistant text).</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ PROJECTION ═══════════════════════════ -->
+    <section id="projection">
+      <h2>4. Projection: Events to DisplayBlocks</h2>
+      <p>The UI never reads raw events. A pure function <code>groupEventsForDisplay()</code> projects the event sequence into <code>DisplayBlock[]</code> for rendering.</p>
+
+      <div class="diagram-box">
+        <svg width="740" height="350" viewBox="0 0 740 350">
+          <defs>
+            <style>
+              .ev { fill: var(--bg-tertiary); stroke: var(--border); stroke-width: 1; rx: 6; }
+              .evt { fill: var(--text-muted); font-size: 10px; }
+              .arw { stroke: var(--accent); stroke-width: 1.5; marker-end: url(#arrowPr); }
+              .arl { fill: var(--accent); font-size: 10px; }
+              .bl { fill: var(--bg-primary); stroke-width: 1.5; rx: 6; }
+            </style>
+            <marker id="arrowPr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent)"/>
+            </marker>
+          </defs>
+
+          <rect x="20" y="10" width="700" height="55" class="ev"/>
+          <text x="370" y="32" text-anchor="middle" fill="var(--nord8)" font-weight="bold" font-size="13">AgentEvent[] (raw execution facts)</text>
+          <text x="50" y="50" class="evt">&#9654; user-input</text>
+          <text x="150" y="50" class="evt">&#9654; text-delta</text>
+          <text x="265" y="50" class="evt">&#9654; text-delta</text>
+          <text x="380" y="50" class="evt">&#9654; tool-call-start</text>
+          <text x="510" y="50" class="evt">&#9654; tool-call-end</text>
+          <text x="620" y="50" class="evt">&#9654; session-end</text>
+
+          <line x1="370" y1="65" x2="370" y2="105" class="arw"/>
+          <text x="390" y="90" class="arl">groupEventsForDisplay()</text>
+
+          <rect x="20" y="115" width="140" height="55" class="bl"/>
+          <text x="90" y="143" text-anchor="middle" fill="var(--nord4)" font-size="11">user block</text>
+          <text x="90" y="158" text-anchor="middle" class="evt" font-size="9">id, content, timestamp</text>
+
+          <rect x="180" y="115" width="150" height="55" class="bl"/>
+          <text x="255" y="143" text-anchor="middle" fill="var(--nord4)" font-size="11">assistant block</text>
+          <text x="255" y="158" text-anchor="middle" class="evt" font-size="9">id, fullText, timestamp</text>
+
+          <rect x="350" y="115" width="150" height="55" class="bl"/>
+          <text x="425" y="143" text-anchor="middle" fill="var(--nord9)" font-size="11">tool-call block</text>
+          <text x="425" y="158" text-anchor="middle" class="evt" font-size="9">toolName, status, result</text>
+
+          <rect x="520" y="115" width="190" height="55" class="bl"/>
+          <text x="615" y="143" text-anchor="middle" fill="var(--accent)" font-size="11">sub-agent block</text>
+          <text x="615" y="158" text-anchor="middle" class="evt" font-size="9">role, state, latestLine</text>
+
+          <path d="M 80 115 L 80 100 L 230 100 L 230 115" fill="none" stroke="var(--text-muted)" stroke-width="0.8" stroke-dasharray="3,2"/>
+          <path d="M 620 115 L 620 100 L 500 100 L 500 115" fill="none" stroke="var(--text-muted)" stroke-width="0.8" stroke-dasharray="3,2"/>
+
+          <line x1="370" y1="170" x2="370" y2="210" class="arw"/>
+          <text x="390" y="195" class="arl">React renders via blocks.map()</text>
+
+          <rect x="100" y="220" width="250" height="55" class="bl"/>
+          <text x="225" y="245" text-anchor="middle" fill="var(--nord9)" font-size="11">UserMessage / AgentMessage</text>
+          <text x="225" y="262" text-anchor="middle" class="evt" font-size="9">ToolMessage / SubAgentRow</text>
+
+          <rect x="400" y="220" width="230" height="55" class="bl"/>
+          <text x="515" y="245" text-anchor="middle" fill="var(--accent)" font-size="11">ChatHistory (Static + live tail)</text>
+          <text x="515" y="262" text-anchor="middle" class="evt" font-size="9">frozen blocks in Static, last 3 dynamic</text>
+        </svg>
+      </div>
+
+      <p>The projection is a <strong>pure, deterministic, side-effect-free</strong> function. Same events &rarr; same display blocks, always. This invariant enables replay, snapshot testing, and time-travel debugging.</p>
+
+      <div class="principle-card">
+        <strong>How grouping works:</strong> Consecutive <code>text-delta</code> events coalesce into one assistant block. When <code>tool-call-start</code> interrupts, the assistant block is flushed and a new tool-call block begins. When <code>tool-call-end</code> arrives, the tool block is finalized via <code>flushTool()</code>. This replaces the old <code>currentId = null</code> hack entirely.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ RENDERING ═══════════════════════════ -->
+    <section id="rendering">
+      <h2>5. Terminal Rendering Strategy</h2>
+      <p>Ink renders output to the terminal buffer. To prevent scroll jank when new events arrive, the UI uses a <strong>frozen + live tail</strong> strategy via Ink&rsquo;s <code>&lt;Static&gt;</code> component.</p>
+
+      <div class="diagram-box">
+        <svg width="700" height="280" viewBox="0 0 700 280">
+          <defs>
+            <style>
+              .frz { fill: var(--bg-tertiary); stroke: var(--border); stroke-width: 1; rx: 4; }
+              .live { fill: var(--bg-primary); stroke: var(--accent); stroke-width: 1.5; rx: 4; stroke-dasharray: 4,2; }
+              .lbl { fill: var(--text-muted); font-size: 9px; }
+              .lbl-act { fill: var(--accent); font-size: 9px; font-weight: bold; }
+            </style>
+          </defs>
+
+          <rect x="20" y="10" width="660" height="35" class="frz"/>
+          <text x="60" y="33" fill="var(--text-muted)" font-size="10">&#9660; &lt;Static&gt; Frozen Blocks</text>
+
+          <rect x="20" y="50" width="660" height="24" class="frz"/>
+          <text x="40" y="66" class="lbl">User: &ldquo;generate some text&rdquo;</text>
+
+          <rect x="20" y="78" width="660" height="24" class="frz"/>
+          <text x="40" y="94" class="lbl">Assistant: Here is the generated text...</text>
+
+          <rect x="20" y="106" width="660" height="24" class="frz"/>
+          <text x="40" y="122" class="lbl">Tool: runCommand (completed)</text>
+
+          <rect x="20" y="140" width="660" height="60" class="live"/>
+          <text x="60" y="163" class="lbl-act">&#9654; Live Tail (last 3 blocks, re-rendered)</text>
+          <text x="40" y="183" class="lbl">Tool: readFile (pending) &larr; updates when result arrives</text>
+
+          <line x1="350" y1="200" x2="350" y2="235" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#arrowEv)"/>
+          <text x="370" y="223" fill="var(--accent)" font-size="9">session emits new event &rarr; only live tail re-renders</text>
+        </svg>
+      </div>
+
+      <p>Terminal emulators naturally scroll to show new output. Without <code>&lt;Static&gt;</code>, every re-render rewrites the <em>entire</em> chat buffer, resetting the viewport. With <code>&lt;Static&gt;</code>, frozen blocks are never re-touched&mdash;only the last 3 blocks update dynamically. The terminal only scrolls for actual new content, not for cosmetic re-renders.</p>
+    </section>
+
+    <!-- ═══════════════════════════ React Integration ═══════════════════════════ -->
+    <section id="react-subscription">
+      <h2>6. React Integration Pattern</h2>
+
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">typescript</span></div>
+        <pre><code>// useChatHistory.ts &mdash; stable ref pattern for useSyncExternalStore
+const EMPTY_EVENTS: readonly AgentEvent[] = [];
+
+const [activeSession, setActiveSession] = useState&lt;AgentSession | null&gt;(null);
+
+const liveEvents = useSyncExternalStore(
+  useCallback(
+    (cb: () =&gt; void) =&gt; {
+      if (!activeSession) return () =&gt; {};
+      return activeSession.subscribe(cb);
+    },
+    [activeSession],
+  ),
+  useCallback(() =&gt; {
+    if (!activeSession) return EMPTY_EVENTS;   // stable reference!
+    return activeSession.getSnapshot();
+  }, [activeSession]),
+);
+
+// Deduplicate events across session boundaries
+const displayEvents = useMemo(() =&gt; {
+  const liveIds = new Set(liveEvents.map(e =&gt; e.id));
+  const filtered = persistedEvents.filter(e =&gt; !liveIds.has(e.id));
+  return [...filtered, ...liveEvents];
+}, [persistedEvents, liveEvents]);
+
+// Project
+const displayBlocks = useMemo(
+  () =&gt; groupEventsForDisplay(displayEvents),
+  [displayEvents],
+);</code></pre>
+      </div>
+
+      <div class="principle-card">
+        <strong>Critical detail:</strong> The <code>EMPTY_EVENTS</code> constant prevents an infinite re-render loop. If <code>getSnapshot()</code> returned a new <code>[]</code> literal on every call, <code>useSyncExternalStore</code> would see a "change" every render and loop. A stable reference fixes this.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ SESSION TREE ═══════════════════════════ -->
+    <section id="session-tree">
+      <h2>7. Session Tree: Main + Sub-Agents</h2>
+      <p>Sub-agents are not "special." A sub-agent is just another <code>AgentSession</code> with <code>parentEventId</code> linking it to the spawning tool call. Its events optionally forward to the parent&rsquo;s bus.</p>
+
+      <div class="diagram-box">
+        <svg width="700" height="200" viewBox="0 0 700 200">
+          <style>
+            .pbox { fill: var(--bg-secondary); stroke: var(--accent); stroke-width: 2; rx: 8; }
+            .cbox { fill: var(--bg-secondary); stroke: var(--success); stroke-width: 2; rx: 8; }
+            .el { fill: var(--bg-primary); stroke: var(--border); stroke-width: 1; rx: 5; }
+          </style>
+
+          <rect x="30" y="20" width="280" height="80" class="pbox"/>
+          <text x="170" y="55" text-anchor="middle" fill="var(--accent)" font-weight="bold" font-size="13">Parent AgentSession</text>
+          <text x="170" y="78" text-anchor="middle" class="sub-text">Main chat or review orchestrator</text>
+
+          <rect x="390" y="20" width="280" height="80" class="cbox"/>
+          <text x="530" y="55" text-anchor="middle" fill="var(--success)" font-weight="bold" font-size="13">Child AgentSession</text>
+          <text x="530" y="78" text-anchor="middle" class="sub-text">Sub-agent (Bug Hunter, etc.)</text>
+
+          <rect x="55" y="125" width="230" height="50" class="el"/>
+          <text x="170" y="147" text-anchor="middle" class="sub-text">Event Log: [main events]</text>
+          <text x="170" y="162" text-anchor="middle" class="sub-text" font-size="9">+ child events forwarded</text>
+
+          <rect x="415" y="125" width="230" height="50" class="el"/>
+          <text x="530" y="147" text-anchor="middle" class="sub-text">Event Log: [child events]</text>
+          <text x="530" y="162" text-anchor="middle" class="sub-text" font-size="9">parentEventId = toolCallId</text>
+
+          <line x1="390" y1="60" x2="310" y2="60" stroke="var(--success)" stroke-width="2" marker-end="url(#arrowEv)"/>
+          <text x="350" y="50" text-anchor="middle" fill="var(--success)" font-size="10">forwards to parent bus</text>
+        </svg>
+      </div>
+
+      <p>The <code>projectEvents.ts</code> projection handles this naturally: <code>spawnSubAgent</code> tool-call events create a pending tool block. When sub-agent events arrive (via forwarded bus events with matching <code>parentEventId</code>), the projection emits a <code>sub-agent</code> DisplayBlock instead of a <code>tool-call</code> block. No string-matching on tool names anywhere in the rendering pipeline.</p>
+    </section>
+
+    <!-- ═══════════════════════════ PRINCIPLES ═══════════════════════════ -->
+    <section id="principles">
+      <h2>8. Architectural Principles</h2>
+
+      <div class="principle-card">
+        <strong>1. Events are immutable facts.</strong> Once created, an event is never mutated. <code>Object.freeze(event)</code> enforces this at runtime. No subscriber can tamper with history.
+      </div>
+      <div class="principle-card">
+        <strong>2. Bus is transport, not state.</strong> The bus distributes events. The event log is the source of truth. Never read state from the bus&mdash;always from the log.
+      </div>
+      <div class="principle-card">
+        <strong>3. Session-scoped isolation.</strong> Each execution gets its own bus. No global event bus, no session-ID filtering, no cross-session leaks.
+      </div>
+      <div class="principle-card">
+        <strong>4. Projections are pure.</strong> <code>groupEventsForDisplay(events)</code> must be deterministic&mdash;same input, same output. No side effects, no mutable state, no date/time dependencies.
+      </div>
+      <div class="principle-card">
+        <strong>5. Store facts, derive views.</strong> Only execution facts go in the event log. Semantic views (assistant-message-complete, etc.) are derived at projection time, not stored.
+      </div>
+      <div class="principle-card">
+        <strong>6. Explicit lifecycle.</strong> Create &rarr; subscribe &rarr; start. Never auto-start in a constructor. Separation of creation and execution enables middleware, debugging, and replay.
+      </div>
+      <div class="principle-card">
+        <strong>7. Batch at the boundary.</strong> React notifications are batched (setTimeout 0) to coalesce rapid streams of events into a single render. DB writes are batched at session-end. The event bus itself is never batched&mdash;subscribers get every event synchronously.
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════ COMPARISON ═══════════════════════════ -->
+    <section id="before-after">
+      <h2>9. Before vs After: Callback Elimination</h2>
+
+      <div class="comparison-grid">
+        <div class="comparison-col old">
+          <h4>Old: Callback Threading</h4>
+          <div class="code-block"><pre><code>// agentStream.ts &mdash; accepts callback
+streamAgentResponse(agent, messages,
+  (event) => onLiveEvent(event)
+);
+
+// useChatSender.ts &mdash; receives callback
+function useChatSender(onLiveEvent) { ... }
+
+// useChat.ts &mdash; threads callback
+const { appendLiveEvent } = useChatHistory();
+const { sendMessage } = useChatSender(appendLiveEvent);
+//                      callback coupling ^</code></pre></div>
+          <p style="margin-top:0.5rem;color:var(--error);font-size:0.85rem;">Point-to-point coupling. Hooks can't be independently composed. Adding a new subscriber requires rewiring parent components.</p>
+        </div>
+
+        <div class="comparison-col new">
+          <h4>New: Session Bus + useSyncExternalStore</h4>
+          <div class="code-block"><pre><code>// useChatSender.ts &mdash; returns session
+const session = new AgentSession();
+
+// Persistence subscribes independently:
+session.bus.on("event", collectForPersist);
+
+// React subscribes independently:
+const liveEvents = useSyncExternalStore(
+  (cb) => session.subscribe(cb),
+  () => session.getSnapshot(),
+);
+
+// No threading needed.
+return session;</code></pre></div>
+          <p style="margin-top:0.5rem;color:var(--success);font-size:0.85rem;">Bus-based distribution. Hooks are independent. Add subscribers without changing any existing code. React, persistence, and debugger are peers.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>

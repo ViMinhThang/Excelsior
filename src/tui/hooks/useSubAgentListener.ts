@@ -3,8 +3,8 @@ import { subAgentBus } from "../../lib/subAgentBus.js";
 import {
   SubAgentState,
   SubAgentOutputPart,
-  ToolCallInfo,
-} from "../../types.js";
+} from "../../lib/eventTypes.js";
+import { ToolCallInfo } from "../../types.js";
 
 interface SubAgentListenerCallbacks {
   onSpawned: (agent: SubAgentState) => void;

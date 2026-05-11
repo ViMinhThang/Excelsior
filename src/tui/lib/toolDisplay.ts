@@ -152,18 +152,6 @@ export function createToolDisplay({
       };
     }
 
-    case "spawnSubAgent": {
-      const role = asString(args?.role);
-      return {
-        label: "Sub-agent",
-        summary: role || "spawn sub-agent",
-        detail: status === "pending" ? "starting" : "press ^O for detail",
-        resultPreview: preview.lines,
-        omittedResultLines: preview.omitted,
-        tone,
-      };
-    }
-
     default:
       return {
         label: name,

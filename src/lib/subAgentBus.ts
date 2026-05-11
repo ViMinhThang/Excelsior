@@ -1,5 +1,6 @@
 import { createBus } from "./bus.js";
-import { SubAgentOutputPart, ToolCallInfo } from "../types.js";
+import { ToolCallInfo } from "../types.js";
+import { SubAgentOutputPart } from "./eventTypes.js";
 
 export type SubAgentEvents = {
   "spawned": { toolCallId: string; role: string };

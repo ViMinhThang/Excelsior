@@ -2,10 +2,10 @@ import { tool } from "ai";
 import { z } from "zod";
 import { randomUUID } from "crypto";
 import { createAgent } from "../../agent/agent.js";
-import { SubAgentOutputPart, ToolCallInfo } from "../../types.js";
-import { streamAgentResponse } from "../../lib/agentStream.js";
-
+import { ToolCallInfo, getTextDelta, getToolName, getToolArgs, getToolResult } from "../../types.js";
+import { SubAgentOutputPart } from "../../lib/eventTypes.js";
 import { subAgentBus } from "../../lib/subAgentBus.js";
+import { StreamPart } from "../../types.js";
 
 function emitBusOutput(
   toolCallId: string,
@@ -65,40 +65,42 @@ export const spawnSubAgentTool = tool({
     }
 
     try {
-      await streamAgentResponse(
-        agent,
-        [{ role: "user", content: instruction }],
-        {
-          onTextDelta: (text) => {
-            const delta = text.slice(fullOutput.length);
-            fullOutput = text;
-            addTextDelta(delta);
-            emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls);
-          },
-          onToolCall: (toolName, toolArgs, callId) => {
-            outputParts.push({ type: "tool-call", toolName, toolArgs, toolCallId: callId, status: "pending" });
-            toolCalls.push({ toolName, toolArgs, toolCallId: callId, status: "pending" });
-            emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${toolName}(${toolArgs})`);
-          },
-          onToolResult: (callId, result) => {
-            const isError = result.startsWith("[Error]");
-            const status = isError ? ("error" as const) : ("completed" as const);
-            for (let i = 0; i < outputParts.length; i++) {
-              const p = outputParts[i];
-              if (p.type === "tool-call" && p.toolCallId === callId) {
-                outputParts[i] = { ...p, status };
-              }
+      const stream = await agent.stream({ messages: [{ role: "user", content: instruction }] } as any);
+
+      for await (const rawPart of stream.fullStream) {
+        const part = rawPart as StreamPart;
+
+        if (part.type === "text-delta") {
+          const delta = getTextDelta(part);
+          fullOutput += delta;
+          addTextDelta(delta);
+          emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls);
+        } else if (part.type === "tool-call") {
+          const toolName = getToolName(part);
+          const toolArgs = getToolArgs(part);
+          const callId = part.toolCallId;
+          outputParts.push({ type: "tool-call", toolName, toolArgs, toolCallId: callId, status: "pending" });
+          toolCalls.push({ toolName, toolArgs, toolCallId: callId, status: "pending" });
+          emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${toolName}(${toolArgs})`);
+        } else if (part.type === "tool-result" || part.type === "tool-error") {
+          const result = getToolResult(part);
+          const callId = part.toolCallId;
+          const isError = part.type === "tool-error";
+          const status = isError ? ("error" as const) : ("completed" as const);
+          for (let i = 0; i < outputParts.length; i++) {
+            const p = outputParts[i];
+            if (p.type === "tool-call" && p.toolCallId === callId) {
+              outputParts[i] = { ...p, status };
             }
-            toolCalls.forEach((tc, i) => {
-              if (tc.toolCallId === callId) {
-                toolCalls[i] = { ...tc, status };
-              }
-            });
-            emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${status}`);
-          },
-          onFinish: () => {},
-        },
-      );
+          }
+          toolCalls.forEach((tc, i) => {
+            if (tc.toolCallId === callId) {
+              toolCalls[i] = { ...tc, status };
+            }
+          });
+          emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${status}`);
+        }
+      }
 
       subAgentBus.emit("done", { toolCallId, fullOutput });
       return fullOutput;

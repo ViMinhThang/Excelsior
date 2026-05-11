@@ -3,6 +3,7 @@ export type StreamPart =
   | { type: "tool-call"; toolName?: string; name?: string; toolCallId: string; input?: unknown; [key: string]: unknown }
   | { type: "tool-result"; toolCallId: string; output?: { type: string; value: unknown }; [key: string]: unknown }
   | { type: "tool-error"; toolCallId: string; toolName?: string; error?: unknown; [key: string]: unknown }
+
 export function getTextDelta(part: StreamPart): string {
   if (part.type === "text-delta") {
     return part.text ?? part.textDelta ?? "";
@@ -44,22 +45,6 @@ export interface ToolCallInfo {
   status: "pending" | "completed" | "error";
 }
 
-export interface StreamCallbacks {
-  onTextDelta: (fullText: string) => void;
-  onToolCall: (toolName: string, args: string, toolCallId: string) => void;
-  onToolResult: (toolCallId: string, result: string) => void;
-  onFinish: (fullText: string, cancelled: boolean) => void;
-}
-
-export interface Message {
-  id: string;
-  role: "user" | "assistant" | "system" | "tool-call";
-  content: string;
-  timestamp?: string;
-  toolCall?: ToolCallInfo;
-  toolCalls?: any[]; // For AI SDK compatibility
-}
-
 export type Screen = 'chat' | 'settings' | 'review';
 
 export type ReviewScreenMode = "browser" | "review" | "results";
@@ -70,22 +55,6 @@ export interface PullRequest {
   author: string;
   headRefName: string;
   createdAt: string;
-}
-
-export type SubAgentOutputPart =
-  | { type: "text"; text: string }
-  | { type: "tool-call"; toolName: string; toolArgs: string; toolCallId: string; status: "pending" | "completed" | "error" };
-
-export interface SubAgentState {
-  toolCallId: string;
-  role: string;
-  status: "running" | "done" | "error";
-  latestLine: string;
-  fullOutput: string;
-  outputParts: SubAgentOutputPart[];
-  toolCalls: ToolCallInfo[];
-  startTime?: number;
-  endTime?: number;
 }
 
 export const PAGE_SIZE = 50;

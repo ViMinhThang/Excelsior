@@ -6,6 +6,7 @@ import {
 } from "../../agent/review/spawnSubAgent.js";
 import { gitDiffTool } from "../../agent/tools/gitDiff/gitDiff.js";
 import { streamAgentResponse } from "../../lib/agentStream.js";
+import { AgentSession } from "../../lib/agentSession.js";
 import { usePRContext } from "../context/PRContext.js";
 import { useReviewSessionContext } from "../context/ReviewSessionContext.js";
 import { useSubAgentContext } from "../context/SubAgentContext.js";
@@ -69,10 +70,34 @@ export function useReviewOrchestrator() {
       spawnSubAgent: spawnSubAgentTool,
     });
 
-    abortRef.current = new AbortController();
-    const signal = abortRef.current.signal;
+    const session = new AgentSession();
+    const abortController = new AbortController();
+    abortRef.current = abortController;
+    session.abortController = abortController;
 
     let prevText = "";
+
+    const unsub = session.bus.on("event", (event) => {
+      if (event.type === "text-delta") {
+        const fullText = prevText + (event.data.delta as string);
+        const delta = (event.data.delta as string);
+        prevText = fullText;
+        onSetMainOutput(fullText);
+        onAddTextBlock(delta);
+      } else if (event.type === "tool-call-start") {
+        const toolName = event.data.toolName as string;
+        const args = event.data.toolArgs as string;
+        const toolCallId = event.relatedToolCallId ?? (event.data.toolCallId as string);
+        onAddToolCallBlock(toolCallId, toolName, args);
+      } else if (event.type === "tool-call-end") {
+        const toolCallId = event.relatedToolCallId ?? (event.data.toolCallId as string);
+        const result = event.data.result as string;
+        const status = result?.startsWith("[Error]") ? "error" : "completed";
+        onUpdateToolCallBlock(toolCallId, status);
+      } else if (event.type === "session-end") {
+        onSetMode("results");
+      }
+    });
 
     try {
       await streamAgentResponse(
@@ -83,32 +108,14 @@ export function useReviewOrchestrator() {
             content: `Review this PR diff for a pull request:\n\n\`\`\`diff\n${currentDiff}\n\`\`\``,
           },
         ],
-        {
-          onTextDelta: (fullText) => {
-            const delta = fullText.slice(prevText.length);
-            prevText = fullText;
-            onSetMainOutput(fullText);
-            onAddTextBlock(delta);
-          },
-          onToolCall: (toolName, args, toolCallId) => {
-            onAddToolCallBlock(toolCallId, toolName, args);
-          },
-          onToolResult: (toolCallId, result) => {
-            onUpdateToolCallBlock(toolCallId, result.startsWith("[Error]") ? "error" : "completed");
-          },
-          onFinish: (text, cancelled) => {
-            if (cancelled) {
-              onSetMainOutput(text + "\n\n[Cancelled]");
-            }
-            onSetMode("results");
-          },
-        },
-        signal,
+        session,
+        abortController.signal,
       );
     } catch (error: any) {
       onSetMainOutput(`Error during review: ${error.message}`);
       onAddTextBlock(`Error during review: ${error.message}`);
     } finally {
+      unsub();
       onSetMode("results");
     }
   }, []);
