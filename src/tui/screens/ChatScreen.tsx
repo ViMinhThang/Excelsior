@@ -1,5 +1,5 @@
-import React, { memo } from 'react';
-import { Box, Text } from 'ink';
+import React, { memo, useState, useEffect } from 'react';
+import { Box, Text, Static } from 'ink';
 import AppHeader from '../components/shared/AppHeader.js';
 import ChatHistory from '../components/chat/ChatHistory.js';
 import ChatInput from '../components/chat/ChatInput.js';
@@ -12,7 +12,19 @@ import { theme } from '../theme.js';
 import Panel from '../components/shared/Panel.js';
 import { DisplayBlock } from '../../lib/eventTypes.js';
 
+const renderAppHeader = () => (
+  <Box key="app-header">
+    <AppHeader />
+  </Box>
+);
+
 const ChatScreen = () => {
+  const [headerItems, setHeaderItems] = useState<string[]>([]);
+  
+  useEffect(() => {
+    setHeaderItems(['app-header']);
+  }, []);
+
   const {
     input,
     setInput,
@@ -40,7 +52,9 @@ const ChatScreen = () => {
 
   return (
     <Box flexDirection="column">
-      <AppHeader />
+      <Static items={headerItems}>
+        {renderAppHeader}
+      </Static>
 
       {chatMode === "subagent-detail" && subAgents.length > 0 && subAgents[subAgentIndex] ? (
         <SubAgentDetail agent={subAgents[subAgentIndex]} />

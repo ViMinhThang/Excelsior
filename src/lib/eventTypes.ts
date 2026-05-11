@@ -13,9 +13,7 @@ export type AgentEventType =
   | "text-delta"
   | "tool-call-start"
   | "tool-call-end"
-  | "sub-agent-spawned"
-  | "sub-agent-output"
-  | "sub-agent-done"
+  | "child-session-attached"
   | "error"
   | "session-end";
 

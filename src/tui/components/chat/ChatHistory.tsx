@@ -41,6 +41,14 @@ function renderBlock(block: DisplayBlock): React.ReactNode {
   }
   return null;
 }
+ 
+function renderStaticBlock(block: DisplayBlock) {
+  return (
+    <Box key={block.id} flexDirection="column">
+      {renderBlock(block)}
+    </Box>
+  );
+}
 
 const LIVED_TAIL = 3;
 
@@ -60,11 +68,7 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({ blocks, hasMore }) => {
         </Box>
       )}
       <Static items={frozenBlocks}>
-        {(block: DisplayBlock) => (
-          <Box key={block.id} flexDirection="column">
-            {renderBlock(block)}
-          </Box>
-        )}
+        {renderStaticBlock}
       </Static>
       {liveBlocks.map((block) => renderBlock(block))}
     </Box>

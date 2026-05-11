@@ -1,22 +1,9 @@
-import { AgentEvent, DisplayBlock, SubAgentDisplayState, SubAgentPart } from "./eventTypes.js";
+import { AgentEvent, DisplayBlock, SubAgentPart } from "./eventTypes.js";
 import { ToolCallInfo } from "../types.js";
 
 function parseToolArgs(args?: unknown): string {
   if (typeof args === "string") return args;
   return JSON.stringify(args ?? {});
-}
-
-interface SubAgentAccum {
-  toolCallId: string;
-  role: string;
-  status: "running" | "done" | "error";
-  latestLine: string;
-  fullOutput: string;
-  toolCalls: ToolCallInfo[];
-  parts: SubAgentPart[];
-  startTime: number;
-  endTime?: number;
-  timestamp: string;
 }
 
 interface PendingAssistant {
@@ -36,10 +23,18 @@ interface PendingTool {
   isSubAgent: boolean;
 }
 
-export function groupEventsForDisplay(events: AgentEvent[]): DisplayBlock[] {
+export interface ProjectOptions {
+  getChildEvents?: (childSessionId: string) => readonly AgentEvent[];
+}
+
+export function groupEventsForDisplay(
+  events: readonly AgentEvent[],
+  options?: ProjectOptions,
+): DisplayBlock[] {
   const blocks: DisplayBlock[] = [];
   let assistant: PendingAssistant | null = null;
   let tool: PendingTool | null = null;
+  const childSessionIdByToolCallId = new Map<string, { childSessionId: string; role: string }>();
 
   function flushAssistant() {
     if (assistant) {
@@ -55,65 +50,143 @@ export function groupEventsForDisplay(events: AgentEvent[]): DisplayBlock[] {
 
   function flushTool() {
     if (!tool) return;
+
     if (tool.isSubAgent) {
-      // Sub-agent display blocks are emitted on sub-agent-done, not here
-    } else {
-      blocks.push({
-        type: "tool-call",
-        id: tool.id,
-        toolName: tool.toolName,
-        toolArgs: tool.toolArgs,
-        status: tool.status,
-        content: tool.result,
-        timestamp: tool.timestamp,
-      });
+      const childInfo = childSessionIdByToolCallId.get(tool.toolCallId);
+      const childEvents =
+        childInfo && options?.getChildEvents
+          ? options.getChildEvents(childInfo.childSessionId)
+          : [];
+
+      let role = "SubAgent";
+      try {
+        const parsed = JSON.parse(tool.toolArgs);
+        role = parsed.role || role;
+      } catch {
+        // ignore
+      }
+      if (childInfo) {
+        role = childInfo.role || role;
+      }
+
+      const derivedStatus =
+        tool.status === "completed" ? "done" : tool.status === "error" ? "error" : "running";
+
+      const subBlock = buildSubAgentBlock(
+        tool.id,
+        role,
+        childEvents,
+        derivedStatus,
+        tool.timestamp,
+      );
+
+      if (subBlock) {
+        blocks.push(subBlock);
+        tool = null;
+        return;
+      }
     }
+
+    blocks.push({
+      type: "tool-call",
+      id: tool.id,
+      toolName: tool.toolName,
+      toolArgs: tool.toolArgs,
+      status: tool.status,
+      content: tool.result,
+      timestamp: tool.timestamp,
+    });
     tool = null;
   }
 
-  // Collect sub-agent state keyed by toolCallId
-  const subAgents = new Map<string, SubAgentAccum>();
+  function buildSubAgentBlock(
+    pendingToolId: string,
+    childRole: string,
+    childEvents: readonly AgentEvent[],
+    status: "running" | "done" | "error",
+    fallbackTimestamp: string,
+  ): DisplayBlock | null {
+    const parts: SubAgentPart[] = [];
+    const toolCalls: ToolCallInfo[] = [];
+    let fullOutput = "";
+    let startTime = Date.now();
+    let endTime = Date.now();
 
-  function getOrInitSA(toolCallId: string): SubAgentAccum {
-    let sa = subAgents.get(toolCallId);
-    if (!sa) {
-      sa = {
-        toolCallId,
-        role: "",
-        status: "running",
-        latestLine: "",
-        fullOutput: "",
-        toolCalls: [],
-        parts: [],
-        startTime: Date.now(),
-        timestamp: new Date().toISOString(),
-      };
-      subAgents.set(toolCallId, sa);
+    for (const evt of childEvents) {
+      if (evt.type === "text-delta") {
+        const delta = evt.data.delta as string;
+        fullOutput += delta;
+        const partsLen = parts.length;
+        if (partsLen > 0 && parts[partsLen - 1].type === "text") {
+          const last = parts[partsLen - 1] as SubAgentPart & { type: "text" };
+          parts[partsLen - 1] = { type: "text", text: last.text + delta };
+        } else {
+          parts.push({ type: "text", text: delta });
+        }
+      } else if (evt.type === "tool-call-start") {
+        const toolName = evt.data.toolName as string;
+        const toolArgs = parseToolArgs(evt.data.toolArgs);
+        const callId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
+        parts.push({ type: "tool-call", toolName, toolArgs, toolCallId: callId, status: "pending" });
+        toolCalls.push({ toolName, toolArgs, toolCallId: callId, status: "pending" });
+      } else if (evt.type === "tool-call-end") {
+        const callId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
+        const tcStatus = evt.data.status === "error" ? ("error" as const) : ("completed" as const);
+        for (let i = 0; i < parts.length; i++) {
+          const p = parts[i];
+          if (p.type === "tool-call" && p.toolCallId === callId) {
+            parts[i] = { ...p, status: tcStatus };
+          }
+        }
+        toolCalls.forEach((tc, i) => {
+          if (tc.toolCallId === callId) {
+            toolCalls[i] = { ...tc, status: tcStatus };
+          }
+        });
+      }
     }
-    return sa;
+
+    const lines = fullOutput.split("\n").filter(Boolean);
+    const latestLine = lines[lines.length - 1] || "";
+
+    if (childEvents.length > 0) {
+      startTime = new Date(childEvents[0].timestamp).getTime();
+      const last = childEvents[childEvents.length - 1];
+      endTime = status === "running" ? Date.now() : new Date(last.timestamp).getTime();
+    } else {
+      startTime = new Date(fallbackTimestamp).getTime();
+      endTime = status === "running" ? Date.now() : startTime;
+    }
+
+    return {
+      type: "sub-agent",
+      id: pendingToolId,
+      role: childRole,
+      state: {
+        status,
+        latestLine,
+        fullOutput,
+        toolCalls,
+        parts,
+        startTime,
+        endTime,
+      },
+      timestamp: childEvents[0]?.timestamp ?? fallbackTimestamp,
+    };
   }
 
-  function emitSubAgentBlock(sa: SubAgentAccum) {
-    if (!sa.role) return;
-    blocks.push({
-      type: "sub-agent",
-      id: sa.toolCallId,
-      role: sa.role,
-      state: {
-        status: sa.status,
-        latestLine: sa.latestLine,
-        fullOutput: sa.fullOutput,
-        toolCalls: sa.toolCalls,
-        parts: sa.parts,
-        startTime: sa.startTime,
-        endTime: sa.endTime,
-      },
-      timestamp: sa.timestamp,
-    });
-  }
+
 
   for (const evt of events) {
     switch (evt.type) {
+      case "child-session-attached": {
+        const childSessionId = evt.data.childSessionId as string;
+        const parentToolCallId = evt.data.parentToolCallId as string;
+        const role = evt.data.role as string;
+        childSessionIdByToolCallId.set(parentToolCallId, { childSessionId, role });
+        break;
+      }
+
       case "user-input": {
         flushAssistant();
         flushTool();
@@ -149,20 +222,19 @@ export function groupEventsForDisplay(events: AgentEvent[]): DisplayBlock[] {
         const toolCallId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
         const isSubAgent = toolName === "spawnSubAgent";
 
-        if (isSubAgent) {
-          let role = "";
-          try { role = JSON.parse(toolArgs).role ?? ""; } catch { role = toolArgs; }
-          const sa = getOrInitSA(toolCallId);
-          sa.role = role;
-          sa.startTime = new Date(evt.timestamp).getTime();
-          sa.timestamp = evt.timestamp;
-        }
-
         tool = {
           id: evt.id,
           toolName,
           toolArgs: isSubAgent
-            ? JSON.stringify({ role: (() => { try { return JSON.parse(toolArgs).role; } catch { return toolArgs; } })() })
+            ? JSON.stringify({
+                role: (() => {
+                  try {
+                    return JSON.parse(toolArgs).role;
+                  } catch {
+                    return toolArgs;
+                  }
+                })(),
+              })
             : toolArgs,
           toolCallId,
           status: "pending",
@@ -180,37 +252,12 @@ export function groupEventsForDisplay(events: AgentEvent[]): DisplayBlock[] {
         const toolName = evt.data.toolName as string;
 
         if (tool && tool.toolCallId === toolCallId) {
-          if (tool.isSubAgent) {
-            const sa = subAgents.get(toolCallId);
-            if (sa) {
-              sa.status = status === "error" ? "error" : "done";
-              sa.endTime = Date.now();
-              sa.fullOutput = result ?? "";
-              const lines = result?.split("\n").filter(Boolean) ?? [];
-              sa.latestLine = lines[lines.length - 1] || result || "";
-            }
-            tool.status = status;
-            tool.result = sa?.latestLine ?? result ?? "";
-            // Emit sub-agent block inline when the tool completes
-            if (sa) emitSubAgentBlock(sa);
-          } else {
-            tool.status = status;
-            tool.result = result ?? "";
-          }
+          tool.status = status;
+          tool.result = result ?? "";
           flushTool();
         } else if (toolName === "spawnSubAgent") {
-          // Tool-call-end matches spawnSubAgent but tool already consumed
-          const sa = subAgents.get(toolCallId);
-          if (sa) {
-            sa.status = status === "error" ? "error" : "done";
-            sa.endTime = Date.now();
-            sa.fullOutput = result ?? "";
-            const lines = result?.split("\n").filter(Boolean) ?? [];
-            sa.latestLine = lines[lines.length - 1] || result || "";
-            emitSubAgentBlock(sa);
-          }
+          // Orphaned: tool already consumed
         } else {
-          // Orphaned tool-call-end
           flushAssistant();
           blocks.push({
             type: "tool-call",
@@ -221,51 +268,6 @@ export function groupEventsForDisplay(events: AgentEvent[]): DisplayBlock[] {
             content: result ?? "",
             timestamp: evt.timestamp,
           });
-        }
-        break;
-      }
-
-      case "sub-agent-spawned": {
-        const toolCallId = evt.parentEventId ?? "";
-        const role = evt.data.role as string;
-        if (toolCallId) {
-          const sa = getOrInitSA(toolCallId);
-          sa.toolCallId = toolCallId;
-          if (role) sa.role = role;
-          sa.status = "running";
-          sa.startTime = new Date(evt.timestamp).getTime();
-          sa.timestamp = evt.timestamp;
-        }
-        break;
-      }
-
-      case "sub-agent-output": {
-        const toolCallId = evt.parentEventId ?? "";
-        const output = evt.data.output as string;
-        const sa = subAgents.get(toolCallId);
-        if (sa) {
-          if (output) {
-            const delta = output.slice(sa.fullOutput.length);
-            if (delta) sa.parts.push({ type: "text", text: delta });
-          }
-          sa.fullOutput = output ?? sa.fullOutput;
-          const lines = sa.fullOutput.split("\n").filter(Boolean);
-          sa.latestLine = lines[lines.length - 1] || sa.latestLine;
-        }
-        break;
-      }
-
-      case "sub-agent-done": {
-        const toolCallId = evt.parentEventId ?? "";
-        const fullOutput = evt.data.fullOutput as string;
-        const sa = subAgents.get(toolCallId);
-        if (sa) {
-          sa.status = "done";
-          sa.endTime = Date.now();
-          sa.fullOutput = fullOutput ?? sa.fullOutput;
-          const lines = sa.fullOutput.split("\n").filter(Boolean);
-          sa.latestLine = lines[lines.length - 1] || sa.latestLine;
-          emitSubAgentBlock(sa);
         }
         break;
       }
@@ -286,13 +288,6 @@ export function groupEventsForDisplay(events: AgentEvent[]): DisplayBlock[] {
 
   flushAssistant();
   flushTool();
-
-  // Emit any sub-agents still running (no tool-call-end yet)
-  for (const [, sa] of subAgents) {
-    if (!sa.role) continue;
-    if (sa.endTime !== undefined) continue; // already emitted inline
-    emitSubAgentBlock(sa);
-  }
 
   return blocks;
 }

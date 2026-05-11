@@ -10,7 +10,7 @@ interface AgentMessageProps {
 
 const AgentMessage: React.FC<AgentMessageProps> = ({ content }) => {
   return (
-    <Box flexDirection="row" gap={1} paddingX={1} marginBottom={1} flexGrow={1}>
+    <Box flexDirection="row" gap={1} paddingX={1} flexGrow={1} paddingBottom={1}>
       <Text color={theme.colors.accent}>●</Text>
       <Box flexDirection="column" flexGrow={1}>
         {content && <MarkdownRenderer content={content} />}

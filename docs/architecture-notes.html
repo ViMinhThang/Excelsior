@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Architecture Notes — Excelsior</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .hero {
+      text-align: center;
+      padding: 3rem 0 2rem;
+      border-bottom: 2px solid var(--border);
+      margin-bottom: 3rem;
+    }
+    .hero h1 { font-size: 2.4rem; margin-bottom: 0.5rem; }
+    .hero .subtitle { color: var(--text-muted); font-size: 1.05rem; }
+
+    .chapter {
+      margin-bottom: 3.5rem;
+    }
+    .chapter h2 {
+      font-size: 1.6rem;
+      margin-bottom: 1rem;
+      border-bottom: none;
+      padding-bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .chapter h2 .num {
+      background: var(--accent);
+      color: var(--bg-primary);
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .chapter h3 {
+      font-size: 1.15rem;
+      margin: 1.25rem 0 0.6rem;
+      color: var(--text-primary);
+    }
+    .chapter h4 {
+      margin: 1rem 0 0.4rem;
+      font-size: 1rem;
+    }
+
+    .block-old {
+      background: rgba(248,81,73,0.06);
+      border-left: 3px solid var(--error);
+      padding: 0.8rem 1rem;
+      border-radius: 0 8px 8px 0;
+      margin: 0.75rem 0;
+    }
+    .block-old code { color: var(--error); }
+    .block-new {
+      background: rgba(163,190,140,0.06);
+      border-left: 3px solid var(--success);
+      padding: 0.8rem 1rem;
+      border-radius: 0 8px 8px 0;
+      margin: 0.75rem 0;
+    }
+    .block-new code { color: var(--success); }
+
+    .quote-block {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin: 1.25rem 0;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    .quote-block .attribution {
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .timeline-flow {
+      position: relative;
+      padding-left: 2rem;
+      margin: 1rem 0;
+    }
+    .timeline-flow::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .timeline-flow li {
+      list-style: none;
+      position: relative;
+      margin-bottom: 0.6rem;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .timeline-flow li::before {
+      content: '';
+      position: absolute;
+      left: -1.65rem;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      transform: translateY(-50%);
+    }
+    .timeline-flow li:nth-child(2)::before { background: var(--nord9); }
+    .timeline-flow li:nth-child(3)::before { background: var(--accent); }
+
+    .signal-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+    .signal-cell {
+      background: rgba(248,81,73,0.04);
+      border-left: 3px solid var(--error);
+      padding: 0.6rem 0.8rem;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.85rem;
+    }
+    .signal-cell code { font-size: 0.8rem; }
+    .signal-cell.solved { border-left-color: var(--success); background: rgba(163,190,140,0.04); }
+    .signal-cell.solved code { color: var(--success); }
+
+    .arch-flow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+      margin: 1.5rem 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+    }
+    .arch-flow .node {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      padding: 0.5rem 1.25rem;
+      border-radius: 6px;
+      color: var(--text-primary);
+    }
+    .arch-flow .node.ai { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .arch-flow .node.session { border-color: var(--nord8); color: var(--nord8); }
+    .arch-flow .node.log { border-color: var(--success); color: var(--success); }
+    .arch-flow .node.bus { border-color: var(--nord9); color: var(--nord9); }
+    .arch-flow .node.proj { border-color: var(--warning); color: var(--warning); }
+    .arch-flow .arrow { color: var(--text-muted); font-size: 0.9rem; }
+
+    .principle-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+    .principle-item {
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+    }
+    .principle-item strong { color: var(--accent); display: block; margin-bottom: 0.25rem; font-size: 0.95rem; }
+    .principle-item span { font-size: 0.85rem; color: var(--text-secondary); }
+
+    .broader-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.6rem;
+      margin: 1rem 0;
+    }
+    .broader-item {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    @media (max-width: 768px) {
+      .signal-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="sidebar">
+    <div class="logo">
+      <span class="logo-icon">&#9889;</span>
+      <span class="logo-text">Excelsior</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="events.html">Event Architecture</a></li>
+      <li><a href="architecture-notes.html" class="active">Architecture Notes</a></li>
+      <li><a href="evolution.html">Evolution</a></li>
+    </ul>
+    <div class="nav-footer">
+      <span>Terminal-based AI coding assistant</span>
+    </div>
+  </nav>
+
+  <main class="content">
+
+    <!-- ═══════════ HERO ═══════════ -->
+    <div class="hero">
+      <h1>From Message-Based Chat to Event-Driven Agent Runtime</h1>
+      <p class="subtitle">How excruciating real-world friction forced a ground-up re-architecture of the data layer. A narrative in 14 chapters.</p>
+    </div>
+
+    <!-- ═══════════ 1 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">1</span> The Original Architecture</h2>
+      <p>The system started as a standard chat application. Messages were the core data model, and streaming callbacks directly mutated chat messages in-place. The mental model was simple: an array of message objects, each with a role and content.</p>
+
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">mental model</span></div>
+        <pre><code>Message[]</code></pre>
+      </div>
+
+      <p>The streaming callbacks mapped AI SDK events directly to message mutations:</p>
+
+      <ul class="timeline-flow">
+        <li>onTextDelta &rarr; append/update assistant message</li>
+        <li>onToolCall &rarr; create tool-call message, reset currentId</li>
+        <li>onTextDelta &rarr; create new assistant message (because currentId was nulled)</li>
+      </ul>
+
+      <p>This produced a chat display like:</p>
+
+      <div class="quote-block">
+        Assistant message<br>
+        &rarr; Tool call<br>
+        &rarr; Assistant continuation
+      </div>
+
+      <p>The critical implementation detail was a mutable tracking variable:</p>
+
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">typescript</span></div>
+        <pre><code>currentId = null;  // forced a new assistant message after each tool call</code></pre>
+      </div>
+
+      <p>After a tool call completed, <code>currentId</code> was set to <code>null</code>. On the next <code>onTextDelta</code>, the code saw no <code>currentId</code> and created a fresh message object. This was the first hint that the message model was fighting the streaming reality: the presentation layer's need for "message boundaries" was leaking into the streaming logic.</p>
+    </div>
+
+    <!-- ═══════════ 2 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">2</span> The First Friction</h2>
+      <p>The architecture started feeling awkward as the system grew beyond simple Q&amp;A. Several features pushed against the message model:</p>
+
+      <ul style="margin-bottom:1rem;color:var(--text-secondary);font-size:0.9rem;">
+        <li style="margin-bottom:0.4rem;">Tool calls streaming their output live</li>
+        <li style="margin-bottom:0.4rem;">Sub-agents spawning and producing their own output</li>
+        <li style="margin-bottom:0.4rem;">Continuous streaming output that didn't fit message boundaries</li>
+        <li style="margin-bottom:0.4rem;">Multiple concurrent execution flows</li>
+      </ul>
+
+      <p>The architecture began mixing three distinct concerns inside the same runtime logic:</p>
+
+      <div class="signal-grid">
+        <div class="signal-cell"><strong>Execution state</strong><br><code>currentId</code>, <code>toolBuffer</code></div>
+        <div class="signal-cell"><strong>UI state</strong><br><code>appendLiveEvent</code>, callback threading</div>
+        <div class="signal-cell"><strong>Persistence state</strong><br><code>persistMessage</code>, <code>assistantMessages[]</code></div>
+        <div class="signal-cell solved"><strong>These were signals</strong> that the abstraction no longer fit the runtime behavior cleanly.</div>
+      </div>
+
+      <p>Each of these was a code smell &mdash; a sign that the message model was being stretched beyond its natural capacity. The system was trying to represent a continuous, nested, parallel execution as a flat array of discrete objects.</p>
+    </div>
+
+    <!-- ═══════════ 3 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">3</span> The Asymmetry Discovery</h2>
+      <p>The most important realization came from comparing two parts of the system that had been built independently.</p>
+
+      <h3>Main Assistant &mdash; Message-Oriented</h3>
+      <p>The top-level assistant was built around the message model. It stored an array of <code>Message</code> objects and mutated them directly during streaming. The message was the central unit of everything: storage, rendering, and state.</p>
+
+      <div class="block-old">
+        <code>Message[]</code> &mdash; stored in SQLite, rendered by React, tracked in streaming callbacks
+      </div>
+
+      <h3>Sub-Agent System &mdash; Already Event-Oriented</h3>
+      <p>The sub-agent system, built later for PR review, used a completely different model. It tracked:</p>
+
+      <div class="block-new">
+        <code>{ fullOutput, outputParts, toolCalls }</code> &mdash; incremental streaming state, not discrete messages
+      </div>
+
+      <p>The sub-agent system naturally modeled streaming, tool lifecycle, execution flow, and incremental output. It didn't have <code>currentId</code> or <code>toolBuffer</code> hacks because it never tried to force events into messages.</p>
+
+      <div class="quote-block">
+        <strong>Key Realization:</strong> The sub-agent system was architecturally ahead of the main chat. It was already treating execution as an event timeline rather than a sequence of chat bubbles.
+      </div>
+    </div>
+
+    <!-- ═══════════ 4 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">4</span> The Conceptual Breakthrough</h2>
+      <p>The asymmetry forced a fundamental reframing:</p>
+
+      <div class="quote-block">
+        <strong>Execution events &ne; UI messages</strong><br><br>
+        Messages are <em>presentation</em>.<br>
+        Events are <em>execution reality</em>.<br><br>
+        AI systems fundamentally behave like continuous event streams &mdash; not static chat bubbles.
+      </div>
+
+      <p>A single user request produces a cascade of runtime events: text tokens, tool invocations, tool results, sub-agent spawns, sub-agent outputs, errors, retries. Collapsing all of that into a flat <code>Message[]</code> was a lossy transformation that threw away execution structure.</p>
+
+      <p>The insight: the UI wanted messages, but the runtime produced events. These are different shapes. Attempting to make one serve both roles caused the friction.</p>
+    </div>
+
+    <!-- ═══════════ 5 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">5</span> Callback Threading &mdash; The Silent Coupling</h2>
+      <p>The original streaming pipeline threaded callbacks through multiple layers:</p>
+
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">architecture</span></div>
+        <pre><code>agentStream.ts
+  &rarr; callback passed to streamAgentResponse
+    &rarr; hook callback (useChatSender.onLiveEvent)
+      &rarr; React state callback (useChatHistory.appendLiveEvent)
+        &rarr; setState()</code></pre>
+      </div>
+
+      <p>This created several problems:</p>
+
+      <ul style="margin-bottom:1rem;color:var(--text-secondary);font-size:0.9rem;">
+        <li style="margin-bottom:0.4rem;"><strong>Point-to-point coupling</strong> &mdash; agentStream was directly wired to a specific consumer</li>
+        <li style="margin-bottom:0.4rem;"><strong>Threading through hooks</strong> &mdash; <code>onLiveEvent</code> was threaded through <code>useChatSender</code> &rarr; <code>useChat</code> &rarr; <code>useChatScreenState</code></li>
+        <li style="margin-bottom:0.4rem;"><strong>Hard-to-follow ownership</strong> &mdash; who owned the callback? Who could call it? When?</li>
+        <li style="margin-bottom:0.4rem;"><strong>Poor extensibility</strong> &mdash; adding a new consumer (e.g., debugger) required rewiring the entire chain</li>
+      </ul>
+
+      <p>The callbacks also created a hidden ordering dependency: the callbacks had to be registered before streaming began, which meant the component tree had to be fully mounted before any message could be sent.</p>
+    </div>
+
+    <!-- ═══════════ 6 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">6</span> The Event Bus Insight</h2>
+      <p>The fix was conceptually simple: decouple the producer from the consumers.</p>
+
+      <div class="quote-block">
+        <strong>Instead of callbacks:</strong> runtime directly calling consumers<br>
+        <strong>The runtime simply emits events.</strong> Consumers subscribe independently.
+      </div>
+
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">architecture</span></div>
+        <pre><code>agentStream.ts
+  &rarr; bus.emit(event)
+
+Subscribers (independent):
+  &rarr; persistence  (collects events for batch DB write)
+  &rarr; React UI     (useSyncExternalStore)
+  &rarr; debugger     (future: tracing, replay)
+  &rarr; projections  (future: analytics, export)</code></pre>
+      </div>
+
+      <p>The bus pattern removed callback threading entirely. The runtime no longer knew who was listening. Subscribers could be added or removed without changing the streaming pipeline. This was the foundation of everything that followed.</p>
+    </div>
+
+    <!-- ═══════════ 7 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">7</span> Global vs Session-Scoped Bus</h2>
+      <p>Two designs were considered for the bus:</p>
+
+      <h3>Rejected: Global Singleton Bus</h3>
+      <p>A single global bus for the entire application was appealing in its simplicity but had fundamental problems:</p>
+
+      <ul style="margin-bottom:1rem;color:var(--text-secondary);font-size:0.9rem;">
+        <li style="margin-bottom:0.4rem;"><strong>Filtering everywhere</strong> &mdash; every subscriber would need <code>if (event.sessionId !== currentSessionId) return;</code></li>
+        <li style="margin-bottom:0.4rem;"><strong>Session mixing</strong> &mdash; events from different conversations would interleave on the same bus</li>
+        <li style="margin-bottom:0.4rem;"><strong>Accidental listeners</strong> &mdash; a subscriber from session A might accidentally process session B's events</li>
+        <li style="margin-bottom:0.4rem;"><strong>Hidden coupling</strong> &mdash; global state often leads to implicit dependencies</li>
+        <li style="margin-bottom:0.4rem;"><strong>Memory leaks</strong> &mdash; stale listeners from completed sessions must be manually cleaned up</li>
+      </ul>
+
+      <h3>Chosen: Session-Scoped Bus</h3>
+      <p>Each execution session owns its own bus and event log. This aligns naturally with cancellation, replay, observability, and sub-agent isolation.</p>
+
+      <div class="block-new">
+        <code>class AgentSession { readonly bus; readonly events; }</code>
+      </div>
+
+      <p>The session scope means:</p>
+      <ul style="margin-bottom:1rem;color:var(--text-secondary);font-size:0.9rem;">
+        <li style="margin-bottom:0.4rem;">No filtering &mdash; every event on this bus belongs to this session</li>
+        <li style="margin-bottom:0.4rem;">No cross-session contamination</li>
+        <li style="margin-bottom:0.4rem;">Natural garbage collection &mdash; drop the session, drop its bus</li>
+        <li style="margin-bottom:0.4rem;">Clean sub-agent model &mdash; child sessions with parentEventId</li>
+      </ul>
+    </div>
+
+    <!-- ═══════════ 8 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">8</span> Event Log as Source of Truth</h2>
+      <p>A critical distinction emerged early:</p>
+
+      <div class="quote-block">
+        <strong>Event log = source of truth</strong><br>
+        <strong>Bus = transport</strong>
+      </div>
+
+      <p>The bus distributes live updates in real-time. The append-only event log stores canonical execution history. These are different concerns with different requirements:</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0;">
+        <div style="background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;padding:0.8rem;">
+          <strong style="color:var(--nord9);font-size:0.85rem;">Bus</strong>
+          <ul style="margin-top:0.4rem;font-size:0.8rem;color:var(--text-muted);padding-left:1rem;">
+            <li>Live distribution</li>
+            <li>Fire-and-forget</li>
+            <li>No ordering guarantees</li>
+            <li>No persistence</li>
+          </ul>
+        </div>
+        <div style="background:var(--bg-primary);border:1px solid var(--border);border-radius:8px;padding:0.8rem;">
+          <strong style="color:var(--success);font-size:0.85rem;">Event Log</strong>
+          <ul style="margin-top:0.4rem;font-size:0.8rem;color:var(--text-muted);padding-left:1rem;">
+            <li>Canonical history</li>
+            <li>Append-only</li>
+            <li>Sequenced and ordered</li>
+            <li>Persisted to SQLite</li>
+          </ul>
+        </div>
+      </div>
+
+      <p>The event log enables replay, persistence, deterministic rendering, debugging, and projections. The bus enables real-time UI updates and subscriber independence. They work together: <code>emit()</code> appends to the log first, then distributes via the bus.</p>
+    </div>
+
+    <!-- ═══════════ 9 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">9</span> The Projection Layer</h2>
+      <p>Once events were the source of truth, the UI needed a way to render them. The answer: a pure projection function.</p>
+
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">typescript</span></div>
+        <pre><code>groupEventsForDisplay(events: AgentEvent[]): DisplayBlock[]</code></pre>
+      </div>
+
+      <p>This function became the heart of the new architecture. It transforms raw execution events into display-oriented blocks. The projection has four essential properties:</p>
+
+      <div class="principle-list">
+        <div class="principle-item">
+          <strong>Pure</strong>
+          <span>No side effects. Same input always produces the same output.</span>
+        </div>
+        <div class="principle-item">
+          <strong>Deterministic</strong>
+          <span>No randomness, no date/time dependence, no mutable state.</span>
+        </div>
+        <div class="principle-item">
+          <strong>Side-effect free</strong>
+          <span>Does not mutate events, does not write to DB, does not change any external state.</span>
+        </div>
+        <div class="principle-item">
+          <strong>Order-preserving</strong>
+          <span>Event sequence determines block sequence. No reordering.</span>
+        </div>
+      </div>
+
+      <p>The projection replaced the old stateful closure bookkeeping (<code>currentId</code>, <code>toolBuffer</code>, <code>assistantMessages[]</code>, <code>toolMessagesToPersist[]</code>). Instead of mutating tracking variables, the projection walks the event array and builds the block list from scratch on every call.</p>
+
+      <div class="quote-block">
+        <strong>This was the key shift:</strong> The old code used stateful closures that tracked "where we are" in the stream. The new projection is a pure function that determines block structure entirely from the event sequence. The <code>currentId = null</code> hack was replaced by: "when I see a tool-call-start event, flush the current assistant block and open a new one."
+      </div>
+    </div>
+
+    <!-- ═══════════ 10 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">10</span> Runtime vs Presentation Separation</h2>
+      <p>The old architecture had a subtle but pervasive problem: runtime logic was making presentation decisions.</p>
+
+      <div class="block-old">
+        <code>currentId = null;</code> &mdash; This is actually presentation logic leaking into execution code. It says "I want a new message bubble here." But that's a UI concern, not an execution concern.
+      </div>
+
+      <p>After the redesign, the separation became clean:</p>
+
+      <div class="block-new">
+        <strong>Runtime:</strong> emits execution facts only (<code>text-delta</code>, <code>tool-call-start</code>, <code>tool-call-end</code>)<br>
+        <strong>Projection:</strong> decides presentation grouping (assistant message boundaries, tool call blocks, sub-agent blocks)
+      </div>
+
+      <p>This separation means:</p>
+      <ul style="margin-bottom:1rem;color:var(--text-secondary);font-size:0.9rem;">
+        <li style="margin-bottom:0.4rem;">The runtime doesn't need to know about message boundaries, React, or rendering</li>
+        <li style="margin-bottom:0.4rem;">The projection can be changed without touching the streaming pipeline</li>
+        <li style="margin-bottom:0.4rem;">Multiple projections can exist (chat view, timeline view, debug view) from the same events</li>
+        <li style="margin-bottom:0.4rem;">The projection can be tested in isolation with fixture event data</li>
+      </ul>
+    </div>
+
+    <!-- ═══════════ 11 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">11</span> Transport vs Semantic Events</h2>
+      <p>Another important distinction emerged when thinking about what to store in the event log:</p>
+
+      <h3>Transport-Level Events (stored)</h3>
+      <p>These are the canonical, persisted runtime events. They remain faithful to actual execution:</p>
+
+      <div class="block-new">
+        <code>text-delta</code>, <code>tool-call-start</code>, <code>tool-call-end</code>
+      </div>
+
+      <p>These are "execution facts." <code>text-delta</code> is a provider-level artifact &mdash; it records exactly what the AI SDK sent, as it was sent. Different providers may emit different delta patterns, and the log faithfully captures those differences.</p>
+
+      <h3>Semantic/Derived Events (not stored)</h3>
+      <p>These are synthesized from transport events at projection time:</p>
+
+      <div class="block-old">
+        <code>assistant-message-updated</code>, <code>assistant-message-complete</code>
+      </div>
+
+      <p>These are NOT stored in the event log. They are derived by transformers at render time. Storing them would create duplicated truth layers, invalidation problems, and replay inconsistencies.</p>
+
+      <div class="quote-block">
+        <strong>Rule:</strong> Only execution facts go in the event log. Semantic views are derived at projection time, never stored.
+      </div>
+    </div>
+
+    <!-- ═══════════ 12 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">12</span> React State Evolution</h2>
+      <p>The React integration went through two phases:</p>
+
+      <h3>Phase 1: Array State (rejected)</h3>
+      <div class="block-old">
+        <code>setLiveEvents(prev =&gt; [...prev, event])</code>
+      </div>
+      <p>This reallocates the entire array on every event. For streaming AI producing hundreds of tokens per second, this causes continuous memory churn and unnecessary re-renders.</p>
+
+      <h3>Phase 2: External Store via useSyncExternalStore</h3>
+      <div class="block-new">
+        <code>useSyncExternalStore(session.subscribe, session.getSnapshot)</code>
+      </div>
+      <p>The session owns the append-only event store. React subscribes to it and reads immutable snapshots. The store only notifies React when the snapshot actually changes (batched notifications consolidate rapid events).</p>
+
+      <p>Key details:</p>
+      <ul style="margin-bottom:1rem;color:var(--text-secondary);font-size:0.9rem;">
+        <li style="margin-bottom:0.4rem;"><code>getSnapshot()</code> returns a cached copy, updated synchronously in <code>emit()</code></li>
+        <li style="margin-bottom:0.4rem;">Notifications to React are batched via <code>setTimeout(0)</code> &mdash; multiple emits in one microtask produce one render</li>
+        <li style="margin-bottom:0.4rem;">The <code>EMPTY_EVENTS</code> constant prevents infinite loops when no session is active (a new <code>[]</code> literal on every call would make React think the store changed every render)</li>
+        <li style="margin-bottom:0.4rem;">Stable references: the <code>subscribe</code> and <code>getSnapshot</code> callbacks must be stable or use refs to avoid re-subscription loops</li>
+      </ul>
+    </div>
+
+    <!-- ═══════════ 13 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">13</span> Sub-Agents as Sessions</h2>
+      <p>The sub-agent system originally used custom plumbing: a separate <code>subAgentBus</code>, manual state management, and special-case rendering logic. The deeper realization was:</p>
+
+      <div class="quote-block">
+        <strong>A sub-agent is not "special."</strong> A sub-agent is just another <code>AgentSession</code> with a parent linkage.
+      </div>
+
+      <p>In the new model:</p>
+
+      <div class="block-new">
+        <code>AgentSession(parentEventId: string)</code> &mdash; child session linked to parent tool call
+      </div>
+
+      <p>The child session has its own event log, its own bus, and its own lifecycle. Events can be forwarded to the parent bus via the <code>parentEventId</code> link. This naturally forms a <strong>session tree</strong>:</p>
+
+      <div class="code-block">
+        <div class="code-header"><span class="code-lang">tree</span></div>
+        <pre><code>Root Session (main chat)
+  &rarr; Researcher (child session)
+  &rarr; Debugger (child session)
+      &rarr; Security Auditor (child of Debugger)
+  &rarr; Planner (child session)</code></pre>
+      </div>
+
+      <p>Each node in this tree is the same <code>AgentSession</code> class, with the same capabilities. No special sub-agent runtime, no custom state management, no manual forwarding.</p>
+    </div>
+
+    <!-- ═══════════ 14 ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num">14</span> The Final Architecture</h2>
+
+      <div class="arch-flow">
+        <div class="node ai">AI SDK Runtime</div>
+        <div class="arrow">&darr;</div>
+        <div class="node session">AgentSession</div>
+        <div class="arrow">&darr;</div>
+        <div class="node log">Append-only Event Log</div>
+        <div class="arrow">&darr;</div>
+        <div class="node bus">Event Bus (live transport)</div>
+        <div class="arrow">&darr;</div>
+        <div class="node proj">Projection Layer</div>
+        <div class="arrow">&darr;</div>
+        <div style="color:var(--text-muted);font-size:0.8rem;">UI &nbsp;|&nbsp; Persistence &nbsp;|&nbsp; Replay &nbsp;|&nbsp; Debugging</div>
+      </div>
+
+      <p>The resulting architecture is a pipeline. Each layer has a single responsibility. No layer reaches across another. The event log is canonical storage; the bus is live transport; the projection is the only layer that knows about UI shapes.</p>
+
+      <h3 style="margin-top:1.5rem;">The 6 Key Principles</h3>
+
+      <div class="principle-list">
+        <div class="principle-item">
+          <strong>1. Execution events are primary</strong>
+          <span>UI messages are derived views. Events are the source of truth. Never let presentation concerns drive execution logic.</span>
+        </div>
+        <div class="principle-item">
+          <strong>2. Event logs are canonical</strong>
+          <span>The bus distributes live events. The log stores history. They serve different purposes and should be designed differently.</span>
+        </div>
+        <div class="principle-item">
+          <strong>3. Runtime and presentation must be separated</strong>
+          <span>Execution should not decide UI grouping. <code>currentId = null</code> was a violation of this principle.</span>
+        </div>
+        <div class="principle-item">
+          <strong>4. Projections should be pure</strong>
+          <span>Deterministic, replayable, side-effect free. Same events &rarr; same display, always.</span>
+        </div>
+        <div class="principle-item">
+          <strong>5. Sub-agents are runtime sessions</strong>
+          <span>Not special-case tools. Same class, same lifecycle, parent linkage via event ID.</span>
+        </div>
+        <div class="principle-item">
+          <strong>6. AI systems behave like streaming runtimes</strong>
+          <span>Not traditional request/response chat apps. Design for continuous, nested, parallel execution from day one.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════ BROADER ═══════════ -->
+    <div class="chapter">
+      <h2><span class="num" style="background:var(--nord9);">+</span> Broader Concepts</h2>
+      <p>This architecture didn't emerge from theory. It emerged from building, encountering friction, and iteratively refining. But in hindsight, it overlaps with several established patterns:</p>
+
+      <div class="broader-grid">
+        <div class="broader-item">Event-driven systems</div>
+        <div class="broader-item">CQRS (Command Query Responsibility Segregation)</div>
+        <div class="broader-item">Event sourcing</div>
+        <div class="broader-item">Workflow runtimes</div>
+        <div class="broader-item">Reactive systems</div>
+        <div class="broader-item">Observability pipelines</div>
+        <div class="broader-item">Distributed tracing</div>
+        <div class="broader-item">Orchestration engines</div>
+      </div>
+
+      <div class="quote-block" style="margin-top:2rem;">
+        <em>"The understanding emerged primarily from building, encountering architectural friction, and iteratively refining abstractions &mdash; rather than from theory alone."</em>
+        <div class="attribution">&mdash; The process that produced this architecture</div>
+      </div>
+    </div>
+
+  </main>
+  <script src="script.js"></script>
+</body>
+</html>
