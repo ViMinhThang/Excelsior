@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from "react";
 import { SubAgentState } from "../../types.js";
+import { useManagedSubAgents } from "../hooks/useManagedSubAgents.js";
 
 interface SubAgentContextType {
   subAgents: SubAgentState[];
@@ -16,49 +17,33 @@ interface SubAgentContextType {
 const SubAgentContext = createContext<SubAgentContextType | null>(null);
 
 export function SubAgentProvider({ children }: { children: ReactNode }) {
-  const [subAgents, setSubAgents] = useState<SubAgentState[]>([]);
-  const [selectedSubAgentIndex, setSelectedSubAgentIndex] = useState(-1);
+  const {
+    subAgents,
+    subAgentIndex,
+    setSubAgentIndex,
+    nextSubAgent,
+    prevSubAgent,
+    clearSubAgents
+  } = useManagedSubAgents();
 
-  const addSubAgent = useCallback((agent: SubAgentState) => {
-    setSubAgents((prev) => [...prev, agent]);
-  }, []);
-
-  const updateSubAgent = useCallback((toolCallId: string, updates: Partial<SubAgentState>) => {
-    setSubAgents((prev) =>
-      prev.map((a) => (a.toolCallId === toolCallId ? { ...a, ...updates } : a)),
-    );
-  }, []);
-
-  const clearSubAgents = useCallback(() => {
-    setSubAgents([]);
-    setSelectedSubAgentIndex(-1);
-  }, []);
-
-  const selectPrevSubAgent = useCallback(() => {
-    setSelectedSubAgentIndex((prev) => {
-      if (subAgents.length === 0) return -1;
-      if (prev <= 0) return subAgents.length - 1;
-      return prev - 1;
-    });
-  }, [subAgents.length]);
-
-  const selectNextSubAgent = useCallback(() => {
-    setSelectedSubAgentIndex((prev) => {
-      if (subAgents.length === 0) return -1;
-      if (prev >= subAgents.length - 1) return 0;
-      return prev + 1;
-    });
-  }, [subAgents.length]);
+  // Map new hook members directly back into context's API names
+  const addSubAgent = useCallback(() => {}, []); // No-op now handled by listener implicitly!
+  const updateSubAgent = useCallback(() => {}, []); // No-op now handled by listener implicitly!
 
   const focusMainAgent = useCallback(() => {
-    setSelectedSubAgentIndex(-1);
-  }, []);
+    setSubAgentIndex(-1); // Main Agent semantic
+  }, [setSubAgentIndex]);
 
   const value = useMemo(() => ({
-    subAgents, selectedSubAgentIndex,
-    addSubAgent, updateSubAgent, clearSubAgents,
-    selectPrevSubAgent, selectNextSubAgent, focusMainAgent,
-  }), [subAgents, selectedSubAgentIndex, addSubAgent, updateSubAgent, clearSubAgents, selectPrevSubAgent, selectNextSubAgent, focusMainAgent]);
+    subAgents,
+    selectedSubAgentIndex: subAgentIndex,
+    addSubAgent, // Kept for legacy signature compat
+    updateSubAgent, // Kept for legacy signature compat
+    clearSubAgents,
+    selectPrevSubAgent: prevSubAgent,
+    selectNextSubAgent: nextSubAgent,
+    focusMainAgent,
+  }), [subAgents, subAgentIndex, addSubAgent, updateSubAgent, clearSubAgents, prevSubAgent, nextSubAgent, focusMainAgent]);
 
   return <SubAgentContext.Provider value={value}>{children}</SubAgentContext.Provider>;
 }

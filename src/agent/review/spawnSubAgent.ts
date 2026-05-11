@@ -5,38 +5,9 @@ import { createAgent } from "../../agent/agent.js";
 import { SubAgentOutputPart, ToolCallInfo } from "../../types.js";
 import { streamAgentResponse } from "../../lib/agentStream.js";
 
-type SubListener = {
-  onSpawned: (args: { toolCallId: string; role: string }) => void;
-  onOutput: (args: { toolCallId: string; latestLine: string; fullOutput: string; outputParts: SubAgentOutputPart[]; toolCalls: ToolCallInfo[] }) => void;
-  onDone: (args: { toolCallId: string; fullOutput: string }) => void;
-};
-
-export function createSubAgentBus() {
-  const listeners = new Set<SubListener>();
-
-  return {
-    subscribe(listener: SubListener) {
-      listeners.add(listener);
-      return () => { listeners.delete(listener); };
-    },
-    emitSpawned(args: { toolCallId: string; role: string }) {
-      listeners.forEach(l => l.onSpawned(args));
-    },
-    emitOutput(args: { toolCallId: string; latestLine: string; fullOutput: string; outputParts: SubAgentOutputPart[]; toolCalls: ToolCallInfo[] }) {
-      listeners.forEach(l => l.onOutput(args));
-    },
-    emitDone(args: { toolCallId: string; fullOutput: string }) {
-      listeners.forEach(l => l.onDone(args));
-    },
-  };
-}
-
-const defaultBus = createSubAgentBus();
-
-export const subAgentBus = defaultBus;
+import { subAgentBus } from "../../lib/subAgentBus.js";
 
 function emitBusOutput(
-  bus: ReturnType<typeof createSubAgentBus>,
   toolCallId: string,
   fullOutput: string,
   outputParts: SubAgentOutputPart[],
@@ -44,7 +15,7 @@ function emitBusOutput(
   latestLine?: string,
 ) {
   const lines = fullOutput.split("\n");
-  bus.emitOutput({
+  subAgentBus.emit("output", {
     toolCallId,
     latestLine: latestLine ?? (lines[lines.length - 1] || lines[lines.length - 2] || ""),
     fullOutput,
@@ -68,7 +39,7 @@ export const spawnSubAgentTool = tool({
   }),
   execute: async ({ role, instruction }: { role: string; instruction: string }) => {
     const toolCallId = `sub_${randomUUID()}`;
-    defaultBus.emitSpawned({ toolCallId, role });
+    subAgentBus.emit("spawned", { toolCallId, role });
 
     const subInstructions =
       `\n\n---\nROLE: ${role}\n---\n` +
@@ -102,12 +73,12 @@ export const spawnSubAgentTool = tool({
             const delta = text.slice(fullOutput.length);
             fullOutput = text;
             addTextDelta(delta);
-            emitBusOutput(defaultBus, toolCallId, fullOutput, outputParts, toolCalls);
+            emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls);
           },
           onToolCall: (toolName, toolArgs, callId) => {
             outputParts.push({ type: "tool-call", toolName, toolArgs, toolCallId: callId, status: "pending" });
             toolCalls.push({ toolName, toolArgs, toolCallId: callId, status: "pending" });
-            emitBusOutput(defaultBus, toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${toolName}(${toolArgs})`);
+            emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${toolName}(${toolArgs})`);
           },
           onToolResult: (callId, result) => {
             const isError = result.startsWith("[Error]");
@@ -123,20 +94,20 @@ export const spawnSubAgentTool = tool({
                 toolCalls[i] = { ...tc, status };
               }
             });
-            emitBusOutput(defaultBus, toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${status}`);
+            emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${status}`);
           },
           onFinish: () => {},
         },
       );
 
-      defaultBus.emitDone({ toolCallId, fullOutput });
+      subAgentBus.emit("done", { toolCallId, fullOutput });
       return fullOutput;
     } catch (error: any) {
       const errorMsg = `Sub-agent error: ${error.message}`;
       fullOutput += `\n\nError: ${errorMsg}`;
       outputParts.push({ type: "text", text: `\n\nError: ${errorMsg}` });
-      emitBusOutput(defaultBus, toolCallId, fullOutput, outputParts, toolCalls, errorMsg);
-      defaultBus.emitDone({ toolCallId, fullOutput });
+      emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls, errorMsg);
+      subAgentBus.emit("done", { toolCallId, fullOutput });
       return fullOutput;
     }
   },

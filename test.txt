@@ -1,1 +1,2 @@
-Hello from Excelsior — write tools work.
+Hello from Excelsior â€” write tools work.
+// UX test: this line added by sub-agent tester to verify edit tool flow

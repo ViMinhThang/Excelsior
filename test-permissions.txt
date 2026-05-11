@@ -1,1 +1,2 @@
 Tool permissions working. Written at: {{timestamp}}
+// UX test: sub-agent edit tool verified — exact-match replacement works.
