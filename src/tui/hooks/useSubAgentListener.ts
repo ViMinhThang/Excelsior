@@ -17,7 +17,7 @@ interface SubAgentListenerCallbacks {
       toolCalls: ToolCallInfo[];
     },
   ) => void;
-  onDone: (toolCallId: string, fullOutput: string) => void;
+  onDone: (toolCallId: string, fullOutput: string, endTime: number) => void;
 }
 
 export function useSubAgentListener(callbacks: SubAgentListenerCallbacks) {
@@ -34,6 +34,7 @@ export function useSubAgentListener(callbacks: SubAgentListenerCallbacks) {
         fullOutput: "",
         outputParts: [],
         toolCalls: [],
+        startTime: Date.now(),
       });
     });
 
@@ -53,7 +54,7 @@ export function useSubAgentListener(callbacks: SubAgentListenerCallbacks) {
     });
 
     const unsub3 = subAgentBus.on("done", ({ toolCallId, fullOutput }) => {
-      ref.current.onDone(toolCallId, fullOutput);
+      ref.current.onDone(toolCallId, fullOutput, Date.now());
     });
 
     return () => {

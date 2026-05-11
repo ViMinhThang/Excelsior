@@ -39,7 +39,7 @@ const ChatScreen = () => {
     <Box flexDirection="column">
       <AppHeader />
 
-      {chatMode === "subagent-detail" && subAgents.length > 0 ? (
+      {chatMode === "subagent-detail" && subAgents.length > 0 && subAgents[subAgentIndex] ? (
         <SubAgentDetail agent={subAgents[subAgentIndex]} />
       ) : (
         <>
@@ -89,9 +89,9 @@ const ChatScreen = () => {
             <Box flexDirection="column" paddingLeft={theme.spacing.toolIndent}>
               <Text color={theme.colors.text}>  {pendingDisplay.detail || "waiting for approval"}</Text>
               <Box flexDirection="column" marginTop={1} paddingLeft={2} borderTop>
-                <Text color={theme.colors.text} bold>[y] approve</Text>
-                <Text color={theme.colors.text} bold>[a] approve all (for this session)</Text>
-                <Text color={theme.colors.text} bold>[n/Esc] deny</Text>
+                <Text color={theme.colors.text} bold>(y) accept</Text>
+                <Text color={theme.colors.text} bold>(a) accept all edits (for this session)</Text>
+                <Text color={theme.colors.text} bold>[(n) deny</Text>
               </Box>
             </Box>
           </Box>

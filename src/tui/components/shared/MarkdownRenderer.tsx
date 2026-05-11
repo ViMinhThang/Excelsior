@@ -1,4 +1,6 @@
 import React, { useMemo, memo, ReactNode } from "react";
+import chalk from "chalk";
+import { highlight } from "cli-highlight";
 import { Box, Text } from "ink";
 import { lexer } from "marked";
 import type { Token, Tokens } from "marked";
@@ -9,237 +11,39 @@ function escapeXml(text: string): string {
   return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-interface Segment {
-  text: string;
-  type: "raw" | "comment" | "string" | "keyword" | "number" | "structural" | "customType" | "function" | "operator" | "boolean" | "tag" | "attribute";
-}
+const highlightTheme = {
+  keyword: chalk.hex('#cba6f7').bold, // Mauve
+  built_in: chalk.hex('#f38ba8'),    // Red
+  type: chalk.hex('#f9e2af'),        // Yellow
+  literal: chalk.hex('#fab387'),     // Peach
+  number: chalk.hex('#fab387'),      // Peach
+  string: chalk.hex('#a6e3a1'),      // Green
+  comment: chalk.hex('#6c7086'),     // Overlay0
+  function: chalk.hex('#89b4fa'),    // Blue
+  title: chalk.hex('#89b4fa'),       // Blue
+  attr: chalk.hex('#94e2d5'),        // Teal
+  tag: chalk.hex('#cba6f7'),         // Mauve
+  params: chalk.hex('#eba0ac'),      // Maroon
+  operator: chalk.hex('#89dceb'),    // Sky
+  meta: chalk.hex('#f5c2e7'),        // Pink
+};
 
 export function highlightCode(code: string, lang?: string): ReactNode {
-  const rawLines = code.split("\n");
-  const normalizedLang = lang ? lang.toLowerCase() : "";
-
-  // 1. Resolve normalized language & keywords
-  let normalized: "ts" | "py" | "json" | null = null;
-  let keywords: Set<string> = new Set();
-
-  if (["js", "javascript", "jsx", "ts", "typescript", "tsx", "cjs", "mjs"].includes(normalizedLang)) {
-    normalized = "ts";
-    keywords = new Set([
-      'const', 'let', 'var', 'function', 'return', 'if', 'else', 'for', 'while', 'class', 
-      'import', 'export', 'from', 'default', 'new', 'this', 'async', 'await', 'try', 'catch', 
-      'interface', 'type', 'as', 'any', 'string', 'number', 'boolean', 'void', 'unknown', 
-      'never', 'readonly', 'static', 'public', 'private', 'protected'
-    ]);
-  } else if (["py", "python"].includes(normalizedLang)) {
-    normalized = "py";
-    keywords = new Set([
-      'def', 'class', 'return', 'if', 'elif', 'else', 'for', 'while', 'import', 'from', 'as', 
-      'in', 'is', 'not', 'and', 'or', 'try', 'except', 'finally', 'raise', 'with', 'lambda', 
-      'global', 'nonlocal'
-    ]);
-  } else if (["json", "jsonc"].includes(normalizedLang)) {
-    normalized = "json";
-  }
-
-  // If no syntax highlighting language matched, fall back to simple unhighlighted escapeXml rendering
-  if (!normalized) {
-    return (
-      <Box flexDirection="column">
-        {rawLines.map((line, i) => {
-          const key = `code_fallback_line_${i}`;
-          return (
-            <Box key={key}>
-              <Text>{escapeXml(line)}</Text>
-            </Box>
-          );
-        })}
-      </Box>
-    );
-  }
-
-  // Helper to slice a "raw" segment by regex and mark matches with a specific type
-  const processRawSegments = (
-    segments: Segment[],
-    regex: RegExp,
-    type: Segment["type"]
-  ): Segment[] => {
-    return segments.flatMap((segment) => {
-      if (segment.type !== "raw") return [segment];
-
-      const result: Segment[] = [];
-      let lastIndex = 0;
-      let match;
-
-      regex.lastIndex = 0;
-
-      while ((match = regex.exec(segment.text)) !== null) {
-        if (match.index > lastIndex) {
-          result.push({ text: segment.text.slice(lastIndex, match.index), type: "raw" });
-        }
-        result.push({ text: match[0], type });
-        lastIndex = regex.lastIndex;
-
-        if (regex.lastIndex === match.index) {
-          regex.lastIndex++;
-        }
-      }
-
-      if (lastIndex < segment.text.length) {
-        result.push({ text: segment.text.slice(lastIndex), type: "raw" });
-      }
-
-      return result;
-    });
-  };
-
-  const lines = rawLines.map((line, lineIndex) => {
-    let segments: Segment[] = [{ text: line, type: "raw" }];
-
-    // --- Phase 1: Comments (if not JSON) ---
-    if (normalized !== "json") {
-      const commentRegex = normalized === "py" ? /(#.*)/g : /(\/\/.*)/g;
-      segments = processRawSegments(segments, commentRegex, "comment");
-      
-      // JSX Comments
-      const jsxCommentRegex = /(\{\/\*[\s\S]*?\*\/\})/g;
-      segments = processRawSegments(segments, jsxCommentRegex, "comment");
-    }
-
-    // --- Phase 2: Strings ---
-    const fullStringRegex = /("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`)/g;
-    segments = processRawSegments(segments, fullStringRegex, "string");
-
-    // --- Phase 3: Structural Delimiters (JSON) ---
-    if (normalized === "json") {
-      const jsonStructuralRegex = /([{}[\]:])/g;
-      segments = processRawSegments(segments, jsonStructuralRegex, "structural");
-    }
-
-    // --- Phase 3.5: Operators (if not JSON) ---
-    if (normalized !== "json") {
-      const operatorRegex = /(===|!==|=>|&&|\|\||[?+\-*/:!=])/g;
-      segments = processRawSegments(segments, operatorRegex, "operator");
-    }
-
-    // --- Phase 3.6: TSX/JSX Tags and Brackets ---
-    if (normalized !== "json") {
-      const jsxTagRegex = /(<\/?[a-zA-Z]\w*|\/?>)/g;
-      segments = processRawSegments(segments, jsxTagRegex, "tag");
-
-      const jsxAttrRegex = /\b(\w+)(?=\s*=)/g;
-      segments = processRawSegments(segments, jsxAttrRegex, "attribute");
-    }
-
-    // --- Phase 4: Keywords (guarded with word-boundaries) ---
-    if (keywords.size > 0) {
-      segments = segments.flatMap((seg) => {
-        if (seg.type !== "raw") return [seg];
-
-        const res: Segment[] = [];
-        const wordRegex = /\b(\w+)\b/g;
-        let lastIndex = 0;
-        let match;
-
-        while ((match = wordRegex.exec(seg.text)) !== null) {
-          if (keywords.has(match[1])) {
-            if (match.index > lastIndex) {
-              res.push({ text: seg.text.slice(lastIndex, match.index), type: "raw" });
-            }
-            res.push({ text: match[0], type: "keyword" });
-            lastIndex = wordRegex.lastIndex;
-          }
-        }
-
-        if (lastIndex < seg.text.length) {
-          res.push({ text: seg.text.slice(lastIndex), type: "raw" });
-        }
-
-        return res;
-      });
-    }
-
-    // --- Phase 4.5: Types & Hooks ---
-    if (normalized !== "json") {
-      const typeHookRegex = /\b(useState|useCallback|useEffect|useRef|useInput|useMemo|useSettingValidator|useDatabase|[A-Z]\w*)\b/g;
-      segments = processRawSegments(segments, typeHookRegex, "customType");
-    }
-
-    // --- Phase 4.6: Functions ---
-    if (normalized !== "json") {
-      const functionRegex = /\b(\w+)(?=\s*\()/g;
-      segments = processRawSegments(segments, functionRegex, "function");
-    }
-
-    // --- Phase 4.7: Booleans & Nulls ---
-    const booleanRegex = /\b(true|false|null|undefined|None|True|False)\b/g;
-    segments = processRawSegments(segments, booleanRegex, "boolean");
-
-    // --- Phase 5: Numbers ---
-    const numberRegex = /\b(\d+)\b/g;
-    segments = processRawSegments(segments, numberRegex, "number");
-
-    const renderedLine = segments.map((seg, segIndex) => {
-      let color: string | undefined;
-      let bold = false;
-
-      switch (seg.type) {
-        case "comment":
-          color = "#4c566a";
-          break;
-        case "string":
-          color = "#a3be8c";
-          break;
-        case "keyword":
-          color = "#81a1c1";
-          bold = true;
-          break;
-        case "customType":
-          color = "#8fbcbb";
-          break;
-        case "function":
-          color = "#ebcb8b";
-          break;
-        case "number":
-          color = "#b48ead";
-          break;
-        case "boolean":
-          color = "#b48ead";
-          break;
-        case "structural":
-          color = "#81a1c1";
-          break;
-        case "operator":
-          color = "#81a1c1";
-          bold = true;
-          break;
-        case "tag":
-          color = "#81a1c1";
-          break;
-        case "attribute":
-          color = "#8fbcbb";
-          break;
-        default:
-          color = theme.colors.text;
-          break;
-      }
-
-      const key = `code_seg_${segIndex}`;
-      return (
-        <Text key={key} color={color} bold={bold}>
-          {seg.text}
-        </Text>
-      );
+  try {
+    // Clean potential invalid space chars from language tag passed by parser
+    const cleanedLang = lang?.trim().split(/\s+/)[0]?.toLowerCase();
+    
+    const colored = highlight(code, { 
+      language: cleanedLang, 
+      theme: highlightTheme,
+      ignoreIllegals: true
     });
 
-    const key = `code_line_${lineIndex}`;
-    return (
-      <Box key={key}>
-        <Text>{renderedLine}</Text>
-      </Box>
-    );
-  });
-
-  return <Box flexDirection="column">{lines}</Box>;
+    return <Text>{colored}</Text>;
+  } catch (error) {
+    // Resilient fallback to raw text rendering on system error
+    return <Text>{code}</Text>;
+  }
 }
 
 export function highlightFilenames(text: string): ReactNode {

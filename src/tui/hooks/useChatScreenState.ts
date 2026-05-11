@@ -1,84 +1,21 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useInput } from "ink";
 import { useNavigation } from "../context/NavigationContext.js";
 import { handleCommand } from "../../agent/commands/registry.js";
 import { useChat } from "./useChat.js";
-import { useEvent } from "./useEvent.js";
+import { useKeymap } from "./useKeymap.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";
 import { useCommandAutocomplete } from "./useCommandAutocomplete.js";
-import { useSubAgentListener } from "./useSubAgentListener.js";
+import { useManagedSubAgents } from "./useManagedSubAgents.js";
 import { SubAgentState } from "../../types.js";
 
-function handlePendingInput(
-  input: string,
-  key: any,
-  approve: () => void,
-  approveAll: () => void,
-  deny: () => void,
-  cancel: () => void,
-): boolean {
-  if (input === "y" || input === "Y") {
-    approve();
-    return true;
-  }
-  if (input === "a" || input === "A") {
-    approveAll();
-    return true;
-  }
-  if (input === "n" || input === "N" || key.escape) {
-    deny();
-    if (key.escape) cancel();
-    return true;
-  }
-  return true;
-}
 
-function handleSubAgentInput(
-  key: any,
-  subAgents: SubAgentState[],
-  subAgentIndex: number,
-  setSubAgentIndex: (fn: (prev: number) => number) => void,
-  setChatMode: (mode: "input" | "subagent-detail") => void,
-): boolean {
-  if (key.upArrow && subAgents.length > 0) {
-    setSubAgentIndex((prev) => (prev > 0 ? prev - 1 : subAgents.length - 1));
-    return true;
-  }
-  if (key.downArrow && subAgents.length > 0) {
-    setSubAgentIndex((prev) => (prev < subAgents.length - 1 ? prev + 1 : 0));
-    return true;
-  }
-  if (key.escape) {
-    setChatMode("input");
-    return true;
-  }
-  return false;
-}
-
-function handleSuggestionInput(
-  key: any,
-  suggestion: any,
-  setInput: (val: string) => void,
-  currentInput: string,
-): boolean {
-  if (key.upArrow) {
-    suggestion.prev();
-    return true;
-  }
-  if (key.downArrow) {
-    suggestion.next();
-    return true;
-  }
-  return false;
-}
 
 export function useChatScreenState() {
   const { navigate, goBack } = useNavigation();
   const [input, setInput] = useState("");
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [originalInput, setOriginalInput] = useState("");
-  const [subAgents, setSubAgents] = useState<SubAgentState[]>([]);
-  const [subAgentIndex, setSubAgentIndex] = useState(0);
+
   const [chatMode, setChatMode] = useState<"input" | "subagent-detail">(
     "input",
   );
@@ -105,80 +42,20 @@ export function useChatScreenState() {
   } = useChat();
 
   const { pending, approve, approveAll, deny } = useToolConfirmation();
-  const suggestion = useCommandAutocomplete(input);
 
-  useSubAgentListener({
-    onSpawned: (agent) => setSubAgents((prev) => [...prev, agent]),
-    onOutput: (toolCallId, updates) =>
-      setSubAgents((prev) =>
-        prev.map((a) =>
-          a.toolCallId === toolCallId ? { ...a, ...updates } : a,
-        ),
-      ),
-    onDone: (toolCallId, fullOutput) =>
-      setSubAgents((prev) =>
-        prev.map((a) =>
-          a.toolCallId === toolCallId
-            ? { ...a, status: "done" as const, fullOutput }
-            : a,
-        ),
-      ),
-  });
+  const {
+    subAgents,
+    subAgentIndex,
+    setSubAgentIndex,
+    nextSubAgent,
+    prevSubAgent
+  } = useManagedSubAgents();
+
+  const suggestion = useCommandAutocomplete(input);
 
   useEffect(() => {
     if (pending) setChatMode("input");
   }, [pending]);
-
-  const handleInput = useEvent((_input: string, key: any) => {
-    if (pending) {
-      handlePendingInput(_input, key, approve, approveAll, deny, cancel);
-      return;
-    }
-    if (chatMode === "subagent-detail") {
-      handleSubAgentInput(
-        key,
-        subAgents,
-        subAgentIndex,
-        setSubAgentIndex,
-        setChatMode,
-      );
-      if (key.ctrl && _input === "o") setChatMode("input");
-      return;
-    }
-    if (suggestion.show && suggestion.filtered.length > 0) {
-      const handled = handleSuggestionInput(key, suggestion, setInput, input);
-      if (handled) return;
-    }
-    if (key.escape && isLoading) cancel();
-    if (key.ctrl && _input === "u") loadMore();
-    if (key.ctrl && _input === "o" && subAgents.length > 0) {
-      setSubAgentIndex(0);
-      setChatMode("subagent-detail");
-      return;
-    }
-    if (key.upArrow || key.downArrow) {
-      const userMessages = messages.filter((m) => m.role === "user").reverse();
-      if (key.upArrow) {
-        if (historyIndex + 1 < userMessages.length) {
-          const newIndex = historyIndex + 1;
-          if (historyIndex === -1) setOriginalInput(input);
-          setHistoryIndex(newIndex);
-          setInput(userMessages[newIndex].content);
-        }
-      } else if (historyIndex >= 0) {
-        const newIndex = historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setInput(
-          newIndex === -1 ? originalInput : userMessages[newIndex].content,
-        );
-      }
-    }
-    if (key.return) {
-      handleSubmit();
-    }
-  });
-
-  useInput(handleInput);
 
   const handleSubmit = useCallback(async () => {
     if (isLoading) return;
@@ -201,13 +78,15 @@ export function useChatScreenState() {
       },
     };
     const suggestedCommand = suggestion.filtered[0];
-    const isCommand = await handleCommand(
-      `/${suggestedCommand.name}`,
-      commandContext,
-    );
-    if (isCommand) {
-      setInput("");
-      return;
+    if (suggestedCommand) {
+      const isCommand = await handleCommand(
+        `/${suggestedCommand.name}`,
+        commandContext,
+      );
+      if (isCommand) {
+        setInput("");
+        return;
+      }
     }
 
     setInput("");
@@ -221,7 +100,69 @@ export function useChatScreenState() {
     sendMessage,
     appendSystemMessage,
     clearMessages,
+    suggestion, // FIXED: satisfied missing dependency
   ]);
+
+  // --- Keymapping Mini-Framework Config ---
+
+  // Layer 1: Blocking Authorization Mode
+  useKeymap({
+    "y": approve,
+    "a": approveAll,
+    "n": deny,
+    "escape": () => { deny(); cancel(); }
+  }, { enabled: !!pending, priority: 100 });
+
+  // Layer 2: Inspecting SubAgent Activity Log
+  useKeymap({
+    "up": () => prevSubAgent(),
+    "down": () => nextSubAgent(),
+    "escape": () => setChatMode("input"),
+    "ctrl+o": () => setChatMode("input"),
+  }, { enabled: chatMode === "subagent-detail", priority: 80 });
+
+  // Layer 3: Command Completion Mode
+  // NOTE: High Priority (60) intentionally hijacks arrow keys from Layer 4 when menu is active
+  useKeymap({
+    "up": () => suggestion.prev(),
+    "down": () => suggestion.next(),
+  }, { enabled: suggestion.show && suggestion.filtered.length > 0, priority: 60 });
+
+  // Layer 4: Global & Text Input Navigation Mode
+  useKeymap({
+    "escape": () => {
+      if (isLoading) cancel();
+    },
+    "ctrl+u": () => loadMore(),
+    "ctrl+o": () => {
+      if (subAgents.length > 0) {
+        setSubAgentIndex(0);
+        setChatMode("subagent-detail");
+      }
+    },
+    "up": () => {
+      const userMessages = messages.filter((m) => m.role === "user").reverse();
+      if (historyIndex + 1 < userMessages.length) {
+        const newIndex = historyIndex + 1;
+        if (historyIndex === -1) setOriginalInput(input);
+        setHistoryIndex(newIndex);
+        setInput(userMessages[newIndex].content);
+      }
+    },
+    "down": () => {
+      const userMessages = messages.filter((m) => m.role === "user").reverse();
+      if (historyIndex >= 0) {
+        const newIndex = historyIndex - 1;
+        setHistoryIndex(newIndex);
+        setInput(newIndex === -1 ? originalInput : userMessages[newIndex].content);
+      }
+    },
+    "return": () => {
+      handleSubmit();
+    }
+  }, { enabled: !pending && chatMode === "input", priority: 10 });
+
+
 
   return {
     input,
