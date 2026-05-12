@@ -1,4 +1,4 @@
-import { createBus } from "./bus.js";
+import { createBus } from "../../lib/runtime/bus.js";
 
 export type ConfirmEvents = {
   "request": { callId: string; toolName: string; args: string };

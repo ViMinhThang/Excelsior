@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
-import { getDb } from "../db/index.js";
-import { AgentEvent, Session } from "./eventTypes.js";
-import { PAGE_SIZE } from "../types.js";
+import { getDb } from "../../db/index.js";
+import { AgentEvent, Session } from "../eventTypes.js";
+import { PAGE_SIZE } from "../../types.js";
 
 interface SessionRow {
   id: string;
@@ -120,45 +120,4 @@ export function deleteAllSessions(db?: Database.Database): void {
   const _db = db ?? getDb();
   _db.exec("DELETE FROM agent_events");
   _db.exec("DELETE FROM sessions");
-}
-
-export function projectEventsToAIHistory(
-  events: AgentEvent[],
-): Array<{ role: "user" | "assistant" | "system"; content: string }> {
-  const history: Array<{ role: "user" | "assistant" | "system"; content: string }> = [];
-  let assistantBuf = "";
-
-  function flushAssistant() {
-    if (assistantBuf) {
-      history.push({ role: "assistant", content: assistantBuf });
-      assistantBuf = "";
-    }
-  }
-
-  for (const evt of events) {
-    if (evt.type === "user-input") {
-      flushAssistant();
-      history.push({ role: "user", content: evt.data.content as string });
-    } else if (evt.type === "text-delta") {
-      assistantBuf += evt.data.delta as string;
-    } else if (evt.type === "tool-call-start" || evt.type === "tool-call-end") {
-      flushAssistant();
-      if (evt.type === "tool-call-end") {
-        const result = evt.data.result as string;
-        const toolName = evt.data.toolName as string;
-        const args = evt.data.toolArgs as string;
-        const status = evt.data.status as string;
-        const isError = status === "error" || result?.startsWith("[Error]");
-        const label = isError ? "[Error]" : "[Completed]";
-        history.push({
-          role: "assistant",
-          content: `[Tool: ${toolName}(${args})] ${label}\n${result ?? ""}`,
-        });
-      }
-    } else if (evt.type === "child-session-attached") {
-      flushAssistant();
-    }
-  }
-  flushAssistant();
-  return history;
 }

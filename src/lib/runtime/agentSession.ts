@@ -1,5 +1,5 @@
 import { createBus } from "./bus.js";
-import { AgentEvent, AgentEventType, makeEvent } from "./eventTypes.js";
+import { AgentEvent, AgentEventType, makeEvent } from "./events.js";
 
 export type SessionEventMap = {
   event: AgentEvent;

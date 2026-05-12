@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { subAgentBus } from "../../lib/subAgentBus.js";
+import { subAgentBus } from "../lib/subAgentBus.js";
 import {
   SubAgentState,
   SubAgentOutputPart,

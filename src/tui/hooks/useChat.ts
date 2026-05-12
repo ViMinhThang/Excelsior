@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 import { useChatHistory } from "./useChatHistory.js";
 import { useChatSender } from "./useChatSender.js";
-import { projectEventsToAIHistory } from "../../lib/eventPersistence.js";
+import { projectEventsToAIHistory } from "../../lib/projection/projectEvents.js";
 import { type AIHistoryRef } from "./useChatSender.js";
 import { type AgentEvent } from "../../lib/eventTypes.js";
 

@@ -109,6 +109,49 @@ function toneFor(status: ToolStatus, content?: string): ToolTone {
   return "success";
 }
 
+type ToolFormatterContext = {
+  args: Record<string, unknown> | null;
+  rawArgs?: string;
+  normalizedContent: string;
+  preview: { lines?: string[]; omitted: number };
+  tone: ToolTone;
+  status: ToolStatus;
+};
+
+type ToolFormatter = (ctx: ToolFormatterContext) => Partial<ToolDisplay>;
+
+const TOOL_FORMATTERS: Record<string, ToolFormatter> = {
+  runCommand: ({ args, normalizedContent, preview, tone, status }) => {
+    const command = asString(args?.command);
+    return {
+      label: "Run command",
+      summary: command || "shell command",
+      detail: normalizedContent.startsWith("Error executing command")
+        ? "command failed"
+        : normalizedContent === "Command timed out"
+          ? "timed out"
+          : status === "pending"
+            ? "waiting for approval or execution"
+            : undefined,
+      resultPreview: preview.lines,
+      omittedResultLines: preview.omitted,
+      tone,
+      risk: getCommandRisk(command),
+    };
+  },
+
+  gitDiff: ({ args, rawArgs, normalizedContent, preview, tone }) => {
+    return {
+      label: "Git diff",
+      summary: genericSummary(args, rawArgs) || "working tree diff",
+      detail: normalizedContent ? `${plural(countLines(normalizedContent), "line")} of diff output` : undefined,
+      resultPreview: preview.lines,
+      omittedResultLines: preview.omitted,
+      tone,
+    };
+  },
+};
+
 export function createToolDisplay({
   toolName,
   toolArgs,
@@ -121,45 +164,33 @@ export function createToolDisplay({
   const preview = previewContent(normalizedContent);
   const tone = toneFor(status, normalizedContent);
 
-  switch (name) {
-    case "runCommand": {
-      const command = asString(args?.command);
-      return {
-        label: "Run command",
-        summary: command || "shell command",
-        detail: normalizedContent.startsWith("Error executing command")
-          ? "command failed"
-          : normalizedContent === "Command timed out"
-            ? "timed out"
-            : status === "pending"
-              ? "waiting for approval or execution"
-              : undefined,
-        resultPreview: preview.lines,
-        omittedResultLines: preview.omitted,
-        tone,
-        risk: getCommandRisk(command),
-      };
-    }
+  const formatter = TOOL_FORMATTERS[name];
+  if (formatter) {
+    const result = formatter({
+      args,
+      rawArgs: toolArgs,
+      normalizedContent,
+      preview,
+      tone,
+      status,
+    });
 
-    case "gitDiff": {
-      return {
-        label: "Git diff",
-        summary: genericSummary(args, toolArgs) || "working tree diff",
-        detail: normalizedContent ? `${plural(countLines(normalizedContent), "line")} of diff output` : undefined,
-        resultPreview: preview.lines,
-        omittedResultLines: preview.omitted,
-        tone,
-      };
-    }
-
-    default:
-      return {
-        label: name,
-        summary: genericSummary(args, toolArgs),
-        detail: normalizedContent && normalizedContent.length < 140 ? normalizedContent : undefined,
-        resultPreview: normalizedContent && normalizedContent.length >= 140 ? preview.lines : undefined,
-        omittedResultLines: normalizedContent && normalizedContent.length >= 140 ? preview.omitted : undefined,
-        tone,
-      };
+    // Ensure default fields exist to satisfy Interface
+    return {
+      label: name,
+      summary: genericSummary(args, toolArgs),
+      tone,
+      ...result,
+    } as ToolDisplay;
   }
+
+  // Default fallback
+  return {
+    label: name,
+    summary: genericSummary(args, toolArgs),
+    detail: normalizedContent && normalizedContent.length < 140 ? normalizedContent : undefined,
+    resultPreview: normalizedContent && normalizedContent.length >= 140 ? preview.lines : undefined,
+    omittedResultLines: normalizedContent && normalizedContent.length >= 140 ? preview.omitted : undefined,
+    tone,
+  };
 }
