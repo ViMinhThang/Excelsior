@@ -1,18 +1,24 @@
-import { createBus } from "./bus.js";
-import { AgentEvent, AgentEventType, makeEvent } from "./events.js";
+import { createChannelBus } from "./bus.js";
+import {
+  AgentEvent,
+  AgentEventType,
+  AgentEventDataMap,
+  makeEvent,
+  AnyAgentEvent,
+} from "./events.js";
 
 export type SessionEventMap = {
-  event: AgentEvent;
+  event: AnyAgentEvent;
 };
 
 export class AgentSession {
   readonly id: string;
-  readonly bus = createBus<SessionEventMap>();
+  readonly bus = createChannelBus<SessionEventMap>("session");
   readonly parentEventId?: string;
   abortController?: AbortController;
 
-  private _events: AgentEvent[] = [];
-  private _snapshot: readonly AgentEvent[] = [];
+  private _events: AnyAgentEvent[] = [];
+  private _snapshot: readonly AnyAgentEvent[] = [];
   private _seq = 0;
   private _listeners = new Set<() => void>();
   private _aborted = false;
@@ -28,9 +34,9 @@ export class AgentSession {
     return this._aborted;
   }
 
-  emit(
-    type: AgentEventType,
-    data: Record<string, unknown>,
+  emit<T extends AgentEventType>(
+    type: T,
+    data: AgentEventDataMap[T],
     overrides?: { relatedToolCallId?: string },
   ): void {
     if (this._aborted && type !== "session-end") return;
@@ -39,9 +45,9 @@ export class AgentSession {
       ...overrides,
     });
     Object.freeze(event);
-    this._events.push(event);
+    this._events.push(event as AnyAgentEvent);
     this._snapshot = [...this._events];
-    this.bus.emit("event", event);
+    this.bus.emit("event", event as AnyAgentEvent);
     this._notify();
   }
 
@@ -66,7 +72,7 @@ export class AgentSession {
     }
   }
 
-  getSnapshot(): readonly AgentEvent[] {
+  getSnapshot(): readonly AnyAgentEvent[] {
     return this._snapshot;
   }
 

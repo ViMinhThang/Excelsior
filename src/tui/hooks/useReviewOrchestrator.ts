@@ -93,18 +93,17 @@ export function useReviewOrchestrator() {
       signal: abortController.signal,
       onEvent: (event) => {
         if (event.type === "text-delta") {
-          const delta = (event.data.delta as string);
+          const delta = event.data.delta;
           prevText = prevText + delta;
           onSetMainOutput(prevText);
           onAddTextBlock(delta);
         } else if (event.type === "tool-call-start") {
-          const toolName = event.data.toolName as string;
-          const args = event.data.toolArgs as string;
-          const toolCallId = event.relatedToolCallId ?? (event.data.toolCallId as string);
-          onAddToolCallBlock(toolCallId, toolName, args);
+          const { toolName, toolArgs } = event.data;
+          const toolCallId = event.relatedToolCallId ?? event.data.toolCallId;
+          onAddToolCallBlock(toolCallId, toolName, toolArgs);
         } else if (event.type === "tool-call-end") {
-          const toolCallId = event.relatedToolCallId ?? (event.data.toolCallId as string);
-          const result = event.data.result as string;
+          const toolCallId = event.relatedToolCallId ?? event.data.toolCallId;
+          const result = event.data.result;
           const status = result?.startsWith("[Error]") ? "error" : "completed";
           onUpdateToolCallBlock(toolCallId, status);
         } else if (event.type === "session-end") {

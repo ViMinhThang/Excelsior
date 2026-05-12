@@ -3,10 +3,10 @@ import { ToolCallInfo } from "../../types.js";
 export type ToolCallStatus = "pending" | "completed" | "error";
 
 export type DisplayBlock =
-  | { type: "user"; id: string; content: string; timestamp: string }
-  | { type: "assistant"; id: string; content: string; timestamp: string }
-  | { type: "tool-call"; id: string; toolName: string; toolArgs: string; status: ToolCallStatus; content: string; timestamp: string }
-  | { type: "sub-agent"; id: string; role: string; state: SubAgentDisplayState; timestamp: string };
+  | { type: "user"; id: string; content: string; timestamp: string; isFrozen?: true }
+  | { type: "assistant"; id: string; content: string; timestamp: string; isFrozen?: true }
+  | { type: "tool-call"; id: string; toolName: string; toolArgs: string; status: ToolCallStatus; content: string; timestamp: string; isFrozen?: true }
+  | { type: "sub-agent"; id: string; role: string; state: SubAgentDisplayState; timestamp: string; isFrozen?: true };
 
 export interface SubAgentDisplayState {
   status: "running" | "done" | "error";

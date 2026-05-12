@@ -7,7 +7,7 @@ import {
   useEffect,
 } from "react";
 import { AgentSession } from "../../lib/runtime/agentSession.js";
-import { AgentEvent, DisplayBlock, Session } from "../../lib/eventTypes.js";
+import { AnyAgentEvent, DisplayBlock, Session } from "../../lib/eventTypes.js";
 import {
   loadSessions,
   loadSessionEvents,
@@ -20,7 +20,6 @@ import {
 import { subAgentBus } from "../lib/subAgentBus.js";
 import { PAGE_SIZE } from "../../types.js";
 
-// Extracted robust notification store for sub-agents to replace inline component tick hacks.
 let _subAgentVersion = 0;
 const _subAgentListeners = new Set<() => void>();
 let _subAgentNotifyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -50,7 +49,7 @@ const subAgentStore = {
   getSnapshot: () => _subAgentVersion,
 };
 
-const EMPTY_EVENTS: readonly AgentEvent[] = [];
+const EMPTY_EVENTS: readonly AnyAgentEvent[] = [];
 
 export interface UseChatHistoryOptions {
   childSessionsMap?: Map<string, AgentSession>;
@@ -62,9 +61,8 @@ export function useChatHistory(options?: UseChatHistoryOptions) {
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [hasMore, setHasMore] = useState(false);
-  const [persistedEvents, setPersistedEvents] = useState<AgentEvent[]>([]);
+  const [persistedEvents, setPersistedEvents] = useState<AnyAgentEvent[]>([]);
 
-  // Initial fetch deferred from state instantiation to ensure UI doesn't block
   useEffect(() => {
     const total = getSessionCount();
     totalRef.current = total;
@@ -74,7 +72,7 @@ export function useChatHistory(options?: UseChatHistoryOptions) {
     setSessions(initial);
     setHasMore(loadedRef.current < total);
 
-    const initialEvents: AgentEvent[] = [];
+    const initialEvents: AnyAgentEvent[] = [];
     for (const session of initial) {
       try {
         initialEvents.push(...loadSessionEvents(session.id));
@@ -105,7 +103,7 @@ export function useChatHistory(options?: UseChatHistoryOptions) {
     }, [activeSession]),
   );
 
-  const addSessionEvents = useCallback((events: AgentEvent[]) => {
+  const addSessionEvents = useCallback((events: AnyAgentEvent[]) => {
     if (events.length > 0) {
       setPersistedEvents((prev) => [...prev, ...events]);
     }
@@ -123,7 +121,7 @@ export function useChatHistory(options?: UseChatHistoryOptions) {
     setActiveSession(newSession);
   }, []);
 
-  const displayEvents = useMemo((): AgentEvent[] => {
+  const displayEvents = useMemo((): AnyAgentEvent[] => {
     if (liveEvents.length === 0) return persistedEvents;
     const liveIds = new Set(liveEvents.map((e) => e.id));
     const filtered = persistedEvents.filter((e) => !liveIds.has(e.id));
@@ -163,7 +161,7 @@ export function useChatHistory(options?: UseChatHistoryOptions) {
       totalRef.current = getSessionCount();
       setHasMore(loadedRef.current < totalRef.current);
       setSessions((prev) => [...prev, ...older]);
-      const moreEvents: AgentEvent[] = [];
+      const moreEvents: AnyAgentEvent[] = [];
       for (const session of older) {
         const evts = loadSessionEvents(session.id);
         moreEvents.push(...evts);

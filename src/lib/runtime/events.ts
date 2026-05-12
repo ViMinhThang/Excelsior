@@ -1,36 +1,44 @@
-export type AgentEventType =
-  | "session-start"
-  | "user-input"
-  | "text-delta"
-  | "tool-call-start"
-  | "tool-call-end"
-  | "child-session-attached"
-  | "error"
-  | "session-end";
+import { randomUUID } from "crypto";
 
-export interface AgentEvent {
+export type AgentEventDataMap = {
+  "session-start": Record<string, never>;
+  "user-input": { content: string };
+  "text-delta": { delta: string };
+  "tool-call-start": { toolName: string; toolArgs: string; toolCallId: string };
+  "tool-call-end": { toolCallId: string; result: string; status: string; toolName: string; toolArgs: string };
+  "child-session-attached": { childSessionId: string; parentToolCallId: string; role: string };
+  "error": { message: string };
+  "session-end": { cancelled: boolean };
+};
+
+export type AgentEventType = keyof AgentEventDataMap;
+
+export interface AgentEvent<T extends AgentEventType = AgentEventType> {
   id: string;
   sessionId: string;
   sequence: number;
-  type: AgentEventType;
+  type: T;
   timestamp: string;
-  data: Record<string, unknown>;
+  data: AgentEventDataMap[T];
   parentEventId?: string;
   relatedToolCallId?: string;
 }
 
-let _eventSeq = 0;
+export type AnyAgentEvent = {
+  [T in AgentEventType]: { type: T } & AgentEvent<T>;
+}[AgentEventType];
+
 export function generateEventId(): string {
-  return `evt_${Date.now()}_${(++_eventSeq).toString(36)}`;
+  return `evt_${randomUUID()}`;
 }
 
-export function makeEvent(
+export function makeEvent<T extends AgentEventType>(
   sessionId: string,
-  type: AgentEventType,
-  data: Record<string, unknown>,
+  type: T,
+  data: AgentEventDataMap[T],
   sequence: number,
   overrides?: { parentEventId?: string; relatedToolCallId?: string },
-): AgentEvent {
+): AgentEvent<T> {
   return {
     id: generateEventId(),
     sessionId,
@@ -40,5 +48,5 @@ export function makeEvent(
     data,
     ...(overrides?.parentEventId ? { parentEventId: overrides.parentEventId } : {}),
     ...(overrides?.relatedToolCallId ? { relatedToolCallId: overrides.relatedToolCallId } : {}),
-  };
+  } as AgentEvent<T>;
 }

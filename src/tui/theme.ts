@@ -2,7 +2,7 @@ export const theme = {
   colors: {
     background: "#2e3440",
     accent: "#cba6f7",
-    activity: "#8fbcbb",
+    activity: "#ffe600ff",
     success: "#a3be8c",
     error: "#bf616a",
     text: "#eceff4",

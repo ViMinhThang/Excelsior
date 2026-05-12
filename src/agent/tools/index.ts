@@ -5,12 +5,7 @@ import { lsTool } from "./fs/ls.js";
 import { viewTool } from "./fs/view.js";
 import { globTool } from "./fs/glob.js";
 import { grepTool } from "./fs/grep.js";
-
-interface ConfirmBus {
-  getListenerCount(event: "request"): number;
-  on(event: "response", handler: (resp: { callId: string; approved: boolean }) => void): () => void;
-  emit(event: "request", data: { callId: string; toolName: string; args: string }): void;
-}
+import type { ConfirmBus } from "../../types.js";
 
 export function createFileTools(confirmBus?: ConfirmBus) {
   return {

@@ -1,4 +1,4 @@
-import { createBus } from "../../lib/runtime/bus.js";
+import { createChannelBus } from "../../lib/runtime/bus.js";
 import { ToolCallInfo } from "../../types.js";
 import { SubAgentOutputPart } from "../../lib/eventTypes.js";
 
@@ -14,4 +14,4 @@ export type SubAgentEvents = {
   "done": { toolCallId: string; fullOutput: string };
 };
 
-export const subAgentBus = createBus<SubAgentEvents>();
+export const subAgentBus = createChannelBus<SubAgentEvents>("sub-agent");

@@ -45,7 +45,16 @@ const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, role, isSelected }) =>
     ? `${latestToolCall.toolName} ${latestToolCall.toolArgs ? String(latestToolCall.toolArgs).substring(0, 40) : ""}`
     : `${agent.toolCalls?.length || 0} toolcalls · ${durationStr}`;
 
-  const topPrefix = isRunning ? "∴" : "│";
+  const [frame, setFrame] = useState(0);
+  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+  useEffect(() => {
+    if (!isRunning) return;
+    const timer = setInterval(() => setFrame((f) => (f + 1) % spinnerFrames.length), 80);
+    return () => clearInterval(timer);
+  }, [isRunning]);
+
+  const topPrefix = isRunning ? spinnerFrames[frame] : "│";
   const bottomPrefix = isRunning ? "↳" : "└";
 
   return (
