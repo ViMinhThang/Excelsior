@@ -1,10 +1,54 @@
-import { useState, useCallback, useRef, useSyncExternalStore, useMemo, useEffect } from "react";
-import { AgentSession } from "../../lib/agentSession.js";
+import {
+  useState,
+  useCallback,
+  useRef,
+  useSyncExternalStore,
+  useMemo,
+  useEffect,
+} from "react";
+import { AgentSession } from "../../lib/runtime/agentSession.js";
 import { AgentEvent, DisplayBlock, Session } from "../../lib/eventTypes.js";
-import { loadSessions, loadSessionEvents, getSessionCount } from "../../lib/eventPersistence.js";
-import { groupEventsForDisplay, ProjectOptions } from "../../lib/projectEvents.js";
-import { subAgentBus } from "../../lib/subAgentBus.js";
+import {
+  loadSessions,
+  loadSessionEvents,
+  getSessionCount,
+} from "../../lib/persistence/eventPersistence.js";
+import {
+  groupEventsForDisplay,
+  ProjectOptions,
+} from "../../lib/projection/projectEvents.js";
+import { subAgentBus } from "../lib/subAgentBus.js";
 import { PAGE_SIZE } from "../../types.js";
+
+// Extracted robust notification store for sub-agents to replace inline component tick hacks.
+let _subAgentVersion = 0;
+const _subAgentListeners = new Set<() => void>();
+let _subAgentNotifyTimer: ReturnType<typeof setTimeout> | null = null;
+
+const triggerSubAgentUpdate = () => {
+  if (_subAgentNotifyTimer !== null) return;
+  _subAgentNotifyTimer = setTimeout(() => {
+    _subAgentNotifyTimer = null;
+    _subAgentVersion++;
+    for (const listener of _subAgentListeners) {
+      listener();
+    }
+  }, 0);
+};
+
+subAgentBus.on("spawned", triggerSubAgentUpdate);
+subAgentBus.on("output", triggerSubAgentUpdate);
+subAgentBus.on("done", triggerSubAgentUpdate);
+
+const subAgentStore = {
+  subscribe: (cb: () => void) => {
+    _subAgentListeners.add(cb);
+    return () => {
+      _subAgentListeners.delete(cb);
+    };
+  },
+  getSnapshot: () => _subAgentVersion,
+};
 
 const EMPTY_EVENTS: readonly AgentEvent[] = [];
 
@@ -13,55 +57,39 @@ export interface UseChatHistoryOptions {
 }
 
 export function useChatHistory(options?: UseChatHistoryOptions) {
-  const totalRef = useRef(getSessionCount());
+  const totalRef = useRef(0);
   const loadedRef = useRef(0);
 
-  const [sessions, setSessions] = useState<Session[]>(() => {
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [persistedEvents, setPersistedEvents] = useState<AgentEvent[]>([]);
+
+  // Initial fetch deferred from state instantiation to ensure UI doesn't block
+  useEffect(() => {
+    const total = getSessionCount();
+    totalRef.current = total;
+
     const initial = loadSessions(PAGE_SIZE, 0);
     loadedRef.current = initial.length;
-    return initial;
-  });
+    setSessions(initial);
+    setHasMore(loadedRef.current < total);
 
-  const [hasMore, setHasMore] = useState(
-    () => loadedRef.current < totalRef.current,
-  );
-
-  const [persistedEvents, setPersistedEvents] = useState<AgentEvent[]>(() => {
-    const all: AgentEvent[] = [];
-    for (const session of sessions) {
-      const evts = loadSessionEvents(session.id);
-      all.push(...evts);
+    const initialEvents: AgentEvent[] = [];
+    for (const session of initial) {
+      try {
+        initialEvents.push(...loadSessionEvents(session.id));
+      } catch {}
     }
-    return all;
-  });
+    setPersistedEvents(initialEvents);
+  }, []);
 
   const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
   const prevSessionRef = useRef<AgentSession | null>(null);
 
-  // Live reactivity link for sub-agents: track updates occurring in parallel streams
-  const [tick, setTick] = useState(0);
-  const notifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const triggerUpdate = () => {
-      if (notifyTimerRef.current !== null) return;
-      notifyTimerRef.current = setTimeout(() => {
-        notifyTimerRef.current = null;
-        setTick((t) => t + 1);
-      }, 0);
-    };
-
-    const unsub1 = subAgentBus.on("spawned", triggerUpdate);
-    const unsub2 = subAgentBus.on("output", triggerUpdate);
-    const unsub3 = subAgentBus.on("done", triggerUpdate);
-
-    return () => {
-      unsub1();
-      unsub2();
-      unsub3();
-      if (notifyTimerRef.current) clearTimeout(notifyTimerRef.current);
-    };
-  }, []);
+  const subAgentTick = useSyncExternalStore(
+    subAgentStore.subscribe,
+    subAgentStore.getSnapshot,
+  );
 
   const liveEvents = useSyncExternalStore(
     useCallback(
@@ -125,7 +153,7 @@ export function useChatHistory(options?: UseChatHistoryOptions) {
 
   const displayBlocks: DisplayBlock[] = useMemo(
     () => groupEventsForDisplay(displayEvents, projectOptions),
-    [displayEvents, projectOptions, tick],
+    [displayEvents, projectOptions, subAgentTick],
   );
 
   const loadMore = useCallback((count: number = PAGE_SIZE) => {

@@ -3,8 +3,8 @@ import { createAgent } from "../../agent/agent.js";
 import { reviewOrchestratorPrompt } from "../../agent/review/reviewPrompt.js";
 import { createSpawnSubAgentTool } from "../../agent/review/spawnSubAgent.js";
 import { gitDiffTool } from "../../agent/tools/gitDiff/gitDiff.js";
-import { streamAgentResponse } from "../../lib/agentStream.js";
-import { AgentSession } from "../../lib/agentSession.js";
+import { SessionOrchestrator } from "../../lib/runtime/sessionOrchestrator.js";
+import { AgentSession } from "../../lib/runtime/agentSession.js";
 import { usePRContext } from "../context/PRContext.js";
 import { useReviewSessionContext } from "../context/ReviewSessionContext.js";
 import { useSubAgentContext } from "../context/SubAgentContext.js";
@@ -55,6 +55,9 @@ export function useReviewOrchestrator() {
     },
   });
 
+  const orchestratorRef = useRef<SessionOrchestrator | null>(null);
+  if (!orchestratorRef.current) orchestratorRef.current = new SessionOrchestrator();
+
   const startReview = useCallback(async () => {
     const currentDiff = diffRef.current;
     if (!currentDiff) return;
@@ -79,45 +82,43 @@ export function useReviewOrchestrator() {
 
     let prevText = "";
 
-    const unsub = session.bus.on("event", (event) => {
-      if (event.type === "text-delta") {
-        const fullText = prevText + (event.data.delta as string);
-        const delta = (event.data.delta as string);
-        prevText = fullText;
-        onSetMainOutput(fullText);
-        onAddTextBlock(delta);
-      } else if (event.type === "tool-call-start") {
-        const toolName = event.data.toolName as string;
-        const args = event.data.toolArgs as string;
-        const toolCallId = event.relatedToolCallId ?? (event.data.toolCallId as string);
-        onAddToolCallBlock(toolCallId, toolName, args);
-      } else if (event.type === "tool-call-end") {
-        const toolCallId = event.relatedToolCallId ?? (event.data.toolCallId as string);
-        const result = event.data.result as string;
-        const status = result?.startsWith("[Error]") ? "error" : "completed";
-        onUpdateToolCallBlock(toolCallId, status);
-      } else if (event.type === "session-end") {
-        onSetMode("results");
-      }
+    const { onComplete } = orchestratorRef.current!.startRun(session, {
+      messages: [
+        {
+          role: "user",
+          content: `Review this PR diff for a pull request:\n\n\`\`\`diff\n${currentDiff}\n\`\`\``,
+        },
+      ],
+      createAgent: () => mainAgent,
+      signal: abortController.signal,
+      onEvent: (event) => {
+        if (event.type === "text-delta") {
+          const delta = (event.data.delta as string);
+          prevText = prevText + delta;
+          onSetMainOutput(prevText);
+          onAddTextBlock(delta);
+        } else if (event.type === "tool-call-start") {
+          const toolName = event.data.toolName as string;
+          const args = event.data.toolArgs as string;
+          const toolCallId = event.relatedToolCallId ?? (event.data.toolCallId as string);
+          onAddToolCallBlock(toolCallId, toolName, args);
+        } else if (event.type === "tool-call-end") {
+          const toolCallId = event.relatedToolCallId ?? (event.data.toolCallId as string);
+          const result = event.data.result as string;
+          const status = result?.startsWith("[Error]") ? "error" : "completed";
+          onUpdateToolCallBlock(toolCallId, status);
+        } else if (event.type === "session-end") {
+          onSetMode("results");
+        }
+      },
     });
 
     try {
-      await streamAgentResponse(
-        mainAgent,
-        [
-          {
-            role: "user",
-            content: `Review this PR diff for a pull request:\n\n\`\`\`diff\n${currentDiff}\n\`\`\``,
-          },
-        ],
-        session,
-        abortController.signal,
-      );
+      await onComplete;
     } catch (error: any) {
       onSetMainOutput(`Error during review: ${error.message}`);
       onAddTextBlock(`Error during review: ${error.message}`);
     } finally {
-      unsub();
       childSessions.clear();
       onSetMode("results");
     }

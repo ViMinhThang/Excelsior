@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { confirmBus } from "../../lib/confirmBus.js";
+import { confirmBus } from "../lib/confirmBus.js";
 
 type PendingRequest = {
   callId: string;

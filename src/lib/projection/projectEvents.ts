@@ -1,5 +1,6 @@
-import { AgentEvent, DisplayBlock, SubAgentPart } from "./eventTypes.js";
-import { ToolCallInfo } from "../types.js";
+import { AgentEvent } from "../runtime/events.js";
+import { DisplayBlock, SubAgentDisplayState, SubAgentPart } from "./display.js";
+import { ToolCallInfo } from "../../types.js";
 
 function parseToolArgs(args?: unknown): string {
   if (typeof args === "string") return args;
@@ -98,84 +99,6 @@ export function groupEventsForDisplay(
     });
     tool = null;
   }
-
-  function buildSubAgentBlock(
-    pendingToolId: string,
-    childRole: string,
-    childEvents: readonly AgentEvent[],
-    status: "running" | "done" | "error",
-    fallbackTimestamp: string,
-  ): DisplayBlock | null {
-    const parts: SubAgentPart[] = [];
-    const toolCalls: ToolCallInfo[] = [];
-    let fullOutput = "";
-    let startTime = Date.now();
-    let endTime = Date.now();
-
-    for (const evt of childEvents) {
-      if (evt.type === "text-delta") {
-        const delta = evt.data.delta as string;
-        fullOutput += delta;
-        const partsLen = parts.length;
-        if (partsLen > 0 && parts[partsLen - 1].type === "text") {
-          const last = parts[partsLen - 1] as SubAgentPart & { type: "text" };
-          parts[partsLen - 1] = { type: "text", text: last.text + delta };
-        } else {
-          parts.push({ type: "text", text: delta });
-        }
-      } else if (evt.type === "tool-call-start") {
-        const toolName = evt.data.toolName as string;
-        const toolArgs = parseToolArgs(evt.data.toolArgs);
-        const callId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
-        parts.push({ type: "tool-call", toolName, toolArgs, toolCallId: callId, status: "pending" });
-        toolCalls.push({ toolName, toolArgs, toolCallId: callId, status: "pending" });
-      } else if (evt.type === "tool-call-end") {
-        const callId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
-        const tcStatus = evt.data.status === "error" ? ("error" as const) : ("completed" as const);
-        for (let i = 0; i < parts.length; i++) {
-          const p = parts[i];
-          if (p.type === "tool-call" && p.toolCallId === callId) {
-            parts[i] = { ...p, status: tcStatus };
-          }
-        }
-        toolCalls.forEach((tc, i) => {
-          if (tc.toolCallId === callId) {
-            toolCalls[i] = { ...tc, status: tcStatus };
-          }
-        });
-      }
-    }
-
-    const lines = fullOutput.split("\n").filter(Boolean);
-    const latestLine = lines[lines.length - 1] || "";
-
-    if (childEvents.length > 0) {
-      startTime = new Date(childEvents[0].timestamp).getTime();
-      const last = childEvents[childEvents.length - 1];
-      endTime = status === "running" ? Date.now() : new Date(last.timestamp).getTime();
-    } else {
-      startTime = new Date(fallbackTimestamp).getTime();
-      endTime = status === "running" ? Date.now() : startTime;
-    }
-
-    return {
-      type: "sub-agent",
-      id: pendingToolId,
-      role: childRole,
-      state: {
-        status,
-        latestLine,
-        fullOutput,
-        toolCalls,
-        parts,
-        startTime,
-        endTime,
-      },
-      timestamp: childEvents[0]?.timestamp ?? fallbackTimestamp,
-    };
-  }
-
-
 
   for (const evt of events) {
     switch (evt.type) {
@@ -290,4 +213,130 @@ export function groupEventsForDisplay(
   flushTool();
 
   return blocks;
+}
+
+function buildSubAgentBlock(
+  pendingToolId: string,
+  childRole: string,
+  childEvents: readonly AgentEvent[],
+  status: "running" | "done" | "error",
+  fallbackTimestamp: string,
+): DisplayBlock | null {
+  const state = projectChildEventsToSubAgentState(childEvents, status, fallbackTimestamp);
+  return {
+    type: "sub-agent",
+    id: pendingToolId,
+    role: childRole,
+    state,
+    timestamp: childEvents[0]?.timestamp ?? fallbackTimestamp,
+  };
+}
+
+export function projectChildEventsToSubAgentState(
+  childEvents: readonly AgentEvent[],
+  status: "running" | "done" | "error",
+  fallbackTimestamp: string,
+): SubAgentDisplayState {
+  const parts: SubAgentPart[] = [];
+  const toolCalls: ToolCallInfo[] = [];
+  let fullOutput = "";
+  let startTime = Date.now();
+  let endTime = Date.now();
+
+  for (const evt of childEvents) {
+    if (evt.type === "text-delta") {
+      const delta = evt.data.delta as string;
+      fullOutput += delta;
+      const partsLen = parts.length;
+      if (partsLen > 0 && parts[partsLen - 1].type === "text") {
+        const last = parts[partsLen - 1] as SubAgentPart & { type: "text" };
+        parts[partsLen - 1] = { type: "text", text: last.text + delta };
+      } else {
+        parts.push({ type: "text", text: delta });
+      }
+    } else if (evt.type === "tool-call-start") {
+      const toolName = evt.data.toolName as string;
+      const toolArgs = parseToolArgs(evt.data.toolArgs);
+      const callId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
+      parts.push({ type: "tool-call", toolName, toolArgs, toolCallId: callId, status: "pending" });
+      toolCalls.push({ toolName, toolArgs, toolCallId: callId, status: "pending" });
+    } else if (evt.type === "tool-call-end") {
+      const callId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
+      const tcStatus = evt.data.status === "error" ? ("error" as const) : ("completed" as const);
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        if (p.type === "tool-call" && p.toolCallId === callId) {
+          parts[i] = { ...p, status: tcStatus };
+        }
+      }
+      toolCalls.forEach((tc, i) => {
+        if (tc.toolCallId === callId) {
+          toolCalls[i] = { ...tc, status: tcStatus };
+        }
+      });
+    }
+  }
+
+  const lines = fullOutput.split("\n").filter(Boolean);
+  const latestLine = lines[lines.length - 1] || "";
+
+  if (childEvents.length > 0) {
+    startTime = new Date(childEvents[0].timestamp).getTime();
+    const last = childEvents[childEvents.length - 1];
+    endTime = status === "running" ? Date.now() : new Date(last.timestamp).getTime();
+  } else {
+    startTime = new Date(fallbackTimestamp).getTime();
+    endTime = status === "running" ? Date.now() : startTime;
+  }
+
+  return {
+    status,
+    latestLine,
+    fullOutput,
+    toolCalls,
+    parts,
+    startTime,
+    endTime,
+  };
+}
+
+export function projectEventsToAIHistory(
+  events: readonly AgentEvent[],
+): Array<{ role: "user" | "assistant" | "system"; content: string }> {
+  const history: Array<{ role: "user" | "assistant" | "system"; content: string }> = [];
+  let assistantBuf = "";
+
+  function flushAssistant() {
+    if (assistantBuf) {
+      history.push({ role: "assistant", content: assistantBuf });
+      assistantBuf = "";
+    }
+  }
+
+  for (const evt of events) {
+    if (evt.type === "user-input") {
+      flushAssistant();
+      history.push({ role: "user", content: evt.data.content as string });
+    } else if (evt.type === "text-delta") {
+      assistantBuf += evt.data.delta as string;
+    } else if (evt.type === "tool-call-start" || evt.type === "tool-call-end") {
+      flushAssistant();
+      if (evt.type === "tool-call-end") {
+        const result = evt.data.result as string;
+        const toolName = evt.data.toolName as string;
+        const args = evt.data.toolArgs as string;
+        const status = evt.data.status as string;
+        const isError = status === "error" || result?.startsWith("[Error]");
+        const label = isError ? "[Error]" : "[Completed]";
+        history.push({
+          role: "assistant",
+          content: `[Tool: ${toolName}(${args})] ${label}\n${result ?? ""}`,
+        });
+      }
+    } else if (evt.type === "child-session-attached") {
+      flushAssistant();
+    }
+  }
+  flushAssistant();
+  return history;
 }

@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { runCommandTool } from "../../agent/tools/runCommand/runCommand.js";
+import { createRunCommandTool } from "../../agent/tools/runCommand/runCommand.js";
 import { runCommandSchema } from "../../agent/tools/runCommand/type.js";
+
+const runCommandTool = createRunCommandTool();
 
 describe("runCommandTool", () => {
   describe("schema validation", () => {

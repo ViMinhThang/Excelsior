@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useNavigation } from "../context/NavigationContext.js";
-import { handleCommand } from "../../agent/commands/registry.js";
+import { handleCommand } from "../lib/commands.js";
 import { useChat } from "./useChat.js";
 import { useKeymap } from "./useKeymap.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";

@@ -1,12 +1,12 @@
 import { useCallback, useRef, useState } from "react";
 import { createAgent } from "../../agent/agent.js";
 import { createSpawnSubAgentTool } from "../../agent/review/spawnSubAgent.js";
-import { logError } from "../../db/index.js";
-import { streamAgentResponse } from "../../lib/agentStream.js";
-import { AgentSession } from "../../lib/agentSession.js";
+import { SessionOrchestrator } from "../../lib/runtime/sessionOrchestrator.js";
+import { AgentSession } from "../../lib/runtime/agentSession.js";
 import { AgentEvent } from "../../lib/eventTypes.js";
-import { persistSession, persistEvents, projectEventsToAIHistory } from "../../lib/eventPersistence.js";
-import { formatErrorMessage } from "./useChatSenderUtils.js";
+import { persistSession, persistEvents } from "../../lib/persistence/eventPersistence.js";
+import { projectEventsToAIHistory } from "../../lib/projection/projectEvents.js";
+import { confirmBus } from "../lib/confirmBus.js";
 
 export interface AIHistoryRef {
   current: Array<{ role: "user" | "assistant" | "system"; content: string }>;
@@ -21,9 +21,11 @@ export function useChatSender(
   isLoadingRef.current = isLoading;
   const currentSessionRef = useRef<AgentSession | null>(null);
   const childSessionsMapRef = useRef(new Map<string, AgentSession>());
+  const orchestratorRef = useRef<SessionOrchestrator | null>(null);
+  if (!orchestratorRef.current) orchestratorRef.current = new SessionOrchestrator();
 
   const cancel = useCallback(() => {
-    currentSessionRef.current?.cancel();
+    orchestratorRef.current?.cancel();
     currentSessionRef.current = null;
   }, []);
 
@@ -40,12 +42,15 @@ export function useChatSender(
     currentSessionRef.current = session;
     const childSessions = childSessionsMapRef.current;
 
-    const allEvents: AgentEvent[] = [];
-    const unsubBus = session.bus.on("event", (event) => {
-      if (event.type !== "session-start") {
-        allEvents.push(event);
-      }
-    });
+    // Build AI history from previous sessions so the model has memory
+    const aiMessages: Array<{ role: string; content: string }> = [];
+    if (historyRef?.current) {
+      aiMessages.push(...historyRef.current);
+    }
+    aiMessages.push({ role: "user" as const, content: trimmed });
+
+    const abortController = new AbortController();
+    session.abortController = abortController;
 
     session.emit("user-input", { content: trimmed });
     persistSession({
@@ -55,44 +60,23 @@ export function useChatSender(
       metadata: { userInput: trimmed },
     });
 
-    // Build AI history from previous sessions so the model has memory
-    const aiMessages: Array<{ role: string; content: string }> = [];
-    if (historyRef?.current) {
-      aiMessages.push(...historyRef.current);
-    }
-    aiMessages.push({ role: "user" as const, content: trimmed });
-
-    const agent = createAgent(undefined, {
-      spawnSubAgent: createSpawnSubAgentTool(session, childSessions),
+    const { onComplete } = orchestratorRef.current!.startRun(session, {
+      messages: aiMessages,
+      createAgent: () => createAgent(undefined, {
+        spawnSubAgent: createSpawnSubAgentTool(session, childSessions),
+      }, confirmBus),
+      signal: abortController.signal,
     });
-    const abortController = new AbortController();
-    session.abortController = abortController;
 
-    streamAgentResponse(
-      agent,
-      aiMessages,
-      session,
-      abortController.signal,
-    )
-      .then(() => {
-        unsubBus();
-        persistEvents(allEvents);
-        onSessionComplete?.current?.(allEvents);
+    onComplete
+      .then((events) => {
+        persistEvents(events);
+        onSessionComplete?.current?.(events);
         if (currentSessionRef.current === session) currentSessionRef.current = null;
         setIsLoading(false);
       })
-      .catch((err: unknown) => {
-        unsubBus();
-        const error = err as Error;
-        if (error?.name === "AbortError" || error?.message?.includes("abort")) {
-          if (currentSessionRef.current === session) currentSessionRef.current = null;
-          setIsLoading(false);
-          return;
-        }
-        logError("Agent Error", "[redacted by formatErrorMessage]");
-        session.emit("error", { message: formatErrorMessage(error) });
-        persistEvents(allEvents);
-        onSessionComplete?.current?.(allEvents);
+      .catch(() => {
+        // AbortError only — orchestrator handles non-abort errors internally
         if (currentSessionRef.current === session) currentSessionRef.current = null;
         setIsLoading(false);
       });

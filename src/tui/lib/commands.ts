@@ -1,5 +1,5 @@
 import { Command, CommandContext } from '../../types.js';
-import { deleteAllSessions } from '../../lib/eventPersistence.js';
+import { deleteAllSessions } from '../../lib/persistence/eventPersistence.js';
 
 export const commands: Command[] = [
   {

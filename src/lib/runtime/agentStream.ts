@@ -1,5 +1,5 @@
 import type { ToolLoopAgent } from "ai";
-import { StreamPart, getTextDelta, getToolName, getToolArgs, getToolResult } from "../types.js";
+import { StreamPart, getTextDelta, getToolName, getToolArgs, getToolResult } from "../../types.js";
 import { AgentSession } from "./agentSession.js";
 
 export async function streamAgentResponse(
