@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { randomUUID } from "crypto";
 import { spawn } from "child_process";
+import type { ConfirmBus } from "../../../types.js";
 import { runCommandSchema } from "./type.js";
 
 const MAX_OUTPUT_LENGTH = 100_000;
@@ -66,12 +67,6 @@ function isDangerous(commandString: string): string | null {
 
 function isWriteCommand(commandString: string): boolean {
   return WRITE_PATTERNS.some((pattern) => pattern.test(commandString));
-}
-
-interface ConfirmBus {
-  getListenerCount(event: "request"): number;
-  on(event: "response", handler: (resp: { callId: string; approved: boolean }) => void): () => void;
-  emit(event: "request", data: { callId: string; toolName: string; args: string }): void;
 }
 
 export function createRunCommandTool(confirmBus?: ConfirmBus) {

@@ -1,4 +1,4 @@
-import { AgentEvent } from "../runtime/events.js";
+import { AnyAgentEvent } from "../runtime/events.js";
 import { DisplayBlock, SubAgentDisplayState, SubAgentPart } from "./display.js";
 import { ToolCallInfo } from "../../types.js";
 
@@ -7,235 +7,267 @@ function parseToolArgs(args?: unknown): string {
   return JSON.stringify(args ?? {});
 }
 
+interface PendingTool {
+  toolName: string;
+  toolArgs: string;
+  toolCallId: string;
+  status: "pending" | "completed" | "error";
+  result: string;
+  isSubAgent: boolean;
+}
+
 interface PendingAssistant {
   id: string;
   fullText: string;
   timestamp: string;
 }
 
-interface PendingTool {
-  id: string;
-  toolName: string;
-  toolArgs: string;
-  toolCallId: string;
-  status: "pending" | "completed" | "error";
-  result: string;
-  timestamp: string;
-  isSubAgent: boolean;
+export interface ProjectionReducerState {
+  blocks: DisplayBlock[];
+  pendingAssistant: PendingAssistant | null;
+  pendingTool: PendingTool | null;
+  childSessionIdByToolCallId: Map<string, { childSessionId: string; role: string }>;
 }
 
 export interface ProjectOptions {
-  getChildEvents?: (childSessionId: string) => readonly AgentEvent[];
+  getChildEvents?: (childSessionId: string) => readonly AnyAgentEvent[];
+}
+
+export function createProjectionState(): ProjectionReducerState {
+  return {
+    blocks: [],
+    pendingAssistant: null,
+    pendingTool: null,
+    childSessionIdByToolCallId: new Map(),
+  };
+}
+
+function flushAssistant(state: ProjectionReducerState, forceFrozen = true): void {
+  if (state.pendingAssistant) {
+    state.blocks.push({
+      type: "assistant",
+      id: state.pendingAssistant.id,
+      content: state.pendingAssistant.fullText,
+      timestamp: state.pendingAssistant.timestamp,
+      ...(forceFrozen ? { isFrozen: true as const } : {}),
+    });
+    state.pendingAssistant = null;
+  }
+}
+
+function flushTool(state: ProjectionReducerState, options?: ProjectOptions): void {
+  if (!state.pendingTool) return;
+
+  if (state.pendingTool.isSubAgent) {
+    const childInfo = state.childSessionIdByToolCallId.get(state.pendingTool.toolCallId);
+    const childEvents =
+      childInfo && options?.getChildEvents
+        ? options.getChildEvents(childInfo.childSessionId)
+        : [];
+
+    let role = "SubAgent";
+    try {
+      const parsed = JSON.parse(state.pendingTool.toolArgs);
+      role = parsed.role || role;
+    } catch {
+      // ignore
+    }
+    if (childInfo) {
+      role = childInfo.role || role;
+    }
+
+    const derivedStatus =
+      state.pendingTool.status === "completed" ? "done"
+        : state.pendingTool.status === "error" ? "error"
+        : "running";
+
+    const subBlock = buildSubAgentBlock(
+      state.pendingTool.toolCallId,
+      role,
+      childEvents,
+      derivedStatus,
+    );
+
+    if (subBlock) {
+      state.blocks.push(subBlock);
+      state.pendingTool = null;
+      return;
+    }
+  }
+
+  const isTerminal = state.pendingTool.status !== "pending";
+  state.blocks.push({
+    type: "tool-call",
+    id: state.pendingTool.toolCallId,
+    toolName: state.pendingTool.toolName,
+    toolArgs: state.pendingTool.toolArgs,
+    status: state.pendingTool.status,
+    content: state.pendingTool.result,
+    timestamp: "",
+    ...(isTerminal ? { isFrozen: true as const } : {}),
+  });
+  state.pendingTool = null;
+}
+
+export function reduceProjectionEvent(
+  state: ProjectionReducerState,
+  evt: AnyAgentEvent,
+  options?: ProjectOptions,
+): void {
+  switch (evt.type) {
+    case "child-session-attached": {
+      const { childSessionId, parentToolCallId, role } = evt.data;
+      state.childSessionIdByToolCallId.set(parentToolCallId, { childSessionId, role });
+      break;
+    }
+
+    case "user-input": {
+      flushAssistant(state);
+      flushTool(state, options);
+      state.blocks.push({
+        type: "user",
+        id: evt.id,
+        content: evt.data.content,
+        timestamp: evt.timestamp,
+        isFrozen: true,
+      });
+      break;
+    }
+
+    case "text-delta": {
+      const delta = evt.data.delta;
+      if (state.pendingAssistant) {
+        state.pendingAssistant.fullText += delta;
+        state.pendingAssistant.timestamp = evt.timestamp;
+      } else {
+        state.pendingAssistant = {
+          id: evt.id,
+          fullText: delta,
+          timestamp: evt.timestamp,
+        };
+      }
+      break;
+    }
+
+    case "tool-call-start": {
+      flushAssistant(state);
+      flushTool(state, options);
+      const { toolName, toolArgs, toolCallId } = evt.data;
+      const tCallId = evt.relatedToolCallId ?? toolCallId;
+      const isSubAgent = toolName === "spawnSubAgent";
+
+      state.pendingTool = {
+        toolName,
+        toolArgs: isSubAgent
+          ? JSON.stringify({
+              role: (() => {
+                try {
+                  return JSON.parse(toolArgs).role;
+                } catch {
+                  return toolArgs;
+                }
+              })(),
+            })
+          : toolArgs,
+        toolCallId: tCallId,
+        status: "pending",
+        result: "",
+        isSubAgent,
+      };
+      break;
+    }
+
+    case "tool-call-end": {
+      const toolCallId = evt.relatedToolCallId ?? evt.data.toolCallId;
+      const result = evt.data.result;
+      const status = evt.data.status === "error" ? "error" as const : "completed" as const;
+      const toolName = evt.data.toolName;
+
+      if (state.pendingTool && state.pendingTool.toolCallId === toolCallId) {
+        state.pendingTool.status = status;
+        state.pendingTool.result = result ?? "";
+        flushTool(state, options);
+      } else if (toolName === "spawnSubAgent") {
+        // Orphaned: tool already consumed
+      } else {
+        flushAssistant(state);
+        state.blocks.push({
+          type: "tool-call",
+          id: evt.id,
+          toolName: toolName || "unknown",
+          toolArgs: parseToolArgs(evt.data.toolArgs),
+          status,
+          content: result ?? "",
+          timestamp: evt.timestamp,
+          isFrozen: true,
+        });
+      }
+      break;
+    }
+
+    case "error": {
+      flushAssistant(state);
+      flushTool(state, options);
+      state.blocks.push({
+        type: "assistant",
+        id: evt.id,
+        content: `Error: ${evt.data.message ?? "Unknown error"}`,
+        timestamp: evt.timestamp,
+        isFrozen: true,
+      });
+      break;
+    }
+
+    case "session-start":
+      break;
+    case "session-end":
+      flushAssistant(state);
+      flushTool(state, options);
+      break;
+  }
+}
+
+export function flushProjectionState(
+  state: ProjectionReducerState,
+  options?: ProjectOptions,
+): DisplayBlock[] {
+  flushAssistant(state, false);
+  flushTool(state, options);
+  return state.blocks;
 }
 
 export function groupEventsForDisplay(
-  events: readonly AgentEvent[],
+  events: readonly AnyAgentEvent[],
   options?: ProjectOptions,
 ): DisplayBlock[] {
-  const blocks: DisplayBlock[] = [];
-  let assistant: PendingAssistant | null = null;
-  let tool: PendingTool | null = null;
-  const childSessionIdByToolCallId = new Map<string, { childSessionId: string; role: string }>();
-
-  function flushAssistant() {
-    if (assistant) {
-      blocks.push({
-        type: "assistant",
-        id: assistant.id,
-        content: assistant.fullText,
-        timestamp: assistant.timestamp,
-      });
-      assistant = null;
-    }
-  }
-
-  function flushTool() {
-    if (!tool) return;
-
-    if (tool.isSubAgent) {
-      const childInfo = childSessionIdByToolCallId.get(tool.toolCallId);
-      const childEvents =
-        childInfo && options?.getChildEvents
-          ? options.getChildEvents(childInfo.childSessionId)
-          : [];
-
-      let role = "SubAgent";
-      try {
-        const parsed = JSON.parse(tool.toolArgs);
-        role = parsed.role || role;
-      } catch {
-        // ignore
-      }
-      if (childInfo) {
-        role = childInfo.role || role;
-      }
-
-      const derivedStatus =
-        tool.status === "completed" ? "done" : tool.status === "error" ? "error" : "running";
-
-      const subBlock = buildSubAgentBlock(
-        tool.id,
-        role,
-        childEvents,
-        derivedStatus,
-        tool.timestamp,
-      );
-
-      if (subBlock) {
-        blocks.push(subBlock);
-        tool = null;
-        return;
-      }
-    }
-
-    blocks.push({
-      type: "tool-call",
-      id: tool.id,
-      toolName: tool.toolName,
-      toolArgs: tool.toolArgs,
-      status: tool.status,
-      content: tool.result,
-      timestamp: tool.timestamp,
-    });
-    tool = null;
-  }
-
+  const state = createProjectionState();
   for (const evt of events) {
-    switch (evt.type) {
-      case "child-session-attached": {
-        const childSessionId = evt.data.childSessionId as string;
-        const parentToolCallId = evt.data.parentToolCallId as string;
-        const role = evt.data.role as string;
-        childSessionIdByToolCallId.set(parentToolCallId, { childSessionId, role });
-        break;
-      }
-
-      case "user-input": {
-        flushAssistant();
-        flushTool();
-        blocks.push({
-          type: "user",
-          id: evt.id,
-          content: evt.data.content as string,
-          timestamp: evt.timestamp,
-        });
-        break;
-      }
-
-      case "text-delta": {
-        const delta = evt.data.delta as string;
-        if (assistant) {
-          assistant.fullText += delta;
-          assistant.timestamp = evt.timestamp;
-        } else {
-          assistant = {
-            id: evt.id,
-            fullText: delta,
-            timestamp: evt.timestamp,
-          };
-        }
-        break;
-      }
-
-      case "tool-call-start": {
-        flushAssistant();
-        flushTool();
-        const toolName = evt.data.toolName as string;
-        const toolArgs = parseToolArgs(evt.data.toolArgs);
-        const toolCallId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
-        const isSubAgent = toolName === "spawnSubAgent";
-
-        tool = {
-          id: evt.id,
-          toolName,
-          toolArgs: isSubAgent
-            ? JSON.stringify({
-                role: (() => {
-                  try {
-                    return JSON.parse(toolArgs).role;
-                  } catch {
-                    return toolArgs;
-                  }
-                })(),
-              })
-            : toolArgs,
-          toolCallId,
-          status: "pending",
-          result: "",
-          timestamp: evt.timestamp,
-          isSubAgent,
-        };
-        break;
-      }
-
-      case "tool-call-end": {
-        const toolCallId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
-        const result = evt.data.result as string;
-        const status = (evt.data.status === "error" ? "error" : "completed") as "completed" | "error";
-        const toolName = evt.data.toolName as string;
-
-        if (tool && tool.toolCallId === toolCallId) {
-          tool.status = status;
-          tool.result = result ?? "";
-          flushTool();
-        } else if (toolName === "spawnSubAgent") {
-          // Orphaned: tool already consumed
-        } else {
-          flushAssistant();
-          blocks.push({
-            type: "tool-call",
-            id: evt.id,
-            toolName: toolName || "unknown",
-            toolArgs: parseToolArgs(evt.data.toolArgs),
-            status,
-            content: result ?? "",
-            timestamp: evt.timestamp,
-          });
-        }
-        break;
-      }
-
-      case "error": {
-        flushAssistant();
-        flushTool();
-        blocks.push({
-          type: "assistant",
-          id: evt.id,
-          content: `Error: ${String(evt.data.message ?? "Unknown error")}`,
-          timestamp: evt.timestamp,
-        });
-        break;
-      }
-    }
+    reduceProjectionEvent(state, evt, options);
   }
-
-  flushAssistant();
-  flushTool();
-
-  return blocks;
+  return flushProjectionState(state, options);
 }
 
 function buildSubAgentBlock(
-  pendingToolId: string,
+  toolCallId: string,
   childRole: string,
-  childEvents: readonly AgentEvent[],
+  childEvents: readonly AnyAgentEvent[],
   status: "running" | "done" | "error",
-  fallbackTimestamp: string,
 ): DisplayBlock | null {
-  const state = projectChildEventsToSubAgentState(childEvents, status, fallbackTimestamp);
+  const state = projectChildEventsToSubAgentState(childEvents, status);
   return {
     type: "sub-agent",
-    id: pendingToolId,
+    id: toolCallId,
     role: childRole,
     state,
-    timestamp: childEvents[0]?.timestamp ?? fallbackTimestamp,
+    timestamp: childEvents[0]?.timestamp ?? "",
+    ...(status !== "running" ? { isFrozen: true as const } : {}),
   };
 }
 
 export function projectChildEventsToSubAgentState(
-  childEvents: readonly AgentEvent[],
+  childEvents: readonly AnyAgentEvent[],
   status: "running" | "done" | "error",
-  fallbackTimestamp: string,
+  fallbackTimestamp?: string,
 ): SubAgentDisplayState {
   const parts: SubAgentPart[] = [];
   const toolCalls: ToolCallInfo[] = [];
@@ -244,36 +276,44 @@ export function projectChildEventsToSubAgentState(
   let endTime = Date.now();
 
   for (const evt of childEvents) {
-    if (evt.type === "text-delta") {
-      const delta = evt.data.delta as string;
-      fullOutput += delta;
-      const partsLen = parts.length;
-      if (partsLen > 0 && parts[partsLen - 1].type === "text") {
-        const last = parts[partsLen - 1] as SubAgentPart & { type: "text" };
-        parts[partsLen - 1] = { type: "text", text: last.text + delta };
-      } else {
-        parts.push({ type: "text", text: delta });
-      }
-    } else if (evt.type === "tool-call-start") {
-      const toolName = evt.data.toolName as string;
-      const toolArgs = parseToolArgs(evt.data.toolArgs);
-      const callId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
-      parts.push({ type: "tool-call", toolName, toolArgs, toolCallId: callId, status: "pending" });
-      toolCalls.push({ toolName, toolArgs, toolCallId: callId, status: "pending" });
-    } else if (evt.type === "tool-call-end") {
-      const callId = evt.relatedToolCallId ?? (evt.data.toolCallId as string);
-      const tcStatus = evt.data.status === "error" ? ("error" as const) : ("completed" as const);
-      for (let i = 0; i < parts.length; i++) {
-        const p = parts[i];
-        if (p.type === "tool-call" && p.toolCallId === callId) {
-          parts[i] = { ...p, status: tcStatus };
+    switch (evt.type) {
+      case "text-delta": {
+        const delta = evt.data.delta;
+        fullOutput += delta;
+        const partsLen = parts.length;
+        if (partsLen > 0 && parts[partsLen - 1].type === "text") {
+          const last = parts[partsLen - 1] as SubAgentPart & { type: "text" };
+          parts[partsLen - 1] = { type: "text", text: last.text + delta };
+        } else {
+          parts.push({ type: "text", text: delta });
         }
+        break;
       }
-      toolCalls.forEach((tc, i) => {
-        if (tc.toolCallId === callId) {
-          toolCalls[i] = { ...tc, status: tcStatus };
+      case "tool-call-start": {
+        const { toolName, toolArgs, toolCallId } = evt.data;
+        const callId = evt.relatedToolCallId ?? toolCallId;
+        parts.push({ type: "tool-call", toolName, toolArgs, toolCallId: callId, status: "pending" });
+        toolCalls.push({ toolName, toolArgs, toolCallId: callId, status: "pending" });
+        break;
+      }
+      case "tool-call-end": {
+        const callId = evt.relatedToolCallId ?? evt.data.toolCallId;
+        const tcStatus = evt.data.status === "error" ? ("error" as const) : ("completed" as const);
+        for (let i = 0; i < parts.length; i++) {
+          const p = parts[i];
+          if (p.type === "tool-call" && p.toolCallId === callId) {
+            parts[i] = { ...p, status: tcStatus };
+          }
         }
-      });
+        toolCalls.forEach((tc, i) => {
+          if (tc.toolCallId === callId) {
+            toolCalls[i] = { ...tc, status: tcStatus };
+          }
+        });
+        break;
+      }
+      default:
+        break;
     }
   }
 
@@ -284,7 +324,7 @@ export function projectChildEventsToSubAgentState(
     startTime = new Date(childEvents[0].timestamp).getTime();
     const last = childEvents[childEvents.length - 1];
     endTime = status === "running" ? Date.now() : new Date(last.timestamp).getTime();
-  } else {
+  } else if (fallbackTimestamp) {
     startTime = new Date(fallbackTimestamp).getTime();
     endTime = status === "running" ? Date.now() : startTime;
   }
@@ -301,7 +341,7 @@ export function projectChildEventsToSubAgentState(
 }
 
 export function projectEventsToAIHistory(
-  events: readonly AgentEvent[],
+  events: readonly AnyAgentEvent[],
 ): Array<{ role: "user" | "assistant" | "system"; content: string }> {
   const history: Array<{ role: "user" | "assistant" | "system"; content: string }> = [];
   let assistantBuf = "";
@@ -314,27 +354,39 @@ export function projectEventsToAIHistory(
   }
 
   for (const evt of events) {
-    if (evt.type === "user-input") {
-      flushAssistant();
-      history.push({ role: "user", content: evt.data.content as string });
-    } else if (evt.type === "text-delta") {
-      assistantBuf += evt.data.delta as string;
-    } else if (evt.type === "tool-call-start" || evt.type === "tool-call-end") {
-      flushAssistant();
-      if (evt.type === "tool-call-end") {
-        const result = evt.data.result as string;
-        const toolName = evt.data.toolName as string;
-        const args = evt.data.toolArgs as string;
-        const status = evt.data.status as string;
-        const isError = status === "error" || result?.startsWith("[Error]");
-        const label = isError ? "[Error]" : "[Completed]";
+    switch (evt.type) {
+      case "user-input":
+        flushAssistant();
+        history.push({ role: "user", content: evt.data.content });
+        break;
+      case "text-delta":
+        assistantBuf += evt.data.delta;
+        break;
+      case "tool-call-start":
+      case "tool-call-end":
+        flushAssistant();
+        if (evt.type === "tool-call-end") {
+          const { result, toolName, toolArgs, status } = evt.data;
+          const isError = status === "error" || result?.startsWith("[Error]");
+          const label = isError ? "[Error]" : "[Completed]";
+          history.push({
+            role: "assistant",
+            content: `[Tool: ${toolName}(${toolArgs})] ${label}\n${result ?? ""}`,
+          });
+        }
+        break;
+      case "error":
+        flushAssistant();
         history.push({
           role: "assistant",
-          content: `[Tool: ${toolName}(${args})] ${label}\n${result ?? ""}`,
+          content: `[Error] ${evt.data.message}`,
         });
-      }
-    } else if (evt.type === "child-session-attached") {
-      flushAssistant();
+        break;
+      case "child-session-attached":
+      case "session-start":
+      case "session-end":
+        flushAssistant();
+        break;
     }
   }
   flushAssistant();

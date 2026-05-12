@@ -3,18 +3,13 @@ import { z } from "zod";
 import { randomUUID } from "crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { ConfirmBus } from "../../../types.js";
 
 export const editSchema = z.object({
   filePath: z.string().describe("Path to file to edit"),
   oldText: z.string().describe("Exact snippet currently in the file to replace"),
   newText: z.string().describe("New text to replace it with"),
 });
-
-interface ConfirmBus {
-  getListenerCount(event: "request"): number;
-  on(event: "response", handler: (resp: { callId: string; approved: boolean }) => void): () => void;
-  emit(event: "request", data: { callId: string; toolName: string; args: string }): void;
-}
 
 export function createEditTool(confirmBus?: ConfirmBus) {
   return tool({

@@ -1,18 +1,25 @@
 import type { ToolLoopAgent } from "ai";
 import { AgentSession } from "./agentSession.js";
-import { AgentEvent } from "../eventTypes.js";
+import { AnyAgentEvent } from "../eventTypes.js";
 import { streamAgentResponse } from "./agentStream.js";
+
+export interface AgentFactory {
+  (
+    systemPrompt?: string,
+    extraTools?: Record<string, unknown>,
+  ): ToolLoopAgent<any, any>;
+}
 
 export interface SessionRunConfig {
   messages: Array<{ role: string; content: string }>;
-  createAgent: () => ToolLoopAgent<any, any>;
+  createAgent: AgentFactory;
   signal?: AbortSignal;
-  onEvent?: (event: AgentEvent, allEvents: AgentEvent[]) => void;
+  onEvent?: (event: AnyAgentEvent, allEvents: AnyAgentEvent[]) => void;
 }
 
 export interface SessionRunResult {
-  events: AgentEvent[];
-  onComplete: Promise<AgentEvent[]>;
+  events: AnyAgentEvent[];
+  onComplete: Promise<AnyAgentEvent[]>;
 }
 
 export class SessionOrchestrator {
@@ -21,7 +28,9 @@ export class SessionOrchestrator {
   startRun(session: AgentSession, config: SessionRunConfig): SessionRunResult {
     this.currentSession = session;
 
-    const allEvents: AgentEvent[] = [];
+    const allEvents: AnyAgentEvent[] = session.getSnapshot().filter(
+      (e) => e.type !== "session-start"
+    );
     const unsub = session.bus.on("event", (event) => {
       if (event.type !== "session-start") {
         allEvents.push(event);

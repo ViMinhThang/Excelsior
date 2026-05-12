@@ -1,8 +1,4 @@
-import { createBus } from "../../lib/runtime/bus.js";
+import { createChannelBus } from "../../lib/runtime/bus.js";
+import type { ConfirmEvents } from "../../types.js";
 
-export type ConfirmEvents = {
-  "request": { callId: string; toolName: string; args: string };
-  "response": { callId: string; approved: boolean };
-};
-
-export const confirmBus = createBus<ConfirmEvents>();
+export const confirmBus = createChannelBus<ConfirmEvents>("confirm");

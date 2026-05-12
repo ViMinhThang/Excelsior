@@ -3,7 +3,7 @@ import { createAgent } from "../../agent/agent.js";
 import { createSpawnSubAgentTool } from "../../agent/review/spawnSubAgent.js";
 import { SessionOrchestrator } from "../../lib/runtime/sessionOrchestrator.js";
 import { AgentSession } from "../../lib/runtime/agentSession.js";
-import { AgentEvent } from "../../lib/eventTypes.js";
+import { AnyAgentEvent } from "../../lib/eventTypes.js";
 import { persistSession, persistEvents } from "../../lib/persistence/eventPersistence.js";
 import { projectEventsToAIHistory } from "../../lib/projection/projectEvents.js";
 import { confirmBus } from "../lib/confirmBus.js";
@@ -14,7 +14,7 @@ export interface AIHistoryRef {
 
 export function useChatSender(
   historyRef?: AIHistoryRef,
-  onSessionComplete?: { current: ((events: AgentEvent[]) => void) | undefined },
+  onSessionComplete?: { current: ((events: AnyAgentEvent[]) => void) | undefined },
 ) {
   const [isLoading, setIsLoading] = useState(false);
   const isLoadingRef = useRef(isLoading);

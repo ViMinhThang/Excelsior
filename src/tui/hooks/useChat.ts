@@ -3,13 +3,13 @@ import { useChatHistory } from "./useChatHistory.js";
 import { useChatSender } from "./useChatSender.js";
 import { projectEventsToAIHistory } from "../../lib/projection/projectEvents.js";
 import { type AIHistoryRef } from "./useChatSender.js";
-import { type AgentEvent } from "../../lib/eventTypes.js";
+import { type AnyAgentEvent } from "../../lib/eventTypes.js";
 
 export function useChat() {
   const aiHistoryRef = useRef<AIHistoryRef["current"]>([]);
 
   const onSessionCompleteRef = useRef<
-    ((events: AgentEvent[]) => void) | undefined
+    ((events: AnyAgentEvent[]) => void) | undefined
   >(undefined);
 
   const { isLoading, sendMessage, cancel, childSessionsMap } = useChatSender(
@@ -21,13 +21,12 @@ export function useChat() {
     displayBlocks,
     hasMore,
     attachSession,
-    addSessionEvents,
     loadMore,
     clearMessages,
     persistedEvents,
   } = useChatHistory({ childSessionsMap });
 
-  const onSessionComplete = useCallback((events: AgentEvent[]) => {
+  const onSessionComplete = useCallback((events: AnyAgentEvent[]) => {
     if (events.length === 0) return;
     const newMessages = projectEventsToAIHistory(events);
     if (newMessages.length > 0) {

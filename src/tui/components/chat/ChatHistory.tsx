@@ -41,7 +41,7 @@ function renderBlock(block: DisplayBlock): React.ReactNode {
   }
   return null;
 }
- 
+
 function renderStaticBlock(block: DisplayBlock) {
   return (
     <Box key={block.id} flexDirection="column">
@@ -50,15 +50,17 @@ function renderStaticBlock(block: DisplayBlock) {
   );
 }
 
-const LIVED_TAIL = 3;
-
 const ChatHistory: React.FC<ChatHistoryProps> = ({ blocks, hasMore }) => {
-  // Split blocks into frozen (never updated) and live (may still be streaming).
-  // Frozen blocks go inside <Static> so Ink renders them once and never re-touches them.
-  // Live blocks are the last LIVED_TAIL blocks that may still update.
-  const frozenCount = Math.max(0, blocks.length - LIVED_TAIL);
-  const frozenBlocks = blocks.slice(0, frozenCount);
-  const liveBlocks = blocks.slice(frozenCount);
+  const frozenBlocks: DisplayBlock[] = [];
+  const liveBlocks: DisplayBlock[] = [];
+
+  for (const block of blocks) {
+    if (block.isFrozen) {
+      frozenBlocks.push(block);
+    } else {
+      liveBlocks.push(block);
+    }
+  }
 
   return (
     <Box flexDirection="column">

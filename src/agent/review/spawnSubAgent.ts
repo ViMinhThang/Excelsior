@@ -2,10 +2,10 @@ import { tool } from "ai";
 import { z } from "zod";
 import { createAgent } from "../../agent/agent.js";
 import { AgentSession } from "../../lib/runtime/agentSession.js";
-import { AgentEvent } from "../../lib/eventTypes.js";
+import { AnyAgentEvent } from "../../lib/eventTypes.js";
 import { streamAgentResponse } from "../../lib/runtime/agentStream.js";
 import { projectChildEventsToSubAgentState } from "../../lib/projection/projectEvents.js";
-import { persistSession, persistEvents } from "../../lib/persistence/eventPersistence.js";
+import { persistEvent, persistSession } from "../../lib/persistence/eventPersistence.js";
 import { subAgentBus } from "../../tui/lib/subAgentBus.js";
 
 export function createSpawnSubAgentTool(
@@ -36,7 +36,7 @@ export function createSpawnSubAgentTool(
         id: childSession.id,
         startedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        metadata: { userInput: instruction },
+        metadata: { userInput: instruction, isChildSession: true },
       });
 
       subAgentBus.emit("spawned", { toolCallId, role });
@@ -56,13 +56,14 @@ export function createSpawnSubAgentTool(
 
       const agent = createAgent(subInstructions);
 
-      const allChildEvents: AgentEvent[] = [];
+      const allChildEvents: AnyAgentEvent[] = [];
       let terminalError = "";
       let finalOutput = "";
 
       const unsub = childSession.bus.on("event", (event) => {
         if (event.type !== "session-start") {
           allChildEvents.push(event);
+          persistEvent(event);
         }
 
         if (event.type === "text-delta" || event.type === "tool-call-start" || event.type === "tool-call-end" || event.type === "error") {
@@ -94,7 +95,7 @@ export function createSpawnSubAgentTool(
         }
       } finally {
         unsub();
-        persistEvents(allChildEvents);
+        childSession.flushNotify();
 
         const finalStatus = terminalError ? "error" : "done" as const;
         const state = projectChildEventsToSubAgentState(allChildEvents, finalStatus, instruction);
