@@ -1,5 +1,7 @@
 import { randomUUID } from "crypto";
 
+export const EVENT_SCHEMA_VERSION = 1;
+
 export type AgentEventDataMap = {
   "session-start": Record<string, never>;
   "user-input": { content: string };
@@ -18,6 +20,9 @@ export interface AgentEvent<T extends AgentEventType = AgentEventType> {
   sessionId: string;
   sequence: number;
   type: T;
+  version: number;
+  causationId: string;
+  correlationId: string;
   timestamp: string;
   data: AgentEventDataMap[T];
   parentEventId?: string;
@@ -37,13 +42,21 @@ export function makeEvent<T extends AgentEventType>(
   type: T,
   data: AgentEventDataMap[T],
   sequence: number,
-  overrides?: { parentEventId?: string; relatedToolCallId?: string },
+  overrides?: {
+    parentEventId?: string;
+    relatedToolCallId?: string;
+    causationId?: string;
+    correlationId?: string;
+  },
 ): AgentEvent<T> {
   return {
     id: generateEventId(),
     sessionId,
     sequence,
     type,
+    version: EVENT_SCHEMA_VERSION,
+    causationId: overrides?.causationId ?? "",
+    correlationId: overrides?.correlationId ?? sessionId,
     timestamp: new Date().toISOString(),
     data,
     ...(overrides?.parentEventId ? { parentEventId: overrides.parentEventId } : {}),

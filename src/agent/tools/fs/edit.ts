@@ -1,9 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { randomUUID } from "crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ConfirmBus } from "../../../types.js";
+import type { ToolContext } from "../../../lib/tool/context.js";
 
 export const editSchema = z.object({
   filePath: z.string().describe("Path to file to edit"),
@@ -11,26 +10,16 @@ export const editSchema = z.object({
   newText: z.string().describe("New text to replace it with"),
 });
 
-export function createEditTool(confirmBus?: ConfirmBus) {
+export function createEditTool(ctx?: ToolContext) {
   return tool({
     description: "Atomically replaces an exact text block with a new version. Fails if oldText is not perfectly unique in file.",
     inputSchema: editSchema,
     execute: async ({ filePath, oldText, newText }) => {
-      if (confirmBus && confirmBus.getListenerCount("request") > 0) {
-        const callId = randomUUID();
-        const approved = await new Promise<boolean>((resolve) => {
-          const unsub = confirmBus.on("response", (resp) => {
-            if (resp.callId === callId) {
-              unsub();
-              resolve(resp.approved);
-            }
-          });
-          confirmBus.emit("request", {
-            callId,
-            toolName: "editFile",
-            args: JSON.stringify({ filePath }),
-          });
-        });
+      if (ctx?.confirm && ctx.confirm.getListenerCount() > 0) {
+        const approved = await ctx.confirm.request(
+          "editFile",
+          JSON.stringify({ filePath }),
+        );
         if (!approved) return "Denied by user.";
       }
 

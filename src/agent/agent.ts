@@ -3,12 +3,12 @@ import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createFileTools } from "./tools/index.js";
 import { getSetting } from "../db/index.js";
 import { buildSystemPrompt } from "./prompt.js";
-import type { ConfirmBus } from "../types.js";
+import type { ToolContext } from "../lib/tool/context.js";
 
 export function createAgent(
   instructions?: string,
   extraTools?: Record<string, any>,
-  confirmBus?: ConfirmBus,
+  ctx?: ToolContext,
 ) {
   const platform = process.platform;
   const systemPrompt = buildSystemPrompt(platform);
@@ -26,7 +26,7 @@ export function createAgent(
     model,
     instructions: finalInstructions,
     tools: {
-      ...createFileTools(confirmBus),
+      ...createFileTools(ctx),
       ...extraTools,
     },
   });

@@ -1,16 +1,14 @@
 import { useCallback, useRef } from "react";
-import { createAgent } from "../../agent/agent.js";
 import { reviewOrchestratorPrompt } from "../../agent/review/reviewPrompt.js";
-import { createSpawnSubAgentTool } from "../../agent/review/spawnSubAgent.js";
 import { gitDiffTool } from "../../agent/tools/gitDiff/gitDiff.js";
-import { SessionOrchestrator } from "../../lib/runtime/sessionOrchestrator.js";
+import { ReviewService } from "../../application/reviewService.js";
+import type { RunHandle } from "../../lib/runtime/sessionOrchestrator.js";
 import { AgentSession } from "../../lib/runtime/agentSession.js";
 import { usePRContext } from "../context/PRContext.js";
 import { useReviewSessionContext } from "../context/ReviewSessionContext.js";
 import { useSubAgentContext } from "../context/SubAgentContext.js";
 import { useEvent } from "./useEvent.js";
 import { useSubAgentListener } from "./useSubAgentListener.js";
-import { postPRComment } from "../../utils/ghComment.js";
 
 export function useReviewOrchestrator() {
   const { diff, selectedPR } = usePRContext();
@@ -35,8 +33,9 @@ export function useReviewOrchestrator() {
   const mainOutputRef = useRef(mainOutput);
   mainOutputRef.current = mainOutput;
 
-  const abortRef = useRef<AbortController | null>(null);
-  const childSessionsRef = useRef(new Map<string, AgentSession>());
+  const runHandleRef = useRef<RunHandle | null>(null);
+  const serviceRef = useRef<ReviewService | null>(null);
+  if (!serviceRef.current) serviceRef.current = new ReviewService();
 
   useSubAgentListener({
     onSpawned: (agent) => {
@@ -55,43 +54,23 @@ export function useReviewOrchestrator() {
     },
   });
 
-  const orchestratorRef = useRef<SessionOrchestrator | null>(null);
-  if (!orchestratorRef.current) orchestratorRef.current = new SessionOrchestrator();
-
   const startReview = useCallback(async () => {
     const currentDiff = diffRef.current;
     if (!currentDiff) return;
 
-    abortRef.current?.abort();
+    runHandleRef.current?.cancel();
+    runHandleRef.current = null;
     onClearSubAgents();
     onClearBlocks();
     onSetMode("review");
 
-    const childSessions = childSessionsRef.current;
-    childSessions.clear();
-
-    const session = new AgentSession();
-    const abortController = new AbortController();
-    abortRef.current = abortController;
-    session.abortController = abortController;
-
-    const mainAgent = createAgent(reviewOrchestratorPrompt, {
-      gitDiff: gitDiffTool,
-      spawnSubAgent: createSpawnSubAgentTool(session, childSessions),
-    });
-
     let prevText = "";
 
-    const { onComplete } = orchestratorRef.current!.startRun(session, {
-      messages: [
-        {
-          role: "user",
-          content: `Review this PR diff for a pull request:\n\n\`\`\`diff\n${currentDiff}\n\`\`\``,
-        },
-      ],
-      createAgent: () => mainAgent,
-      signal: abortController.signal,
-      onEvent: (event) => {
+    const { handle } = serviceRef.current!.startReview(
+      currentDiff,
+      reviewOrchestratorPrompt,
+      { gitDiff: gitDiffTool },
+      (event) => {
         if (event.type === "text-delta") {
           const delta = event.data.delta;
           prevText = prevText + delta;
@@ -110,29 +89,29 @@ export function useReviewOrchestrator() {
           onSetMode("results");
         }
       },
-    });
+    );
+    runHandleRef.current = handle;
 
     try {
-      await onComplete;
+      await handle.done;
     } catch (error: any) {
       onSetMainOutput(`Error during review: ${error.message}`);
       onAddTextBlock(`Error during review: ${error.message}`);
     } finally {
-      childSessions.clear();
       onSetMode("results");
     }
   }, []);
 
   const cancelReview = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
+    runHandleRef.current?.cancel();
+    runHandleRef.current = null;
   }, []);
 
   const postComment = useCallback(async (): Promise<string> => {
     const pr = selectedPRRef.current;
     const output = mainOutputRef.current;
-    if (!pr || !output) return "No content to post.";
-    return postPRComment(pr.number, output);
+    if (!pr) return "No PR selected.";
+    return serviceRef.current!.postComment(pr.number, output);
   }, []);
 
   return { startReview, cancelReview, postComment };

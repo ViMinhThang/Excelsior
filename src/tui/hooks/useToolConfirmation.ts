@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { confirmBus } from "../lib/confirmBus.js";
 
 type PendingRequest = {
@@ -7,14 +7,15 @@ type PendingRequest = {
   args: string;
 };
 
-let isSessionAutoApproved = false;
-
 export function useToolConfirmation() {
   const [pending, setPending] = useState<PendingRequest | null>(null);
+  const [isAutoApproved, setIsAutoApproved] = useState(false);
+  const isAutoApprovedRef = useRef(isAutoApproved);
+  isAutoApprovedRef.current = isAutoApproved;
 
   useEffect(() => {
     return confirmBus.on("request", (req) => {
-      if (isSessionAutoApproved) {
+      if (isAutoApprovedRef.current) {
         confirmBus.emit("response", { callId: req.callId, approved: true });
         return;
       }
@@ -30,7 +31,7 @@ export function useToolConfirmation() {
   }, [pending]);
 
   const approveAll = useCallback(() => {
-    isSessionAutoApproved = true;
+    setIsAutoApproved(true);
     if (pending) {
       confirmBus.emit("response", { callId: pending.callId, approved: true });
       setPending(null);

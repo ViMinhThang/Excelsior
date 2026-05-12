@@ -6,6 +6,7 @@ import {
   makeEvent,
   AnyAgentEvent,
 } from "./events.js";
+import { DisposableScope } from "../utils/disposable.js";
 
 export type SessionEventMap = {
   event: AnyAgentEvent;
@@ -15,19 +16,27 @@ export class AgentSession {
   readonly id: string;
   readonly bus = createChannelBus<SessionEventMap>("session");
   readonly parentEventId?: string;
+  readonly correlationId: string;
   abortController?: AbortController;
 
   private _events: AnyAgentEvent[] = [];
   private _snapshot: readonly AnyAgentEvent[] = [];
   private _seq = 0;
+  private _lastEventId: string | null = null;
   private _listeners = new Set<() => void>();
   private _aborted = false;
+  private _scope = new DisposableScope();
   private _notifyPending = false;
   private _notifyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(parentEventId?: string) {
+  constructor(parentEventId?: string, correlationId?: string) {
     this.id = `ses_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     this.parentEventId = parentEventId;
+    this.correlationId = correlationId ?? this.id;
+  }
+
+  get abortSignal(): AbortSignal {
+    return this._scope.abortSignal;
   }
 
   get isCancelled(): boolean {
@@ -42,8 +51,11 @@ export class AgentSession {
     if (this._aborted && type !== "session-end") return;
     const event = makeEvent(this.id, type, data, this._seq++, {
       parentEventId: this.parentEventId,
+      correlationId: this.correlationId,
+      causationId: this._lastEventId ?? undefined,
       ...overrides,
     });
+    this._lastEventId = event.id;
     Object.freeze(event);
     this._events.push(event as AnyAgentEvent);
     this._snapshot = [...this._events];
@@ -52,8 +64,10 @@ export class AgentSession {
   }
 
   cancel(): void {
+    if (this._aborted) return;
     this._aborted = true;
     this.abortController?.abort();
+    this._scope.dispose();
     if (this._notifyTimer !== null) {
       clearTimeout(this._notifyTimer);
       this._notifyTimer = null;

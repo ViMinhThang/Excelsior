@@ -2,6 +2,7 @@ import type { ToolLoopAgent } from "ai";
 import { AgentSession } from "./agentSession.js";
 import { AnyAgentEvent } from "../eventTypes.js";
 import { streamAgentResponse } from "./agentStream.js";
+import { Unsubscribe } from "./bus.js";
 
 export interface AgentFactory {
   (
@@ -17,21 +18,18 @@ export interface SessionRunConfig {
   onEvent?: (event: AnyAgentEvent, allEvents: AnyAgentEvent[]) => void;
 }
 
-export interface SessionRunResult {
-  events: AnyAgentEvent[];
-  onComplete: Promise<AnyAgentEvent[]>;
+export interface RunHandle {
+  cancel(): void;
+  readonly done: Promise<AnyAgentEvent[]>;
 }
 
 export class SessionOrchestrator {
-  private currentSession: AgentSession | null = null;
+  startRun(session: AgentSession, config: SessionRunConfig): RunHandle {
+    const allEvents: AnyAgentEvent[] = session
+      .getSnapshot()
+      .filter((e) => e.type !== "session-start");
 
-  startRun(session: AgentSession, config: SessionRunConfig): SessionRunResult {
-    this.currentSession = session;
-
-    const allEvents: AnyAgentEvent[] = session.getSnapshot().filter(
-      (e) => e.type !== "session-start"
-    );
-    const unsub = session.bus.on("event", (event) => {
+    let unsub: Unsubscribe | null = session.bus.on("event", (event) => {
       if (event.type !== "session-start") {
         allEvents.push(event);
       }
@@ -40,20 +38,20 @@ export class SessionOrchestrator {
 
     const agent = config.createAgent();
 
-    const onComplete = streamAgentResponse(
+    const done = streamAgentResponse(
       agent,
       config.messages,
       session,
       config.signal,
     )
       .then(() => {
-        unsub();
-        this.currentSession = null;
+        unsub?.();
+        unsub = null;
         return allEvents;
       })
       .catch((err: unknown) => {
-        unsub();
-        this.currentSession = null;
+        unsub?.();
+        unsub = null;
         const error = err as Error;
         if (error.name !== "AbortError" && !error.message?.includes("abort")) {
           session.emit("error", { message: error.message });
@@ -62,11 +60,15 @@ export class SessionOrchestrator {
         throw err;
       });
 
-    return { events: allEvents, onComplete };
-  }
+    const handle: RunHandle = {
+      cancel() {
+        session.cancel();
+        unsub?.();
+        unsub = null;
+      },
+      done,
+    };
 
-  cancel(): void {
-    this.currentSession?.cancel();
-    this.currentSession = null;
+    return handle;
   }
 }

@@ -5,15 +5,15 @@ import { lsTool } from "./fs/ls.js";
 import { viewTool } from "./fs/view.js";
 import { globTool } from "./fs/glob.js";
 import { grepTool } from "./fs/grep.js";
-import type { ConfirmBus } from "../../types.js";
+import type { ToolContext } from "../../lib/tool/context.js";
 
-export function createFileTools(confirmBus?: ConfirmBus) {
+export function createFileTools(ctx?: ToolContext) {
   return {
-    runCommand: createRunCommandTool(confirmBus),
+    runCommand: createRunCommandTool(ctx),
     ls: lsTool,
     view: viewTool,
-    write: createWriteTool(confirmBus),
-    edit: createEditTool(confirmBus),
+    write: createWriteTool(ctx),
+    edit: createEditTool(ctx),
     glob: globTool,
     grep: grepTool,
   };
