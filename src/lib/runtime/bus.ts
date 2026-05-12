@@ -50,28 +50,48 @@ export interface HubEvent {
 
 export type HubObserver = (hubEvent: HubEvent) => void;
 
-const _hubListeners = new Set<HubObserver>();
+export interface Hub {
+  observe(observer: HubObserver): Unsubscribe;
+  notify(channel: string, event: string, data: unknown): void;
+  dispose(): void;
+}
 
-export function observeHub(observer: HubObserver): Unsubscribe {
-  _hubListeners.add(observer);
-  return () => {
-    _hubListeners.delete(observer);
+export function createHub(): Hub {
+  const listeners = new Set<HubObserver>();
+
+  return {
+    observe(observer: HubObserver): Unsubscribe {
+      listeners.add(observer);
+      return () => {
+        listeners.delete(observer);
+      };
+    },
+
+    notify(channel: string, event: string, data: unknown): void {
+      const hubEvent: HubEvent = { channel, event, data };
+      for (const listener of listeners) {
+        try {
+          listener(hubEvent);
+        } catch {}
+      }
+    },
+
+    dispose(): void {
+      listeners.clear();
+    },
   };
 }
 
 export function createChannelBus<TEvents extends Record<string, any>>(
   channel: string,
+  hub?: Hub,
 ): Bus<TEvents> {
   const inner = createBus<TEvents>();
-  const origEmit = inner.emit.bind(inner);
+  if (!hub) return inner;
 
+  const origEmit = inner.emit.bind(inner);
   inner.emit = ((event: any, data: any) => {
-    const hubEvent: HubEvent = { channel, event: String(event), data };
-    for (const listener of _hubListeners) {
-      try {
-        listener(hubEvent);
-      } catch {}
-    }
+    hub.notify(channel, String(event), data);
     origEmit(event, data);
   }) as Bus<TEvents>["emit"];
 

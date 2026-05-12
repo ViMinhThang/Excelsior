@@ -1,6 +1,7 @@
 import { AnyAgentEvent } from "../runtime/events.js";
 import { DisplayBlock, SubAgentDisplayState, SubAgentPart } from "./display.js";
 import { ToolCallInfo } from "../../types.js";
+import { ReadModel } from "./readModel.js";
 
 function parseToolArgs(args?: unknown): string {
   if (typeof args === "string") return args;
@@ -392,3 +393,58 @@ export function projectEventsToAIHistory(
   flushAssistant();
   return history;
 }
+
+export const chatTranscriptModel: ReadModel<ProjectionReducerState, AnyAgentEvent> = {
+  initialState: createProjectionState,
+  apply(state, event) {
+    reduceProjectionEvent(state, event);
+    return state;
+  },
+};
+
+export type AIHistoryMessage = { role: "user" | "assistant" | "system"; content: string };
+
+export const aiHistoryModel: ReadModel<AIHistoryMessage[], AnyAgentEvent> = {
+  initialState: () => [],
+  apply(history, event) {
+    let assistantBuf = "";
+    const last = history[history.length - 1];
+    if (last?.role === "assistant" && !last.content.startsWith("[Tool:") && !last.content.startsWith("[Error]")) {
+      assistantBuf = last.content;
+      history.pop();
+    }
+    switch (event.type) {
+      case "user-input":
+        if (assistantBuf) history.push({ role: "assistant", content: assistantBuf });
+        history.push({ role: "user", content: event.data.content });
+        break;
+      case "text-delta":
+        assistantBuf += event.data.delta;
+        break;
+      case "tool-call-end": {
+        if (assistantBuf) history.push({ role: "assistant", content: assistantBuf });
+        assistantBuf = "";
+        const { result, toolName, toolArgs, status } = event.data;
+        const isError = status === "error" || result?.startsWith("[Error]");
+        const label = isError ? "[Error]" : "[Completed]";
+        history.push({
+          role: "assistant",
+          content: `[Tool: ${toolName}(${toolArgs})] ${label}\n${result ?? ""}`,
+        });
+        break;
+      }
+      case "error":
+        if (assistantBuf) history.push({ role: "assistant", content: assistantBuf });
+        assistantBuf = "";
+        history.push({ role: "assistant", content: `[Error] ${event.data.message}` });
+        break;
+      case "tool-call-start":
+      case "child-session-attached":
+      case "session-start":
+      case "session-end":
+        break;
+    }
+    if (assistantBuf) history.push({ role: "assistant", content: assistantBuf });
+    return history;
+  },
+};

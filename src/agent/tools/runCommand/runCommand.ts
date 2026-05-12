@@ -1,7 +1,6 @@
 import { tool } from "ai";
-import { randomUUID } from "crypto";
 import { spawn } from "child_process";
-import type { ConfirmBus } from "../../../types.js";
+import type { ToolContext } from "../../../lib/tool/context.js";
 import { runCommandSchema } from "./type.js";
 
 const MAX_OUTPUT_LENGTH = 100_000;
@@ -69,7 +68,7 @@ function isWriteCommand(commandString: string): boolean {
   return WRITE_PATTERNS.some((pattern) => pattern.test(commandString));
 }
 
-export function createRunCommandTool(confirmBus?: ConfirmBus) {
+export function createRunCommandTool(ctx?: ToolContext) {
   return tool({
     description: "Run an executable with distinct parameters in the current directory",
     inputSchema: runCommandSchema,
@@ -78,21 +77,11 @@ export function createRunCommandTool(confirmBus?: ConfirmBus) {
       const danger = isDangerous(fullString);
       if (danger) return danger;
 
-      if (confirmBus && confirmBus.getListenerCount("request") > 0 && isWriteCommand(fullString)) {
-        const callId = randomUUID();
-        const approved = await new Promise<boolean>((resolve) => {
-          const unsub = confirmBus.on("response", (resp) => {
-            if (resp.callId === callId) {
-              unsub();
-              resolve(resp.approved);
-            }
-          });
-          confirmBus.emit("request", {
-            callId,
-            toolName: "runCommand",
-            args: JSON.stringify({ command, args }),
-          });
-        });
+      if (ctx?.confirm && ctx.confirm.getListenerCount() > 0 && isWriteCommand(fullString)) {
+        const approved = await ctx.confirm.request(
+          "runCommand",
+          JSON.stringify({ command, args }),
+        );
         if (!approved) return "Denied by user.";
       }
 

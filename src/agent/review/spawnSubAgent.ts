@@ -6,7 +6,7 @@ import { AnyAgentEvent } from "../../lib/eventTypes.js";
 import { streamAgentResponse } from "../../lib/runtime/agentStream.js";
 import { projectChildEventsToSubAgentState } from "../../lib/projection/projectEvents.js";
 import { persistEvent, persistSession } from "../../lib/persistence/eventPersistence.js";
-import { subAgentBus } from "../../tui/lib/subAgentBus.js";
+import { subAgentBus } from "../../lib/runtime/subAgentBus.js";
 
 export function createSpawnSubAgentTool(
   parentSession: AgentSession,
@@ -29,7 +29,7 @@ export function createSpawnSubAgentTool(
       { role, instruction }: { role: string; instruction: string },
       { toolCallId }: { toolCallId: string },
     ) => {
-      const childSession = new AgentSession(parentSession.id);
+      const childSession = new AgentSession(parentSession.id, parentSession.correlationId);
       childSessionsMap.set(childSession.id, childSession);
 
       persistSession({

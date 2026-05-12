@@ -20,34 +20,52 @@ import {
 import { subAgentBus } from "../lib/subAgentBus.js";
 import { PAGE_SIZE } from "../../types.js";
 
-let _subAgentVersion = 0;
-const _subAgentListeners = new Set<() => void>();
-let _subAgentNotifyTimer: ReturnType<typeof setTimeout> | null = null;
+class SubAgentProjectionStore {
+  private _version = 0;
+  private _listeners = new Set<() => void>();
+  private _notifyTimer: ReturnType<typeof setTimeout> | null = null;
+  private _unsubs: Array<() => void> = [];
 
-const triggerSubAgentUpdate = () => {
-  if (_subAgentNotifyTimer !== null) return;
-  _subAgentNotifyTimer = setTimeout(() => {
-    _subAgentNotifyTimer = null;
-    _subAgentVersion++;
-    for (const listener of _subAgentListeners) {
-      listener();
-    }
-  }, 0);
-};
+  constructor() {
+    this._unsubs.push(subAgentBus.on("spawned", () => this._triggerUpdate()));
+    this._unsubs.push(subAgentBus.on("output", () => this._triggerUpdate()));
+    this._unsubs.push(subAgentBus.on("done", () => this._triggerUpdate()));
+  }
 
-subAgentBus.on("spawned", triggerSubAgentUpdate);
-subAgentBus.on("output", triggerSubAgentUpdate);
-subAgentBus.on("done", triggerSubAgentUpdate);
-
-const subAgentStore = {
-  subscribe: (cb: () => void) => {
-    _subAgentListeners.add(cb);
+  subscribe(cb: () => void): () => void {
+    this._listeners.add(cb);
     return () => {
-      _subAgentListeners.delete(cb);
+      this._listeners.delete(cb);
     };
-  },
-  getSnapshot: () => _subAgentVersion,
-};
+  }
+
+  getSnapshot(): number {
+    return this._version;
+  }
+
+  dispose(): void {
+    for (const unsub of this._unsubs) {
+      unsub();
+    }
+    this._unsubs = [];
+    this._listeners.clear();
+    if (this._notifyTimer !== null) {
+      clearTimeout(this._notifyTimer);
+      this._notifyTimer = null;
+    }
+  }
+
+  private _triggerUpdate(): void {
+    if (this._notifyTimer !== null) return;
+    this._notifyTimer = setTimeout(() => {
+      this._notifyTimer = null;
+      this._version++;
+      for (const listener of this._listeners) {
+        listener();
+      }
+    }, 0);
+  }
+}
 
 const EMPTY_EVENTS: readonly AnyAgentEvent[] = [];
 
@@ -81,12 +99,23 @@ export function useChatHistory(options?: UseChatHistoryOptions) {
     setPersistedEvents(initialEvents);
   }, []);
 
+  const subAgentStoreRef = useRef<SubAgentProjectionStore | null>(null);
+  if (!subAgentStoreRef.current)
+    subAgentStoreRef.current = new SubAgentProjectionStore();
+
+  useEffect(() => {
+    return () => subAgentStoreRef.current?.dispose();
+  }, []);
+
   const [activeSession, setActiveSession] = useState<AgentSession | null>(null);
   const prevSessionRef = useRef<AgentSession | null>(null);
 
   const subAgentTick = useSyncExternalStore(
-    subAgentStore.subscribe,
-    subAgentStore.getSnapshot,
+    useCallback(
+      (cb: () => void) => subAgentStoreRef.current!.subscribe(cb),
+      [],
+    ),
+    useCallback(() => subAgentStoreRef.current!.getSnapshot(), []),
   );
 
   const liveEvents = useSyncExternalStore(
