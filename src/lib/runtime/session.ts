@@ -3,4 +3,6 @@ export interface Session {
   startedAt: string;
   updatedAt: string;
   metadata: { userInput: string } & Record<string, unknown>;
+  workspaceId?: string;
+  title?: string;
 }

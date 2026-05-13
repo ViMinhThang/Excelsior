@@ -5,7 +5,9 @@ import { useAgentManager } from "../../features/session/useAgentManager.js";
 import { useKeymap } from "./useKeymap.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";
 import { useCommandAutocomplete } from "./useCommandAutocomplete.js";
-import { DisplayBlock } from "../../lib/eventTypes.js";
+import { ProjectedBlock } from "../../lib/projection/display.js";
+import { postPRComment } from "../../utils/ghComment.js";
+import { selectSubAgentBlocks, selectUserBlocks } from "../selectors/chat-selectors.js";
 
 export function useChatScreenState() {
   const { navigate, goBack } = useNavigation();
@@ -32,7 +34,7 @@ export function useChatScreenState() {
   const [subAgentIndex, setSubAgentIndex] = useState(0);
 
   const subAgentBlocks = useMemo(
-    () => displayBlocks.filter((b): b is DisplayBlock & { type: "sub-agent" } => b.type === "sub-agent"),
+    () => selectSubAgentBlocks(displayBlocks),
     [displayBlocks],
   );
 
@@ -75,6 +77,15 @@ export function useChatScreenState() {
       clearMessages: () => {
         clear();
         setCommandResult(null);
+      },
+      send: (content: string) => {
+        setInput("");
+        setHistoryIndex(-1);
+        setOriginalInput("");
+        send(content);
+      },
+      postComment: async (prNumber: number, body: string) => {
+        return postPRComment(prNumber, body);
       },
     };
     const suggestedCommand = suggestion.filtered[0];
@@ -135,7 +146,7 @@ export function useChatScreenState() {
       }
     },
     "up": () => {
-      const userBlocks = displayBlocks.filter((b) => b.type === "user").reverse();
+      const userBlocks = selectUserBlocks(displayBlocks).reverse();
       if (historyIndex + 1 < userBlocks.length) {
         const newIndex = historyIndex + 1;
         if (historyIndex === -1) setOriginalInput(input);
@@ -144,7 +155,7 @@ export function useChatScreenState() {
       }
     },
     "down": () => {
-      const userBlocks = displayBlocks.filter((b) => b.type === "user").reverse();
+      const userBlocks = selectUserBlocks(displayBlocks).reverse();
       if (historyIndex >= 0) {
         const newIndex = historyIndex - 1;
         setHistoryIndex(newIndex);

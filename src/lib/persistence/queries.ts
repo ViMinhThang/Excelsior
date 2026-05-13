@@ -1,15 +1,15 @@
 export const INSERT_SESSION = `
-  INSERT OR REPLACE INTO sessions (id, started_at, updated_at, metadata)
-  VALUES (?, ?, ?, ?)
+  INSERT OR REPLACE INTO sessions (id, started_at, updated_at, metadata, workspace_id, title)
+  VALUES (?, ?, ?, ?, ?, ?)
 `;
 
 export const INSERT_EVENT = `
-  INSERT OR IGNORE INTO agent_events (id, session_id, sequence, type, timestamp, data, parent_event_id, related_tool_call_id)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  INSERT OR IGNORE INTO agent_events (id, session_id, run_id, sequence, type, timestamp, data, parent_event_id, related_tool_call_id)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 export const SELECT_PARENT_SESSIONS = `
-  SELECT id, started_at, updated_at, metadata
+  SELECT id, started_at, updated_at, metadata, workspace_id, title
   FROM sessions
   WHERE json_extract(metadata, '$.isChildSession') IS NULL
      OR json_extract(metadata, '$.isChildSession') != 1
@@ -17,7 +17,7 @@ export const SELECT_PARENT_SESSIONS = `
 `;
 
 export const SELECT_CHILD_SESSIONS_EXCLUDING = `
-  SELECT id, started_at, updated_at, metadata
+  SELECT id, started_at, updated_at, metadata, workspace_id, title
   FROM sessions
   WHERE json_extract(metadata, '$.isChildSession') = 1
     AND id != ?
@@ -25,23 +25,25 @@ export const SELECT_CHILD_SESSIONS_EXCLUDING = `
 `;
 
 export const SELECT_CHILD_SESSIONS_ALL = `
-  SELECT id, started_at, updated_at, metadata
+  SELECT id, started_at, updated_at, metadata, workspace_id, title
   FROM sessions
   WHERE json_extract(metadata, '$.isChildSession') = 1
   ORDER BY started_at ASC
 `;
 
 export const SELECT_SESSION_EVENTS = `
-  SELECT id, session_id, sequence, type, timestamp, data, parent_event_id, related_tool_call_id
-  FROM agent_events
-  WHERE session_id = ?
-  ORDER BY sequence ASC
+  SELECT e.id, e.session_id, e.run_id, e.sequence, e.type, e.timestamp, e.data, e.parent_event_id, e.related_tool_call_id
+  FROM agent_events e
+  JOIN runs r ON r.id = e.run_id
+  WHERE r.session_id = ?
+  ORDER BY e.sequence ASC
 `;
 
 export const SELECT_ALL_PARENT_EVENTS = `
-  SELECT e.id, e.session_id, e.sequence, e.type, e.timestamp, e.data, e.parent_event_id, e.related_tool_call_id
+  SELECT e.id, e.session_id, e.run_id, e.sequence, e.type, e.timestamp, e.data, e.parent_event_id, e.related_tool_call_id
   FROM agent_events e
-  JOIN sessions s ON e.session_id = s.id
+  JOIN runs r ON r.id = e.run_id
+  JOIN sessions s ON r.session_id = s.id
   WHERE json_extract(s.metadata, '$.isChildSession') IS NULL
      OR json_extract(s.metadata, '$.isChildSession') != 1
   ORDER BY s.started_at ASC, e.sequence ASC

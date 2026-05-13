@@ -1,10 +1,10 @@
 import React, { memo, useState, useEffect } from "react";
 import { Box, Text } from "ink";
-import { SubAgentDisplayState } from "../../../lib/eventTypes.js";
+import { ProjectedSubAgent } from "../../../lib/projection/display.js";
 import { theme } from "../../theme.js";
 
 interface SubAgentRowProps {
-  agent: SubAgentDisplayState;
+  agent: ProjectedSubAgent;
   role: string;
   isSelected: boolean;
 }

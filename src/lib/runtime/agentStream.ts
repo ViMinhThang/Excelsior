@@ -1,3 +1,7 @@
+// Invariant: streamAgentResponse always emits run-start before
+//   any other event, and run-end as the last event.
+//   Retries are applied for transient errors (429, 502, 503, 504).
+
 import type { ToolLoopAgent } from "ai";
 import {
   StreamPart,
@@ -6,17 +10,10 @@ import {
   getToolArgs,
   getToolResult,
 } from "../../types.js";
-import { AgentSession } from "./agentSession.js";
+import { AgentRun } from "./agentRun.js";
 import { withRetry, isTransientError } from "../../utils/retry.js";
+import { RUN_START, RUN_END, TEXT_DELTA, TOOL_CALL_START, TOOL_CALL_END, ERROR } from "./event-names.js";
 
-/**
- * Streams AI response parts into session events.
- * This is the primary event producer.
- *
- * Emits: session-start, text-delta, tool-call-start, tool-call-end, error, session-end
- * @see src/lib/runtime/agentSession.ts:emit for where events are recorded
- * @see src/features/session/agentManager.ts:97 for the facade that drives this
- */
 export async function streamAgentResponse(
   agent: ToolLoopAgent<any, any>,
   messages: Array<{
@@ -29,12 +26,12 @@ export async function streamAgentResponse(
       function: { name: string; arguments: string };
     }>;
   }>,
-  session: AgentSession,
+  run: AgentRun,
   signal?: AbortSignal,
 ): Promise<void> {
   let cancelled = false;
 
-  session.emit("session-start", {});
+  run.emit(RUN_START, {});
 
   try {
     const stream = await withRetry(() => agent.stream({ messages } as any), {
@@ -42,7 +39,7 @@ export async function streamAgentResponse(
       maxRetries: 3,
       baseDelayMs: 1000,
       onRetry: (error, attempt) => {
-        session.emit("text-delta", {
+        run.emit(TEXT_DELTA, {
           delta: `\n[Retry ${attempt}/3] API error: ${error.message} — retrying...\n`,
         });
       },
@@ -58,13 +55,13 @@ export async function streamAgentResponse(
 
       if (part.type === "text-delta") {
         const delta = getTextDelta(part);
-        session.emit("text-delta", { delta });
+        run.emit(TEXT_DELTA, { delta });
       } else if (part.type === "tool-call") {
         const toolName = getToolName(part);
         const toolArgs = getToolArgs(part);
         const toolCallId = part.toolCallId;
-        session.emit(
-          "tool-call-start",
+        run.emit(
+          TOOL_CALL_START,
           { toolName, toolArgs, toolCallId },
           { relatedToolCallId: toolCallId },
         );
@@ -72,8 +69,8 @@ export async function streamAgentResponse(
         const toolCallId = part.toolCallId;
         const result = getToolResult(part);
         const status = part.type === "tool-error" ? "error" : "success";
-        session.emit(
-          "tool-call-end",
+        run.emit(
+          TOOL_CALL_END,
           {
             toolCallId,
             result,
@@ -86,19 +83,19 @@ export async function streamAgentResponse(
       }
     }
 
-    session.emit("session-end", { cancelled });
+    run.emit(RUN_END, { cancelled });
   } catch (error: any) {
     if (error?.name === "AbortError" || error?.message?.includes("abort")) {
-      session.emit("session-end", { cancelled: true });
+      run.emit(RUN_END, { cancelled: true });
       return;
     }
 
     if (isTransientError(error)) {
-      session.emit("text-delta", {
+      run.emit(TEXT_DELTA, {
         delta: `\n[Error] API request failed after retries: ${error.message}\n`,
       });
     }
-    session.emit("error", { message: error?.message ?? String(error) });
-    session.emit("session-end", { cancelled: true });
+    run.emit(ERROR, { message: error?.message ?? String(error) });
+    run.emit(RUN_END, { cancelled: true });
   }
 }

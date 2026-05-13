@@ -2,8 +2,6 @@ export type StreamPart =
   | {
       type: "text-delta";
       text: string;
-      textDelta?: string;
-      [key: string]: unknown;
     }
   | {
       type: "tool-call";
@@ -11,20 +9,17 @@ export type StreamPart =
       name?: string;
       toolCallId: string;
       input?: unknown;
-      [key: string]: unknown;
     }
   | {
       type: "tool-result";
       toolCallId: string;
       output?: { type: string; value: unknown };
-      [key: string]: unknown;
     }
   | {
       type: "tool-error";
       toolCallId: string;
       toolName?: string;
       error?: unknown;
-      [key: string]: unknown;
     };
 
 export type ConfirmEvents = {
@@ -87,9 +82,7 @@ export interface ToolCallInfo {
   status: "pending" | "completed" | "error";
 }
 
-export type Screen = "chat" | "settings" | "review";
-
-export type ReviewScreenMode = "browser" | "review" | "results";
+export type Screen = "chat" | "settings";
 
 export interface PullRequest {
   number: number;
@@ -109,6 +102,8 @@ export interface CommandContext {
     content: string,
   ) => void;
   clearMessages: () => void;
+  send: (content: string) => void;
+  postComment: (prNumber: number, body: string) => Promise<string>;
 }
 
 export interface Command {

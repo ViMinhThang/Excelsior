@@ -1,16 +1,19 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { createAgent } from "../../agent/agent.js";
-import { AgentSession } from "../../lib/runtime/agentSession.js";
-import { AnyAgentEvent } from "../../lib/eventTypes.js";
+import { AgentRun } from "../../lib/runtime/agentRun.js";
+import { AnyAgentEvent } from "../../lib/runtime/events.js";
 import { streamAgentResponse } from "../../lib/runtime/agentStream.js";
-import { projectChildEventsToSubAgentState } from "../../lib/projection/projectEvents.js";
-import { persistEvent, persistSession } from "../../lib/persistence/eventPersistence.js";
+import { projectChildEventsToSubAgentState } from "../../lib/projection/projectChildren.js";
+import { persistEvent } from "../../lib/persistence/eventPersistence.js";
+import { createRun, completeRun } from "../../lib/persistence/runStore.js";
 import { subAgentBus } from "../../lib/runtime/subAgentBus.js";
+import { CHILD_RUN_ATTACHED } from "../../lib/runtime/event-names.js";
 
 export function createSpawnSubAgentTool(
-  parentSession: AgentSession,
-  childSessionsMap: Map<string, AgentSession>,
+  parentRun: AgentRun,
+  childRunsMap: Map<string, AgentRun>,
+  sessionId?: string,
 ) {
   return tool({
     description:
@@ -29,20 +32,17 @@ export function createSpawnSubAgentTool(
       { role, instruction }: { role: string; instruction: string },
       { toolCallId }: { toolCallId: string },
     ) => {
-      const childSession = new AgentSession(parentSession.id, parentSession.correlationId);
-      childSessionsMap.set(childSession.id, childSession);
+      const sid = sessionId ?? parentRun.id;
+      const childRun = new AgentRun(sid, parentRun.id, parentRun.correlationId);
+      childRunsMap.set(childRun.id, childRun);
 
-      persistSession({
-        id: childSession.id,
-        startedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        metadata: { userInput: instruction, isChildSession: true },
-      });
+      createRun(sid, childRun.id, "subagent", parentRun.id);
+      completeRun(childRun.id, "running");
 
       subAgentBus.emit("spawned", { toolCallId, role });
 
-      parentSession.emit("child-session-attached", {
-        childSessionId: childSession.id,
+      parentRun.emit(CHILD_RUN_ATTACHED, {
+        childRunId: childRun.id,
         parentToolCallId: toolCallId,
         role,
       });
@@ -60,10 +60,10 @@ export function createSpawnSubAgentTool(
       let terminalError = "";
       let finalOutput = "";
 
-      const unsub = childSession.bus.on("event", (event) => {
-        if (event.type !== "session-start") {
+      const unsub = childRun.bus.on("event", (event) => {
+        if (event.type !== "run-start") {
           allChildEvents.push(event);
-          persistEvent(event);
+          persistEvent(event, sid);
         }
 
         if (event.type === "text-delta" || event.type === "tool-call-start" || event.type === "tool-call-end" || event.type === "error") {
@@ -80,25 +80,27 @@ export function createSpawnSubAgentTool(
 
       try {
         const abortController = new AbortController();
-        childSession.abortController = abortController;
+        childRun.abortController = abortController;
 
         await streamAgentResponse(
           agent,
           [{ role: "user", content: instruction }],
-          childSession,
+          childRun,
           abortController.signal,
         );
       } catch (error: any) {
         if (error?.name !== "AbortError") {
           terminalError = error.message;
-          childSession.emit("error", { message: terminalError });
+          childRun.emit("error", { message: terminalError });
         }
       } finally {
         unsub();
-        childSession.flushNotify();
+        childRun.flushNotify();
 
-        const finalStatus = terminalError ? "error" : "done" as const;
-        const state = projectChildEventsToSubAgentState(allChildEvents, finalStatus, instruction);
+        const finalStatus = terminalError ? "failed" : "completed" as const;
+        completeRun(childRun.id, finalStatus);
+
+        const state = projectChildEventsToSubAgentState(allChildEvents, terminalError ? "error" : "done", instruction);
         finalOutput = terminalError
           ? state.fullOutput + `\n\nError: ${terminalError}`
           : state.fullOutput;

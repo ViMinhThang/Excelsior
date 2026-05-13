@@ -9,12 +9,19 @@ describe("Commands", () => {
       goBack: [],
       appendMessage: [],
       clearMessages: [],
+      send: [],
+      postComment: [],
     };
     const ctx: CommandContext = {
       navigate: (screen) => called.navigate.push(screen),
       goBack: () => called.goBack.push(true),
       appendMessage: (role, content) => called.appendMessage.push({ role, content }),
       clearMessages: () => called.clearMessages.push(true),
+      send: (content) => called.send.push(content),
+      postComment: async (prNumber, body) => {
+        called.postComment.push({ prNumber, body });
+        return `Posted comment to PR #${prNumber}`;
+      },
     };
     return { ctx, called };
   }
@@ -27,6 +34,7 @@ describe("Commands", () => {
       expect(names).toContain("reset");
       expect(names).toContain("settings");
       expect(names).toContain("review");
+      expect(names).toContain("review-post");
     });
   });
 
@@ -59,10 +67,32 @@ describe("Commands", () => {
       expect(called.navigate).toEqual(["settings"]);
     });
 
-    it("/review navigates to review screen", async () => {
+    it("/review without number shows usage", async () => {
       const { ctx, called } = mockContext();
       await handleCommand("/review", ctx);
-      expect(called.navigate).toEqual(["review"]);
+      expect(called.appendMessage.length).toBe(1);
+      expect(called.appendMessage[0].content).toContain("Usage:");
+    });
+
+    it("/review with number fetches diff or shows error", async () => {
+      const { ctx, called } = mockContext();
+      await handleCommand("/review 42", ctx);
+      expect(called.appendMessage.length).toBeGreaterThanOrEqual(2);
+      // First message confirms fetch attempt
+      expect(called.appendMessage[0].content).toContain("Fetching PR #42");
+    });
+
+    it("/review-post without number shows usage", async () => {
+      const { ctx, called } = mockContext();
+      await handleCommand("/review-post", ctx);
+      expect(called.appendMessage[0].content).toContain("Usage:");
+    });
+
+    it("/review-post with number and body posts comment", async () => {
+      const { ctx, called } = mockContext();
+      await handleCommand('/review-post 42 "Looks good"', ctx);
+      expect(called.postComment.length).toBe(1);
+      expect(called.postComment[0].prNumber).toBe(42);
     });
 
     it("unknown command appends system error", async () => {
