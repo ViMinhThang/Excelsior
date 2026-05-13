@@ -11,7 +11,7 @@ export async function postPRComment(prNumber: number, body: string): Promise<str
       body,
     });
     return "Comment posted successfully.";
-  } catch (error: any) {
-    return `Error posting comment: ${error.message}`;
+  } catch (error: unknown) {
+    return `Error posting comment: ${error instanceof Error ? error.message : String(error)}`;
   }
 }

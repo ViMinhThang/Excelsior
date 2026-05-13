@@ -48,13 +48,13 @@ export async function withRetry<T>(
     try {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       return await fn();
-    } catch (error: any) {
-      lastError = error;
-      if (error?.name === "AbortError" || signal?.aborted) throw error;
+    } catch (error: unknown) {
+      lastError = error as Error;
+      if (error instanceof DOMException || signal?.aborted) throw error;
       if (attempt >= maxRetries || !isTransientError(error)) throw error;
 
       const delay = Math.min(baseDelayMs * Math.pow(2, attempt), maxDelayMs);
-      onRetry?.(error, attempt + 1);
+      onRetry?.(error as Error, attempt + 1);
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, delay);
         const onAbort = () => { clearTimeout(timer); resolve(); };

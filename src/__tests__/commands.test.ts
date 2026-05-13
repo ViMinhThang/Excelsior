@@ -11,6 +11,12 @@ describe("Commands", () => {
       clearMessages: [],
       send: [],
       postComment: [],
+      switchSession: [],
+      createSession: [],
+      deleteSession: [],
+      renameSession: [],
+      listSessions: [],
+      currentSessionId: null,
     };
     const ctx: CommandContext = {
       navigate: (screen) => called.navigate.push(screen),
@@ -22,6 +28,12 @@ describe("Commands", () => {
         called.postComment.push({ prNumber, body });
         return `Posted comment to PR #${prNumber}`;
       },
+      switchSession: (id) => called.switchSession.push(id),
+      createSession: (title) => called.createSession.push(title),
+      deleteSession: (id) => called.deleteSession.push(id),
+      renameSession: (id, title) => called.renameSession.push({ id, title }),
+      listSessions: () => { called.listSessions.push(true); return []; },
+      currentSessionId: null,
     };
     return { ctx, called };
   }
@@ -35,6 +47,7 @@ describe("Commands", () => {
       expect(names).toContain("settings");
       expect(names).toContain("review");
       expect(names).toContain("review-post");
+      expect(names).toContain("session");
     });
   });
 

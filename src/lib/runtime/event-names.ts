@@ -9,3 +9,4 @@ export const TEXT_DELTA = "text-delta";
 export const TOOL_CALL_START = "tool-call-start";
 export const TOOL_CALL_END = "tool-call-end";
 export const ERROR = "error";
+export const TURN_COMPLETE = "turn-complete";

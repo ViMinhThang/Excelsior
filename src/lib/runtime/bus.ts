@@ -42,15 +42,4 @@ export function createBus<TEvents extends Record<string, any>>(): Bus<TEvents> {
   };
 }
 
-/**
- * Creates a channel-scoped bus.
- *
- * @see src/lib/runtime/subAgentBus.ts for "sub-agent" channel
- * @see src/tui/lib/confirmBus.ts for "confirm" channel
- * @see src/lib/runtime/agentSession.ts:16 for "session" channel
- */
-export function createChannelBus<TEvents extends Record<string, any>>(
-  _channel: string,
-): Bus<TEvents> {
-  return createBus<TEvents>();
-}
+export { createBus as createChannelBus };

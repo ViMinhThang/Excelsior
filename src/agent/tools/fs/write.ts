@@ -27,8 +27,8 @@ export function createWriteTool(ctx?: ToolContext) {
         await fs.mkdir(path.dirname(fullPath), { recursive: true });
         await fs.writeFile(fullPath, content, "utf-8");
         return `Successfully wrote ${content.length} characters to ${filePath}`;
-      } catch (error: any) {
-        return `Error writing file: ${error.message}`;
+      } catch (error: unknown) {
+        return `Error writing file: ${error instanceof Error ? error.message : String(error)}`;
       }
     },
   });

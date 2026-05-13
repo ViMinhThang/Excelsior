@@ -38,8 +38,8 @@ export function createEditTool(ctx?: ToolContext) {
         const updated = content.replace(oldText, newText);
         await fs.writeFile(fullPath, updated, "utf-8");
         return `Successfully replaced the block in ${filePath}.`;
-      } catch (error: any) {
-        return `Error editing file: ${error.message}`;
+      } catch (error: unknown) {
+        return `Error editing file: ${error instanceof Error ? error.message : String(error)}`;
       }
     },
   });

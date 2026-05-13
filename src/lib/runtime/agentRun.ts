@@ -20,7 +20,7 @@ export type RunEventMap = {
 export class AgentRun {
   readonly id: string;
   readonly sessionId: string;
-  readonly bus = createChannelBus<RunEventMap>("run");
+  readonly bus = createChannelBus<RunEventMap>();
   readonly parentEventId?: string;
   readonly correlationId: string;
   abortController?: AbortController;
@@ -35,7 +35,11 @@ export class AgentRun {
   private _notifyPending = false;
   private _notifyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(sessionId?: string, parentEventId?: string, correlationId?: string) {
+  constructor(
+    sessionId?: string,
+    parentEventId?: string,
+    correlationId?: string,
+  ) {
     this.id = `run_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     this.sessionId = sessionId ?? this.id;
     this.parentEventId = parentEventId;

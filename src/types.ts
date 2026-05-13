@@ -84,15 +84,6 @@ export interface ToolCallInfo {
 
 export type Screen = "chat" | "settings";
 
-export interface PullRequest {
-  number: number;
-  title: string;
-  author: string;
-  headRefName: string;
-  createdAt: string;
-}
-
-export const PAGE_SIZE = 50;
 
 export interface CommandContext {
   navigate: (screen: Screen) => void;
@@ -102,8 +93,15 @@ export interface CommandContext {
     content: string,
   ) => void;
   clearMessages: () => void;
+  deleteAllSessions: () => void;
   send: (content: string) => void;
   postComment: (prNumber: number, body: string) => Promise<string>;
+  switchSession: (sessionId: string) => void;
+  createSession: (title?: string) => void;
+  deleteSession: (sessionId: string) => void;
+  renameSession: (sessionId: string, title: string) => void;
+  listSessions: () => Array<{ id: string; title?: string }>;
+  currentSessionId: string | null;
 }
 
 export interface Command {

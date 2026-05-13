@@ -5,13 +5,16 @@
 import { AnyAgentEvent } from "../runtime/events.js";
 import { ProjectedBlock } from "./display.js";
 import { projectEventsToAIHistory } from "./projectHistory.js";
-import { AgentRun } from "../runtime/agentRun.js";
 import { groupEventsForDisplay } from "./projectEvents.js";
+
+export interface ChildRun {
+  getSnapshot(): readonly AnyAgentEvent[];
+}
 
 export interface ProjectionInput {
   liveEvents: readonly AnyAgentEvent[];
   persistedEvents: AnyAgentEvent[];
-  childRuns: Map<string, AgentRun>;
+  childRuns: Map<string, ChildRun>;
 }
 
 export function mergeEvents(input: ProjectionInput): AnyAgentEvent[] {

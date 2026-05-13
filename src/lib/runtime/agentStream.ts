@@ -29,7 +29,7 @@ export async function streamAgentResponse(
   run: AgentRun,
   signal?: AbortSignal,
 ): Promise<void> {
-  let cancelled = false;
+  let isCancelled = false;
 
   run.emit(RUN_START, {});
 
@@ -47,7 +47,7 @@ export async function streamAgentResponse(
 
     for await (const rawPart of stream.fullStream) {
       if (signal?.aborted) {
-        cancelled = true;
+        isCancelled = true;
         break;
       }
 
@@ -83,19 +83,20 @@ export async function streamAgentResponse(
       }
     }
 
-    run.emit(RUN_END, { cancelled });
-  } catch (error: any) {
-    if (error?.name === "AbortError" || error?.message?.includes("abort")) {
+    run.emit(RUN_END, { cancelled: isCancelled });
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    if (err.name === "AbortError" || err.message.includes("abort")) {
       run.emit(RUN_END, { cancelled: true });
       return;
     }
 
-    if (isTransientError(error)) {
+    if (isTransientError(err)) {
       run.emit(TEXT_DELTA, {
-        delta: `\n[Error] API request failed after retries: ${error.message}\n`,
+        delta: `\n[Error] API request failed after retries: ${err.message}\n`,
       });
     }
-    run.emit(ERROR, { message: error?.message ?? String(error) });
+    run.emit(ERROR, { message: err.message ?? String(error) });
     run.emit(RUN_END, { cancelled: true });
   }
 }

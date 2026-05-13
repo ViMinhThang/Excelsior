@@ -5,7 +5,7 @@ import AgentMessage from './AgentMessage.js';
 import ToolMessage from './ToolMessage.js';
 import SubAgentRow from '../review/SubAgentRow.js';
 
-import { ProjectedBlock } from '../../../lib/eventTypes.js';
+import { ProjectedBlock } from '../../../lib/projection/display.js';
 
 interface ChatHistoryProps {
   blocks: ProjectedBlock[];
