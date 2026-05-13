@@ -8,7 +8,7 @@ interface AppHeaderProps {
 
 const AppHeader: React.FC<AppHeaderProps> = ({ subtitle }) => {
   return (
-    <Box marginBottom={1}>
+    <Box paddingLeft={1} paddingBottom={1}>
       <Text color="#5e81ac" bold>Excelsior</Text>
       {subtitle && <Text color={theme.colors.muted}> {theme.glyphs.section} {subtitle}</Text>}
     </Box>

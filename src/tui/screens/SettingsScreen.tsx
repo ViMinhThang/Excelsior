@@ -49,7 +49,7 @@ const SettingsScreen: React.FC<SettingsScreenProps> = ({ onClose }) => {
   }, [githubToken, saveGithubToken]);
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" padding={1}>
       <Box marginBottom={1}>
         <Text color="#5e81ac" bold>Settings</Text>
       </Box>

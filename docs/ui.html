@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UI Components — Excelsior Docs</title>
+<link rel="stylesheet" href="doc.css">
+</head>
+<body>
+<div class="wrapper">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1>Excelsior</h1>
+      <div class="version">v1.0.0</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-title">Overview</div>
+        <a class="nav-link" href="index.html">Home</a>
+        <a class="nav-link" href="architecture.html">Architecture</a>
+        <a class="nav-link" href="data-flow.html">Data Flow</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Reference</div>
+        <a class="nav-link" href="modules.html">Modules</a>
+        <a class="nav-link" href="tools.html">Tools API</a>
+        <a class="nav-link active" href="ui.html">UI Components</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Design</div>
+        <a class="nav-link" href="patterns.html">Patterns</a>
+      </div>
+    </nav>
+  </aside>
+  <main class="main">
+    <h1>UI Component Hierarchy</h1>
+    <p class="lead">The terminal UI is built with Ink 7 (React for CLIs). Components are organized into screens, shared components, and review-specific components.</p>
+
+    <h2>Component Tree</h2>
+    <pre><code>ErrorBoundary
+└─ ReviewProvider
+   └─ NavigationProvider
+      └─ Router
+         ├─ ChatScreen
+         │  ├─ AppHeader
+         │  ├─ ChatHistory
+         │  │  ├─ &lt;Static&gt; frozen blocks
+         │  │  │  ├─ UserMessage (frozen)
+         │  │  │  ├─ AgentMessage (frozen)
+         │  │  │  ├─ ToolMessage (frozen)
+         │  │  │  └─ SubAgentRow (frozen)
+         │  │  └─ Live blocks
+         │  │     ├─ UserMessage
+         │  │     ├─ AgentMessage
+         │  │     ├─ ToolMessage
+         │  │     └─ SubAgentRow
+         │  ├─ ChatInput (with ink-text-input)
+         │  ├─ CommandSuggestions (autocomplete dropdown)
+         │  ├─ ThinkingIndicator (animated spinner)
+         │  └─ Panel (tool confirmation dialog)
+         │
+         ├─ SettingsScreen
+         │  ├─ AppHeader
+         │  └─ Settings form (API key / GitHub token)
+         │
+         ├─ ReviewScreen
+         │  ├─ ReviewHeader
+         │  ├─ [mode: browser]
+         │  │  ├─ PRBrowser (split pane)
+         │  │  │  ├─ PRList (scrollable PR list)
+         │  │  │  └─ DiffViewer (colorized diff)
+         │  │  └─ ReviewFooter
+         │  ├─ [mode: review]
+         │  │  ├─ ReviewOverview (inline review status)
+         │  │  ├─ ReviewBlockList
+         │  │  │  ├─ Text blocks
+         │  │  │  ├─ SubAgentRow / SubAgentDetail
+         │  │  │  └─ ToolMessage
+         │  │  └─ ReviewFooter
+         │  └─ [mode: results]
+         │     ├─ ReviewResults (final synthesis)
+         │     └─ ReviewFooter
+         │
+         └─ ErrorScreen (fatal error display)</code></pre>
+
+    <h2>Screen Components</h2>
+
+    <h3>ChatScreen <span class="tag tag-ui">src/tui/screens/ChatScreen.tsx</span></h3>
+    <p>The main interaction surface. Composes:</p>
+    <ul>
+      <li><strong>ChatHistory</strong> — renders <code>DisplayBlock[]</code> with the static/live split for Ink optimization</li>
+      <li><strong>ChatInput</strong> — text input using <code>ink-text-input</code> with message history (↑/↓ navigation)</li>
+      <li><strong>CommandSuggestions</strong> — slash command autocomplete dropdown when input starts with <code>/</code></li>
+      <li><strong>ThinkingIndicator</strong> — animated spinner with elapsed timer during agent execution</li>
+      <li><strong>Panel</strong> — tool confirmation dialog for write/edit/runCommand approvals</li>
+    </ul>
+
+    <h3>SettingsScreen <span class="tag tag-ui">src/tui/screens/SettingsScreen.tsx</span></h3>
+    <p>Configuration screen for API credentials:</p>
+    <ul>
+      <li><strong>DEEPSEEK_API_KEY</strong> — required for the AI agent</li>
+      <li><strong>GITHUB_TOKEN</strong> — required for PR review features</li>
+    </ul>
+
+    <h3>ReviewScreen <span class="tag tag-ui">src/tui/screens/ReviewScreen.tsx</span></h3>
+    <p>Multi-mode PR review screen. Three modes:</p>
+    <table>
+      <tr><th>Mode</th><th>Description</th></tr>
+      <tr><td><code>browser</code></td><td>Browse open PRs, select one, view its diff. Split pane: PR list on left, diff viewer on right.</td></tr>
+      <tr><td><code>review</code></td><td>Live review session. Shows orchestrator output, sub-agent status rows, and tool calls as they happen.</td></tr>
+      <tr><td><code>results</code></td><td>Final synthesized PR comment. Option to post as a GitHub comment.</td></tr>
+    </table>
+
+    <h2>Shared Components</h2>
+
+    <h3>AppHeader <span class="tag tag-ui">src/tui/components/shared/AppHeader.tsx</span></h3>
+    <p>Application title bar displayed at the top of every screen. Shows the screen name and context-sensitive information.</p>
+
+    <h3>MarkdownRenderer <span class="tag tag-ui">src/tui/components/shared/MarkdownRenderer.tsx</span></h3>
+    <p>Renders markdown text to Ink elements using <code>marked</code> for parsing and <code>cli-highlight</code> for syntax highlighting. Supports headings, code blocks, tables, lists, inline formatting, and links.</p>
+
+    <h3>Panel <span class="tag tag-ui">src/tui/components/shared/Panel.tsx</span></h3>
+    <p>Reusable bordered panel component used for tool confirmations and modal dialogs.</p>
+
+    <h2>Chat Components</h2>
+
+    <h3>ChatHistory <span class="tag tag-ui">src/tui/components/chat/ChatHistory.tsx</span></h3>
+    <p>Renders the full message list. Splits blocks into <strong>frozen</strong> (has <code>isFrozen: true</code>) and <strong>live</strong> (still streaming). Frozen blocks render inside Ink's <code>&lt;Static&gt;</code> element for zero re-render cost. Live blocks render normally using React reconciliation.</p>
+
+    <h3>ChatInput <span class="tag tag-ui">src/tui/components/chat/ChatInput.tsx</span></h3>
+    <p>Wraps <code>ink-text-input</code> with styling consistent with the Nord theme. Supports message history navigation via ↑/↓.</p>
+
+    <h3>AgentMessage <span class="tag tag-ui">src/tui/components/chat/AgentMessage.tsx</span></h3>
+    <p>Renders assistant messages through <code>MarkdownRenderer</code> for rich markdown display with syntax-highlighted code blocks.</p>
+
+    <h3>ToolMessage <span class="tag tag-ui">src/tui/components/chat/ToolMessage.tsx</span></h3>
+    <p>Displays tool call information: tool name, arguments, execution status (spinner/checkmark/error), and the result output. Color-coded by tool type and status.</p>
+
+    <h3>SubAgentRow <span class="tag tag-ui">src/tui/components/review/SubAgentRow.tsx</span></h3>
+    <p>Compact sub-agent status row showing role, status icon (running/done/error), latest output line, and elapsed time. When selected, expands to show full output.</p>
+
+    <h2>Review Components</h2>
+
+    <h3>PRBrowser <span class="tag tag-ui">src/tui/components/review/PRBrowser.tsx</span></h3>
+    <p>Split pane layout for browsing PRs. Left pane: scrollable PR list. Right pane: diff viewer.</p>
+
+    <h3>DiffViewer <span class="tag tag-ui">src/tui/components/review/DiffViewer.tsx</span></h3>
+    <p>Colorized diff display with additions (green), deletions (red), and context lines. Uses the Nord color palette for syntax highlighting.</p>
+
+    <h3>ReviewResults <span class="tag tag-ui">src/tui/components/review/ReviewResults.tsx</span></h3>
+    <p>Displays the final synthesized PR review. Shows severity-ranked findings with suggested fixes. Options to post as a GitHub comment or return to the browser.</p>
+
+    <h2>Theming</h2>
+    <p><span class="filepath">src/tui/theme.ts</span> defines the Nord-inspired color palette:</p>
+    <pre><code>colors:
+  background: #2e3440  (dark polar night)
+  accent:    #cba6f7  (mauve)
+  activity:  #8fbcbb  (frost teal)
+  success:   #a3be8c  (aurora green)
+  error:     #bf616a  (aurora red)
+  text:      #eceff4  (snow white)
+  border:    #4c566a  (medium polar night)
+
+glyphs:
+  user:      "›"      (chevron for user messages)
+  assistant: "·"      (dot for agent messages)
+  success:   "✔"      (checkmark)
+  error:     "✖"      (cross mark)
+  pending:   "…"      (ellipsis for loading)</code></pre>
+
+    <h2>Keyboard System</h2>
+    <p>The <code>useKeymap</code> hook (16 files) implements a prioritized keybinding system:</p>
+    <ul>
+      <li>Hooks register keymaps with a <strong>priority number</strong> (higher = wins)</li>
+      <li>Conflict resolution: sort by priority desc, then by registration timestamp desc (LIFO tie-break)</li>
+      <li>Only the winning registration executes for a given key combo</li>
+      <li>Supports <code>enabled</code>/<code>disabled</code> toggling for contextual shortcuts</li>
+      <li>Normalizes key combos via <code>parseKeyCombo()</code> into consistent string format (e.g., <code>"ctrl+shift+up"</code>)</li>
+    </ul>
+
+    <h2>Screen Navigation</h2>
+    <p>The <code>NavigationContext</code> manages a <code>Screen[]</code> history stack:</p>
+    <ul>
+      <li>Starts with <code>['chat']</code></li>
+      <li><code>navigate(screen)</code> pushes to history (capped at 50 entries)</li>
+      <li><code>goBack()</code> pops the stack (minimum 1 entry)</li>
+      <li><code>Router</code> component reads <code>currentScreen</code> and renders the matching screen</li>
+    </ul>
+  </main>
+</div>
+</body>
+</html>

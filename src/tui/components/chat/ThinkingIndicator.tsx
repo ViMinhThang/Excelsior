@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Text } from 'ink';
+import { Box, Text } from 'ink';
 import { theme } from '../../theme.js';
 
 function formatDuration(totalSeconds: number): string {
@@ -33,9 +33,15 @@ const ThinkingIndicator = () => {
   }, []);
 
   return (
+    <Box flexDirection='column'>
     <Text color={theme.colors.activity}>
-      thinking{frames[frame]} {formatDuration(elapsed)}
+      Thinking {frames[frame]}
     </Text>
+    <Text color="dim">
+      Worked for {formatDuration(elapsed)}
+    </Text>
+    </Box>
+ 
   );
 };
 

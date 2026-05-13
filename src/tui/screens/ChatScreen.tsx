@@ -1,5 +1,5 @@
-import React, { memo } from 'react';
-import { Box, Text } from 'ink';
+import React, { memo, useState, useEffect } from 'react';
+import { Box, Text, Static } from 'ink';
 import AppHeader from '../components/shared/AppHeader.js';
 import ChatHistory from '../components/chat/ChatHistory.js';
 import ChatInput from '../components/chat/ChatInput.js';
@@ -10,8 +10,21 @@ import { useChatScreenState } from '../hooks/useChatScreenState.js';
 import { createToolDisplay } from '../lib/toolDisplay.js';
 import { theme } from '../theme.js';
 import Panel from '../components/shared/Panel.js';
+import { DisplayBlock } from '../../lib/eventTypes.js';
+
+const renderAppHeader = () => (
+  <Box key="app-header">
+    <AppHeader />
+  </Box>
+);
 
 const ChatScreen = () => {
+  const [headerItems, setHeaderItems] = useState<string[]>([]);
+  
+  useEffect(() => {
+    setHeaderItems(['app-header']);
+  }, []);
+
   const {
     input,
     setInput,
@@ -20,8 +33,6 @@ const ChatScreen = () => {
     subAgentIndex,
     messages,
     isLoading,
-    hasMore,
-    loadMore,
     pending,
     suggestion,
     commandResult,
@@ -35,9 +46,13 @@ const ChatScreen = () => {
       })
     : null;
 
+  const displayBlocks = messages as DisplayBlock[];
+
   return (
     <Box flexDirection="column">
-      <AppHeader />
+      <Static items={headerItems}>
+        {renderAppHeader}
+      </Static>
 
       {chatMode === "subagent-detail" && subAgents.length > 0 && subAgents[subAgentIndex] ? (
         <SubAgentDetail agent={subAgents[subAgentIndex]} />
@@ -45,10 +60,7 @@ const ChatScreen = () => {
         <>
           <Box flexDirection="column">
             <ChatHistory
-              messages={messages}
-              subAgents={subAgents}
-              hasMore={hasMore}
-              onLoadMore={loadMore}
+              blocks={displayBlocks}
             />
           </Box>
 

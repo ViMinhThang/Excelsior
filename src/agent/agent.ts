@@ -1,13 +1,14 @@
 import { ToolLoopAgent } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
-import { fileTools } from "./tools/index.js";
+import { createFileTools } from "./tools/index.js";
 import { getSetting } from "../db/index.js";
 import { buildSystemPrompt } from "./prompt.js";
-import { spawnSubAgentTool } from "./review/spawnSubAgent.js";
+import type { ToolContext } from "../lib/tool/context.js";
 
 export function createAgent(
   instructions?: string,
   extraTools?: Record<string, any>,
+  ctx?: ToolContext,
 ) {
   const platform = process.platform;
   const systemPrompt = buildSystemPrompt(platform);
@@ -25,8 +26,7 @@ export function createAgent(
     model,
     instructions: finalInstructions,
     tools: {
-      spawnSubAgentTool,
-      ...fileTools,
+      ...createFileTools(ctx),
       ...extraTools,
     },
   });

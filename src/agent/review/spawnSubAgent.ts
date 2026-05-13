@@ -1,114 +1,111 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { randomUUID } from "crypto";
 import { createAgent } from "../../agent/agent.js";
-import { SubAgentOutputPart, ToolCallInfo } from "../../types.js";
-import { streamAgentResponse } from "../../lib/agentStream.js";
+import { AgentSession } from "../../lib/runtime/agentSession.js";
+import { AnyAgentEvent } from "../../lib/eventTypes.js";
+import { streamAgentResponse } from "../../lib/runtime/agentStream.js";
+import { projectChildEventsToSubAgentState } from "../../lib/projection/projectEvents.js";
+import { persistEvent, persistSession } from "../../lib/persistence/eventPersistence.js";
+import { subAgentBus } from "../../lib/runtime/subAgentBus.js";
 
-import { subAgentBus } from "../../lib/subAgentBus.js";
-
-function emitBusOutput(
-  toolCallId: string,
-  fullOutput: string,
-  outputParts: SubAgentOutputPart[],
-  toolCalls: ToolCallInfo[],
-  latestLine?: string,
+export function createSpawnSubAgentTool(
+  parentSession: AgentSession,
+  childSessionsMap: Map<string, AgentSession>,
 ) {
-  const lines = fullOutput.split("\n");
-  subAgentBus.emit("output", {
-    toolCallId,
-    latestLine: latestLine ?? (lines[lines.length - 1] || lines[lines.length - 2] || ""),
-    fullOutput,
-    outputParts: [...outputParts],
-    toolCalls: [...toolCalls],
+  return tool({
+    description:
+      "Spawn a specialist sub-agent to analyze code. The sub-agent runs as an Excelsior instance with a focused role.",
+    inputSchema: z.object({
+      role: z
+        .string()
+        .describe(
+          "Role name, e.g. 'Bug Hunter', 'Security Auditor', 'Code Style Reviewer'",
+        ),
+      instruction: z
+        .string()
+        .describe("Detailed analysis task with code context for this specialist"),
+    }),
+    execute: async (
+      { role, instruction }: { role: string; instruction: string },
+      { toolCallId }: { toolCallId: string },
+    ) => {
+      const childSession = new AgentSession(parentSession.id, parentSession.correlationId);
+      childSessionsMap.set(childSession.id, childSession);
+
+      persistSession({
+        id: childSession.id,
+        startedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        metadata: { userInput: instruction, isChildSession: true },
+      });
+
+      subAgentBus.emit("spawned", { toolCallId, role });
+
+      parentSession.emit("child-session-attached", {
+        childSessionId: childSession.id,
+        parentToolCallId: toolCallId,
+        role,
+      });
+
+      const subInstructions =
+        `\n\n---\nROLE: ${role}\n---\n` +
+        `\nYou are a sub-agent of a larger code review.` +
+        `\nDo NOT spawn sub-agents, agents, or tools that delegate to other agents.` +
+        `\nComplete your assigned task directly.` +
+        `\n---\n\n${instruction}`;
+
+      const agent = createAgent(subInstructions);
+
+      const allChildEvents: AnyAgentEvent[] = [];
+      let terminalError = "";
+      let finalOutput = "";
+
+      const unsub = childSession.bus.on("event", (event) => {
+        if (event.type !== "session-start") {
+          allChildEvents.push(event);
+          persistEvent(event);
+        }
+
+        if (event.type === "text-delta" || event.type === "tool-call-start" || event.type === "tool-call-end" || event.type === "error") {
+          const state = projectChildEventsToSubAgentState(allChildEvents, "running", instruction);
+          subAgentBus.emit("output", {
+            toolCallId,
+            latestLine: state.latestLine,
+            fullOutput: state.fullOutput,
+            outputParts: state.parts,
+            toolCalls: state.toolCalls,
+          });
+        }
+      });
+
+      try {
+        const abortController = new AbortController();
+        childSession.abortController = abortController;
+
+        await streamAgentResponse(
+          agent,
+          [{ role: "user", content: instruction }],
+          childSession,
+          abortController.signal,
+        );
+      } catch (error: any) {
+        if (error?.name !== "AbortError") {
+          terminalError = error.message;
+          childSession.emit("error", { message: terminalError });
+        }
+      } finally {
+        unsub();
+        childSession.flushNotify();
+
+        const finalStatus = terminalError ? "error" : "done" as const;
+        const state = projectChildEventsToSubAgentState(allChildEvents, finalStatus, instruction);
+        finalOutput = terminalError
+          ? state.fullOutput + `\n\nError: ${terminalError}`
+          : state.fullOutput;
+        subAgentBus.emit("done", { toolCallId, fullOutput: finalOutput });
+      }
+
+      return finalOutput;
+    },
   });
 }
-
-export const spawnSubAgentTool = tool({
-  description:
-    "Spawn a specialist sub-agent to analyze code. The sub-agent runs as an Excelsior instance with a focused role.",
-  inputSchema: z.object({
-    role: z
-      .string()
-      .describe(
-        "Role name, e.g. 'Bug Hunter', 'Security Auditor', 'Code Style Reviewer'",
-      ),
-    instruction: z
-      .string()
-      .describe("Detailed analysis task with code context for this specialist"),
-  }),
-  execute: async ({ role, instruction }: { role: string; instruction: string }) => {
-    const toolCallId = `sub_${randomUUID()}`;
-    subAgentBus.emit("spawned", { toolCallId, role });
-
-    const subInstructions =
-      `\n\n---\nROLE: ${role}\n---\n` +
-      `\nYou are a sub-agent of a larger code review.` +
-      `\nDo NOT spawn sub-agents, agents, or tools that delegate to other agents.` +
-      `\nComplete your assigned task directly.` +
-      `\n---\n\n${instruction}`;
-
-    const agent = createAgent(subInstructions);
-
-    let fullOutput = "";
-    const outputParts: SubAgentOutputPart[] = [];
-    const toolCalls: ToolCallInfo[] = [];
-
-    function addTextDelta(delta: string) {
-      const partsLen = outputParts.length;
-      if (partsLen > 0 && outputParts[partsLen - 1].type === "text") {
-        const last = outputParts[partsLen - 1] as SubAgentOutputPart & { type: "text" };
-        outputParts[partsLen - 1] = { type: "text", text: last.text + delta };
-      } else {
-        outputParts.push({ type: "text", text: delta });
-      }
-    }
-
-    try {
-      await streamAgentResponse(
-        agent,
-        [{ role: "user", content: instruction }],
-        {
-          onTextDelta: (text) => {
-            const delta = text.slice(fullOutput.length);
-            fullOutput = text;
-            addTextDelta(delta);
-            emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls);
-          },
-          onToolCall: (toolName, toolArgs, callId) => {
-            outputParts.push({ type: "tool-call", toolName, toolArgs, toolCallId: callId, status: "pending" });
-            toolCalls.push({ toolName, toolArgs, toolCallId: callId, status: "pending" });
-            emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${toolName}(${toolArgs})`);
-          },
-          onToolResult: (callId, result) => {
-            const isError = result.startsWith("[Error]");
-            const status = isError ? ("error" as const) : ("completed" as const);
-            for (let i = 0; i < outputParts.length; i++) {
-              const p = outputParts[i];
-              if (p.type === "tool-call" && p.toolCallId === callId) {
-                outputParts[i] = { ...p, status };
-              }
-            }
-            toolCalls.forEach((tc, i) => {
-              if (tc.toolCallId === callId) {
-                toolCalls[i] = { ...tc, status };
-              }
-            });
-            emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls, `[tool] ${status}`);
-          },
-          onFinish: () => {},
-        },
-      );
-
-      subAgentBus.emit("done", { toolCallId, fullOutput });
-      return fullOutput;
-    } catch (error: any) {
-      const errorMsg = `Sub-agent error: ${error.message}`;
-      fullOutput += `\n\nError: ${errorMsg}`;
-      outputParts.push({ type: "text", text: `\n\nError: ${errorMsg}` });
-      emitBusOutput(toolCallId, fullOutput, outputParts, toolCalls, errorMsg);
-      subAgentBus.emit("done", { toolCallId, fullOutput });
-      return fullOutput;
-    }
-  },
-});

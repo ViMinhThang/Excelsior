@@ -1,144 +1,146 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Excelsior - AI Coding Assistant Documentation</title>
-  <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Excelsior — Architecture Documentation</title>
+<link rel="stylesheet" href="doc.css">
 </head>
 <body>
-  <nav class="sidebar">
-    <div class="logo">
-      <span class="logo-icon">⚡</span>
-      <span class="logo-text">Excelsior</span>
-    </div>
-    <ul class="nav-links">
-      <li><a href="index.html" class="active">Overview</a></li>
-      <li><a href="architecture.html">Architecture</a></li>
-      <li><a href="flow.html">Data Flow</a></li>
-      <li><a href="code.html">Code Reference</a></li>
-    </ul>
-    <div class="nav-footer">
-      <span>A terminal-based AI coding assistant</span>
-    </div>
-  </nav>
-
-  <main class="content">
-    <section id="hero">
+<div class="wrapper">
+  <aside class="sidebar">
+    <div class="sidebar-header">
       <h1>Excelsior</h1>
-      <p class="tagline">A terminal-based AI coding assistant powered by DeepSeek, built with Ink (React for CLIs).</p>
-    </section>
-
-    <section id="features">
-      <h2>Features</h2>
-      <div class="feature-grid">
-        <div class="feature-card">
-          <div class="feature-icon">💬</div>
-          <h3>Interactive Chat</h3>
-          <p>Converse with an AI coding assistant directly in your terminal with real-time streaming responses.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🔧</div>
-          <h3>Tool Use</h3>
-          <p>The agent can read, write, list files and run shell commands with user confirmation for safety.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🔍</div>
-          <h3>PR Review</h3>
-          <p>Browse open pull requests, orchestrate multi-agent code reviews, and post results back to GitHub.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">💾</div>
-          <h3>Chat Persistence</h3>
-          <p>Conversation history is stored locally in SQLite, allowing you to resume conversations.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">⚙️</div>
-          <h3>Settings Screen</h3>
-          <p>Configure API keys and GitHub tokens without leaving the TUI application.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🤖</div>
-          <h3>Multi-Agent Orchestration</h3>
-          <p>Spawn specialized sub-agents (Bug Hunters, Security Auditors, etc.) for comprehensive code reviews.</p>
-        </div>
+      <div class="version">v1.0.0</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-title">Overview</div>
+        <a class="nav-link active" href="index.html">Home</a>
+        <a class="nav-link" href="architecture.html">Architecture</a>
+        <a class="nav-link" href="data-flow.html">Data Flow</a>
       </div>
-    </section>
-
-    <section id="quick-start">
-      <h2>Quick Start</h2>
-      <div class="code-block">
-        <div class="code-header">
-          <span class="code-lang">bash</span>
-          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-        </div>
-        <pre><code># Install dependencies
-npm install
-
-# Set up your API key (or configure in-app via /settings)
-export DEEPSEEK_API_KEY="your-key-here"
-
-# Optional: for PR review features
-export GITHUB_TOKEN="your-github-token"
-
-# Run
-npm run dev</code></pre>
+      <div class="nav-section">
+        <div class="nav-section-title">Reference</div>
+        <a class="nav-link" href="modules.html">Modules</a>
+        <a class="nav-link" href="tools.html">Tools API</a>
+        <a class="nav-link" href="ui.html">UI Components</a>
       </div>
-    </section>
+      <div class="nav-section">
+        <div class="nav-section-title">Design</div>
+        <a class="nav-link" href="patterns.html">Patterns</a>
+      </div>
+    </nav>
+  </aside>
+  <main class="main">
+    <h1>Excelsior</h1>
+    <p class="lead">A terminal-based AI coding assistant powered by DeepSeek V4 Flash, built with Ink (React for CLIs) and the Vercel AI SDK.</p>
 
-    <section id="commands">
-      <h2>Commands</h2>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Command</th>
-            <th>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td><code>/help</code></td><td>List all available commands</td></tr>
-          <tr><td><code>/clear</code></td><td>Clear chat messages from the screen</td></tr>
-          <tr><td><code>/reset</code></td><td>Delete all conversation history from database</td></tr>
-          <tr><td><code>/settings</code></td><td>Open the Settings screen</td></tr>
-          <tr><td><code>/review</code></td><td>Open the PR review screen</td></tr>
-        </tbody>
-      </table>
-    </section>
+    <h2>Overview</h2>
+    <p>Excelsior is a <strong>TUI (Terminal User Interface)</strong> application that provides an interactive chat experience with an AI coding agent. The agent can read, write, edit files, run shell commands, and orchestrate multi-agent PR code reviews. Conversation history is persisted locally in SQLite. It supports slash commands and keyboard-driven navigation.</p>
 
-    <section id="shortcuts">
-      <h2>Keyboard Shortcuts</h2>
-      <table class="data-table">
-        <thead>
-          <tr><th>Shortcut</th><th>Action</th></tr>
-        </thead>
-        <tbody>
-          <tr><td><kbd>Ctrl+S</kbd></td><td>Open Settings</td></tr>
-          <tr><td><kbd>Ctrl+C</kbd></td><td>Exit</td></tr>
-          <tr><td><kbd>Ctrl+U</kbd></td><td>Load older messages</td></tr>
-          <tr><td><kbd>Ctrl+O</kbd></td><td>Toggle sub-agent detail view</td></tr>
-          <tr><td><kbd>ESC</kbd></td><td>Cancel running agent / Go back</td></tr>
-          <tr><td><kbd>↑ / ↓</kbd></td><td>Navigate message history</td></tr>
-          <tr><td><kbd>Tab</kbd></td><td>(Settings) Switch between input fields</td></tr>
-        </tbody>
-      </table>
-    </section>
+    <div class="card-grid">
+      <div class="card">
+        <h4>Runtime</h4>
+        <p>Node.js ESM with TypeScript 6.0, strict mode. Built with <span class="tag tag-ts">tsx</span> for development.</p>
+      </div>
+      <div class="card">
+        <h4>UI Framework</h4>
+        <p>Ink 7 (React 19) renders a full terminal UI with composable components, keyboard bindings, and real-time streaming.</p>
+      </div>
+      <div class="card">
+        <h4>AI Engine</h4>
+        <p>Vercel AI SDK 6.0 with <code>ToolLoopAgent</code> providing structured tool calling and streaming responses.</p>
+      </div>
+      <div class="card">
+        <h4>Model</h4>
+        <p>DeepSeek V4 Flash via <code>@ai-sdk/deepseek</code> 2.x. Configured via <code>DEEPSEEK_API_KEY</code> setting.</p>
+      </div>
+      <div class="card">
+        <h4>Persistence</h4>
+        <p>SQLite via <code>better-sqlite3</code> 12.x with WAL mode. Stores sessions, events, settings, and error logs.</p>
+      </div>
+      <div class="card">
+        <h4>Testing</h4>
+        <p>Vitest 4.x with 59 tests across 7 test files covering commands, DB, streaming types, tools, and keymaps.</p>
+      </div>
+    </div>
 
-    <section id="tech-stack">
-      <h2>Tech Stack</h2>
-      <ul class="tech-list">
-        <li><strong>AI SDK</strong> - Vercel's AI SDK for streaming and tool calls</li>
-        <li><strong>DeepSeek</strong> - Model provider (deepseek-v4-flash)</li>
-        <li><strong>Ink</strong> - React for CLIs</li>
-        <li><strong>React 19</strong> - UI library</li>
-        <li><strong>better-sqlite3</strong> - Local SQLite database</li>
-        <li><strong>Octokit</strong> - GitHub API client</li>
-        <li><strong>TypeScript</strong> - Type safety</li>
-        <li><strong>Vite/Rolldown</strong> - Build tooling</li>
-        <li><strong>Vitest</strong> - Testing framework</li>
-      </ul>
-    </section>
+    <h2>Quick Start</h2>
+    <pre><code>npm install         # Install dependencies
+npm run dev         # Start with tsx (development)
+npm run build       # Compile TypeScript
+npm start           # Run compiled output
+npm test            # Run test suite</code></pre>
+
+    <h2>Project Structure</h2>
+    <pre><code>src/
+  index.ts              # Entry point — renders Ink App
+  types.ts              # Shared types (StreamPart, ConfirmBus, etc.)
+  agent/                # AI agent layer
+    agent.ts            #  createAgent() factory
+    prompt.ts           #  System prompt builder
+    tools/              #  Tool implementations
+      index.ts          #   Tool registry
+      fs/               #   Filesystem tools (ls, view, write, edit, glob, grep)
+      runCommand/       #   Shell execution tool
+      gitDiff/          #   GitHub PR diff fetching
+    review/             #  Multi-agent PR review
+      reviewPrompt.ts   #   Orchestrator system prompt
+      spawnSubAgent.ts  #   Sub-agent spawning tool
+  tui/                  # Terminal UI (Ink/React)
+    app.tsx             #  Root component (providers)
+    theme.ts            #  Nord-inspired theme
+    screens/            #  Screen components
+    components/         #  Reusable UI components
+    hooks/              #  React hooks (16 files)
+    context/            #  Context providers (5 files)
+    lib/                #  TUI-specific utilities
+  lib/                  # Core framework
+    runtime/            #  Event bus, sessions, orchestrator
+    persistence/        #  SQLite read/write
+    projection/         #  Event → Display block transforms
+  db/                   # SQLite initialization
+  utils/                # Utilities (octokit, execPromise, retry)</code></pre>
+
+    <h2>Key Dependencies</h2>
+    <table>
+      <tr><th>Package</th><th>Version</th><th>Purpose</th></tr>
+      <tr><td><code>ink</code></td><td>^7.0.1</td><td>React renderer for CLIs</td></tr>
+      <tr><td><code>ai</code></td><td>^6.0.175</td><td>Vercel AI SDK (ToolLoopAgent)</td></tr>
+      <tr><td><code>@ai-sdk/deepseek</code></td><td>^2.0.32</td><td>DeepSeek model provider</td></tr>
+      <tr><td><code>better-sqlite3</code></td><td>^12.9.0</td><td>Synchronous SQLite for Node.js</td></tr>
+      <tr><td><code>@octokit/rest</code></td><td>^22.0.1</td><td>GitHub API client</td></tr>
+      <tr><td><code>zod</code></td><td>^4.4.3</td><td>Schema validation for tool inputs</td></tr>
+      <tr><td><code>marked</code></td><td>^18.0.3</td><td>Markdown parser for agent output</td></tr>
+      <tr><td><code>chalk</code></td><td>^5.6.2</td><td>Terminal string styling</td></tr>
+    </table>
+
+    <h2>Slash Commands</h2>
+    <table>
+      <tr><th>Command</th><th>Description</th></tr>
+      <tr><td><code>/help</code></td><td>Display help message with available commands</td></tr>
+      <tr><td><code>/clear</code></td><td>Clear the current chat history</td></tr>
+      <tr><td><code>/reset</code></td><td>Reset the conversation context</td></tr>
+      <tr><td><code>/settings</code></td><td>Open the settings screen (API keys, GitHub token)</td></tr>
+      <tr><td><code>/review</code></td><td>Open the PR review screen</td></tr>
+    </table>
+
+    <h2>Keyboard Shortcuts</h2>
+    <table>
+      <tr><th>Key</th><th>Context</th><th>Action</th></tr>
+      <tr><td><code>Ctrl+S</code></td><td>Global</td><td>Open settings</td></tr>
+      <tr><td><code>Ctrl+C</code></td><td>Global</td><td>Exit application</td></tr>
+      <tr><td><code>Escape</code></td><td>Global</td><td>Go back / Cancel loading</td></tr>
+      <tr><td><code>Return</code></td><td>Chat input</td><td>Send message</td></tr>
+      <tr><td><code>↑/↓</code></td><td>Chat input</td><td>Navigate message history</td></tr>
+      <tr><td><code>Ctrl+U</code></td><td>Chat</td><td>Load older messages</td></tr>
+      <tr><td><code>Ctrl+O</code></td><td>Chat</td><td>Open sub-agent detail view</td></tr>
+      <tr><td><code>Y</code></td><td>Confirmation</td><td>Approve tool execution</td></tr>
+      <tr><td><code>A</code></td><td>Confirmation</td><td>Approve all tools for session</td></tr>
+      <tr><td><code>N</code></td><td>Confirmation</td><td>Deny tool execution</td></tr>
+    </table>
   </main>
-
-  <script src="script.js"></script>
+</div>
 </body>
 </html>
