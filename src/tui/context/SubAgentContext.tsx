@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from "react";
-import { SubAgentState } from "../../types.js";
+import { SubAgentState } from "../../lib/eventTypes.js";
 import { useManagedSubAgents } from "../hooks/useManagedSubAgents.js";
 
 interface SubAgentContextType {

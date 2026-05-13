@@ -3,13 +3,18 @@ import { execPromise } from "../../utils/execPromise.js";
 import { getOctokit, getRepoInfo } from "../../utils/octokit.js";
 import { PullRequest } from "../../types.js";
 
-export function usePullRequests(onPRs: (prs: PullRequest[]) => void) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export function usePullRequests(
+  onPRs: (prs: PullRequest[]) => void,
+  onDiff: (diff: string | null) => void,
+) {
+  const [prsLoading, setPrsLoading] = useState(false);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [prsError, setPrsError] = useState<string | null>(null);
+  const [diffError, setDiffError] = useState<string | null>(null);
 
   const fetchPRs = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setPrsLoading(true);
+    setPrsError(null);
     try {
       const { stdout: branch } = await execPromise("git branch --show-current");
       const baseBranch = branch.trim();
@@ -31,11 +36,41 @@ export function usePullRequests(onPRs: (prs: PullRequest[]) => void) {
       }));
       onPRs(parsed);
     } catch (err: any) {
-      setError(err.message || "Failed to fetch PRs");
+      setPrsError(err.message || "Failed to fetch PRs");
     } finally {
-      setLoading(false);
+      setPrsLoading(false);
     }
-  }, []);
+  }, [onPRs]);
 
-  return { loading, error, fetchPRs };
+  const fetchDiff = useCallback(async (prNumber: number) => {
+    setDiffLoading(true);
+    setDiffError(null);
+    try {
+      const octokit = await getOctokit();
+      const { owner, repo } = await getRepoInfo();
+      const response = await octokit.request(
+        "GET /repos/{owner}/{repo}/pulls/{pull_number}",
+        {
+          owner,
+          repo,
+          pull_number: prNumber,
+          mediaType: { format: "diff" },
+        },
+      );
+      onDiff(response.data as unknown as string);
+    } catch (err: any) {
+      setDiffError(err.message || "Failed to fetch diff");
+    } finally {
+      setDiffLoading(false);
+    }
+  }, [onDiff]);
+
+  return {
+    prsLoading,
+    prsError,
+    fetchPRs,
+    diffLoading,
+    diffError,
+    fetchDiff,
+  };
 }

@@ -32,7 +32,7 @@ export default function ReviewScreen() {
     : `Code Review`;
 
   return (
-    <Box flexDirection="column" flexGrow={1}>
+    <Box flexDirection="column" flexGrow={1} padding={1}>
       <ReviewHeader title={title} />
 
       {mode === "browser" && (

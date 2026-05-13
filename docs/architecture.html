@@ -1,321 +1,155 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Architecture - Excelsior Documentation</title>
-  <link rel="stylesheet" href="styles.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture — Excelsior Docs</title>
+<link rel="stylesheet" href="doc.css">
 </head>
 <body>
-  <nav class="sidebar">
-    <div class="logo">
-      <span class="logo-icon">⚡</span>
-      <span class="logo-text">Excelsior</span>
+<div class="wrapper">
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1>Excelsior</h1>
+      <div class="version">v1.0.0</div>
     </div>
-    <ul class="nav-links">
-      <li><a href="index.html">Overview</a></li>
-      <li><a href="architecture.html" class="active">Architecture</a></li>
-      <li><a href="flow.html">Data Flow</a></li>
-      <li><a href="code.html">Code Reference</a></li>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-title">Overview</div>
+        <a class="nav-link" href="index.html">Home</a>
+        <a class="nav-link active" href="architecture.html">Architecture</a>
+        <a class="nav-link" href="data-flow.html">Data Flow</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Reference</div>
+        <a class="nav-link" href="modules.html">Modules</a>
+        <a class="nav-link" href="tools.html">Tools API</a>
+        <a class="nav-link" href="ui.html">UI Components</a>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Design</div>
+        <a class="nav-link" href="patterns.html">Patterns</a>
+      </div>
+    </nav>
+  </aside>
+  <main class="main">
+    <h1>Layered Architecture</h1>
+    <p class="lead">The application is organized into four distinct layers with unidirectional dependencies. Each layer has a single responsibility and depends only on the layers below it.</p>
+
+    <pre><code>┌─────────────────────────────────────────────────────┐
+│                  PRESENTATION LAYER                  │
+│              Ink / React TUI (src/tui/)              │
+│  Screens · Components · Hooks · Context Providers   │
+├─────────────────────────────────────────────────────┤
+│                  PROJECTION LAYER                    │
+│           Event → Display Block transforms           │
+│         (src/lib/projection/projectEvents.ts)        │
+├─────────────────────────────────────────────────────┤
+│                    AGENT LAYER                       │
+│        AI model · Tools · Sub-agent orchestration    │
+│             (src/agent/agent.ts, tools/)             │
+├─────────────────────────────────────────────────────┤
+│                 INFRASTRUCTURE LAYER                 │
+│    Event bus · Sessions · SQLite persistence · DB    │
+│        (src/lib/runtime/ · persistence/ · db/)       │
+└─────────────────────────────────────────────────────┘</code></pre>
+
+    <h2>Layer 1: Infrastructure</h2>
+
+    <h3>Event Bus (<span class="filepath">src/lib/runtime/bus.ts</span>)</h3>
+    <p>A typed pub/sub event bus that serves as the foundational communication primitive. Three bus instances exist:</p>
+    <table>
+      <tr><th>Bus</th><th>Channel</th><th>Purpose</th></tr>
+      <tr><td><code>confirmBus</code></td><td><code>"confirm"</code></td><td>Tool execution approval (write/edit/runCommand)</td></tr>
+      <tr><td><code>subAgentBus</code></td><td><code>"sub-agent"</code></td><td>Sub-agent lifecycle events (spawned/output/done)</td></tr>
+      <tr><td><code>AgentSession.bus</code></td><td><code>"session"</code></td><td>Agent event stream (per-session)</td></tr>
+    </table>
+    <p>All buses route through a global <code>EventBusHub</code> for unified observability. Any code can subscribe via <code>observeHub()</code> to receive <code>{ channel, event, data }</code> messages from all buses.</p>
+
+    <h3>Event Types (<span class="filepath">src/lib/runtime/events.ts</span>)</h3>
+    <p>The <code>AgentEvent</code> discriminated union is the single source of truth for all agent interactions:</p>
+    <table>
+      <tr><th>Event Type</th><th>Data</th><th>Description</th></tr>
+      <tr><td><code>session-start</code></td><td><code>{}</code></td><td>Fired when a session begins streaming</td></tr>
+      <tr><td><code>user-input</code></td><td><code>{ content }</code></td><td>User submitted a message</td></tr>
+      <tr><td><code>text-delta</code></td><td><code>{ delta }</code></td><td>Incremental assistant text output</td></tr>
+      <tr><td><code>tool-call-start</code></td><td><code>{ toolName, toolArgs, toolCallId }</code></td><td>Agent invoked a tool</td></tr>
+      <tr><td><code>tool-call-end</code></td><td><code>{ toolCallId, result, status, toolName, toolArgs }</code></td><td>Tool execution complete</td></tr>
+      <tr><td><code>child-session-attached</code></td><td><code>{ childSessionId, parentToolCallId, role }</code></td><td>Sub-agent session created</td></tr>
+      <tr><td><code>error</code></td><td><code>{ message }</code></td><td>Non-fatal error during agent execution</td></tr>
+      <tr><td><code>session-end</code></td><td><code>{ cancelled }</code></td><td>Session terminated (natural or cancelled)</td></tr>
+    </table>
+
+    <h3>AgentSession (<span class="filepath">src/lib/runtime/agentSession.ts</span>)</h3>
+    <p>Core reactive session class that:</p>
+    <ul>
+      <li>Emits typed events via its internal bus</li>
+      <li>Maintains an immutable event snapshot (frozen events array)</li>
+      <li>Supports cancellation via <code>AbortController</code></li>
+      <li>Provides a <code>useSyncExternalStore</code>-compatible subscription API for React integration</li>
+      <li>Debounces listener notification via <code>setTimeout(0)</code> microtask batching</li>
     </ul>
-    <div class="nav-footer">
-      <span>A terminal-based AI coding assistant</span>
-    </div>
-  </nav>
 
-  <main class="content">
-    <section id="high-level">
-      <h1>Architecture Overview</h1>
-      <p>Excelsior follows a layered architecture pattern with clear separation of concerns. The application is built on three main layers: the <strong>Agent Layer</strong> for AI interactions, the <strong>TUI Layer</strong> for terminal UI, and the <strong>Data Layer</strong> for persistence.</p>
-    </section>
+    <h3>Persistence (<span class="filepath">src/lib/persistence/eventPersistence.ts</span>)</h3>
+    <p>SQLite-backed persistence with WAL mode for concurrent read/write:</p>
+    <pre><code>sessions (id, started_at, updated_at, metadata)
+agent_events (id, session_id, sequence, type, timestamp,
+              data, parent_event_id, related_tool_call_id)
+settings (key, value)
+error_logs (id, message, stack, timestamp)</code></pre>
+    <p>An in-memory LRU write-through cache (max 10 sessions) decouples UI reads from database writes. Events are both persisted to SQLite and written to the cache, so <code>loadSessionEvents()</code> returns cached data when available.</p>
 
-    <section id="layer-diagram">
-      <h2>Layered Architecture</h2>
-      <div class="architecture-diagram">
-        <div class="layer">
-          <div class="layer-label">TUI Layer</div>
-          <div class="layer-components">
-            <div class="component">Screens</div>
-            <div class="component">Components</div>
-            <div class="component">Hooks</div>
-            <div class="component">Contexts</div>
-            <div class="component">Theme</div>
-          </div>
-        </div>
-        <div class="layer">
-          <div class="layer-label">Agent Layer</div>
-          <div class="layer-components">
-            <div class="component">Agent Creation</div>
-            <div class="component">Tools</div>
-            <div class="component">Prompts</div>
-            <div class="component">Commands</div>
-            <div class="component">Review Orchestrator</div>
-            <div class="component">Sub-Agent Management</div>
-          </div>
-        </div>
-        <div class="layer">
-          <div class="layer-label">Data Layer</div>
-          <div class="layer-components">
-            <div class="component">SQLite Database</div>
-            <div class="component">Settings Store</div>
-            <div class="component">Chat Persistence</div>
-            <div class="component">Error Logging</div>
-          </div>
-        </div>
-        <div class="layer">
-          <div class="layer-label">Utilities</div>
-          <div class="layer-components">
-            <div class="component">GitHub API (Octokit)</div>
-            <div class="component">Agent Streaming</div>
-            <div class="component">Command Execution</div>
-          </div>
-        </div>
-      </div>
-    </section>
+    <h2>Layer 2: Agent</h2>
 
-    <section id="project-structure">
-      <h2>Project Structure</h2>
-      <div class="file-tree">
-        <div class="tree-root">src/</div>
-        <div class="tree-node">
-          <span class="tree-folder">agent/</span> - AI agent configuration and tools
-          <div class="tree-node">
-            <span class="tree-folder">commands/</span> - Slash command registry
-          </div>
-          <div class="tree-node">
-            <span class="tree-folder">review/</span> - PR review orchestration
-            <div class="sub-components">
-              <span class="sub-component">reviewPrompt.ts</span>
-              <span class="sub-component">spawnSubAgent.ts</span>
-            </div>
-          </div>
-          <div class="tree-node">
-            <span class="tree-folder">tools/</span> - Agent tools
-            <div class="sub-components">
-              <span class="sub-component">confirm.ts</span>
-              <span class="sub-component">runCommand/</span>
-              <span class="sub-component">gitDiff/</span>
-            </div>
-          </div>
-          <div class="tree-node">
-            <span class="tree-file">agent.ts</span> - Agent factory
-          </div>
-          <div class="tree-node">
-            <span class="tree-file">prompt.ts</span> - System prompt builder
-          </div>
-        </div>
-        <div class="tree-node">
-          <span class="tree-folder">tui/</span> - Terminal UI (Ink/React)
-          <div class="tree-node">
-            <span class="tree-folder">components/</span> - UI components
-            <div class="sub-components">
-              <span class="sub-component">chat/</span>
-              <span class="sub-component">review/</span>
-              <span class="sub-component">shared/</span>
-              <span class="sub-component">navigation/</span>
-            </div>
-          </div>
-          <div class="tree-node">
-            <span class="tree-folder">context/</span> - React contexts
-            <div class="sub-components">
-              <span class="sub-component">NavigationContext.tsx</span>
-              <span class="sub-component">ReviewContext.tsx</span>
-              <span class="sub-component">ReviewSessionContext.tsx</span>
-              <span class="sub-component">SubAgentContext.tsx</span>
-              <span class="sub-component">PRContext.tsx</span>
-            </div>
-          </div>
-          <div class="tree-node">
-            <span class="tree-folder">hooks/</span> - Custom React hooks
-            <div class="sub-components">
-              <span class="sub-component">useChat.ts</span>
-              <span class="sub-component">useChatSender.ts</span>
-              <span class="sub-component">useChatHistory.ts</span>
-              <span class="sub-component">useReviewScreenState.ts</span>
-              <span class="sub-component">useReviewOrchestrator.ts</span>
-              <span class="sub-component">useDatabase.ts</span>
-            </div>
-          </div>
-          <div class="tree-node">
-            <span class="tree-folder">screens/</span> - Screen components
-            <div class="sub-components">
-              <span class="sub-component">ChatScreen.tsx</span>
-              <span class="sub-component">ReviewScreen.tsx</span>
-              <span class="sub-component">SettingsScreen.tsx</span>
-              <span class="sub-component">ErrorScreen.tsx</span>
-            </div>
-          </div>
-          <div class="tree-node">
-            <span class="tree-folder">lib/</span> - UI utilities
-            <div class="sub-components">
-              <span class="sub-component">chatPersistence.ts</span>
-              <span class="sub-component">toolDisplay.ts</span>
-            </div>
-          </div>
-          <div class="tree-node">
-            <span class="tree-file">app.tsx</span> - Root component
-          </div>
-          <div class="tree-node">
-            <span class="tree-file">theme.ts</span> - Theme configuration
-          </div>
-        </div>
-        <div class="tree-node">
-          <span class="tree-folder">db/</span> - SQLite database layer
-        </div>
-        <div class="tree-node">
-          <span class="tree-folder">lib/</span> - Shared utilities
-          <div class="sub-components">
-            <span class="sub-component">agentStream.ts</span>
-          </div>
-        </div>
-        <div class="tree-node">
-          <span class="tree-folder">utils/</span> - Utility functions
-          <div class="sub-components">
-            <span class="sub-component">octokit.ts</span>
-            <span class="sub-component">ghComment.ts</span>
-            <span class="sub-component">execPromise.ts</span>
-          </div>
-        </div>
-        <div class="tree-node">
-          <span class="tree-file">index.ts</span> - Application entry point
-        </div>
-        <div class="tree-node">
-          <span class="tree-file">types.ts</span> - TypeScript type definitions
-        </div>
-      </div>
-    </section>
+    <h3>Agent Factory (<span class="filepath">src/agent/agent.ts</span>)</h3>
+    <p>The <code>createAgent()</code> factory builds a <code>ToolLoopAgent</code> with:</p>
+    <ul>
+      <li>The DeepSeek V4 Flash model configured with the user's API key (or <code>DEEPSEEK_API_KEY</code> env var)</li>
+      <li>A system prompt generated by <code>buildSystemPrompt()</code> with tone scaling rules</li>
+      <li>Filesystem tools (ls, view, write, edit, glob, grep) from the tool registry</li>
+      <li>Optional extra tools (e.g., <code>spawnSubAgent</code>, <code>gitDiff</code>) passed by callers</li>
+    </ul>
 
-    <section id="context-hierarchy">
-      <h2>React Context Hierarchy</h2>
-      <div class="svg-container">
-        <svg width="100%" height="400" viewBox="0 0 800 400">
-          <!-- App Root -->
-          <rect x="300" y="20" width="200" height="60" rx="8" fill="var(--nord15)" stroke="var(--border)" stroke-width="2"/>
-          <text x="400" y="55" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold">App</text>
+    <h3>System Prompt (<span class="filepath">src/agent/prompt.ts</span>)</h3>
+    <p>The prompt defines three intensity modes that the agent self-selects based on task complexity:</p>
+    <table>
+      <tr><th>Mode</th><th>When</th><th>Style</th></tr>
+      <tr><td><strong>LIGHT</strong></td><td>Greetings, quick questions, tiny edits</td><td>Casual, brief, one-liner responses</td></tr>
+      <tr><td><strong>MODERATE</strong></td><td>Feature additions, single-file changes</td><td>Clear and direct, short plan if needed</td></tr>
+      <tr><td><strong>INTENSIVE</strong></td><td>Multi-file refactors, architecture, deep debugging</td><td>Step-by-step plan, thorough, production-quality code</td></tr>
+    </table>
 
-          <!-- Error Boundary -->
-          <rect x="300" y="100" width="200" height="50" rx="8" fill="var(--nord11)" stroke="var(--border)" stroke-width="2"/>
-          <text x="400" y="130" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold">ErrorBoundary</text>
+    <h2>Layer 3: Projection</h2>
+    <p>The projection layer (<span class="filepath">src/lib/projection/projectEvents.ts</span>) transforms raw event streams into UI-consumable display blocks. It implements a <strong>pure reducer</strong> pattern:</p>
+    <pre><code>createProjectionState() → state
+  reduceProjectionEvent(state, event) → void  (mutates in place)
+  flushProjectionState(state) → DisplayBlock[]</code></pre>
+    <p>Two parallel projections exist:</p>
+    <ul>
+      <li><strong><code>groupEventsForDisplay</code></strong> → <code>DisplayBlock[]</code> for the TUI</li>
+      <li><strong><code>projectEventsToAIHistory</code></strong> → conversation history for model context memory</li>
+    </ul>
 
-          <!-- ReviewProvider -->
-          <rect x="300" y="170" width="200" height="50" rx="8" fill="var(--nord10)" stroke="var(--border)" stroke-width="2"/>
-          <text x="400" y="200" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold">ReviewProvider</text>
+    <h2>Layer 4: Presentation</h2>
+    <p>The TUI is a tree of Ink/React components organized as:</p>
+    <pre><code>ErrorBoundary
+  └─ ReviewProvider (composes PR + ReviewSession + SubAgent)
+      └─ NavigationProvider (screen stack)
+          └─ Router (dispatches screen)
+              ├─ ChatScreen    (main interaction)
+              ├─ SettingsScreen (API configuration)
+              ├─ ReviewScreen  (PR browser/review/results)
+              └─ ErrorScreen   (fatal error)</code></pre>
+    <p>Five context providers manage shared state: <code>NavigationContext</code>, <code>PRContext</code>, <code>ReviewSessionContext</code>, <code>SubAgentContext</code>, and the composite <code>ReviewContext</code>. Sixteen React hooks implement the application logic with clear separation of concerns.</p>
 
-          <!-- PRProvider -->
-          <rect x="50" y="240" width="180" height="50" rx="8" fill="var(--nord8)" stroke="var(--border)" stroke-width="2"/>
-          <text x="140" y="270" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold">PRProvider</text>
-
-          <!-- ReviewSessionProvider -->
-          <rect x="310" y="240" width="180" height="50" rx="8" fill="var(--nord7)" stroke="var(--border)" stroke-width="2"/>
-          <text x="400" y="270" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold">ReviewSessionProvider</text>
-
-          <!-- SubAgentProvider -->
-          <rect x="570" y="240" width="180" height="50" rx="8" fill="var(--nord8)" stroke="var(--border)" stroke-width="2"/>
-          <text x="660" y="270" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold">SubAgentProvider</text>
-
-          <!-- NavigationProvider -->
-          <rect x="300" y="310" width="200" height="50" rx="8" fill="var(--nord9)" stroke="var(--border)" stroke-width="2"/>
-          <text x="400" y="340" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold">NavigationProvider</text>
-
-          <!-- Router -->
-          <rect x="300" y="380" width="200" height="50" rx="8" fill="var(--nord4)" stroke="var(--border)" stroke-width="2"/>
-          <text x="400" y="410" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold">Router</text>
-
-          <!-- Connection Lines -->
-          <line x1="400" y1="80" x2="400" y2="100" stroke="var(--border)" stroke-width="2"/>
-          <line x1="400" y1="150" x2="400" y2="170" stroke="var(--border)" stroke-width="2"/>
-          <line x1="400" y1="220" x2="140" y2="240" stroke="var(--border)" stroke-width="2"/>
-          <line x1="400" y1="220" x2="400" y2="240" stroke="var(--border)" stroke-width="2"/>
-          <line x1="400" y1="220" x2="660" y2="240" stroke="var(--border)" stroke-width="2"/>
-          <line x1="400" y1="290" x2="400" y2="310" stroke="var(--border)" stroke-width="2"/>
-          <line x1="400" y1="360" x2="400" y2="380" stroke="var(--border)" stroke-width="2"/>
-        </svg>
-      </div>
-      <div class="callout callout-info">
-        <span class="callout-icon">ℹ️</span>
-        <div class="callout-content">
-          <p><strong>Context Hierarchy:</strong> The providers are nested to enable cross-cutting concerns. <strong>ReviewProvider</strong> composes three specialized providers that work together during PR reviews.</p>
-        </div>
-      </div>
-    </section>
-
-    <section id="screen-flow">
-      <h2>Screen Navigation Flow</h2>
-      <div class="svg-container">
-        <svg width="100%" height="300" viewBox="0 0 700 300">
-          <!-- Chat Screen -->
-          <rect x="250" y="20" width="200" height="80" rx="8" fill="var(--nord4)" stroke="var(--accent)" stroke-width="3"/>
-          <text x="350" y="55" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold" font-size="14">ChatScreen</text>
-          <text x="350" y="75" text-anchor="middle" fill="var(--bg-primary)" font-size="11">(Default)</text>
-
-          <!-- Arrow to Settings -->
-          <line x1="350" y1="100" x2="350" y2="140" stroke="var(--accent)" stroke-width="2" marker-end="url(#arrowhead)"/>
-          <text x="370" y="125" fill="var(--text-muted)" font-size="10">Ctrl+S or /settings</text>
-
-          <!-- Settings Screen -->
-          <rect x="450" y="150" width="200" height="80" rx="8" fill="var(--nord4)" stroke="var(--border)" stroke-width="2"/>
-          <text x="550" y="185" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold" font-size="14">SettingsScreen</text>
-          <text x="550" y="205" text-anchor="middle" fill="var(--bg-primary)" font-size="11">API Keys, GitHub Token</text>
-
-          <!-- Arrow to Review -->
-          <line x1="350" y1="100" x2="250" y2="140" stroke="var(--accent)" stroke-width="2"/>
-          <text x="290" y="125" fill="var(--text-muted)" font-size="10">/review</text>
-
-          <!-- Review Screen -->
-          <rect x="50" y="150" width="200" height="80" rx="8" fill="var(--nord4)" stroke="var(--border)" stroke-width="2"/>
-          <text x="150" y="185" text-anchor="middle" fill="var(--bg-primary)" font-weight="bold" font-size="14">ReviewScreen</text>
-          <text x="150" y="205" text-anchor="middle" fill="var(--bg-primary)" font-size="11">PR Browser / Review / Results</text>
-
-          <!-- Sub Screens in Review -->
-          <rect x="20" y="250" width="100" height="40" rx="6" fill="var(--bg-tertiary)" stroke="var(--border)"/>
-          <text x="70" y="278" text-anchor="middle" fill="var(--text-secondary)" font-size="11">Browser</text>
-
-          <rect x="100" y="250" width="100" height="40" rx="6" fill="var(--bg-tertiary)" stroke="var(--border)"/>
-          <text x="150" y="278" text-anchor="middle" fill="var(--text-secondary)" font-size="11">Review</text>
-
-          <rect x="180" y="250" width="100" height="40" rx="6" fill="var(--bg-tertiary)" stroke="var(--border)"/>
-          <text x="230" y="278" text-anchor="middle" fill="var(--text-secondary)" font-size="11">Results</text>
-
-          <!-- Arrow definitions -->
-          <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-              <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent)"/>
-            </marker>
-          </defs>
-        </svg>
-      </div>
-    </section>
-
-    <section id="data-flow">
-      <h2>Data Flow Architecture</h2>
-      <p>The application follows a unidirectional data flow pattern with React's component tree for UI state and an event bus pattern for cross-cutting concerns like tool confirmations and sub-agent events.</p>
-      
-      <h3>Event Bus Architecture</h3>
-      <div class="architecture-diagram">
-        <div class="layer">
-          <div class="layer-label">confirmBus</div>
-          <div class="layer-components">
-            <div class="component">runCommand Tool</div>
-            <div class="component">→</div>
-            <div class="component">requestConfirmation()</div>
-            <div class="component">→</div>
-            <div class="component">useToolConfirmation</div>
-          </div>
-        </div>
-        <div class="layer">
-          <div class="layer-label">subAgentBus</div>
-          <div class="layer-components">
-            <div class="component">spawnSubAgent Tool</div>
-            <div class="component">→</div>
-            <div class="component">emitSpawned/emitOutput/emitDone</div>
-            <div class="component">→</div>
-            <div class="component">useSubAgentListener</div>
-          </div>
-        </div>
-      </div>
-    </section>
+    <h2>Dependency Graph</h2>
+    <pre><code>Presentation (tui/)
+  ├── depends on → Projection (lib/projection/)
+  ├── depends on → Agent (agent/)
+  │   └── depends on → Infrastructure (lib/runtime/, lib/persistence/, db/)
+  └── depends on → Infrastructure (lib/runtime/, lib/persistence/, db/)</code></pre>
+    <p>No layer depends on a layer above it. The Infrastructure layer has zero knowledge of Ink, React, or AI models.</p>
   </main>
-
-  <script src="script.js"></script>
+</div>
 </body>
 </html>

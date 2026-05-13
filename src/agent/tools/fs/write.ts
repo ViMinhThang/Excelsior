@@ -1,44 +1,35 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { randomUUID } from "crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { confirmBus } from "../../../lib/confirmBus.js";
+import type { ToolContext } from "../../../lib/tool/context.js";
 
 export const writeSchema = z.object({
   filePath: z.string().describe("Destination file path"),
   content: z.string().describe("Full content to write into the file"),
 });
 
-export const writeTool = tool({
-  description: "Create or overwrite entire files with provided content. Automatically creates parent directories.",
-  inputSchema: writeSchema,
-  execute: async ({ filePath, content }) => {
-    if (confirmBus.getListenerCount("request") > 0) {
-      const callId = randomUUID();
-      const approved = await new Promise<boolean>((resolve) => {
-        const unsub = confirmBus.on("response", (resp) => {
-          if (resp.callId === callId) {
-            unsub();
-            resolve(resp.approved);
-          }
-        });
-        confirmBus.emit("request", {
-          callId,
-          toolName: "writeFile",
-          args: JSON.stringify({ filePath }),
-        });
-      });
-      if (!approved) return "Denied by user.";
-    }
+export function createWriteTool(ctx?: ToolContext) {
+  return tool({
+    description: "Create or overwrite entire files with provided content. Automatically creates parent directories.",
+    inputSchema: writeSchema,
+    execute: async ({ filePath, content }) => {
+      if (ctx?.confirm && ctx.confirm.getListenerCount() > 0) {
+        const approved = await ctx.confirm.request(
+          "writeFile",
+          JSON.stringify({ filePath }),
+        );
+        if (!approved) return "Denied by user.";
+      }
 
-    const fullPath = path.resolve(process.cwd(), filePath);
-    try {
-      await fs.mkdir(path.dirname(fullPath), { recursive: true });
-      await fs.writeFile(fullPath, content, "utf-8");
-      return `Successfully wrote ${content.length} characters to ${filePath}`;
-    } catch (error: any) {
-      return `Error writing file: ${error.message}`;
-    }
-  },
-});
+      const fullPath = path.resolve(process.cwd(), filePath);
+      try {
+        await fs.mkdir(path.dirname(fullPath), { recursive: true });
+        await fs.writeFile(fullPath, content, "utf-8");
+        return `Successfully wrote ${content.length} characters to ${filePath}`;
+      } catch (error: any) {
+        return `Error writing file: ${error.message}`;
+      }
+    },
+  });
+}

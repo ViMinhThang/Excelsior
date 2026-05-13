@@ -1,13 +1,13 @@
 import React, { memo, useState, useEffect } from "react";
 import { Box, Text } from "ink";
-import { SubAgentState } from "../../../types.js";
+import { SubAgentDisplayState } from "../../../lib/eventTypes.js";
 import { theme } from "../../theme.js";
 
 interface SubAgentRowProps {
-  agent: SubAgentState;
+  agent: SubAgentDisplayState;
+  role: string;
   isSelected: boolean;
 }
-
 
 const formatDuration = (ms: number) => {
   const secs = Math.max(0, ms / 1000);
@@ -17,10 +17,9 @@ const formatDuration = (ms: number) => {
   return `${mins}m ${remSecs}s`;
 };
 
-const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, isSelected }) => {
+const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, role, isSelected }) => {
   const isRunning = agent.status === "running";
   
-  // Real-time duration polling toggle
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!isRunning) return;
@@ -28,21 +27,16 @@ const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, isSelected }) => {
     return () => clearInterval(timer);
   }, [isRunning]);
 
-  // Calculate runtime logic
   const start = agent.startTime || now;
   const end = agent.endTime || now;
   const durationStr = formatDuration(end - start);
 
-  // Content Normalization per User Prompt ("except the Task")
-  const rawRole = agent.role || "SubAgent";
-  // Replace "Task" case-insensitive and clean any resulting double-spacing/hanging-hyphens
-  const cleanRole = rawRole
+  const cleanRole = (role || "SubAgent")
     .replace(/\bTask\b/gi, "")
     .replace(/\s+/g, " ")
     .replace(/^[-–—\s]+|[-–—\s]+$/g, "")
     .trim();
 
-  // Dynamic Activity Feeds
   const latestToolCall = agent.toolCalls?.length
     ? agent.toolCalls[agent.toolCalls.length - 1]
     : null;
@@ -51,13 +45,20 @@ const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, isSelected }) => {
     ? `${latestToolCall.toolName} ${latestToolCall.toolArgs ? String(latestToolCall.toolArgs).substring(0, 40) : ""}`
     : `${agent.toolCalls?.length || 0} toolcalls · ${durationStr}`;
 
-  // Icon Tree System
-  const topPrefix = isRunning ? "∴" : "│";
+  const [frame, setFrame] = useState(0);
+  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+  useEffect(() => {
+    if (!isRunning) return;
+    const timer = setInterval(() => setFrame((f) => (f + 1) % spinnerFrames.length), 80);
+    return () => clearInterval(timer);
+  }, [isRunning]);
+
+  const topPrefix = isRunning ? spinnerFrames[frame] : "│";
   const bottomPrefix = isRunning ? "↳" : "└";
 
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={1}>
-      {/* Row 1: ID/Name Line */}
       <Box flexDirection="row">
         <Text color={theme.colors.muted}>{topPrefix} </Text>
         <Text 
@@ -67,8 +68,6 @@ const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, isSelected }) => {
           {cleanRole}
         </Text>
       </Box>
-
-      {/* Row 2: Metrics or Activity Feeder */}
       <Box flexDirection="row">
         <Text color={theme.colors.muted}>{bottomPrefix} </Text>
         <Text color={theme.colors.muted} dimColor={!isRunning}>

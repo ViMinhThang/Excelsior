@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { handleCommand, commands } from "../agent/commands/registry.js";
+import { handleCommand, commands } from "../tui/lib/commands.js";
 import { CommandContext } from "../types.js";
 
 describe("Commands", () => {

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { commands } from "../../agent/commands/registry.js";
+import { commands } from "../lib/commands.js";
 
 const MAX_VISIBLE_COUNT = commands.length;
 

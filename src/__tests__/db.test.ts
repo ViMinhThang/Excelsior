@@ -15,23 +15,32 @@ describe("Database", () => {
   });
 
   describe("initDb", () => {
-    it("creates observation, settings, and error_logs tables", () => {
+    it("creates sessions, agent_events, settings, and error_logs tables", () => {
       const tables = db
         .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         .all() as { name: string }[];
 
       const names = tables.map((t) => t.name);
-      expect(names).toContain("observation");
+      expect(names).toContain("sessions");
+      expect(names).toContain("agent_events");
       expect(names).toContain("settings");
       expect(names).toContain("error_logs");
+      expect(names).not.toContain("observation");
     });
 
-    it("observation table has a message_id column", () => {
+    it("agent_events table has expected columns", () => {
       const columns = db
-        .prepare("PRAGMA table_info(observation)")
+        .prepare("PRAGMA table_info(agent_events)")
         .all() as { name: string }[];
       const names = columns.map((c) => c.name);
-      expect(names).toContain("message_id");
+      expect(names).toContain("id");
+      expect(names).toContain("session_id");
+      expect(names).toContain("sequence");
+      expect(names).toContain("type");
+      expect(names).toContain("timestamp");
+      expect(names).toContain("data");
+      expect(names).toContain("parent_event_id");
+      expect(names).toContain("related_tool_call_id");
     });
   });
 
@@ -55,21 +64,24 @@ describe("Database", () => {
     });
   });
 
-  describe("observation table", () => {
-    it("stores a message with message_id", () => {
-      db.prepare("INSERT INTO observation (role, content, message_id) VALUES (?, ?, ?)").run("user", "hello", "msg_abc123");
-      const row = db.prepare("SELECT * FROM observation WHERE message_id = ?").get("msg_abc123") as any;
+  describe("sessions and agent_events tables", () => {
+    it("stores a session", () => {
+      db.prepare("INSERT INTO sessions (id, started_at, updated_at, metadata) VALUES (?, ?, ?, ?)").run("ses_1", "2024-01-01", "2024-01-01", '{"userInput":"hello"}');
+      const row = db.prepare("SELECT * FROM sessions WHERE id = ?").get("ses_1") as any;
       expect(row).toBeDefined();
-      expect(row.role).toBe("user");
-      expect(row.content).toBe("hello");
-      expect(row.message_id).toBe("msg_abc123");
+      expect(row.id).toBe("ses_1");
+      expect(row.metadata).toBe('{"userInput":"hello"}');
     });
 
-    it("allows null message_id for legacy rows", () => {
-      db.prepare("INSERT INTO observation (role, content) VALUES (?, ?)").run("assistant", "legacy message");
-      const row = db.prepare("SELECT * FROM observation WHERE content = ?").get("legacy message") as any;
-      expect(row.message_id).toBeNull();
-      expect(row.id).toBeGreaterThan(0);
+    it("stores events with session reference", () => {
+      db.prepare(
+        "INSERT INTO agent_events (id, session_id, sequence, type, timestamp, data, parent_event_id, related_tool_call_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run("evt_1", "ses_1", 0, "user-input", "2024-01-01T00:00:00Z", '{"content":"hello"}', null, null);
+      const row = db.prepare("SELECT * FROM agent_events WHERE id = ?").get("evt_1") as any;
+      expect(row).toBeDefined();
+      expect(row.session_id).toBe("ses_1");
+      expect(row.type).toBe("user-input");
+      expect(row.data).toBe('{"content":"hello"}');
     });
   });
 
