@@ -43,7 +43,9 @@ export class DisposableScope {
     for (const cleanup of cleanups) {
       try {
         cleanup();
-      } catch {}
+      } catch (err) {
+        process.stderr.write(`disposable: cleanup error: ${err}\n`);
+      }
     }
   }
 

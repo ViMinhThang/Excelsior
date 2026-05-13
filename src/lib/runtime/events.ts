@@ -1,11 +1,12 @@
 import { randomUUID } from "crypto";
-import { RUN_START, RUN_END, CHILD_RUN_ATTACHED } from "./event-names.js";
+import { RUN_START, RUN_END, CHILD_RUN_ATTACHED, TURN_COMPLETE } from "./event-names.js";
 
 export const EVENT_SCHEMA_VERSION = 1;
 
 export type AgentEventDataMap = {
   [RUN_START]: Record<string, never>;
   [RUN_END]: { cancelled: boolean };
+  [TURN_COMPLETE]: { runId: string };
   [CHILD_RUN_ATTACHED]: { childRunId: string; parentToolCallId: string; role: string };
   "user-input": { content: string };
   "text-delta": { delta: string };
@@ -34,10 +35,6 @@ export type AnyAgentEvent = {
   [T in AgentEventType]: { type: T } & AgentEvent<T>;
 }[AgentEventType];
 
-export function generateEventId(): string {
-  return `evt_${randomUUID()}`;
-}
-
 export function makeEvent<T extends AgentEventType>(
   runId: string,
   type: T,
@@ -51,7 +48,7 @@ export function makeEvent<T extends AgentEventType>(
   },
 ): AgentEvent<T> {
   return {
-    id: generateEventId(),
+    id: `evt_${randomUUID()}`,
     runId,
     sequence,
     type,

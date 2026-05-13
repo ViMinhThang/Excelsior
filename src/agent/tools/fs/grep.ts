@@ -40,8 +40,8 @@ export const grepTool = tool({
               totalMatches++;
             }
           });
-        } catch {
-          // Skip unreadable binary files or permission issues silently
+        } catch (err) {
+          process.stderr.write(`grep: skipping unreadable file ${filePath}: ${err}\n`);
         }
 
         if (totalMatches >= 100) break;
@@ -52,8 +52,8 @@ export const grepTool = tool({
       return totalMatches > 100 
         ? `${output}\n[Showing first 100 results]` 
         : output;
-    } catch (error: any) {
-      return `Error running grep: ${error.message}`;
+    } catch (error: unknown) {
+      return `Error running grep: ${error instanceof Error ? error.message : String(error)}`;
     }
   },
 });

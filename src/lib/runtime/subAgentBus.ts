@@ -14,4 +14,4 @@ export type SubAgentEvents = {
   "done": { toolCallId: string; fullOutput: string };
 };
 
-export const subAgentBus = createChannelBus<SubAgentEvents>("sub-agent");
+export const subAgentBus = createChannelBus<SubAgentEvents>();

@@ -1,60 +1,13 @@
 import { AnyAgentEvent } from "../runtime/events.js";
-import { ReadModel } from "./readModel.js";
-import { CHILD_RUN_ATTACHED, RUN_START, RUN_END, USER_INPUT, TEXT_DELTA, TOOL_CALL_END, TOOL_CALL_START, ERROR } from "../runtime/event-names.js";
+import { ReadModel, projectEvents } from "./readModel.js";
+import { CHILD_RUN_ATTACHED, RUN_START, RUN_END, USER_INPUT, TEXT_DELTA, TOOL_CALL_END, TOOL_CALL_START, ERROR, TURN_COMPLETE } from "../runtime/event-names.js";
 
 export type AIHistoryMessage = { role: "user" | "assistant" | "system"; content: string };
 
 export function projectEventsToAIHistory(
   events: readonly AnyAgentEvent[],
 ): AIHistoryMessage[] {
-  const history: AIHistoryMessage[] = [];
-  let assistantBuf = "";
-
-  function flushAssistant() {
-    if (assistantBuf) {
-      history.push({ role: "assistant", content: assistantBuf });
-      assistantBuf = "";
-    }
-  }
-
-  for (const evt of events) {
-    switch (evt.type) {
-      case USER_INPUT:
-        flushAssistant();
-        history.push({ role: "user", content: evt.data.content });
-        break;
-      case TEXT_DELTA:
-        assistantBuf += evt.data.delta;
-        break;
-      case TOOL_CALL_START:
-      case TOOL_CALL_END:
-        flushAssistant();
-        if (evt.type === TOOL_CALL_END) {
-          const { result, toolName, toolArgs, status } = evt.data;
-          const isError = status === "error" || result?.startsWith("[Error]");
-          const label = isError ? "[Error]" : "[Completed]";
-          history.push({
-            role: "assistant",
-            content: `[Tool: ${toolName}(${toolArgs})] ${label}\n${result ?? ""}`,
-          });
-        }
-        break;
-      case ERROR:
-        flushAssistant();
-        history.push({
-          role: "assistant",
-          content: `[Error] ${evt.data.message}`,
-        });
-        break;
-      case CHILD_RUN_ATTACHED:
-      case RUN_START:
-      case RUN_END:
-        flushAssistant();
-        break;
-    }
-  }
-  flushAssistant();
-  return history;
+  return projectEvents(aiHistoryModel, events);
 }
 
 export const aiHistoryModel: ReadModel<AIHistoryMessage[], AnyAgentEvent> = {
@@ -95,6 +48,7 @@ export const aiHistoryModel: ReadModel<AIHistoryMessage[], AnyAgentEvent> = {
       case CHILD_RUN_ATTACHED:
       case RUN_START:
       case RUN_END:
+      case TURN_COMPLETE:
         break;
     }
     if (assistantBuf) history.push({ role: "assistant", content: assistantBuf });

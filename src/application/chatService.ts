@@ -1,7 +1,7 @@
 import { startRun } from "./runSession.js";
-import { persistSession, persistEvents } from "../lib/persistence/eventPersistence.js";
+import { persistSession } from "../lib/persistence/eventPersistence.js";
 import { createAgent } from "../agent/agent.js";
-import { createSpawnSubAgentTool } from "../agent/review/spawnSubAgent.js";
+import { createSpawnSubAgentTool } from "../agent/spawn/spawnSubAgent.js";
 
 export interface AIHistoryRef {
   current: Array<{ role: "user" | "assistant" | "system"; content: string }>;
@@ -14,6 +14,7 @@ export class ChatService {
       history?: AIHistoryRef;
       extraTools?: Record<string, unknown>;
       sessionId?: string;
+      workspaceId?: string;
     },
   ) {
     const aiMessages: Array<{ role: string; content: string }> = [];
@@ -33,6 +34,7 @@ export class ChatService {
           },
           runCtx.ctx,
         ),
+      sessionId: options?.sessionId,
     });
 
     run.emit("user-input", { content });
@@ -43,11 +45,7 @@ export class ChatService {
       startedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       metadata: { userInput: content },
-      workspaceId: "ws_default",
-    });
-
-    handle.done.then((events) => {
-      persistEvents(events as any, sessionId);
+      workspaceId: options?.workspaceId ?? "ws_default",
     });
 
     return { run, childRuns, handle, sessionId };

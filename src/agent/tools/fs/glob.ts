@@ -20,8 +20,8 @@ export const globTool = tool({
       }
       if (matches.length === 0) return "No files found matching pattern.";
       return matches.join("\n");
-    } catch (error: any) {
-      return `Error running glob: ${error.message}`;
+    } catch (error: unknown) {
+      return `Error running glob: ${error instanceof Error ? error.message : String(error)}`;
     }
   },
 });

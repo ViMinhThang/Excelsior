@@ -1,6 +1,5 @@
 import { Command, CommandContext } from '../../types.js';
-import { deleteAllSessions } from '../../lib/persistence/eventPersistence.js';
-import { getOctokit, getRepoInfo } from '../../utils/octokit.js';
+import { fetchPRDiff } from '../../utils/github.js';
 
 export const commands: Command[] = [
   {
@@ -25,7 +24,7 @@ export const commands: Command[] = [
     name: 'reset',
     description: 'Delete all conversation history from database',
     execute: async (args, context) => {
-      deleteAllSessions();
+      context.deleteAllSessions();
       context.clearMessages();
       context.appendMessage('system', 'Database history reset.');
     },
@@ -50,18 +49,7 @@ export const commands: Command[] = [
       context.appendMessage('system', `Fetching PR #${prNumber} diff...`);
 
       try {
-        const octokit = await getOctokit();
-        const { owner, repo } = await getRepoInfo();
-        const response = await octokit.request(
-          "GET /repos/{owner}/{repo}/pulls/{pull_number}",
-          {
-            owner,
-            repo,
-            pull_number: prNumber,
-            mediaType: { format: "diff" },
-          },
-        );
-        const diff = response.data as unknown as string;
+        const diff = await fetchPRDiff(prNumber);
 
         context.appendMessage('system', `Running code review on PR #${prNumber}...`);
 
@@ -74,8 +62,70 @@ export const commands: Command[] = [
           `\`\`\`diff\n${diff}\n\`\`\``;
 
         context.send(reviewInstruction);
-      } catch (err: any) {
-        context.appendMessage('system', `Error fetching PR #${prNumber}: ${err.message}`);
+      } catch (err: unknown) {
+        context.appendMessage('system', `Error fetching PR #${prNumber}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    },
+  },
+  {
+    name: 'session',
+    description: 'Manage sessions (list, new, open, rename, delete)',
+    execute: async (args, context) => {
+      const sub = args[0]?.toLowerCase();
+      switch (sub) {
+        case 'new': {
+          const title = args.slice(1).join(' ') || 'Untitled';
+          context.createSession(title);
+          context.appendMessage('system', `Created session: "${title}".`);
+          break;
+        }
+        case 'open': {
+          const id = args[1];
+          if (!id) {
+            context.appendMessage('system', 'Usage: /session open <session-id>');
+            break;
+          }
+          context.switchSession(id);
+          context.appendMessage('system', `Switched to session ${id.slice(0, 8)}….`);
+          break;
+        }
+        case 'rename': {
+          const id = args[1];
+          const title = args.slice(2).join(' ');
+          if (!id || !title) {
+            context.appendMessage('system', 'Usage: /session rename <session-id> <title>');
+            break;
+          }
+          context.renameSession(id, title);
+          context.appendMessage('system', `Renamed session to "${title}".`);
+          break;
+        }
+        case 'delete': {
+          const id = args[1];
+          if (!id) {
+            context.appendMessage('system', 'Usage: /session delete <session-id>');
+            break;
+          }
+          context.deleteSession(id);
+          context.appendMessage('system', `Deleted session ${id.slice(0, 8)}….`);
+          break;
+        }
+        default: {
+          const sessions = context.listSessions();
+          const currentId = context.currentSessionId;
+          if (sessions.length === 0) {
+            context.appendMessage('system', 'No sessions in this workspace.');
+          } else {
+            const lines = sessions.map((s) => {
+              const isCurrent = s.id === currentId;
+              const prefix = isCurrent ? ` ${"*"} ` : "   ";
+              const shortId = s.id.slice(0, 8);
+              const label = s.title || "untitled";
+              return `${prefix}${shortId}…  ${label}`;
+            });
+            context.appendMessage('system', `Sessions:\n${lines.join("\n")}\n\nUsage: /session new <title> | /session open <id> | /session rename <id> <title> | /session delete <id>`);
+          }
+        }
       }
     },
   },

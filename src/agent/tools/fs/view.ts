@@ -35,8 +35,8 @@ export const viewTool = tool({
 
       const summary = `[File: ${filePath}, Lines ${start}-${end} of ${lines.length}]`;
       return `${summary}\n${"-".repeat(summary.length)}\n${formatted}`;
-    } catch (error: any) {
-      return `Error reading file: ${error.message}`;
+    } catch (error: unknown) {
+      return `Error reading file: ${error instanceof Error ? error.message : String(error)}`;
     }
   },
 });

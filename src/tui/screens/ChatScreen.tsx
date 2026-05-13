@@ -20,7 +20,7 @@ const renderAppHeader = () => (
 
 const ChatScreen = () => {
   const [headerItems, setHeaderItems] = useState<string[]>([]);
-  
+
   useEffect(() => {
     setHeaderItems(['app-header']);
   }, []);
@@ -33,6 +33,8 @@ const ChatScreen = () => {
     subAgentIndex,
     messages,
     isLoading,
+    currentSessionId,
+    workspaceRootPath,
     pending,
     suggestion,
     commandResult,
@@ -117,6 +119,10 @@ const ChatScreen = () => {
           maxVisibleCount={suggestion.maxVisibleCount}
         />
       )}
+
+      <Box marginTop={1} paddingLeft={1}>
+        <Text color={theme.colors.muted} dimColor>workspace: {workspaceRootPath}</Text>
+      </Box>
     </Box>
   );
 };

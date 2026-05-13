@@ -2,6 +2,43 @@ import { AnyAgentEvent } from "../runtime/events.js";
 import { ProjectedBlock, ProjectedSubAgent, SubAgentProjectionPart } from "./display.js";
 import { ToolCallInfo } from "../../types.js";
 
+function updateToolCallStatus(
+  parts: SubAgentProjectionPart[],
+  toolCalls: ToolCallInfo[],
+  callId: string,
+  status: "pending" | "completed" | "error",
+): void {
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (p.type === "tool-call" && p.toolCallId === callId) {
+      parts[i] = { type: "tool-call", toolName: p.toolName, toolArgs: p.toolArgs, toolCallId: p.toolCallId, status };
+    }
+  }
+  toolCalls.forEach((tc, i) => {
+    if (tc.toolCallId === callId) {
+      toolCalls[i] = { ...tc, status };
+    }
+  });
+}
+
+function computeTiming(
+  childEvents: readonly AnyAgentEvent[],
+  status: "running" | "done" | "error",
+  fallbackTimestamp?: string,
+): { startTime: number; endTime: number } {
+  if (childEvents.length > 0) {
+    const startTime = new Date(childEvents[0].timestamp).getTime();
+    const last = childEvents[childEvents.length - 1];
+    const endTime = status === "running" ? Date.now() : new Date(last.timestamp).getTime();
+    return { startTime, endTime };
+  }
+  if (fallbackTimestamp) {
+    const t = new Date(fallbackTimestamp).getTime();
+    return { startTime: t, endTime: status === "running" ? Date.now() : t };
+  }
+  return { startTime: Date.now(), endTime: Date.now() };
+}
+
 export function buildSubAgentBlock(
   toolCallId: string,
   childRole: string,
@@ -27,20 +64,16 @@ export function projectChildEventsToSubAgentState(
   const parts: SubAgentProjectionPart[] = [];
   const toolCalls: ToolCallInfo[] = [];
   let fullOutput = "";
-  let startTime = Date.now();
-  let endTime = Date.now();
 
   for (const evt of childEvents) {
     switch (evt.type) {
       case "text-delta": {
-        const delta = evt.data.delta;
-        fullOutput += delta;
-        const partsLen = parts.length;
-        if (partsLen > 0 && parts[partsLen - 1].type === "text") {
-          const last = parts[partsLen - 1] as SubAgentProjectionPart & { type: "text" };
-          parts[partsLen - 1] = { type: "text", text: last.text + delta };
+        fullOutput += evt.data.delta;
+        const last = parts[parts.length - 1];
+        if (last?.type === "text") {
+          parts[parts.length - 1] = { type: "text", text: last.text + evt.data.delta };
         } else {
-          parts.push({ type: "text", text: delta });
+          parts.push({ type: "text", text: evt.data.delta });
         }
         break;
       }
@@ -54,17 +87,7 @@ export function projectChildEventsToSubAgentState(
       case "tool-call-end": {
         const callId = evt.relatedToolCallId ?? evt.data.toolCallId;
         const tcStatus = evt.data.status === "error" ? ("error" as const) : ("completed" as const);
-        for (let i = 0; i < parts.length; i++) {
-          const p = parts[i];
-          if (p.type === "tool-call" && p.toolCallId === callId) {
-            parts[i] = { ...p, status: tcStatus };
-          }
-        }
-        toolCalls.forEach((tc, i) => {
-          if (tc.toolCallId === callId) {
-            toolCalls[i] = { ...tc, status: tcStatus };
-          }
-        });
+        updateToolCallStatus(parts, toolCalls, callId, tcStatus);
         break;
       }
       default:
@@ -74,23 +97,7 @@ export function projectChildEventsToSubAgentState(
 
   const lines = fullOutput.split("\n").filter(Boolean);
   const latestLine = lines[lines.length - 1] || "";
+  const { startTime, endTime } = computeTiming(childEvents, status, fallbackTimestamp);
 
-  if (childEvents.length > 0) {
-    startTime = new Date(childEvents[0].timestamp).getTime();
-    const last = childEvents[childEvents.length - 1];
-    endTime = status === "running" ? Date.now() : new Date(last.timestamp).getTime();
-  } else if (fallbackTimestamp) {
-    startTime = new Date(fallbackTimestamp).getTime();
-    endTime = status === "running" ? Date.now() : startTime;
-  }
-
-  return {
-    status,
-    latestLine,
-    fullOutput,
-    toolCalls,
-    parts,
-    startTime,
-    endTime,
-  };
+  return { status, latestLine, fullOutput, toolCalls, parts, startTime, endTime };
 }

@@ -4,6 +4,7 @@ import { AnyAgentEvent } from "./events.js";
 import { streamAgentResponse } from "./agentStream.js";
 import { Unsubscribe } from "./bus.js";
 import { RUN_START } from "./event-names.js";
+import { appendEvent } from "../persistence/rolloutRecorder.js";
 
 export interface AgentFactory {
   (
@@ -17,6 +18,7 @@ export interface RunConfig {
   createAgent: AgentFactory;
   signal?: AbortSignal;
   onEvent?: (event: AnyAgentEvent, allEvents: AnyAgentEvent[]) => void;
+  sessionId?: string;
 }
 
 export interface RunHandle {
@@ -37,6 +39,9 @@ export class RunOrchestrator {
     let unsub: Unsubscribe | null = run.bus.on("event", (event) => {
       if (event.type !== RUN_START) {
         allEvents.push(event);
+        if (config.sessionId) {
+          appendEvent(config.sessionId, event).catch(() => {});
+        }
       }
       config.onEvent?.(event, allEvents);
     });

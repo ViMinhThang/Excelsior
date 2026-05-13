@@ -100,6 +100,20 @@ describe("projectEvents", () => {
       expect(groupEventsForDisplay([])).toEqual([]);
     });
 
+    it("does not freeze pending assistant message during streaming", () => {
+      const events: AnyAgentEvent[] = [
+        makeEvent({ type: "run-start", data: {} }),
+        makeEvent({ type: "text-delta", data: { delta: "Thinking..." } }),
+      ];
+      const blocks = groupEventsForDisplay(events);
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0]).toMatchObject({
+        type: "assistant",
+        content: "Thinking...",
+      });
+      expect((blocks[0] as any).isFrozen).toBeFalsy();
+    });
+
     it("full round-trip: user + assistant + tool", () => {
       const events: AnyAgentEvent[] = [
         makeEvent({ type: "user-input", data: { content: "List files" } }),
