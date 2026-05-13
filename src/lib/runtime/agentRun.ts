@@ -1,3 +1,7 @@
+// Invariant: After cancel(), no new events are accepted except run-end.
+//   getSnapshot() still returns all events emitted before cancel().
+//   Notifications are debounced (setTimeout(0)) to batch React re-renders.
+
 import { createChannelBus } from "./bus.js";
 import {
   AgentEvent,
@@ -6,15 +10,17 @@ import {
   makeEvent,
   AnyAgentEvent,
 } from "./events.js";
+import { RUN_END } from "./event-names.js";
 import { DisposableScope } from "../utils/disposable.js";
 
-export type SessionEventMap = {
+export type RunEventMap = {
   event: AnyAgentEvent;
 };
 
-export class AgentSession {
+export class AgentRun {
   readonly id: string;
-  readonly bus = createChannelBus<SessionEventMap>("session");
+  readonly sessionId: string;
+  readonly bus = createChannelBus<RunEventMap>("run");
   readonly parentEventId?: string;
   readonly correlationId: string;
   abortController?: AbortController;
@@ -29,8 +35,9 @@ export class AgentSession {
   private _notifyPending = false;
   private _notifyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(parentEventId?: string, correlationId?: string) {
-    this.id = `ses_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  constructor(sessionId?: string, parentEventId?: string, correlationId?: string) {
+    this.id = `run_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    this.sessionId = sessionId ?? this.id;
     this.parentEventId = parentEventId;
     this.correlationId = correlationId ?? this.id;
   }
@@ -48,7 +55,7 @@ export class AgentSession {
     data: AgentEventDataMap[T],
     overrides?: { relatedToolCallId?: string },
   ): void {
-    if (this._aborted && type !== "session-end") return;
+    if (this._aborted && type !== RUN_END) return;
     const event = makeEvent(this.id, type, data, this._seq++, {
       parentEventId: this.parentEventId,
       correlationId: this.correlationId,
@@ -90,22 +97,11 @@ export class AgentSession {
     return this._snapshot;
   }
 
-  /**
-   * React integration point.
-   * @param onStoreChange Callback registered by useSyncExternalStore
-   * @see src/features/session/agentManager.ts for the facade that calls this
-   * @see src/tui/hooks/useChatHistory.ts:110 for the previous manual wiring
-   */
   subscribe(onStoreChange: () => void): () => void {
     this._listeners.add(onStoreChange);
     return () => this._listeners.delete(onStoreChange);
   }
 
-  /**
-   * Triggers React re-renders via useSyncExternalStore.
-   * Debounced with setTimeout(0) so multiple emits batch into one render.
-   * @see src/features/session/agentManager.ts:134 where session.subscribe reads getSnapshot()
-   */
   private _notify(): void {
     if (this._notifyPending) return;
     this._notifyPending = true;

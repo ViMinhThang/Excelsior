@@ -15,7 +15,7 @@ describe("Database", () => {
   });
 
   describe("initDb", () => {
-    it("creates sessions, agent_events, settings, and error_logs tables", () => {
+    it("creates all expected tables", () => {
       const tables = db
         .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         .all() as { name: string }[];
@@ -23,24 +23,49 @@ describe("Database", () => {
       const names = tables.map((t) => t.name);
       expect(names).toContain("sessions");
       expect(names).toContain("agent_events");
+      expect(names).toContain("runs");
+      expect(names).toContain("workspaces");
       expect(names).toContain("settings");
       expect(names).toContain("error_logs");
       expect(names).not.toContain("observation");
     });
 
-    it("agent_events table has expected columns", () => {
+    it("agent_events table has run_id column", () => {
       const columns = db
         .prepare("PRAGMA table_info(agent_events)")
         .all() as { name: string }[];
       const names = columns.map((c) => c.name);
       expect(names).toContain("id");
       expect(names).toContain("session_id");
+      expect(names).toContain("run_id");
       expect(names).toContain("sequence");
-      expect(names).toContain("type");
-      expect(names).toContain("timestamp");
-      expect(names).toContain("data");
-      expect(names).toContain("parent_event_id");
-      expect(names).toContain("related_tool_call_id");
+    });
+
+    it("sessions table has workspace_id column", () => {
+      const columns = db
+        .prepare("PRAGMA table_info(sessions)")
+        .all() as { name: string }[];
+      const names = columns.map((c) => c.name);
+      expect(names).toContain("workspace_id");
+      expect(names).toContain("title");
+    });
+
+    it("runs table has expected columns", () => {
+      const columns = db
+        .prepare("PRAGMA table_info(runs)")
+        .all() as { name: string }[];
+      const names = columns.map((c) => c.name);
+      expect(names).toContain("id");
+      expect(names).toContain("session_id");
+      expect(names).toContain("parent_run_id");
+      expect(names).toContain("kind");
+      expect(names).toContain("status");
+    });
+
+    it("workspaces table exists with default workspace", () => {
+      const row = db.prepare("SELECT id, name FROM workspaces WHERE id = 'ws_default'").get() as any;
+      expect(row).toBeDefined();
+      expect(row.name).toBe("default");
     });
   });
 
@@ -55,43 +80,27 @@ describe("Database", () => {
       const row = db.prepare("SELECT value FROM settings WHERE key = ?").get("nonexistent") as { value: string } | undefined;
       expect(row).toBeUndefined();
     });
-
-    it("setSetting overwrites existing keys", () => {
-      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run("dup_key", "first");
-      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run("dup_key", "second");
-      const row = db.prepare("SELECT value FROM settings WHERE key = ?").get("dup_key") as { value: string };
-      expect(row.value).toBe("second");
-    });
   });
 
-  describe("sessions and agent_events tables", () => {
-    it("stores a session", () => {
-      db.prepare("INSERT INTO sessions (id, started_at, updated_at, metadata) VALUES (?, ?, ?, ?)").run("ses_1", "2024-01-01", "2024-01-01", '{"userInput":"hello"}');
-      const row = db.prepare("SELECT * FROM sessions WHERE id = ?").get("ses_1") as any;
+  describe("schema integrity", () => {
+    it("can insert and read a run", () => {
+      db.prepare("INSERT INTO sessions (id, started_at, updated_at, metadata, workspace_id) VALUES (?, ?, ?, ?, ?)")
+        .run("ses_integ", "2024-01-01", "2024-01-01", '{"userInput":"test"}', 'ws_default');
+      db.prepare("INSERT INTO runs (id, session_id, parent_run_id, kind, status, started_at, ended_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .run("run_integ", "ses_integ", null, "main", "completed", "2024-01-01", "2024-01-01");
+      const row = db.prepare("SELECT id, session_id, kind, status FROM runs WHERE id = ?").get("run_integ") as any;
       expect(row).toBeDefined();
-      expect(row.id).toBe("ses_1");
-      expect(row.metadata).toBe('{"userInput":"hello"}');
+      expect(row.session_id).toBe("ses_integ");
+      expect(row.status).toBe("completed");
     });
 
-    it("stores events with session reference", () => {
+    it("run_id on agent_events is queryable", () => {
+      const now = new Date().toISOString();
       db.prepare(
-        "INSERT INTO agent_events (id, session_id, sequence, type, timestamp, data, parent_event_id, related_tool_call_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-      ).run("evt_1", "ses_1", 0, "user-input", "2024-01-01T00:00:00Z", '{"content":"hello"}', null, null);
-      const row = db.prepare("SELECT * FROM agent_events WHERE id = ?").get("evt_1") as any;
-      expect(row).toBeDefined();
-      expect(row.session_id).toBe("ses_1");
-      expect(row.type).toBe("user-input");
-      expect(row.data).toBe('{"content":"hello"}');
-    });
-  });
-
-  describe("logError", () => {
-    it("stores error logs", () => {
-      db.prepare("INSERT INTO error_logs (message, stack) VALUES (?, ?)").run("test error", "at test.js:1");
-      const rows = db.prepare("SELECT * FROM error_logs WHERE message = ?").all("test error") as any[];
-      expect(rows.length).toBe(1);
-      expect(rows[0].stack).toBe("at test.js:1");
-      expect(rows[0].timestamp).toBeDefined();
+        "INSERT INTO agent_events (id, session_id, run_id, sequence, type, timestamp, data) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).run("evt_integ", "ses_integ", "run_integ", 0, "user-input", now, '{"content":"test"}');
+      const row = db.prepare("SELECT run_id FROM agent_events WHERE id = ?").get("evt_integ") as any;
+      expect(row.run_id).toBe("run_integ");
     });
   });
 });

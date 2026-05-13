@@ -1,23 +1,24 @@
 import { randomUUID } from "crypto";
+import { RUN_START, RUN_END, CHILD_RUN_ATTACHED } from "./event-names.js";
 
 export const EVENT_SCHEMA_VERSION = 1;
 
 export type AgentEventDataMap = {
-  "session-start": Record<string, never>;
+  [RUN_START]: Record<string, never>;
+  [RUN_END]: { cancelled: boolean };
+  [CHILD_RUN_ATTACHED]: { childRunId: string; parentToolCallId: string; role: string };
   "user-input": { content: string };
   "text-delta": { delta: string };
   "tool-call-start": { toolName: string; toolArgs: string; toolCallId: string };
   "tool-call-end": { toolCallId: string; result: string; status: string; toolName: string; toolArgs: string };
-  "child-session-attached": { childSessionId: string; parentToolCallId: string; role: string };
   "error": { message: string };
-  "session-end": { cancelled: boolean };
 };
 
 export type AgentEventType = keyof AgentEventDataMap;
 
 export interface AgentEvent<T extends AgentEventType = AgentEventType> {
   id: string;
-  sessionId: string;
+  runId: string;
   sequence: number;
   type: T;
   version: number;
@@ -38,7 +39,7 @@ export function generateEventId(): string {
 }
 
 export function makeEvent<T extends AgentEventType>(
-  sessionId: string,
+  runId: string,
   type: T,
   data: AgentEventDataMap[T],
   sequence: number,
@@ -51,12 +52,12 @@ export function makeEvent<T extends AgentEventType>(
 ): AgentEvent<T> {
   return {
     id: generateEventId(),
-    sessionId,
+    runId,
     sequence,
     type,
     version: EVENT_SCHEMA_VERSION,
     causationId: overrides?.causationId ?? "",
-    correlationId: overrides?.correlationId ?? sessionId,
+    correlationId: overrides?.correlationId ?? runId,
     timestamp: new Date().toISOString(),
     data,
     ...(overrides?.parentEventId ? { parentEventId: overrides.parentEventId } : {}),

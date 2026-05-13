@@ -52,4 +52,35 @@ describe("tool display model", () => {
 
     expect(display.tone).toBe("error");
   });
+
+  it("formats gitDiff tool correctly", () => {
+    const display = createToolDisplay({
+      toolName: "gitDiff",
+      toolArgs: JSON.stringify({ prNumber: 42 }),
+      status: "completed",
+      content: "diff --git a/src/x.ts b/src/x.ts\nindex abc..def\n--- a/src/x.ts\n+++ b/src/x.ts\n@@ -1 +1 @@\n-old\n+new",
+    });
+    expect(display.label).toBe("Git diff");
+    expect(display.detail).toContain("line");
+  });
+
+  it("formats default tool without specialized formatter", () => {
+    const display = createToolDisplay({
+      toolName: "write",
+      toolArgs: JSON.stringify({ path: "/tmp/x.txt" }),
+      status: "completed",
+      content: "wrote 42 bytes",
+    });
+    expect(display.label).toBe("write");
+    expect(display.summary).toBe("path: /tmp/x.txt");
+  });
+
+  it("handles null args gracefully", () => {
+    const display = createToolDisplay({
+      toolName: "runCommand",
+      status: "pending",
+    });
+    expect(display.label).toBe("Run command");
+    expect(display.risk).toBe("low");
+  });
 });

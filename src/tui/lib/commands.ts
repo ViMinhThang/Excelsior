@@ -1,5 +1,6 @@
 import { Command, CommandContext } from '../../types.js';
 import { deleteAllSessions } from '../../lib/persistence/eventPersistence.js';
+import { getOctokit, getRepoInfo } from '../../utils/octokit.js';
 
 export const commands: Command[] = [
   {
@@ -38,9 +39,59 @@ export const commands: Command[] = [
   },
   {
     name: 'review',
-    description: 'Review pull requests targeting the current branch',
+    description: 'Review a pull request by number (e.g. /review 42)',
     execute: async (args, context) => {
-      context.navigate('review');
+      const prNumber = parseInt(args[0], 10);
+      if (isNaN(prNumber)) {
+        context.appendMessage('system', 'Usage: /review <pr-number>\nAfter review completes, run /review-post <pr-number> to publish the result as a PR comment.');
+        return;
+      }
+
+      context.appendMessage('system', `Fetching PR #${prNumber} diff...`);
+
+      try {
+        const octokit = await getOctokit();
+        const { owner, repo } = await getRepoInfo();
+        const response = await octokit.request(
+          "GET /repos/{owner}/{repo}/pulls/{pull_number}",
+          {
+            owner,
+            repo,
+            pull_number: prNumber,
+            mediaType: { format: "diff" },
+          },
+        );
+        const diff = response.data as unknown as string;
+
+        context.appendMessage('system', `Running code review on PR #${prNumber}...`);
+
+        const reviewInstruction =
+          `Review PR #${prNumber}\n\n` +
+          `I need you to perform a comprehensive code review of this PR diff. ` +
+          `Spawn specialist sub-agents for different analysis categories ` +
+          `(bug hunting, security, code style, infrastructure, readability) ` +
+          `and synthesize their findings.\n\n` +
+          `\`\`\`diff\n${diff}\n\`\`\``;
+
+        context.send(reviewInstruction);
+      } catch (err: any) {
+        context.appendMessage('system', `Error fetching PR #${prNumber}: ${err.message}`);
+      }
+    },
+  },
+  {
+    name: 'review-post',
+    description: 'Post a comment to a PR (e.g. /review-post 42 "Looks good")',
+    execute: async (args, context) => {
+      const prNumber = parseInt(args[0], 10);
+      if (isNaN(prNumber) || args.length < 2) {
+        context.appendMessage('system', 'Usage: /review-post <pr-number> <comment body>');
+        return;
+      }
+      const body = args.slice(1).join(' ');
+      context.appendMessage('system', `Posting comment to PR #${prNumber}...`);
+      const result = await context.postComment(prNumber, body);
+      context.appendMessage('system', result);
     },
   },
 ];

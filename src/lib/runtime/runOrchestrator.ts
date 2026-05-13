@@ -1,8 +1,9 @@
 import type { ToolLoopAgent } from "ai";
-import { AgentSession } from "./agentSession.js";
-import { AnyAgentEvent } from "../eventTypes.js";
+import { AgentRun } from "./agentRun.js";
+import { AnyAgentEvent } from "./events.js";
 import { streamAgentResponse } from "./agentStream.js";
 import { Unsubscribe } from "./bus.js";
+import { RUN_START } from "./event-names.js";
 
 export interface AgentFactory {
   (
@@ -11,7 +12,7 @@ export interface AgentFactory {
   ): ToolLoopAgent<any, any>;
 }
 
-export interface SessionRunConfig {
+export interface RunConfig {
   messages: Array<{ role: string; content: string }>;
   createAgent: AgentFactory;
   signal?: AbortSignal;
@@ -24,20 +25,17 @@ export interface RunHandle {
 }
 
 /**
- * Stateless orchestrator for agent session runs.
- * Does NOT store session state — each startRun returns an independent RunHandle.
- *
- * @see src/application/chatService.ts:44-49 for the consumer that calls startRun
- * @see src/features/session/agentManager.ts:97 for the facade that wraps this
+ * Stateless orchestrator for agent runs.
+ * Does NOT store run state — each startRun returns an independent RunHandle.
  */
-export class SessionOrchestrator {
-  startRun(session: AgentSession, config: SessionRunConfig): RunHandle {
-    const allEvents: AnyAgentEvent[] = session
+export class RunOrchestrator {
+  startRun(run: AgentRun, config: RunConfig): RunHandle {
+    const allEvents: AnyAgentEvent[] = run
       .getSnapshot()
-      .filter((e) => e.type !== "session-start");
+      .filter((e) => e.type !== RUN_START);
 
-    let unsub: Unsubscribe | null = session.bus.on("event", (event) => {
-      if (event.type !== "session-start") {
+    let unsub: Unsubscribe | null = run.bus.on("event", (event) => {
+      if (event.type !== RUN_START) {
         allEvents.push(event);
       }
       config.onEvent?.(event, allEvents);
@@ -48,7 +46,7 @@ export class SessionOrchestrator {
     const done = streamAgentResponse(
       agent,
       config.messages,
-      session,
+      run,
       config.signal,
     )
       .then(() => {
@@ -61,7 +59,7 @@ export class SessionOrchestrator {
         unsub = null;
         const error = err as Error;
         if (error.name !== "AbortError" && !error.message?.includes("abort")) {
-          session.emit("error", { message: error.message });
+          run.emit("error", { message: error.message });
           return allEvents;
         }
         throw err;
@@ -69,7 +67,7 @@ export class SessionOrchestrator {
 
     const handle: RunHandle = {
       cancel() {
-        session.cancel();
+        run.cancel();
         unsub?.();
         unsub = null;
       },

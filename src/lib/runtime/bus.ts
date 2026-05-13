@@ -42,65 +42,15 @@ export function createBus<TEvents extends Record<string, any>>(): Bus<TEvents> {
   };
 }
 
-export interface HubEvent {
-  channel: string;
-  event: string;
-  data: unknown;
-}
-
-export type HubObserver = (hubEvent: HubEvent) => void;
-
-export interface Hub {
-  observe(observer: HubObserver): Unsubscribe;
-  notify(channel: string, event: string, data: unknown): void;
-  dispose(): void;
-}
-
-export function createHub(): Hub {
-  const listeners = new Set<HubObserver>();
-
-  return {
-    observe(observer: HubObserver): Unsubscribe {
-      listeners.add(observer);
-      return () => {
-        listeners.delete(observer);
-      };
-    },
-
-    notify(channel: string, event: string, data: unknown): void {
-      const hubEvent: HubEvent = { channel, event, data };
-      for (const listener of listeners) {
-        try {
-          listener(hubEvent);
-        } catch {}
-      }
-    },
-
-    dispose(): void {
-      listeners.clear();
-    },
-  };
-}
-
 /**
- * Creates a bus whose emits are forwarded to an optional Hub.
+ * Creates a channel-scoped bus.
  *
  * @see src/lib/runtime/subAgentBus.ts for "sub-agent" channel
  * @see src/tui/lib/confirmBus.ts for "confirm" channel
- * @see src/lib/runtime/agentSession.ts:16 for "session" channel (created with no hub)
+ * @see src/lib/runtime/agentSession.ts:16 for "session" channel
  */
 export function createChannelBus<TEvents extends Record<string, any>>(
-  channel: string,
-  hub?: Hub,
+  _channel: string,
 ): Bus<TEvents> {
-  const inner = createBus<TEvents>();
-  if (!hub) return inner;
-
-  const origEmit = inner.emit.bind(inner);
-  inner.emit = ((event: any, data: any) => {
-    hub.notify(channel, String(event), data);
-    origEmit(event, data);
-  }) as Bus<TEvents>["emit"];
-
-  return inner;
+  return createBus<TEvents>();
 }
