@@ -25,7 +25,6 @@ export class ChatService {
     options?: {
       history?: AIHistoryRef;
       extraTools?: Record<string, unknown>;
-      onComplete?: (events: AnyAgentEvent[]) => void;
     },
   ): ChatRunResult {
     const session = new AgentSession();
@@ -69,7 +68,6 @@ export class ChatService {
 
     handle.done.then((events) => {
       persistEvents(events);
-      options?.onComplete?.(events);
     });
 
     return { session, childSessions, handle };

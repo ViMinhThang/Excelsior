@@ -33,8 +33,6 @@ const ChatScreen = () => {
     subAgentIndex,
     messages,
     isLoading,
-    hasMore,
-    loadMore,
     pending,
     suggestion,
     commandResult,
@@ -63,7 +61,6 @@ const ChatScreen = () => {
           <Box flexDirection="column">
             <ChatHistory
               blocks={displayBlocks}
-              hasMore={hasMore}
             />
           </Box>
 

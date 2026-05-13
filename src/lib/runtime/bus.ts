@@ -82,6 +82,13 @@ export function createHub(): Hub {
   };
 }
 
+/**
+ * Creates a bus whose emits are forwarded to an optional Hub.
+ *
+ * @see src/lib/runtime/subAgentBus.ts for "sub-agent" channel
+ * @see src/tui/lib/confirmBus.ts for "confirm" channel
+ * @see src/lib/runtime/agentSession.ts:16 for "session" channel (created with no hub)
+ */
 export function createChannelBus<TEvents extends Record<string, any>>(
   channel: string,
   hub?: Hub,
