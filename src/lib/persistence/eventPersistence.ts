@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { getDb } from "../../db/index.js";
 import { AgentEvent, AnyAgentEvent, AgentEventType, Session } from "../eventTypes.js";
-import { PAGE_SIZE } from "../../types.js";
+import * as QUERIES from "./queries.js";
 
 interface SessionRow {
   id: string;
@@ -19,10 +19,6 @@ interface EventRow {
   data: string;
   parent_event_id: string | null;
   related_tool_call_id: string | null;
-}
-
-interface CountRow {
-  count: number;
 }
 
 const MAX_CACHED_SESSIONS = 10;
@@ -68,9 +64,7 @@ function clearCache(): void {
 export function persistSession(session: Session, db?: Database.Database): void {
   const _db = db ?? getDb();
   _db
-    .prepare(
-      "INSERT OR REPLACE INTO sessions (id, started_at, updated_at, metadata) VALUES (?, ?, ?, ?)",
-    )
+    .prepare(QUERIES.INSERT_SESSION)
     .run(
       session.id,
       session.startedAt,
@@ -81,9 +75,7 @@ export function persistSession(session: Session, db?: Database.Database): void {
 
 export function persistEvents(events: AgentEvent[], db?: Database.Database): void {
   const _db = db ?? getDb();
-  const stmt = _db.prepare(
-    "INSERT OR IGNORE INTO agent_events (id, session_id, sequence, type, timestamp, data, parent_event_id, related_tool_call_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-  );
+  const stmt = _db.prepare(QUERIES.INSERT_EVENT);
   const insertMany = _db.transaction((evts: AgentEvent[]) => {
     for (const e of evts) {
       stmt.run(
@@ -113,9 +105,7 @@ export function persistEvents(events: AgentEvent[], db?: Database.Database): voi
 
 export function persistEvent(event: AgentEvent, db?: Database.Database): void {
   const _db = db ?? getDb();
-  const stmt = _db.prepare(
-    "INSERT OR IGNORE INTO agent_events (id, session_id, sequence, type, timestamp, data, parent_event_id, related_tool_call_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-  );
+  const stmt = _db.prepare(QUERIES.INSERT_EVENT);
   stmt.run(
     event.id,
     event.sessionId,
@@ -130,16 +120,12 @@ export function persistEvent(event: AgentEvent, db?: Database.Database): void {
 }
 
 export function loadSessions(
-  limit: number = PAGE_SIZE,
-  offset: number = 0,
   db?: Database.Database,
 ): Session[] {
   const _db = db ?? getDb();
   const rows = _db
-    .prepare(
-      "SELECT id, started_at, updated_at, metadata FROM sessions WHERE json_extract(metadata, '$.isChildSession') IS NULL OR json_extract(metadata, '$.isChildSession') != 1 ORDER BY started_at DESC LIMIT ? OFFSET ?",
-    )
-    .all(limit, offset) as SessionRow[];
+    .prepare(QUERIES.SELECT_PARENT_SESSIONS)
+    .all() as SessionRow[];
 
   return rows.reverse().map((row) => ({
     id: row.id,
@@ -153,9 +139,7 @@ export function loadChildSessions(parentSessionId?: string, db?: Database.Databa
   const _db = db ?? getDb();
   if (parentSessionId) {
     const rows = _db
-      .prepare(
-        "SELECT id, started_at, updated_at, metadata FROM sessions WHERE json_extract(metadata, '$.isChildSession') = 1 AND id != ? ORDER BY started_at ASC",
-      )
+      .prepare(QUERIES.SELECT_CHILD_SESSIONS_EXCLUDING)
       .all(parentSessionId) as SessionRow[];
     return rows.map((row) => ({
       id: row.id,
@@ -165,9 +149,7 @@ export function loadChildSessions(parentSessionId?: string, db?: Database.Databa
     }));
   }
   const rows = _db
-    .prepare(
-      "SELECT id, started_at, updated_at, metadata FROM sessions WHERE json_extract(metadata, '$.isChildSession') = 1 ORDER BY started_at ASC",
-    )
+    .prepare(QUERIES.SELECT_CHILD_SESSIONS_ALL)
     .all() as SessionRow[];
   return rows.map((row) => ({
     id: row.id,
@@ -175,16 +157,6 @@ export function loadChildSessions(parentSessionId?: string, db?: Database.Databa
     updatedAt: row.updated_at,
     metadata: row.metadata ? JSON.parse(row.metadata) : { userInput: "" },
   }));
-}
-
-export function getChildSessionCount(db?: Database.Database): number {
-  const _db = db ?? getDb();
-  const row = _db
-    .prepare(
-      "SELECT COUNT(*) as count FROM sessions WHERE json_extract(metadata, '$.isChildSession') = 1",
-    )
-    .get() as CountRow;
-  return row.count;
 }
 
 export function loadSessionEvents(
@@ -196,9 +168,7 @@ export function loadSessionEvents(
 
   const _db = db ?? getDb();
   const rows = _db
-    .prepare(
-      "SELECT id, session_id, sequence, type, timestamp, data, parent_event_id, related_tool_call_id FROM agent_events WHERE session_id = ? ORDER BY sequence ASC",
-    )
+    .prepare(QUERIES.SELECT_SESSION_EVENTS)
     .all(sessionId) as EventRow[];
 
   const events = rows.map((row) => ({
@@ -218,21 +188,31 @@ export function loadSessionEvents(
   return events;
 }
 
-export function getSessionCount(db?: Database.Database): number {
+export function loadAllParentEvents(db?: Database.Database): AnyAgentEvent[] {
   const _db = db ?? getDb();
-  const row = _db
-    .prepare("SELECT COUNT(*) as count FROM sessions WHERE json_extract(metadata, '$.isChildSession') IS NULL OR json_extract(metadata, '$.isChildSession') != 1")
-    .get() as CountRow;
-  return row.count;
+  const rows = _db
+    .prepare(QUERIES.SELECT_ALL_PARENT_EVENTS)
+    .all() as EventRow[];
+
+  return rows.map((row) => ({
+    id: row.id,
+    sessionId: row.session_id,
+    sequence: row.sequence,
+    type: row.type as AgentEventType,
+    timestamp: row.timestamp,
+    data: JSON.parse(row.data),
+    ...(row.parent_event_id ? { parentEventId: row.parent_event_id } : {}),
+    ...(row.related_tool_call_id ? { relatedToolCallId: row.related_tool_call_id } : {}),
+  })) as AnyAgentEvent[];
 }
 
 export function deleteAllSessions(includeChildSessions?: boolean, db?: Database.Database): void {
   const _db = db ?? getDb();
-  _db.exec("DELETE FROM agent_events");
+  _db.exec(QUERIES.DELETE_ALL_EVENTS);
   if (includeChildSessions) {
-    _db.exec("DELETE FROM sessions");
+    _db.exec(QUERIES.DELETE_ALL_SESSIONS);
   } else {
-    _db.exec("DELETE FROM sessions WHERE json_extract(metadata, '$.isChildSession') IS NULL OR json_extract(metadata, '$.isChildSession') != 1");
+    _db.exec(QUERIES.DELETE_PARENT_SESSIONS);
   }
   clearCache();
 }

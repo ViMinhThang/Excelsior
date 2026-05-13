@@ -90,11 +90,22 @@ export class AgentSession {
     return this._snapshot;
   }
 
+  /**
+   * React integration point.
+   * @param onStoreChange Callback registered by useSyncExternalStore
+   * @see src/features/session/agentManager.ts for the facade that calls this
+   * @see src/tui/hooks/useChatHistory.ts:110 for the previous manual wiring
+   */
   subscribe(onStoreChange: () => void): () => void {
     this._listeners.add(onStoreChange);
     return () => this._listeners.delete(onStoreChange);
   }
 
+  /**
+   * Triggers React re-renders via useSyncExternalStore.
+   * Debounced with setTimeout(0) so multiple emits batch into one render.
+   * @see src/features/session/agentManager.ts:134 where session.subscribe reads getSnapshot()
+   */
   private _notify(): void {
     if (this._notifyPending) return;
     this._notifyPending = true;

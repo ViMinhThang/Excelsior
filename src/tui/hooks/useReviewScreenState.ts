@@ -1,12 +1,10 @@
 import { useState, useEffect } from "react";
-import { useInput } from "ink";
 import { useNavigation } from "../context/NavigationContext.js";
-import { useEvent } from "./useEvent.js";
+import { useKeymap } from "./useKeymap.js";
 import { usePRContext } from "../context/PRContext.js";
 import { useReviewSessionContext } from "../context/ReviewSessionContext.js";
 import { useSubAgentContext } from "../context/SubAgentContext.js";
 import { usePullRequests } from "./usePullRequests.js";
-import { usePRDiff } from "./usePRDiff.js";
 import { useReviewOrchestrator } from "./useReviewOrchestrator.js";
 
 export function useReviewScreenState() {
@@ -15,8 +13,14 @@ export function useReviewScreenState() {
   const { mode, setMode, subMode, setSubMode } = useReviewSessionContext();
   const { subAgents, selectedSubAgentIndex, selectPrevSubAgent, selectNextSubAgent, focusMainAgent } = useSubAgentContext();
 
-  const { loading: prsLoading, error: prsError, fetchPRs } = usePullRequests(setPRs);
-  const { loading: diffLoading, error: diffError, fetchDiff } = usePRDiff(setDiff);
+  const {
+    prsLoading,
+    prsError,
+    fetchPRs,
+    diffLoading,
+    diffError,
+    fetchDiff,
+  } = usePullRequests(setPRs, setDiff);
   const { startReview, cancelReview, postComment } = useReviewOrchestrator();
   const [commentStatus, setCommentStatus] = useState<string | null>(null);
 
@@ -38,96 +42,56 @@ export function useReviewScreenState() {
     }
   }, [prs, prIndex]);
 
-  const handleInput = useEvent((input: string, key: any) => {
-    if (mode === "browser") {
-      if (key.upArrow) {
-        setPrIndex((prev) => Math.max(0, prev - 1));
-        return;
+  useKeymap({
+    "up": () => setPrIndex((prev) => Math.max(0, prev - 1)),
+    "down": () => setPrIndex((prev) => Math.min(prs.length - 1, prev + 1)),
+    "return": () => {
+      if (prs[prIndex]) {
+        startReview();
       }
-      if (key.downArrow) {
-        setPrIndex((prev) => Math.min(prs.length - 1, prev + 1));
-        return;
-      }
-      if (input === "\r") {
-        if (prs[prIndex]) {
-          startReview();
-        }
-        return;
-      }
-      if (input === "r") {
-        setViewingDiff(false);
-        selectPR(null);
-        setDiff(null);
-        fetchPRs();
-        return;
-      }
-      if (input === "c") {
-        navigate("chat");
-        return;
-      }
-      if (input === "d" && viewingDiff) {
-        setViewingDiff(false);
-        return;
-      }
+    },
+    "r": () => {
+      setViewingDiff(false);
+      selectPR(null);
+      setDiff(null);
+      fetchPRs();
+    },
+    "c": () => navigate("chat"),
+    "d": () => {
+      if (viewingDiff) setViewingDiff(false);
     }
+  }, { enabled: mode === "browser" });
 
-    if (mode === "review") {
-      if (subMode === "overview") {
-        if (key.upArrow) {
-          selectPrevSubAgent();
-          return;
-        }
-        if (key.downArrow) {
-          selectNextSubAgent();
-          return;
-        }
-        if (key.ctrl && input === "o") {
-          if (selectedSubAgentIndex >= 0) setSubMode("detail");
-          return;
-        }
-        if (key.escape) {
-          focusMainAgent();
-          return;
-        }
-      } else if (subMode === "detail") {
-        if (key.upArrow) {
-          selectPrevSubAgent();
-          return;
-        }
-        if (key.downArrow) {
-          selectNextSubAgent();
-          return;
-        }
-        if (key.escape) {
-          setSubMode("overview");
-          focusMainAgent();
-          return;
-        }
-      }
-      if (input === "c") {
-        cancelReview();
-        navigate("chat");
-        return;
-      }
+  useKeymap({
+    "up": selectPrevSubAgent,
+    "down": selectNextSubAgent,
+    "c": () => {
+      cancelReview();
+      navigate("chat");
     }
+  }, { enabled: mode === "review" });
 
-    if (mode === "results") {
-      if (input === "p") {
-        postComment().then(setCommentStatus);
-        return;
-      }
-      if (input === "d") {
-        setMode("browser");
-        return;
-      }
-      if (input === "c") {
-        navigate("chat");
-        return;
-      }
-    }
-  });
+  useKeymap({
+    "ctrl+o": () => {
+      if (selectedSubAgentIndex >= 0) setSubMode("detail");
+    },
+    "escape": focusMainAgent,
+  }, { enabled: mode === "review" && subMode === "overview" });
 
-  useInput(handleInput);
+  useKeymap({
+    "escape": () => {
+      setSubMode("overview");
+      focusMainAgent();
+    },
+  }, { enabled: mode === "review" && subMode === "detail" });
+
+  useKeymap({
+    "p": () => {
+      postComment().then(setCommentStatus);
+    },
+    "d": () => setMode("browser"),
+    "c": () => navigate("chat"),
+  }, { enabled: mode === "results" });
 
   return {
     prs,

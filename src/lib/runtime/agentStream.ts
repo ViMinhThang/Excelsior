@@ -9,6 +9,14 @@ import {
 import { AgentSession } from "./agentSession.js";
 import { withRetry, isTransientError } from "../../utils/retry.js";
 
+/**
+ * Streams AI response parts into session events.
+ * This is the primary event producer.
+ *
+ * Emits: session-start, text-delta, tool-call-start, tool-call-end, error, session-end
+ * @see src/lib/runtime/agentSession.ts:emit for where events are recorded
+ * @see src/features/session/agentManager.ts:97 for the facade that drives this
+ */
 export async function streamAgentResponse(
   agent: ToolLoopAgent<any, any>,
   messages: Array<{

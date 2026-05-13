@@ -9,7 +9,6 @@ import { DisplayBlock } from '../../../lib/eventTypes.js';
 
 interface ChatHistoryProps {
   blocks: DisplayBlock[];
-  hasMore?: boolean;
 }
 
 function renderBlock(block: DisplayBlock): React.ReactNode {
@@ -50,7 +49,7 @@ function renderStaticBlock(block: DisplayBlock) {
   );
 }
 
-const ChatHistory: React.FC<ChatHistoryProps> = ({ blocks, hasMore }) => {
+const ChatHistory: React.FC<ChatHistoryProps> = ({ blocks }) => {
   const frozenBlocks: DisplayBlock[] = [];
   const liveBlocks: DisplayBlock[] = [];
 
@@ -64,11 +63,6 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({ blocks, hasMore }) => {
 
   return (
     <Box flexDirection="column">
-      {hasMore && (
-        <Box paddingX={1} marginBottom={1}>
-          <Text color="dim">··· ↑ ^U older messages</Text>
-        </Box>
-      )}
       <Static items={frozenBlocks}>
         {renderStaticBlock}
       </Static>

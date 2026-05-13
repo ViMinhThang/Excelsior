@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useNavigation } from "../context/NavigationContext.js";
 import { handleCommand } from "../lib/commands.js";
-import { useChat } from "./useChat.js";
+import { useAgentManager } from "../../features/session/useAgentManager.js";
 import { useKeymap } from "./useKeymap.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";
 import { useCommandAutocomplete } from "./useCommandAutocomplete.js";
@@ -26,19 +26,8 @@ export function useChatScreenState() {
 
   const inputRef = useRef(input);
   inputRef.current = input;
-  const submittingRef = useRef(false);
 
-  const {
-    displayBlocks,
-    isLoading,
-    hasMore,
-    sendMessage,
-    cancel,
-    loadMore,
-    clearMessages,
-    attachSession,
-    appendSystemMessage,
-  } = useChat();
+  const { state: { displayBlocks, isLoading }, send, cancel, clear } = useAgentManager();
 
   const [subAgentIndex, setSubAgentIndex] = useState(0);
 
@@ -69,28 +58,22 @@ export function useChatScreenState() {
     if (pending) setChatMode("input");
   }, [pending]);
 
-  useEffect(() => {
-    if (!isLoading) submittingRef.current = false;
-  }, [isLoading]);
-
   const handleSubmit = useCallback(() => {
-    if (submittingRef.current) return;
+    if (isLoading) return;
     const trimmed = inputRef.current.trim();
     if (!trimmed) return;
-    submittingRef.current = true;
 
     const commandContext = {
       navigate,
       goBack,
       appendMessage: (
-        role: "user" | "assistant" | "system",
+        _role: "user" | "assistant" | "system",
         content: string,
       ) => {
-        appendSystemMessage(content);
         setCommandResult(content);
       },
       clearMessages: () => {
-        clearMessages();
+        clear();
         setCommandResult(null);
       },
     };
@@ -112,20 +95,13 @@ export function useChatScreenState() {
     setHistoryIndex(-1);
     setOriginalInput("");
 
-    const session = sendMessage(trimmed);
-    if (session) {
-      attachSession(session);
-    } else {
-      submittingRef.current = false;
-    }
+    send(trimmed);
   }, [
     isLoading,
     navigate,
     goBack,
-    sendMessage,
-    attachSession,
-    appendSystemMessage,
-    clearMessages,
+    send,
+    clear,
     suggestion,
   ]);
 
@@ -152,7 +128,6 @@ export function useChatScreenState() {
     "escape": () => {
       if (isLoading) cancel();
     },
-    "ctrl+u": () => loadMore(),
     "ctrl+o": () => {
       if (subAgentBlocks.length > 0) {
         setSubAgentIndex(0);
@@ -189,8 +164,6 @@ export function useChatScreenState() {
     subAgentIndex,
     messages: displayBlocks,
     isLoading,
-    hasMore,
-    loadMore,
     pending,
     suggestion,
     handleSubmit,

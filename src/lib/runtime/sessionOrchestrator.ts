@@ -23,6 +23,13 @@ export interface RunHandle {
   readonly done: Promise<AnyAgentEvent[]>;
 }
 
+/**
+ * Stateless orchestrator for agent session runs.
+ * Does NOT store session state — each startRun returns an independent RunHandle.
+ *
+ * @see src/application/chatService.ts:44-49 for the consumer that calls startRun
+ * @see src/features/session/agentManager.ts:97 for the facade that wraps this
+ */
 export class SessionOrchestrator {
   startRun(session: AgentSession, config: SessionRunConfig): RunHandle {
     const allEvents: AnyAgentEvent[] = session
