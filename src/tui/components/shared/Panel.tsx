@@ -2,8 +2,8 @@ import React, { ReactNode, memo } from "react";
 import { Box, Text } from "ink";
 import { theme } from "../../theme.js";
 
-const LEFT_BORDER_STYLE = { top: '', bottom: '', left: '┃', right: '', topLeft: '', topRight: '', bottomLeft: '', bottomRight: '' };
-const TOP_BOTTOM_BORDER_STYLE = { top: '─', bottom: '─', left: '', right: '', topLeft: '', topRight: '', bottomLeft: '', bottomRight: '' };
+const LEFT_BORDER_STYLE = { top: "", bottom: "", left: theme.glyphs.output, right: "", topLeft: "", topRight: "", bottomLeft: "", bottomRight: "" };
+const TOP_BOTTOM_BORDER_STYLE = { top: theme.glyphs.section, bottom: theme.glyphs.section, left: "", right: "", topLeft: "", topRight: "", bottomLeft: "", bottomRight: "" };
 
 interface PanelProps {
   title?: string;
@@ -32,7 +32,7 @@ const Panel: React.FC<PanelProps> = ({
   paddingX = 0,
   paddingY = 0,
 }) => {
-  const bgProp = backgroundColor === 'transparent' ? undefined : backgroundColor;
+  const bgProp = backgroundColor === "transparent" ? undefined : backgroundColor;
 
   return (
     <Box flexDirection="column" marginTop={marginTop} marginBottom={marginBottom}>
@@ -41,19 +41,13 @@ const Panel: React.FC<PanelProps> = ({
           <Text backgroundColor={bgProp} color={titleColor} bold>{title}</Text>
         </Box>
       )}
-      <Box 
-        flexDirection="row" 
+      <Box
+        flexDirection="row"
         backgroundColor={bgProp}
-        borderStyle={borderLeftColor ? LEFT_BORDER_STYLE : borderTopBottomColor ? TOP_BOTTOM_BORDER_STYLE : borderColor ? 'round' : undefined}
+        borderStyle={borderLeftColor ? LEFT_BORDER_STYLE : borderTopBottomColor ? TOP_BOTTOM_BORDER_STYLE : borderColor ? "round" : undefined}
         borderColor={borderLeftColor || borderTopBottomColor || borderColor}
       >
-        <Box
-          backgroundColor={bgProp}
-          paddingX={paddingX}
-          paddingY={paddingY}
-          flexDirection="column"
-          flexGrow={1}
-        >
+        <Box backgroundColor={bgProp} paddingX={paddingX} paddingY={paddingY} flexDirection="column" flexGrow={1}>
           {children}
         </Box>
       </Box>

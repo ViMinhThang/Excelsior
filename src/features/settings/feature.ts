@@ -6,6 +6,7 @@ export const settingsFeature: AppFeature = {
     {
       name: "settings",
       description: "View or set configuration settings (e.g. apiKey, githubToken)",
+      usage: "/settings",
       execute: async (_args, context) => {
         context.navigate("settings");
       },

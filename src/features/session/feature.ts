@@ -9,6 +9,7 @@ export const sessionFeature: AppFeature = {
     {
       name: "session",
       description: "Open the session picker",
+      usage: "/session",
       execute: async (args, context) => {
         const sub = args[0]?.toLowerCase();
         switch (sub) {

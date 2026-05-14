@@ -225,20 +225,20 @@ describe("projectEvents", () => {
       const events: AnyAgentEvent[] = [
         makeEvent({
           type: "tool-call-start",
-          data: { toolName: "grep", toolArgs: '{pattern:"foo"}', toolCallId: "tc2" },
+          data: { toolName: "ripgrep", toolArgs: '{pattern:"foo"}', toolCallId: "tc2" },
           relatedToolCallId: "tc2",
         }),
         makeEvent({
           type: "tool-call-end",
           relatedToolCallId: "tc2",
-          data: { toolCallId: "tc2", result: "matched", status: "success", toolName: "grep", toolArgs: "{}" },
+          data: { toolCallId: "tc2", result: "matched", status: "success", toolName: "ripgrep", toolArgs: "{}" },
         }),
       ];
       const state = projectChildEventsToSubAgentState(events, "done");
       expect(state.toolCalls).toHaveLength(1);
-      expect(state.toolCalls[0]).toMatchObject({ toolName: "grep", status: "completed" });
+      expect(state.toolCalls[0]).toMatchObject({ toolName: "ripgrep", status: "completed" });
       expect(state.parts).toHaveLength(1);
-      expect(state.parts[0]).toMatchObject({ type: "tool-call", toolName: "grep", status: "completed" });
+      expect(state.parts[0]).toMatchObject({ type: "tool-call", toolName: "ripgrep", status: "completed" });
     });
   });
 

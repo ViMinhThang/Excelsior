@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { existsSync } from "fs";
+import { mkdtemp, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
 import { createDb, resetDb } from "../lib/persistence/db.js";
 import { loadSessionsByWorkspace, persistSession } from "../lib/persistence/eventPersistence.js";
 import Database from "better-sqlite3";
@@ -42,6 +46,17 @@ describe("Database", () => {
       const row = db.prepare("SELECT id, name FROM workspaces WHERE id = 'ws_default'").get() as any;
       expect(row).toBeDefined();
       expect(row.name).toBe("default");
+    });
+
+    it("creates the persistence directory when opening a file database", async () => {
+      const root = await mkdtemp(join(tmpdir(), "excelsior-db-"));
+      const dbPath = join(root, "missing", "data", "index.db");
+      const fileDb = createDb(dbPath);
+
+      fileDb.close();
+      expect(existsSync(join(root, "missing", "data"))).toBe(true);
+
+      await rm(root, { recursive: true, force: true });
     });
   });
 

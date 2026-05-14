@@ -1,7 +1,8 @@
-import React, { memo, useState, useEffect } from "react";
+import React, { memo, useEffect, useState } from "react";
 import { Box, Text } from "ink";
 import { ProjectedSubAgent } from "../../../lib/projection/display.js";
 import { theme } from "../../theme.js";
+import { cleanSubAgentRole, formatToolPreview, getSubAgentStatusDisplay } from "../../lib/subAgentDisplay.js";
 
 interface SubAgentRowProps {
   agent: ProjectedSubAgent;
@@ -19,57 +20,41 @@ const formatDuration = (ms: number) => {
 
 const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, role, isSelected }) => {
   const isRunning = agent.status === "running";
-  
   const [now, setNow] = useState(Date.now());
+  const [frame, setFrame] = useState(0);
+
   useEffect(() => {
     if (!isRunning) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [isRunning]);
 
-  const start = agent.startTime || now;
-  const end = agent.endTime || now;
-  const durationStr = formatDuration(end - start);
-
-  const cleanRole = (role || "SubAgent")
-    .replace(/\bTask\b/gi, "")
-    .replace(/\s+/g, " ")
-    .replace(/^[-–—\s]+|[-–—\s]+$/g, "")
-    .trim();
-
-  const latestToolCall = agent.toolCalls?.length
-    ? agent.toolCalls[agent.toolCalls.length - 1]
-    : null;
-  
-  const activityStatusLine = isRunning && latestToolCall
-    ? `${latestToolCall.toolName} ${latestToolCall.toolArgs ? String(latestToolCall.toolArgs).substring(0, 40) : ""}`
-    : `${agent.toolCalls?.length || 0} toolcalls · ${durationStr}`;
-
-  const [frame, setFrame] = useState(0);
-  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-
   useEffect(() => {
     if (!isRunning) return;
-    const timer = setInterval(() => setFrame((f) => (f + 1) % spinnerFrames.length), 80);
+    const timer = setInterval(() => setFrame((f) => (f + 1) % theme.glyphs.spinner.length), 80);
     return () => clearInterval(timer);
   }, [isRunning]);
 
-  const topPrefix = isRunning ? spinnerFrames[frame] : "│";
-  const bottomPrefix = isRunning ? "↳" : "└";
+  const latestToolCall = agent.toolCalls?.length ? agent.toolCalls[agent.toolCalls.length - 1] : null;
+  const durationStr = formatDuration((agent.endTime || now) - (agent.startTime || now));
+  const status = getSubAgentStatusDisplay(agent.status);
+  const activityStatusLine = isRunning && latestToolCall
+    ? formatToolPreview(latestToolCall.toolName, latestToolCall.toolArgs)
+    : `${agent.toolCalls?.length || 0} toolcalls${theme.glyphs.separator}${durationStr}`;
+
+  const topPrefix = isRunning ? theme.glyphs.spinner[frame] : theme.glyphs.output;
+  const bottomPrefix = isRunning ? theme.glyphs.branch : status.glyph;
 
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={1}>
       <Box flexDirection="row">
         <Text color={theme.colors.muted}>{topPrefix} </Text>
-        <Text 
-          bold={isSelected} 
-          color={isSelected ? theme.colors.text : theme.colors.muted}
-        >
-          {cleanRole}
+        <Text bold={isSelected} color={isSelected ? theme.colors.text : theme.colors.muted}>
+          {cleanSubAgentRole(role)}
         </Text>
       </Box>
       <Box flexDirection="row">
-        <Text color={theme.colors.muted}>{bottomPrefix} </Text>
+        <Text color={status.color}>{bottomPrefix} </Text>
         <Text color={theme.colors.muted} dimColor={!isRunning}>
           {activityStatusLine}
         </Text>
