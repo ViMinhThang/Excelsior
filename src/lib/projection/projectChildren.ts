@@ -1,6 +1,6 @@
 import { AnyAgentEvent } from "../runtime/events.js";
 import { ProjectedBlock, ProjectedSubAgent, SubAgentProjectionPart } from "./display.js";
-import { ToolCallInfo } from "../../types.js";
+import { ToolCallInfo } from "../runtime/toolCallInfo.js";
 
 function updateToolCallStatus(
   parts: SubAgentProjectionPart[],

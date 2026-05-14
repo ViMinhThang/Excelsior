@@ -2,6 +2,8 @@ import { startRun } from "./runSession.js";
 import { persistSession } from "../lib/persistence/eventPersistence.js";
 import { createAgent } from "../agent/agent.js";
 import { createSpawnSubAgentTool } from "../agent/spawn/spawnSubAgent.js";
+import type { RunRecorder } from "../lib/persistence/runRecorder.js";
+import type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
 
 export interface AIHistoryRef {
   current: Array<{ role: "user" | "assistant" | "system"; content: string }>;
@@ -15,6 +17,8 @@ export class ChatService {
       extraTools?: Record<string, unknown>;
       sessionId?: string;
       workspaceId?: string;
+      recorder?: RunRecorder;
+      subAgentEvents?: SubAgentEventSink;
     },
   ) {
     const aiMessages: Array<{ role: string; content: string }> = [];
@@ -29,12 +33,21 @@ export class ChatService {
         createAgent(
           undefined,
           {
-            spawnSubAgent: createSpawnSubAgentTool(runCtx.run, runCtx.childRuns, options?.sessionId),
+            spawnSubAgent: createSpawnSubAgentTool(
+              runCtx.run,
+              runCtx.childRuns,
+              options?.sessionId,
+              runCtx.ctx,
+              runCtx.recorder,
+              runCtx.subAgentEvents,
+            ),
             ...options?.extraTools,
           },
           runCtx.ctx,
-        ),
+      ),
       sessionId: options?.sessionId,
+      recorder: options?.recorder,
+      subAgentEvents: options?.subAgentEvents,
     });
 
     run.emit("user-input", { content });

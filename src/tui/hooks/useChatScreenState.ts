@@ -1,21 +1,23 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigation } from "../context/NavigationContext.js";
-import { handleCommand } from "../lib/commands.js";
 import { useAgentManager } from "./useAgentManager.js";
 import { useKeymap } from "./useKeymap.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";
 import { useCommandAutocomplete } from "./useCommandAutocomplete.js";
-import { postPRComment } from "../../utils/ghComment.js";
+import { postPRComment } from "../../lib/github/ghComment.js";
 import { deleteAllSessions } from "../../lib/persistence/eventPersistence.js";
 import { useInputHistory } from "./useInputHistory.js";
 import { useSubAgentNavigation } from "./useSubAgentNavigation.js";
 import { useCommandResult } from "./useCommandResult.js";
+import { completeCommandInput } from "../lib/commandSubmission.js";
+import { createFeatureRuntimeContext, submitChatInput } from "../lib/chatSubmit.js";
+import { appFeatureRegistry } from "../../features/index.js";
 
 export function useChatScreenState() {
   const { navigate, goBack } = useNavigation();
 
   const {
-    state: { displayBlocks, isLoading, currentSessionId, workspaceRootPath },
+    state: { displayBlocks, isLoading, sessions, currentSessionId, workspaceRootPath },
     send, cancel, clear,
     switchSession, createSession, deleteSession, renameSession, listSessions,
   } = useAgentManager();
@@ -23,6 +25,7 @@ export function useChatScreenState() {
   const { input, setInput, inputRef, resetInput, navigateUp, navigateDown } = useInputHistory(displayBlocks);
   const { chatMode, setChatMode, subAgentIndex, subAgentBlocks, nextSubAgent, prevSubAgent, openSubAgent } = useSubAgentNavigation(displayBlocks);
   const { commandResult, setCommandResult } = useCommandResult(input);
+  const [activePanelId, setActivePanelId] = useState<string | null>(null);
 
   const { pending, approve, approveAll, deny } = useToolConfirmation();
 
@@ -30,68 +33,72 @@ export function useChatScreenState() {
 
   useEffect(() => {
     if (pending) setChatMode("input");
-  }, [pending]);
+  }, [pending, setChatMode]);
+
+  const openPanel = useCallback((panelId: string) => {
+    setCommandResult(null);
+    resetInput();
+    setActivePanelId(panelId);
+  }, [resetInput, setCommandResult]);
+
+  const closePanel = useCallback(() => setActivePanelId(null), []);
+
+  const featureContext = useMemo(() => createFeatureRuntimeContext({
+    navigate,
+    goBack,
+    setCommandResult,
+    clear,
+    deleteAllSessions,
+    resetInput,
+    send,
+    postComment: postPRComment,
+    switchSession,
+    createSession,
+    deleteSession,
+    renameSession,
+    listSessions,
+    sessions,
+    currentSessionId,
+    openPanel,
+    closePanel,
+    getHelpText: () => appFeatureRegistry.getHelpText(),
+  }), [
+    navigate,
+    goBack,
+    setCommandResult,
+    clear,
+    resetInput,
+    send,
+    switchSession,
+    createSession,
+    deleteSession,
+    renameSession,
+    listSessions,
+    sessions,
+    currentSessionId,
+    openPanel,
+    closePanel,
+  ]);
 
   const handleSubmit = useCallback(() => {
     if (isLoading) return;
     const trimmed = inputRef.current.trim();
     if (!trimmed) return;
 
-    const commandContext = {
-      navigate,
-      goBack,
-      appendMessage: (
-        _role: "user" | "assistant" | "system",
-        content: string,
-      ) => {
-        setCommandResult(content);
-      },
-      clearMessages: () => {
-        clear();
-        setCommandResult(null);
-      },
-      deleteAllSessions: () => {
-        deleteAllSessions();
-      },
-      send: (content: string) => {
-        resetInput();
-        send(content);
-      },
-      postComment: async (prNumber: number, body: string) => {
-        return postPRComment(prNumber, body);
-      },
-      switchSession: (id: string) => switchSession(id),
-      createSession: (title?: string) => createSession(title),
-      deleteSession: (id: string) => deleteSession(id),
-      renameSession: (id: string, title: string) => renameSession(id, title),
-      listSessions: () => listSessions(),
-      currentSessionId,
-    };
-    const suggestedCommand = suggestion.filtered[0];
-    if (suggestedCommand) {
-      handleCommand(
-        `/${suggestedCommand.name}`,
-        commandContext,
-      ).then((isCommand) => {
-        if (isCommand) {
-          setInput("");
-          return;
-        }
-      });
-      return;
-    }
-
-    resetInput();
-
-    send(trimmed);
+    submitChatInput({
+      input: trimmed,
+      isLoading,
+      commandContext: featureContext,
+      resetInput,
+      setInput,
+      send,
+    });
   }, [
     isLoading,
-    navigate,
-    goBack,
-    send,
-    clear,
-    suggestion,
+    featureContext,
     resetInput,
+    setInput,
+    send,
   ]);
 
   useKeymap({
@@ -111,7 +118,11 @@ export function useChatScreenState() {
   useKeymap({
     "up": () => suggestion.prev(),
     "down": () => suggestion.next(),
-  }, { enabled: suggestion.show && suggestion.filtered.length > 0, priority: 60 });
+    "tab": () => {
+      const completed = completeCommandInput(suggestion.filtered, suggestion.selectedIndex);
+      if (completed) setInput(completed);
+    },
+  }, { enabled: !activePanelId && chatMode === "input" && suggestion.show && suggestion.filtered.length > 0, priority: 60 });
 
   useKeymap({
     "escape": () => {
@@ -125,7 +136,9 @@ export function useChatScreenState() {
     "return": () => {
       handleSubmit();
     }
-  }, { enabled: !pending && chatMode === "input", priority: 10 });
+  }, { enabled: !pending && !activePanelId && chatMode === "input", priority: 10 });
+
+  const activePanel = activePanelId ? appFeatureRegistry.getPanel(activePanelId) : undefined;
 
   return {
     input,
@@ -134,6 +147,8 @@ export function useChatScreenState() {
     subAgents: subAgentBlocks,
     subAgentIndex,
     messages: displayBlocks,
+    activePanel,
+    featureContext,
     isLoading,
     currentSessionId,
     workspaceRootPath,

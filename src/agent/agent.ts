@@ -1,7 +1,7 @@
 import { ToolLoopAgent } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createFileTools } from "./tools/index.js";
-import { getSetting } from "../db/index.js";
+import { getSetting } from "../lib/persistence/db.js";
 import { buildSystemPrompt } from "./prompt.js";
 import type { ToolContext } from "../lib/tool/context.js";
 

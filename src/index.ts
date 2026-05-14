@@ -1,13 +1,10 @@
 import React from 'react';
 import { render } from 'ink';
-import { initDb, logError } from './db/index.js';
+import { initDb, logError } from './lib/persistence/db.js';
 import App from './tui/app.js';
 
 async function main() {
-  // Initialize DB before starting UI
   initDb();
-
-  // Render Ink App
   render(React.createElement(App));
 }
 

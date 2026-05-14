@@ -1,10 +1,10 @@
 import React, { memo } from "react";
 import { Box, Text } from "ink";
-import { Command } from "../../../types.js";
+import { CommandDefinition } from "../../../features/featureTypes.js";
 import { theme } from "../../theme.js";
 
 interface CommandSuggestionsProps {
-  commands: Command[];
+  commands: CommandDefinition[];
   selectedIndex: number;
   maxVisibleCount: number;
 }

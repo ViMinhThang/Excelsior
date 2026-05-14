@@ -1,28 +1,21 @@
 # Excelsior
 
-A terminal-based AI coding assistant powered by DeepSeek, built with [Ink](https://github.com/vadimdemedes/ink) (React for CLIs).
+A terminal-based AI coding assistant powered by DeepSeek, built with [Ink](https://github.com/vadimdemedes/ink).
 
 ## Features
 
-- **Interactive chat** — converse with an AI coding assistant directly in your terminal
-- **Tool use** — the agent can read, write, list files and run shell commands (with user confirmation)
-- **PR review** — browse open pull requests, orchestrate multi-agent code reviews, and post results back to GitHub
-- **Chat persistence** — conversation history is stored locally in SQLite
-- **Settings screen** — configure API keys without leaving the TUI
+- **Interactive chat** - converse with an AI coding assistant directly in your terminal
+- **Tool use** - read, write, list, search files, and run shell commands with confirmation for write-like actions
+- **PR review** - review pull requests from slash commands with specialist sub-agents
+- **Chat persistence** - SQLite stores session metadata and JSONL stores runtime events
+- **Settings screen** - configure API keys without leaving the TUI
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Set up your API key (or configure it in-app via /settings)
 export DEEPSEEK_API_KEY="your-key-here"
-
-# Optional: for PR review features
-export GITHUB_TOKEN="your-github-token"
-
-# Run
+export GITHUB_TOKEN="your-github-token" # optional, for PR review
 npm run dev
 ```
 
@@ -32,9 +25,11 @@ npm run dev
 |---------|-------------|
 | `/help` | List all available commands |
 | `/clear` | Clear chat messages from the screen |
-| `/reset` | Delete all conversation history from database |
+| `/reset` | Delete all conversation history |
 | `/settings` | Open the Settings screen |
-| `/review` | Open the PR review screen |
+| `/review <number>` | Fetch a PR diff and run a multi-agent review |
+| `/review-post <number> <body>` | Post a comment to a PR |
+| `/session` | Open the selectable session list |
 
 ## Keyboard Shortcuts
 
@@ -42,56 +37,48 @@ npm run dev
 |----------|--------|
 | `Ctrl+S` | Open Settings |
 | `Ctrl+C` | Exit |
-| `Ctrl+U` | Load older messages |
 | `Ctrl+O` | Toggle sub-agent detail view |
-| `ESC` | Cancel running agent / Go back |
-| `↑ / ↓` | Navigate message history |
-| `Tab` | (Settings) Switch between input fields |
+| `Esc` | Cancel running agent / Go back |
+| `Up` / `Down` | Navigate message history or suggestions |
+| `Tab` | Complete command suggestion or switch Settings fields |
 
 ## Architecture
 
-```
+```text
 src/
-├── agent/          # AI agent: model setup, prompts, tools, commands
-│   ├── review/     # Multi-agent PR review orchestrator
-│   ├── tools/      # File I/O, shell, git diff tools
-│   └── commands/   # Slash command registry
-├── tui/            # Terminal UI (Ink/React)
-│   ├── screens/    # ChatScreen, ReviewScreen, SettingsScreen
-│   ├── components/ # Reusable UI components
-│   ├── hooks/      # React hooks for state management
-│   ├── context/    # React contexts (Navigation, PR, Review, SubAgent)
-│   └── lib/        # Agent streaming, chat persistence
-├── db/             # SQLite database layer
-└── utils/          # GitHub API, exec helpers
+|- agent/          # model setup, prompts, tools, sub-agent tool
+|- application/    # AgentManager, ChatService, run wiring
+|- features/       # plain feature services such as SessionManager
+|- lib/
+|  |- github/      # GitHub API integration and repo detection
+|  |- persistence/ # SQLite metadata, JSONL event recorder
+|  |- projection/  # event-to-display/history read models
+|  |- runtime/     # AgentRun, RunOrchestrator, stream handling
+|  |- tool/        # ToolContext and capabilities
+|  `- utils/       # small shared library helpers
+`- tui/            # Ink UI screens, components, hooks, commands
 ```
+
+See [`docs/architecture.md`](docs/architecture.md) for current runtime boundaries.
+
+Slash commands are feature-owned: add commands, panels, and feature-specific helpers under `src/features/<feature>/`, then register the feature in `src/features/index.ts`.
 
 ## Development
 
 ```bash
-# Run tests
 npm test
-
-# Watch mode
 npm run test:watch
-
-# Type check
 npx tsc --noEmit
-
-# Build
 npm run build
 ```
 
 ## Configuration
 
-Excelsior needs a DeepSeek API key to function. You can provide it via:
+Excelsior needs a DeepSeek API key. You can provide it with `DEEPSEEK_API_KEY` or save it in-app via `Ctrl+S` / `/settings`.
 
-1. **Environment variable**: `export DEEPSEEK_API_KEY="..."`
-2. **In-app settings**: Press `Ctrl+S` or type `/settings`
+For PR review features, configure `GITHUB_TOKEN` with repo access.
 
-For PR review features, also configure a GitHub token with `repo` scope.
-
-See [`.env.example`](.env.example) for all available environment variables.
+See [`.env.example`](.env.example) for available environment variables.
 
 ## License
 

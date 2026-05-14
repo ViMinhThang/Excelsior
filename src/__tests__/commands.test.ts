@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { handleCommand, commands } from "../tui/lib/commands.js";
-import { CommandContext } from "../types.js";
+import { SESSION_PANEL_ID } from "../features/session/feature.js";
+import { FeatureRuntimeContext } from "../features/featureTypes.js";
 
 describe("Commands", () => {
-  function mockContext(): { ctx: CommandContext; called: Record<string, any[]> } {
+  function mockContext(): { ctx: FeatureRuntimeContext; called: Record<string, any[]> } {
     const called: Record<string, any[]> = {
       navigate: [],
       goBack: [],
@@ -16,9 +17,12 @@ describe("Commands", () => {
       deleteSession: [],
       renameSession: [],
       listSessions: [],
+      openPanel: [],
+      closePanel: [],
+      getHelpText: [],
       currentSessionId: null,
     };
-    const ctx: CommandContext = {
+    const ctx: FeatureRuntimeContext = {
       navigate: (screen) => called.navigate.push(screen),
       goBack: () => called.goBack.push(true),
       appendMessage: (role, content) => called.appendMessage.push({ role, content }),
@@ -33,7 +37,11 @@ describe("Commands", () => {
       deleteSession: (id) => called.deleteSession.push(id),
       renameSession: (id, title) => called.renameSession.push({ id, title }),
       listSessions: () => { called.listSessions.push(true); return []; },
+      sessions: [],
       currentSessionId: null,
+      openPanel: (panelId) => called.openPanel.push(panelId),
+      closePanel: () => called.closePanel.push(true),
+      getHelpText: () => { called.getHelpText.push(true); return "Available commands:\n/help - List all available commands"; },
     };
     return { ctx, called };
   }
@@ -65,6 +73,7 @@ describe("Commands", () => {
       expect(called.appendMessage.length).toBe(1);
       expect(called.appendMessage[0].role).toBe("system");
       expect(called.appendMessage[0].content).toContain("/help");
+      expect(called.getHelpText).toEqual([true]);
     });
 
     it("/clear clears messages and appends confirmation", async () => {
@@ -119,6 +128,13 @@ describe("Commands", () => {
       const { ctx } = mockContext();
       const result = await handleCommand("/help extra args", ctx);
       expect(result).toBe(true);
+    });
+
+    it("/session opens the interactive session list", async () => {
+      const { ctx, called } = mockContext();
+      await handleCommand("/session", ctx);
+      expect(called.openPanel).toEqual([SESSION_PANEL_ID]);
+      expect(called.appendMessage).toEqual([]);
     });
   });
 });
