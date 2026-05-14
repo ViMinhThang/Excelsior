@@ -87,6 +87,27 @@ describe("jsonlEventStore", () => {
     await cleanup(id);
   });
 
+  it("reorders completed events by run sequence even when file lines are scrambled", async () => {
+    const id = sid("scrambled");
+    await appendEvent(id, makeEvent("run_1", "user-input", { content: "hi" }, 1) as AnyAgentEvent);
+    await appendEvent(id, makeEvent("run_1", TURN_COMPLETE, { runId: "run_1" }, 4) as AnyAgentEvent);
+    await appendEvent(id, makeEvent("run_1", "text-delta", { delta: "Hello " }, 2) as AnyAgentEvent);
+    await appendEvent(id, makeEvent("run_1", "text-delta", { delta: "world" }, 3) as AnyAgentEvent);
+
+    const result = await loadUntilLastCheckpoint(id);
+
+    expect(result.hasIncompleteRun).toBe(false);
+    expect(result.events.map((event) => event.type)).toEqual([
+      "user-input",
+      "text-delta",
+      "text-delta",
+      TURN_COMPLETE,
+    ]);
+    expect(result.events.filter((event) => event.type === "text-delta").map((event) => event.data.delta).join("")).toBe("Hello world");
+
+    await cleanup(id);
+  });
+
   it("loadUntilLastCheckpoint detects incomplete run after checkpoint", async () => {
     const id = sid("incomplete");
     await appendEvent(id, makeEvent("run_1", "user-input", { content: "hi" }, 0) as AnyAgentEvent);
@@ -144,16 +165,14 @@ describe("jsonlEventStore", () => {
     expect((await loadSessionEvents(id2)).length).toBe(0);
   });
 
-  it("handles concurrent events correctly", async () => {
+  it("serializes concurrent appends for one session file", async () => {
     const id = sid("concurrent");
     const events = Array.from({ length: 10 }, (_, i) =>
       makeEvent("run_1", "text-delta", { delta: String(i) }, i) as AnyAgentEvent,
     );
-    for (const e of events) {
-      await appendEvent(id, e);
-    }
+    await Promise.all(events.map((event) => appendEvent(id, event)));
 
-    const loaded = await loadSessionEvents(id);
+    const loaded = await loadRawSessionEvents(id);
     expect(loaded).toHaveLength(10);
     for (let i = 0; i < 10; i++) {
       expect((loaded[i] as any).data.delta).toBe(String(i));

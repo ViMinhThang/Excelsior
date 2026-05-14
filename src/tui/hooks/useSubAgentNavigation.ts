@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { ProjectedBlock } from "../../lib/projection/display.js";
 import { selectSubAgentBlocks } from "../selectors/chat-selectors.js";
 
@@ -12,6 +12,16 @@ export function useSubAgentNavigation(displayBlocks: ProjectedBlock[]) {
     () => selectSubAgentBlocks(displayBlocks),
     [displayBlocks],
   );
+
+  useEffect(() => {
+    if (subAgentBlocks.length === 0) {
+      setSubAgentIndex(0);
+      if (chatMode === "subagent-detail") setChatMode("input");
+      return;
+    }
+
+    setSubAgentIndex((index) => Math.min(index, subAgentBlocks.length - 1));
+  }, [chatMode, subAgentBlocks.length]);
 
   const nextSubAgent = useCallback(() => {
     setSubAgentIndex((prev) => {

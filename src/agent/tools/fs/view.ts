@@ -35,8 +35,7 @@ export function createViewTool(ctx?: ToolContext) {
           return `${String(lineNum).padStart(padLength)}: ${line}`;
         }).join("\n");
 
-        const summary = `[File: ${filePath}, Lines ${start}-${end} of ${lines.length}]`;
-        return `${summary}\n${"-".repeat(summary.length)}\n${formatted}`;
+        return formatted;
       } catch (error: unknown) {
         return `Error reading file: ${error instanceof Error ? error.message : String(error)}`;
       }

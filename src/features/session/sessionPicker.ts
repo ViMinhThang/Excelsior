@@ -1,5 +1,7 @@
 import type { Session } from "../../lib/runtime/session.js";
 
+export const SESSION_PICKER_HINT = "Up/Down select · Enter open · Ctrl+D+D remove · Esc close";
+
 export function getSessionDisplayTitle(session: Session): string {
   const title = session.title?.trim() || session.metadata?.userInput?.trim();
   return title || "Untitled";
