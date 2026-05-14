@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { getTextDelta, getToolName, getToolArgs, getToolResult, StreamPart } from "../types.js";
+import { getTextDelta, getToolName, getToolArgs, getToolResult, StreamPart } from "../lib/runtime/streamTypes.js";
 
 describe("StreamPart type helpers", () => {
   describe("getTextDelta", () => {

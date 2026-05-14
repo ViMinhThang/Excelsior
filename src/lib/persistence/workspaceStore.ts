@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { getDb } from "../../db/index.js";
+import { getDb } from "./db.js";
 
 export interface WorkspaceRow {
   id: string;

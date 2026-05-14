@@ -1,16 +1,18 @@
 import { RunOrchestrator, RunHandle } from "../lib/runtime/runOrchestrator.js";
 import { AgentRun } from "../lib/runtime/agentRun.js";
-import { AnyAgentEvent, makeEvent } from "../lib/runtime/events.js";
-import { TURN_COMPLETE } from "../lib/runtime/event-names.js";
+import { AnyAgentEvent } from "../lib/runtime/events.js";
 import { createToolContext, ToolContext } from "../lib/tool/context.js";
 import { confirmBus } from "../lib/runtime/confirmBus.js";
-import { appendEvent } from "../lib/persistence/rolloutRecorder.js";
+import { defaultRunRecorder, RunRecorder } from "../lib/persistence/runRecorder.js";
+import { createSubAgentEventSink, SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
 import type { ToolLoopAgent } from "ai";
 
 export interface RunContext {
   ctx: ToolContext;
   run: AgentRun;
   childRuns: Map<string, AgentRun>;
+  recorder: RunRecorder;
+  subAgentEvents: SubAgentEventSink;
 }
 
 export interface RunConfig {
@@ -20,6 +22,8 @@ export interface RunConfig {
   signal?: AbortSignal;
   sessionId?: string;
   workspaceId?: string;
+  recorder?: RunRecorder;
+  subAgentEvents?: SubAgentEventSink;
 }
 
 export interface RunResult {
@@ -40,23 +44,12 @@ function mergeSignals(a?: AbortSignal, b?: AbortController): AbortSignal {
   return controller.signal;
 }
 
-function withCheckpoint(
-  handle: RunHandle,
-  runId: string,
-  sessionId: string,
-): RunHandle {
-  const wrappedDone = handle.done.then(async (events) => {
-    const checkpoint = makeEvent(runId, TURN_COMPLETE, { runId }, events.length + 1);
-    await appendEvent(sessionId, checkpoint as AnyAgentEvent);
-    return events;
-  });
-  return { ...handle, done: wrappedDone };
-}
-
 export function startRun(config: RunConfig): RunResult {
   const sessionId = config.sessionId ?? `ses_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const run = new AgentRun(sessionId);
   const childRuns = new Map<string, AgentRun>();
+  const recorder = config.recorder ?? defaultRunRecorder;
+  const subAgentEvents = config.subAgentEvents ?? createSubAgentEventSink();
 
   const abortController = new AbortController();
   run.abortController = abortController;
@@ -64,7 +57,7 @@ export function startRun(config: RunConfig): RunResult {
   const combinedSignal = mergeSignals(config.signal, abortController);
 
   const ctx = createToolContext({ abortSignal: combinedSignal, confirmBus });
-  const runCtx: RunContext = { ctx, run, childRuns };
+  const runCtx: RunContext = { ctx, run, childRuns, recorder, subAgentEvents };
 
   const handle = orchestrator.startRun(run, {
     messages: config.messages,
@@ -72,7 +65,16 @@ export function startRun(config: RunConfig): RunResult {
     signal: combinedSignal,
     onEvent: config.onEvent,
     sessionId,
+    recorder,
   });
 
-  return { run, childRuns, handle: withCheckpoint(handle, run.id, sessionId), sessionId };
+  const checkpointedHandle: RunHandle = {
+    ...handle,
+    done: handle.done.then(async (events) => {
+      await recorder.recordTurnComplete(sessionId, run.id, events.length + 1);
+      return events;
+    }),
+  };
+
+  return { run, childRuns, handle: checkpointedHandle, sessionId };
 }

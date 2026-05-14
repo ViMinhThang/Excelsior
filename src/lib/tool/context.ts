@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import type { ConfirmBus } from "../../types.js";
+import type { ConfirmBus } from "../runtime/confirmTypes.js";
 
 export type ToolCapability =
   | "fs:read"
@@ -18,11 +18,13 @@ export interface ToolContext {
   capabilities: ReadonlySet<ToolCapability>;
   confirm?: ConfirmCapability;
   abortSignal?: AbortSignal;
+  workspaceRoot?: string;
 }
 
 export function createToolContext(options?: {
   abortSignal?: AbortSignal;
   confirmBus?: ConfirmBus;
+  workspaceRoot?: string;
 }): ToolContext {
   const capabilities = new Set<ToolCapability>();
   capabilities.add("fs:read");
@@ -31,6 +33,7 @@ export function createToolContext(options?: {
   const ctx: ToolContext = {
     capabilities,
     abortSignal: options?.abortSignal,
+    workspaceRoot: options?.workspaceRoot ?? process.cwd(),
   };
 
   if (options?.confirmBus) {

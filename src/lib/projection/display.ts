@@ -1,4 +1,4 @@
-import { ToolCallInfo } from "../../types.js";
+import { ToolCallInfo } from "../runtime/toolCallInfo.js";
 
 export type ToolCallStatus = "pending" | "completed" | "error";
 

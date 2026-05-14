@@ -1,9 +1,9 @@
 import Database from "better-sqlite3";
-import { getDb } from "../../db/index.js";
+import { getDb } from "./db.js";
 import { AnyAgentEvent } from "../runtime/events.js";
 import type { Session } from "../runtime/session.js";
 import * as QUERIES from "./queries.js";
-import { loadSessionEvents as loadFromRollout, deleteSessionEvents, deleteAllSessionsEvents } from "./rolloutRecorder.js";
+import { defaultRunRecorder } from "./runRecorder.js";
 
 interface SessionRow {
   id: string;
@@ -11,6 +11,11 @@ interface SessionRow {
   updated_at: string;
   metadata: string | null;
   workspace_id: string | null;
+  title: string | null;
+}
+
+interface ExistingSessionRow {
+  started_at: string;
   title: string | null;
 }
 
@@ -27,15 +32,19 @@ function rowToSession(row: SessionRow): Session {
 
 export function persistSession(session: Session, db?: Database.Database): void {
   const _db = db ?? getDb();
+  const existing = _db
+    .prepare("SELECT started_at, title FROM sessions WHERE id = ?")
+    .get(session.id) as ExistingSessionRow | undefined;
+
   _db
     .prepare(QUERIES.INSERT_SESSION)
     .run(
       session.id,
-      session.startedAt,
+      existing?.started_at ?? session.startedAt,
       session.updatedAt,
       JSON.stringify(session.metadata ?? {}),
       (session as any).workspaceId ?? null,
-      (session as any).title ?? null,
+      (session as any).title ?? existing?.title ?? null,
     );
 }
 
@@ -62,7 +71,7 @@ export function loadChildSessions(parentSessionId?: string, db?: Database.Databa
 }
 
 export async function loadSessionEvents(sessionId: string): Promise<AnyAgentEvent[]> {
-  return loadFromRollout(sessionId);
+  return defaultRunRecorder.loadCompletedEvents(sessionId);
 }
 
 export function loadSessionsByWorkspace(workspaceId: string, db?: Database.Database): Session[] {
@@ -75,7 +84,7 @@ export function loadSessionsByWorkspace(workspaceId: string, db?: Database.Datab
 
 export function deleteSession(sessionId: string, db?: Database.Database): void {
   const _db = db ?? getDb();
-  deleteSessionEvents(sessionId);
+  defaultRunRecorder.deleteSessionEvents(sessionId).catch(() => {});
   _db.prepare(QUERIES.DELETE_SESSION).run(sessionId);
 }
 
@@ -86,7 +95,7 @@ export function updateSessionTitle(sessionId: string, title: string, db?: Databa
 
 export function deleteAllSessions(includeChildSessions?: boolean, db?: Database.Database): void {
   const _db = db ?? getDb();
-  deleteAllSessionsEvents();
+  defaultRunRecorder.deleteAllSessionEvents().catch(() => {});
   if (includeChildSessions) {
     _db.exec(QUERIES.DELETE_ALL_SESSIONS);
   } else {

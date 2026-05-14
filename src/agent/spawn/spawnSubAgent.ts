@@ -5,9 +5,10 @@ import { AgentRun } from "../../lib/runtime/agentRun.js";
 import { AnyAgentEvent } from "../../lib/runtime/events.js";
 import { streamAgentResponse } from "../../lib/runtime/agentStream.js";
 import { projectChildEventsToSubAgentState } from "../../lib/projection/projectChildren.js";
-import { appendEvent } from "../../lib/persistence/rolloutRecorder.js";
-import { subAgentBus } from "../../lib/runtime/subAgentBus.js";
-import { CHILD_RUN_ATTACHED } from "../../lib/runtime/event-names.js";
+import type { RunRecorder } from "../../lib/persistence/runRecorder.js";
+import type { SubAgentEventSink } from "../../lib/runtime/subAgentEventSink.js";
+import { CHILD_RUN_ATTACHED } from "../../lib/runtime/eventNames.js";
+import type { ToolContext } from "../../lib/tool/context.js";
 
 function setupChildEventBus(
   childRun: AgentRun,
@@ -15,15 +16,17 @@ function setupChildEventBus(
   toolCallId: string,
   instruction: string,
   allChildEvents: AnyAgentEvent[],
+  recorder: RunRecorder,
+  subAgentEvents: SubAgentEventSink,
 ): () => void {
   return childRun.bus.on("event", (event) => {
     if (event.type === "run-start") return;
     allChildEvents.push(event);
-    appendEvent(sid, event).catch(() => {});
+    recorder.recordEvent(sid, event).catch(() => {});
 
     if (event.type === "text-delta" || event.type === "tool-call-start" || event.type === "tool-call-end" || event.type === "error") {
       const state = projectChildEventsToSubAgentState(allChildEvents, "running", instruction);
-      subAgentBus.emit("output", {
+      subAgentEvents.emit("output", {
         toolCallId,
         latestLine: state.latestLine,
         fullOutput: state.fullOutput,
@@ -38,6 +41,9 @@ export function createSpawnSubAgentTool(
   parentRun: AgentRun,
   childRunsMap: Map<string, AgentRun>,
   sessionId?: string,
+  ctx?: ToolContext,
+  recorder?: RunRecorder,
+  subAgentEvents?: SubAgentEventSink,
 ) {
   return tool({
     description:
@@ -53,8 +59,18 @@ export function createSpawnSubAgentTool(
       const sid = sessionId ?? parentRun.sessionId;
       const childRun = new AgentRun(sid, parentRun.id, parentRun.correlationId);
       childRunsMap.set(childRun.id, childRun);
+      const abortController = new AbortController();
+      childRun.abortController = abortController;
+      const childCtx = ctx ? { ...ctx, abortSignal: abortController.signal } : undefined;
+      const abortChild = () => abortController.abort(ctx?.abortSignal?.reason);
 
-      subAgentBus.emit("spawned", { toolCallId, role });
+      if (ctx?.abortSignal?.aborted) {
+        abortChild();
+      } else {
+        ctx?.abortSignal?.addEventListener("abort", abortChild, { once: true });
+      }
+
+      subAgentEvents?.emit("spawned", { toolCallId, role });
       parentRun.emit(CHILD_RUN_ATTACHED, { childRunId: childRun.id, parentToolCallId: toolCallId, role });
 
       const subInstructions =
@@ -64,14 +80,14 @@ export function createSpawnSubAgentTool(
         `\nComplete your assigned task directly.` +
         `\n---\n\n${instruction}`;
 
-      const agent = createAgent(subInstructions);
+      const agent = createAgent(subInstructions, undefined, childCtx);
       const allChildEvents: AnyAgentEvent[] = [];
-      const unsub = setupChildEventBus(childRun, sid, toolCallId, instruction, allChildEvents);
+      const unsub = recorder && subAgentEvents
+        ? setupChildEventBus(childRun, sid, toolCallId, instruction, allChildEvents, recorder, subAgentEvents)
+        : () => {};
 
       let terminalError = "";
       try {
-        const abortController = new AbortController();
-        childRun.abortController = abortController;
         await streamAgentResponse(agent, [{ role: "user", content: instruction }], childRun, abortController.signal);
       } catch (error: unknown) {
         if (error instanceof Error && error.name !== "AbortError") {
@@ -79,13 +95,14 @@ export function createSpawnSubAgentTool(
           childRun.emit("error", { message: terminalError });
         }
       } finally {
+        ctx?.abortSignal?.removeEventListener("abort", abortChild);
         unsub();
         childRun.flushNotify();
       }
 
       const state = projectChildEventsToSubAgentState(allChildEvents, terminalError ? "error" : "done", instruction);
       const finalOutput = terminalError ? state.fullOutput + `\n\nError: ${terminalError}` : state.fullOutput;
-      subAgentBus.emit("done", { toolCallId, fullOutput: finalOutput });
+      subAgentEvents?.emit("done", { toolCallId, fullOutput: finalOutput });
       return finalOutput;
     },
   });

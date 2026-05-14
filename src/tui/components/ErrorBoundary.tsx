@@ -1,5 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
-import { logError } from '../../db/index.js';
+import { logError } from '../../lib/persistence/db.js';
 import ErrorScreen from '../screens/ErrorScreen.js';
 
 interface Props {

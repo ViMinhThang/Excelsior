@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { RUN_START, RUN_END, CHILD_RUN_ATTACHED, TURN_COMPLETE } from "./event-names.js";
+import { RUN_START, RUN_END, CHILD_RUN_ATTACHED, TURN_COMPLETE } from "./eventNames.js";
 
 export const EVENT_SCHEMA_VERSION = 1;
 

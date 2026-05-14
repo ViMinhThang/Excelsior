@@ -1,10 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { commands } from "../lib/commands.js";
-
-const MAX_VISIBLE_COUNT = commands.length;
+import { appFeatureRegistry } from "../../features/index.js";
 
 export function useCommandAutocomplete(input: string) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const commands = appFeatureRegistry.getCommands();
 
   const show = input.startsWith("/");
   const query = show ? input.slice(1).split(" ")[0].toLowerCase() : "";
@@ -36,7 +35,7 @@ export function useCommandAutocomplete(input: string) {
     show,
     filtered,
     selectedIndex,
-    maxVisibleCount: MAX_VISIBLE_COUNT,
+    maxVisibleCount: commands.length,
     next,
     prev,
   };
