@@ -162,6 +162,44 @@ describe("projectEvents", () => {
       const subBlock = blocks[0] as any;
       expect(subBlock.state.status).toBe("done");
     });
+
+    it("marks a flushed sub-agent done when its result arrives after another tool starts", () => {
+      const events: AnyAgentEvent[] = [
+        makeEvent({
+          type: "child-run-attached",
+          data: { childRunId: "child1", parentToolCallId: "tc1", role: "Code Style Reviewer" },
+        }),
+        makeEvent({
+          type: "tool-call-start",
+          data: { toolName: "spawnSubAgent", toolArgs: JSON.stringify({ role: "Code Style Reviewer" }), toolCallId: "tc1" },
+        }),
+        makeEvent({
+          type: "tool-call-start",
+          data: { toolName: "view", toolArgs: JSON.stringify({ filePath: "src/index.ts" }), toolCallId: "tc2" },
+        }),
+        makeEvent({
+          type: "tool-call-end",
+          relatedToolCallId: "tc1",
+          data: { toolCallId: "tc1", result: "Review complete", status: "success", toolName: "unknown", toolArgs: "{}" },
+        }),
+        makeEvent({
+          type: "tool-call-end",
+          relatedToolCallId: "tc2",
+          data: { toolCallId: "tc2", result: "file contents", status: "success", toolName: "view", toolArgs: "{}" },
+        }),
+      ];
+
+      const blocks = groupEventsForDisplay(events);
+      expect(blocks).toHaveLength(2);
+      expect(blocks[0]).toMatchObject({
+        type: "sub-agent",
+        role: "Code Style Reviewer",
+        isFrozen: true,
+        state: { status: "done", fullOutput: "Review complete" },
+      });
+      expect(blocks[1]).toMatchObject({ type: "tool-call", toolName: "view", status: "completed" });
+      expect(blocks.some((block) => block.type === "tool-call" && block.toolName === "unknown")).toBe(false);
+    });
   });
 
   describe("projectChildEventsToSubAgentState", () => {

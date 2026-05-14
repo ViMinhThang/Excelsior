@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { Box, Text } from 'ink';
-import TextInput from 'ink-text-input';
+import TextInput from './SafeTextInput.js';
 import { theme } from '../../theme.js';
 import Panel from '../shared/Panel.js';
 

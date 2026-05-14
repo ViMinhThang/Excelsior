@@ -10,7 +10,7 @@ import {
   makeEvent,
   AnyAgentEvent,
 } from "./events.js";
-import { RUN_END } from "./event-names.js";
+import { RUN_END } from "./eventNames.js";
 import { DisposableScope } from "../utils/disposable.js";
 
 export type RunEventMap = {

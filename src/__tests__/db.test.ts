@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createDb, resetDb } from "../db/index.js";
+import { createDb, resetDb } from "../lib/persistence/db.js";
+import { loadSessionsByWorkspace, persistSession } from "../lib/persistence/eventPersistence.js";
 import Database from "better-sqlite3";
 
 let db: Database.Database;
@@ -54,6 +55,31 @@ describe("Database", () => {
     it("getSetting returns undefined for missing keys", () => {
       const row = db.prepare("SELECT value FROM settings WHERE key = ?").get("nonexistent") as { value: string } | undefined;
       expect(row).toBeUndefined();
+    });
+  });
+
+  describe("session metadata", () => {
+    it("preserves an existing title when later persistence omits title", () => {
+      persistSession({
+        id: "ses_title_preserve",
+        startedAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:00:00.000Z",
+        metadata: { userInput: "first" },
+        workspaceId: "ws_default",
+        title: "first prompt",
+      }, db);
+
+      persistSession({
+        id: "ses_title_preserve",
+        startedAt: "2026-05-14T00:00:00.000Z",
+        updatedAt: "2026-05-14T00:01:00.000Z",
+        metadata: { userInput: "second" },
+        workspaceId: "ws_default",
+      }, db);
+
+      const saved = loadSessionsByWorkspace("ws_default", db)
+        .find((session) => session.id === "ses_title_preserve");
+      expect(saved?.title).toBe("first prompt");
     });
   });
 });

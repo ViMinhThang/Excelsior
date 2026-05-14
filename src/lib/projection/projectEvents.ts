@@ -2,7 +2,7 @@ import { AnyAgentEvent } from "../runtime/events.js";
 import { ProjectedBlock } from "./display.js";
 import { ReadModel } from "./readModel.js";
 import { buildSubAgentBlock } from "./projectChildren.js";
-import { CHILD_RUN_ATTACHED, RUN_START, RUN_END, USER_INPUT, TEXT_DELTA, TOOL_CALL_START, TOOL_CALL_END, ERROR, TURN_COMPLETE } from "../runtime/event-names.js";
+import { CHILD_RUN_ATTACHED, RUN_START, RUN_END, USER_INPUT, TEXT_DELTA, TOOL_CALL_START, TOOL_CALL_END, ERROR, TURN_COMPLETE } from "../runtime/eventNames.js";
 
 interface PendingTool {
   toolName: string;
@@ -107,6 +107,70 @@ function flushSubAgentTool(state: ProjectionReducerState, options?: ProjectOptio
   return flushRegularTool(state);
 }
 
+function applyResultToSubAgentBlock(
+  block: Extract<ProjectedBlock, { type: "sub-agent" }>,
+  result: string,
+  status: "completed" | "error",
+  timestamp: string,
+): Extract<ProjectedBlock, { type: "sub-agent" }> {
+  const nextStatus = status === "error" ? "error" : "done";
+  const endTime = timestamp ? new Date(timestamp).getTime() : Date.now();
+
+  if (block.state.fullOutput || !result) {
+    return {
+      ...block,
+      isFrozen: true,
+      state: { ...block.state, status: nextStatus, endTime },
+    };
+  }
+
+  const lines = result.split("\n").filter(Boolean);
+  return {
+    ...block,
+    isFrozen: true,
+    state: {
+      ...block.state,
+      status: nextStatus,
+      fullOutput: result,
+      latestLine: lines[lines.length - 1] ?? "",
+      parts: [{ type: "text", text: result }],
+      endTime,
+    },
+  };
+}
+
+function updateExistingToolResult(
+  state: ProjectionReducerState,
+  toolCallId: string,
+  status: "completed" | "error",
+  result: string,
+  timestamp: string,
+): ProjectionReducerState | null {
+  let changed = false;
+  const blocks = state.blocks.map((block) => {
+    if (block.id !== toolCallId) return block;
+    changed = true;
+
+    if (block.type === "sub-agent") {
+      return applyResultToSubAgentBlock(block, result, status, timestamp);
+    }
+
+    if (block.type === "tool-call") {
+      return {
+        ...block,
+        status,
+        content: result,
+        timestamp: timestamp || block.timestamp,
+        isFrozen: true as const,
+      };
+    }
+
+    return block;
+  });
+
+  return changed ? { ...state, blocks } : null;
+}
+
 function flushTool(state: ProjectionReducerState, options?: ProjectOptions): ProjectionReducerState {
   if (!state.pendingTool) return state;
   if (state.pendingTool.isSubAgent) return flushSubAgentTool(state, options);
@@ -181,10 +245,15 @@ function handleToolCallEnd(state: ProjectionReducerState, evt: AnyAgentEvent): P
   const data = evt.data as any;
   const toolCallId = evt.relatedToolCallId ?? data.toolCallId;
   const status = data.status === "error" ? "error" as const : "completed" as const;
+  const result = data.result ?? "";
 
   if (state.pendingTool && state.pendingTool.toolCallId === toolCallId) {
-    return { ...state, pendingTool: { ...state.pendingTool, status, result: data.result ?? "" } };
+    return { ...state, pendingTool: { ...state.pendingTool, status, result } };
   }
+
+  const updated = updateExistingToolResult(state, toolCallId, status, result, evt.timestamp);
+  if (updated) return updated;
+
   if (data.toolName === "spawnSubAgent") {
     return state;
   }
@@ -199,7 +268,7 @@ function handleToolCallEnd(state: ProjectionReducerState, evt: AnyAgentEvent): P
         toolName: data.toolName || "unknown",
         toolArgs: JSON.stringify(data.toolArgs ?? {}),
         status,
-        content: data.result ?? "",
+        content: result,
         timestamp: evt.timestamp,
         isFrozen: true,
       },

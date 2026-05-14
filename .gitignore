@@ -2,6 +2,12 @@
 node_modules
 dist
 .env
+data/
+tmp/
+*.db
+*.db-wal
+*.db-shm
+data/sessions/*.jsonl
 .codex
 skills
 AGENTS.md

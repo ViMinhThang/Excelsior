@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { getSetting, setSetting } from "../../db/index.js";
+import { getSetting, setSetting } from "../../lib/persistence/db.js";
 
 export function useDatabase() {
   const getApiKey = useCallback(() => {

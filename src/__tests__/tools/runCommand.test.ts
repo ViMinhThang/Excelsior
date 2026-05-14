@@ -43,6 +43,12 @@ describe("runCommandTool", () => {
       const result = await (runCommandTool as any).execute({ command: "nonexistent_command_xyz", args: [] });
       expect(result).toContain("Error");
     });
+
+    it.runIf(process.platform === "win32")("supports Windows date command compatibility", async () => {
+      const result = await (runCommandTool as any).execute({ command: "date", args: [] });
+      expect(result.trim().length).toBeGreaterThan(0);
+      expect(result).not.toContain("Executable not found");
+    });
   });
 
   describe("sandbox - dangerous commands", () => {
