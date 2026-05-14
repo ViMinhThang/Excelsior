@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { Box, useInput, useApp } from 'ink';
-import { Screen } from '../../../types.js';
+import { Screen } from '../../lib/navigationTypes.js';
 import { useNavigation } from '../../context/NavigationContext.js';
 import { useEvent } from '../../hooks/useEvent.js';
 import ChatScreen from '../../screens/ChatScreen.js';
@@ -8,6 +8,17 @@ import SettingsScreen from '../../screens/SettingsScreen.js';
 
 interface ScreenDispatcherProps {
   screen: Screen;
+}
+
+export function getGlobalNavigationAction(
+  input: string,
+  key: any,
+  currentScreen: Screen,
+): "exit" | "back" | "settings" | null {
+  if (key.ctrl && input === 'c') return "exit";
+  if (key.backspace && currentScreen !== 'settings' && currentScreen !== 'chat') return "back";
+  if (key.ctrl && input === 's' && currentScreen === 'chat') return "settings";
+  return null;
 }
 
 const ScreenDispatcher = memo(function ScreenDispatcher({ screen }: ScreenDispatcherProps) {
@@ -30,10 +41,10 @@ const Router = () => {
   const onExit = useEvent(exit);
 
   const handleInput = useEvent((input: string, key: any) => {
-    if (key.ctrl && input === 'c') onExit();
-    if (key.backspace && currentScreen !== 'settings' && currentScreen !== 'chat') onGoBack();
-    if (key.ctrl && input === 's' && currentScreen === 'chat') onNavigate('settings');
-    if (input === 'c' && currentScreen === 'settings') onNavigate('chat');
+    const action = getGlobalNavigationAction(input, key, currentScreen);
+    if (action === "exit") onExit();
+    if (action === "back") onGoBack();
+    if (action === "settings") onNavigate('settings');
   });
 
   useInput(handleInput);

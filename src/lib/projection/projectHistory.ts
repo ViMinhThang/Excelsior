@@ -1,6 +1,6 @@
 import { AnyAgentEvent } from "../runtime/events.js";
 import { ReadModel, projectEvents } from "./readModel.js";
-import { CHILD_RUN_ATTACHED, RUN_START, RUN_END, USER_INPUT, TEXT_DELTA, TOOL_CALL_END, TOOL_CALL_START, ERROR, TURN_COMPLETE } from "../runtime/event-names.js";
+import { CHILD_RUN_ATTACHED, RUN_START, RUN_END, USER_INPUT, TEXT_DELTA, TOOL_CALL_END, TOOL_CALL_START, ERROR, TURN_COMPLETE } from "../runtime/eventNames.js";
 
 export type AIHistoryMessage = { role: "user" | "assistant" | "system"; content: string };
 

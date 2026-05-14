@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Screen } from '../../types.js';
+import { Screen } from '../lib/navigationTypes.js';
 
 interface NavigationContextType {
   currentScreen: Screen;

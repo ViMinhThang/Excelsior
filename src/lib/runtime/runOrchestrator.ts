@@ -3,8 +3,8 @@ import { AgentRun } from "./agentRun.js";
 import { AnyAgentEvent } from "./events.js";
 import { streamAgentResponse } from "./agentStream.js";
 import { Unsubscribe } from "./bus.js";
-import { RUN_START } from "./event-names.js";
-import { appendEvent } from "../persistence/rolloutRecorder.js";
+import { RUN_START } from "./eventNames.js";
+import type { RunRecorder } from "../persistence/runRecorder.js";
 
 export interface AgentFactory {
   (
@@ -19,6 +19,7 @@ export interface RunConfig {
   signal?: AbortSignal;
   onEvent?: (event: AnyAgentEvent, allEvents: AnyAgentEvent[]) => void;
   sessionId?: string;
+  recorder?: RunRecorder;
 }
 
 export interface RunHandle {
@@ -28,7 +29,7 @@ export interface RunHandle {
 
 /**
  * Stateless orchestrator for agent runs.
- * Does NOT store run state — each startRun returns an independent RunHandle.
+ * Does NOT store run state; each startRun returns an independent RunHandle.
  */
 export class RunOrchestrator {
   startRun(run: AgentRun, config: RunConfig): RunHandle {
@@ -39,8 +40,8 @@ export class RunOrchestrator {
     let unsub: Unsubscribe | null = run.bus.on("event", (event) => {
       if (event.type !== RUN_START) {
         allEvents.push(event);
-        if (config.sessionId) {
-          appendEvent(config.sessionId, event).catch(() => {});
+        if (config.sessionId && config.recorder) {
+          config.recorder.recordEvent(config.sessionId, event).catch(() => {});
         }
       }
       config.onEvent?.(event, allEvents);

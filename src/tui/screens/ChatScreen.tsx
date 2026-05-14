@@ -32,8 +32,9 @@ const ChatScreen = () => {
     subAgents,
     subAgentIndex,
     messages,
+    activePanel,
+    featureContext,
     isLoading,
-    currentSessionId,
     workspaceRootPath,
     pending,
     suggestion,
@@ -49,6 +50,7 @@ const ChatScreen = () => {
     : null;
 
   const displayBlocks = messages as ProjectedBlock[];
+  const ActiveFeaturePanel = activePanel?.component;
 
   return (
     <Box flexDirection="column">
@@ -72,15 +74,19 @@ const ChatScreen = () => {
             </Box>
           )}
 
-          <ChatInput
-            value={input}
-            onChange={setInput}
-            onSubmit={() => {}}
-            placeholder="Type your coding task here..."
-            isLoading={isLoading}
-            focus={!pending}
-          />
-          {commandResult && (
+          {ActiveFeaturePanel ? (
+            <ActiveFeaturePanel context={featureContext} />
+          ) : (
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSubmit={() => {}}
+              placeholder="Type your coding task here..."
+              isLoading={isLoading}
+              focus={!pending && chatMode === "input"}
+            />
+          )}
+          {!ActiveFeaturePanel && chatMode === "input" && commandResult && (
             <Box marginTop={1} paddingLeft={1} flexDirection="column">
               <Text color={theme.colors.secondary}>{commandResult}</Text>
             </Box>

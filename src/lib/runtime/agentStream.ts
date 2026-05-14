@@ -9,10 +9,10 @@ import {
   getToolName,
   getToolArgs,
   getToolResult,
-} from "../../types.js";
+} from "./streamTypes.js";
 import { AgentRun } from "./agentRun.js";
-import { withRetry, isTransientError } from "../../utils/retry.js";
-import { RUN_START, RUN_END, TEXT_DELTA, TOOL_CALL_START, TOOL_CALL_END, ERROR } from "./event-names.js";
+import { withRetry, isTransientError } from "./retry.js";
+import { RUN_START, RUN_END, TEXT_DELTA, TOOL_CALL_START, TOOL_CALL_END, ERROR } from "./eventNames.js";
 
 export async function streamAgentResponse(
   agent: ToolLoopAgent<any, any>,
@@ -40,7 +40,7 @@ export async function streamAgentResponse(
       baseDelayMs: 1000,
       onRetry: (error, attempt) => {
         run.emit(TEXT_DELTA, {
-          delta: `\n[Retry ${attempt}/3] API error: ${error.message} — retrying...\n`,
+          delta: `\n[Retry ${attempt}/3] API error: ${error.message} - retrying...\n`,
         });
       },
     });

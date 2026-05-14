@@ -7,12 +7,9 @@ import {
   computeDisplayBlocks,
   buildAIHistory,
 } from "../lib/projection/projectionMerger.js";
-import {
-  loadSessionsByWorkspace,
-  loadSessionEvents,
-} from "../lib/persistence/eventPersistence.js";
-import { subAgentBus } from "../lib/runtime/subAgentBus.js";
-import { SessionManager } from "../features/session/SessionManager.js";
+import { loadSessionEvents } from "../lib/persistence/eventPersistence.js";
+import { createSubAgentEventSink, SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
+import { SessionManager } from "../features/session/manager.js";
 import { ChatService } from "./chatService.js";
 
 export interface ChatSessionState {
@@ -44,6 +41,7 @@ export class AgentManager {
   private _persistedEvents: AnyAgentEvent[] = [];
   private _liveEvents: readonly AnyAgentEvent[] = [];
 
+  private _subAgentEvents: SubAgentEventSink;
   private _subAgentUnsubs: Array<() => void> = [];
   private _notifyTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -53,12 +51,11 @@ export class AgentManager {
   constructor(workspaceId?: string, options?: AgentManagerOptions) {
     this._service = options?.chatService ?? new ChatService();
     this._sessionManager = options?.sessionManager ?? new SessionManager(workspaceId);
+    this._subAgentEvents = createSubAgentEventSink();
     this._loadInitialData();
-    this._subscribeSubAgentBus();
+    this._subscribeSubAgentEvents();
     this._updateSnapshot();
   }
-
-  // ─── Public API ───────────────────────────────────────────────
 
   getSnapshot(): ChatSessionState {
     if (!this._snapshot) this._updateSnapshot();
@@ -72,14 +69,13 @@ export class AgentManager {
     };
   }
 
-  // ─── Phase orchestration ─────────────────────────────────────
-
   send(content: string): void {
     if (this._isLoading || this._disposed) return;
     const trimmed = content.trim();
     if (!trimmed) return;
 
-    const sessionId = this._sessionManager.ensureSession();
+    const sessionId = this._sessionManager.ensureSession(trimmed);
+    this._sessions = this._sessionManager.listSessions();
     const history = this._buildAIHistory();
 
     this._setLoading(true);
@@ -89,13 +85,12 @@ export class AgentManager {
       history: { current: history },
       sessionId,
       workspaceId: this._sessionManager.getWorkspaceId(),
+      subAgentEvents: this._subAgentEvents,
     });
 
     this._attachRun(result.run, result.childRuns, result.handle);
     this._notify();
   }
-
-  // ─── Session management ──────────────────────────────────────
 
   async switchSession(sessionId: string): Promise<void> {
     this.cancel();
@@ -134,8 +129,6 @@ export class AgentManager {
   getCurrentSessionId(): string | null {
     return this._sessionManager.getCurrentSessionId();
   }
-
-  // ─── Run lifecycle ───────────────────────────────────────────
 
   private _setLoading(loading: boolean): void {
     this._isLoading = loading;
@@ -205,11 +198,8 @@ export class AgentManager {
     }
   }
 
-  // ─── Private ─────────────────────────────────────────────────
-
   private _loadInitialData(): void {
-    const wsId = this._sessionManager.getWorkspaceId();
-    this._sessions = loadSessionsByWorkspace(wsId);
+    this._sessions = this._sessionManager.listSessions();
   }
 
   private async _reloadSessionEvents(): Promise<void> {
@@ -217,10 +207,10 @@ export class AgentManager {
     this._persistedEvents = sid ? await loadSessionEvents(sid) : [];
   }
 
-  private _subscribeSubAgentBus(): void {
-    this._subAgentUnsubs.push(subAgentBus.on("spawned", () => this._scheduleNotify()));
-    this._subAgentUnsubs.push(subAgentBus.on("output", () => this._scheduleNotify()));
-    this._subAgentUnsubs.push(subAgentBus.on("done", () => this._scheduleNotify()));
+  private _subscribeSubAgentEvents(): void {
+    this._subAgentUnsubs.push(this._subAgentEvents.on("spawned", () => this._scheduleNotify()));
+    this._subAgentUnsubs.push(this._subAgentEvents.on("output", () => this._scheduleNotify()));
+    this._subAgentUnsubs.push(this._subAgentEvents.on("done", () => this._scheduleNotify()));
   }
 
   private _buildAIHistory(): Array<{ role: "user" | "assistant" | "system"; content: string }> {
@@ -232,7 +222,6 @@ export class AgentManager {
   }
 
   private _updateSnapshot(): void {
-    const sm = this._sessionManager.getSnapshot();
     this._snapshot = {
       displayBlocks: computeDisplayBlocks({
         liveEvents: this._liveEvents,
@@ -242,8 +231,8 @@ export class AgentManager {
       isLoading: this._isLoading,
       sessions: this._sessions,
       activeRun: this._run,
-      currentSessionId: sm.currentSessionId,
-      workspaceRootPath: sm.workspaceRootPath,
+      currentSessionId: this._sessionManager.getCurrentSessionId(),
+      workspaceRootPath: this._sessionManager.getWorkspaceRootPath(),
     };
   }
 

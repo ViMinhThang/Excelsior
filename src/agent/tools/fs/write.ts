@@ -3,6 +3,7 @@ import { z } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ToolContext } from "../../../lib/tool/context.js";
+import { resolveWorkspacePath } from "./workspacePath.js";
 
 export const writeSchema = z.object({
   filePath: z.string().describe("Destination file path"),
@@ -14,6 +15,13 @@ export function createWriteTool(ctx?: ToolContext) {
     description: "Create or overwrite entire files with provided content. Automatically creates parent directories.",
     inputSchema: writeSchema,
     execute: async ({ filePath, content }) => {
+      let fullPath: string;
+      try {
+        fullPath = resolveWorkspacePath(filePath, ctx);
+      } catch (error: unknown) {
+        return `Error writing file: ${error instanceof Error ? error.message : String(error)}`;
+      }
+
       if (ctx?.confirm && ctx.confirm.getListenerCount() > 0) {
         const approved = await ctx.confirm.request(
           "writeFile",
@@ -22,7 +30,6 @@ export function createWriteTool(ctx?: ToolContext) {
         if (!approved) return "Denied by user.";
       }
 
-      const fullPath = path.resolve(process.cwd(), filePath);
       try {
         await fs.mkdir(path.dirname(fullPath), { recursive: true });
         await fs.writeFile(fullPath, content, "utf-8");
