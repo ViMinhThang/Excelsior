@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
-import { join } from "path";
+import { mkdirSync } from "fs";
+import { dirname, join } from "path";
 
 function getDefaultDbPath(): string {
   return process.env.EXCELSIOR_DB_PATH ?? join(process.cwd(), "data", "index.db");
@@ -14,6 +15,9 @@ function columnExists(db: Database.Database, table: string, column: string): boo
 
 export function createDb(dbPath?: string): Database.Database {
   const path = dbPath ?? getDefaultDbPath();
+  if (path !== ":memory:") {
+    mkdirSync(dirname(path), { recursive: true });
+  }
   const db = new Database(path);
   db.pragma("journal_mode = WAL");
 

@@ -31,9 +31,22 @@ export function createFeatureRegistry(features: AppFeature[]): FeatureRegistry {
     getCommands: () => [...commands.values()],
     findCommand: (name) => commands.get(name),
     getPanel: (panelId) => panels.get(panelId),
-    getHelpText: () =>
-      `Available commands:\n${[...commands.values()]
-        .map((command) => `/${command.name} - ${command.description}`)
-        .join("\n")}`,
+    getHelpText: () => {
+      const groups = features
+        .filter((feature) => feature.commands.length > 0)
+        .map((feature) => {
+          const title = feature.id.charAt(0).toUpperCase() + feature.id.slice(1);
+          const entries = feature.commands
+            .map((command) => {
+              const usage = command.usage ? `\n  usage: ${command.usage}` : "";
+              return `/${command.name} - ${command.description}${usage}`;
+            })
+            .join("\n");
+          return `${title}\n${entries}`;
+        })
+        .join("\n\n");
+
+      return `Available commands:\n\n${groups}`;
+    },
   };
 }

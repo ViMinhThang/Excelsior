@@ -39,8 +39,9 @@ function SessionPickerInner({
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={1}>
       <Text color={theme.colors.accent} bold>Sessions</Text>
+      <Text color={theme.colors.muted} dimColor>Up/Down select{theme.glyphs.separator}Enter open{theme.glyphs.separator}Esc close</Text>
       {rows.length === 0 ? (
-        <Text color={theme.colors.muted}>No sessions</Text>
+        <Text color={theme.colors.muted}>No sessions yet. Send a message to start one.</Text>
       ) : rows.map((row, index) => (
         <Text
           key={`${context.sessions[index].id}:${index}`}

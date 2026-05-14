@@ -148,6 +148,7 @@ export function useChatScreenState() {
     subAgentIndex,
     messages: displayBlocks,
     activePanel,
+    activePanelId,
     featureContext,
     isLoading,
     currentSessionId,

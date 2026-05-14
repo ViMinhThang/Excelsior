@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Session } from "../lib/runtime/session.js";
 import {
   getInitialSessionIndex,
+  getRelativeSessionTime,
   getSessionDisplayTitle,
   getSessionPickerRows,
   moveSessionSelection,
@@ -39,9 +40,17 @@ describe("session picker helpers", () => {
       [session("ses_secret_123", "Review project architecture")],
       0,
       "ses_secret_123",
+      Date.parse("2026-05-14T00:01:00.000Z"),
     );
 
     expect(rows[0]).toContain("Review project architecture");
+    expect(rows[0]).toContain("(current)");
+    expect(rows[0]).toContain("1m ago");
     expect(rows[0]).not.toContain("ses_secret_123");
+  });
+
+  it("formats relative session times", () => {
+    expect(getRelativeSessionTime(session("ses_1"), Date.parse("2026-05-14T00:00:30.000Z"))).toBe("just now");
+    expect(getRelativeSessionTime(session("ses_1"), Date.parse("2026-05-14T02:00:00.000Z"))).toBe("2h ago");
   });
 });

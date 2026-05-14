@@ -4,7 +4,7 @@ import { createEditTool } from "./fs/edit.js";
 import { createLsTool } from "./fs/ls.js";
 import { createViewTool } from "./fs/view.js";
 import { createGlobTool } from "./fs/glob.js";
-import { createGrepTool } from "./fs/grep.js";
+import { createRipgrepTool } from "./fs/ripgrep.js";
 import type { ToolContext } from "../../lib/tool/context.js";
 
 export function createFileTools(ctx?: ToolContext) {
@@ -15,6 +15,6 @@ export function createFileTools(ctx?: ToolContext) {
     write: createWriteTool(ctx),
     edit: createEditTool(ctx),
     glob: createGlobTool(ctx),
-    grep: createGrepTool(ctx),
+    ripgrep: createRipgrepTool(ctx),
   };
 }

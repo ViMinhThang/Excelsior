@@ -8,9 +8,10 @@ import { CommandSuggestions } from '../components/chat/CommandSuggestions.js';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator.js';
 import { useChatScreenState } from '../hooks/useChatScreenState.js';
 import { createToolDisplay } from '../lib/toolDisplay.js';
+import { getChatModeHint } from '../lib/modeHints.js';
 import { theme } from '../theme.js';
 import Panel from '../components/shared/Panel.js';
-import { ProjectedBlock, toSubAgentViewModel, SubAgentViewModel } from '../../lib/projection/display.js';
+import { ProjectedBlock, toSubAgentViewModel } from '../../lib/projection/display.js';
 
 const renderAppHeader = () => (
   <Box key="app-header">
@@ -33,6 +34,7 @@ const ChatScreen = () => {
     subAgentIndex,
     messages,
     activePanel,
+    activePanelId,
     featureContext,
     isLoading,
     workspaceRootPath,
@@ -51,6 +53,14 @@ const ChatScreen = () => {
 
   const displayBlocks = messages as ProjectedBlock[];
   const ActiveFeaturePanel = activePanel?.component;
+  const selectedSubAgent = subAgents[subAgentIndex] as (ProjectedBlock & { type: "sub-agent" }) | undefined;
+  const footerHint = getChatModeHint({
+    chatMode,
+    isLoading,
+    hasPending: !!pending,
+    activePanelId,
+    subAgentCount: subAgents.length,
+  });
 
   return (
     <Box flexDirection="column">
@@ -58,8 +68,16 @@ const ChatScreen = () => {
         {renderAppHeader}
       </Static>
 
-      {chatMode === "subagent-detail" && subAgents.length > 0 && subAgents[subAgentIndex] ? (
-        <SubAgentDetail agent={toSubAgentViewModel((subAgents[subAgentIndex] as ProjectedBlock & { type: "sub-agent" }).state, subAgents[subAgentIndex].id, (subAgents[subAgentIndex] as ProjectedBlock & { type: "sub-agent" }).role)} />
+      {chatMode === "subagent-detail" ? (
+        <>
+          {selectedSubAgent ? (
+            <SubAgentDetail agent={toSubAgentViewModel(selectedSubAgent.state, selectedSubAgent.id, selectedSubAgent.role)} />
+          ) : (
+            <Box marginTop={1} paddingLeft={1}>
+              <Text color={theme.colors.muted}>No sub-agent detail is available yet.</Text>
+            </Box>
+          )}
+        </>
       ) : (
         <>
           <Box flexDirection="column">
@@ -127,6 +145,10 @@ const ChatScreen = () => {
       )}
 
       <Box marginTop={1} paddingLeft={1}>
+        <Text color={theme.colors.muted} dimColor>{footerHint}</Text>
+      </Box>
+
+      <Box paddingLeft={1}>
         <Text color={theme.colors.muted} dimColor>workspace: {workspaceRootPath}</Text>
       </Box>
     </Box>
