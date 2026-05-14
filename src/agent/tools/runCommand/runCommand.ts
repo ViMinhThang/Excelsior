@@ -96,7 +96,9 @@ export function createRunCommandTool(ctx?: ToolContext) {
         });
 
         const killAndResolve = (msg: string) => {
-          try { child.kill(); } catch {}
+          try { child.kill(); } catch (err) {
+            process.stderr.write(`runCommand: kill failed: ${err}\n`);
+          }
           resolve(msg);
         };
 
@@ -124,7 +126,7 @@ export function createRunCommandTool(ctx?: ToolContext) {
           }
         });
 
-        child.on("error", (err: any) => {
+        child.on("error", (err: NodeJS.ErrnoException) => {
           clearTimeout(timeoutTimer);
           if (err.code === 'ENOENT') {
             resolve(`Error: Executable not found: ${command}`);

@@ -24,7 +24,8 @@ export const lsTool = tool({
             const size = entry.isDirectory() ? "-" : s.size.toLocaleString();
             const mtime = s.mtime.toISOString().split('T')[0];
             return `${type} | ${entry.name.padEnd(30)} | ${size.padStart(12)} bytes | ${mtime}`;
-          } catch {
+          } catch (err) {
+            process.stderr.write(`ls: failed to stat ${fullPath}: ${err}\n`);
             return `UNKN | ${entry.name.padEnd(30)} | - | -`;
           }
         })
@@ -32,8 +33,8 @@ export const lsTool = tool({
 
       if (stats.length === 0) return "Directory is empty.";
       return ["TYPE | NAME".padEnd(35) + " | SIZE".padStart(20) + " | MODIFIED", "-".repeat(80), ...stats].join("\n");
-    } catch (error: any) {
-      return `Error listing directory: ${error.message}`;
+    } catch (error: unknown) {
+      return `Error listing directory: ${error instanceof Error ? error.message : String(error)}`;
     }
   },
 });

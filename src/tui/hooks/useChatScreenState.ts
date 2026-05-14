@@ -1,54 +1,28 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useCallback, useEffect } from "react";
 import { useNavigation } from "../context/NavigationContext.js";
 import { handleCommand } from "../lib/commands.js";
-import { useAgentManager } from "../../features/session/useAgentManager.js";
+import { useAgentManager } from "./useAgentManager.js";
 import { useKeymap } from "./useKeymap.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";
 import { useCommandAutocomplete } from "./useCommandAutocomplete.js";
-import { DisplayBlock } from "../../lib/eventTypes.js";
+import { postPRComment } from "../../utils/ghComment.js";
+import { deleteAllSessions } from "../../lib/persistence/eventPersistence.js";
+import { useInputHistory } from "./useInputHistory.js";
+import { useSubAgentNavigation } from "./useSubAgentNavigation.js";
+import { useCommandResult } from "./useCommandResult.js";
 
 export function useChatScreenState() {
   const { navigate, goBack } = useNavigation();
-  const [input, setInput] = useState("");
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const [originalInput, setOriginalInput] = useState("");
 
-  const [chatMode, setChatMode] = useState<"input" | "subagent-detail">(
-    "input",
-  );
-  const [commandResult, setCommandResult] = useState<string | null>(null);
+  const {
+    state: { displayBlocks, isLoading, currentSessionId, workspaceRootPath },
+    send, cancel, clear,
+    switchSession, createSession, deleteSession, renameSession, listSessions,
+  } = useAgentManager();
 
-  useEffect(() => {
-    if (input) {
-      setCommandResult(null);
-    }
-  }, [input]);
-
-  const inputRef = useRef(input);
-  inputRef.current = input;
-
-  const { state: { displayBlocks, isLoading }, send, cancel, clear } = useAgentManager();
-
-  const [subAgentIndex, setSubAgentIndex] = useState(0);
-
-  const subAgentBlocks = useMemo(
-    () => displayBlocks.filter((b): b is DisplayBlock & { type: "sub-agent" } => b.type === "sub-agent"),
-    [displayBlocks],
-  );
-
-  const nextSubAgent = useCallback(() => {
-    setSubAgentIndex((prev) => {
-      if (subAgentBlocks.length === 0) return 0;
-      return prev < subAgentBlocks.length - 1 ? prev + 1 : 0;
-    });
-  }, [subAgentBlocks.length]);
-
-  const prevSubAgent = useCallback(() => {
-    setSubAgentIndex((prev) => {
-      if (subAgentBlocks.length === 0) return 0;
-      return prev > 0 ? prev - 1 : subAgentBlocks.length - 1;
-    });
-  }, [subAgentBlocks.length]);
+  const { input, setInput, inputRef, resetInput, navigateUp, navigateDown } = useInputHistory(displayBlocks);
+  const { chatMode, setChatMode, subAgentIndex, subAgentBlocks, nextSubAgent, prevSubAgent, openSubAgent } = useSubAgentNavigation(displayBlocks);
+  const { commandResult, setCommandResult } = useCommandResult(input);
 
   const { pending, approve, approveAll, deny } = useToolConfirmation();
 
@@ -76,6 +50,22 @@ export function useChatScreenState() {
         clear();
         setCommandResult(null);
       },
+      deleteAllSessions: () => {
+        deleteAllSessions();
+      },
+      send: (content: string) => {
+        resetInput();
+        send(content);
+      },
+      postComment: async (prNumber: number, body: string) => {
+        return postPRComment(prNumber, body);
+      },
+      switchSession: (id: string) => switchSession(id),
+      createSession: (title?: string) => createSession(title),
+      deleteSession: (id: string) => deleteSession(id),
+      renameSession: (id: string, title: string) => renameSession(id, title),
+      listSessions: () => listSessions(),
+      currentSessionId,
     };
     const suggestedCommand = suggestion.filtered[0];
     if (suggestedCommand) {
@@ -91,9 +81,7 @@ export function useChatScreenState() {
       return;
     }
 
-    setInput("");
-    setHistoryIndex(-1);
-    setOriginalInput("");
+    resetInput();
 
     send(trimmed);
   }, [
@@ -103,6 +91,7 @@ export function useChatScreenState() {
     send,
     clear,
     suggestion,
+    resetInput,
   ]);
 
   useKeymap({
@@ -129,28 +118,10 @@ export function useChatScreenState() {
       if (isLoading) cancel();
     },
     "ctrl+o": () => {
-      if (subAgentBlocks.length > 0) {
-        setSubAgentIndex(0);
-        setChatMode("subagent-detail");
-      }
+      openSubAgent();
     },
-    "up": () => {
-      const userBlocks = displayBlocks.filter((b) => b.type === "user").reverse();
-      if (historyIndex + 1 < userBlocks.length) {
-        const newIndex = historyIndex + 1;
-        if (historyIndex === -1) setOriginalInput(input);
-        setHistoryIndex(newIndex);
-        setInput(userBlocks[newIndex].content);
-      }
-    },
-    "down": () => {
-      const userBlocks = displayBlocks.filter((b) => b.type === "user").reverse();
-      if (historyIndex >= 0) {
-        const newIndex = historyIndex - 1;
-        setHistoryIndex(newIndex);
-        setInput(newIndex === -1 ? originalInput : userBlocks[newIndex].content);
-      }
-    },
+    "up": () => navigateUp(),
+    "down": () => navigateDown(),
     "return": () => {
       handleSubmit();
     }
@@ -164,6 +135,8 @@ export function useChatScreenState() {
     subAgentIndex,
     messages: displayBlocks,
     isLoading,
+    currentSessionId,
+    workspaceRootPath,
     pending,
     suggestion,
     handleSubmit,

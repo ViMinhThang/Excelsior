@@ -8,9 +8,9 @@ describe("StreamPart type helpers", () => {
       expect(getTextDelta(part)).toBe("hello world");
     });
 
-    it("falls back to textDelta when text is missing", () => {
-      const part: StreamPart = { type: "text-delta", textDelta: "fallback" };
-      expect(getTextDelta(part)).toBe("fallback");
+    it("returns text directly without textDelta fallback", () => {
+      const part: StreamPart = { type: "text-delta", text: "actual text" };
+      expect(getTextDelta(part)).toBe("actual text");
     });
 
     it("returns empty string for non-text part", () => {
