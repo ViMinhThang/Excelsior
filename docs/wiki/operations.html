@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Operations - Excelsior Wiki</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>Excelsior Wiki</h1>
+        <p>Running, persistence, testing, and maintenance.</p>
+      </div>
+      <nav>
+        <div class="nav-section">
+          <h2>Pages</h2>
+          <a href="index.html">Overview</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="data-flow.html">Data Flow</a>
+          <a href="code-tour.html">Code Tour</a>
+          <a href="tools-features.html">Tools and Features</a>
+          <a href="operations.html">Operations</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <div class="eyebrow">Operations</div>
+        <h1>Running and maintaining Excelsior</h1>
+        <p class="lead">
+          This page covers local startup, environment variables, persistent files, tests, build commands, and the operational
+          assumptions that matter when you change the runtime.
+        </p>
+      </section>
+
+      <h2>Local Commands</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Purpose</th>
+              <th>When to run</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>npm run dev</code></td>
+              <td>Runs the TypeScript entry point through `tsx`.</td>
+              <td>During local development.</td>
+            </tr>
+            <tr>
+              <td><code>npm test</code></td>
+              <td>Runs the Vitest test suite.</td>
+              <td>After behavior changes.</td>
+            </tr>
+            <tr>
+              <td><code>npm run build</code></td>
+              <td>Runs TypeScript compilation to `dist`.</td>
+              <td>Before shipping or after type-level refactors.</td>
+            </tr>
+            <tr>
+              <td><code>npm start</code></td>
+              <td>Runs the compiled JavaScript entry point.</td>
+              <td>After `npm run build`.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Environment And Settings</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3><code>DEEPSEEK_API_KEY</code></h3>
+          <p>Provider key used by `createAgent()`. The app first checks stored settings through `getSetting("DEEPSEEK_API_KEY")`, then falls back to the environment variable.</p>
+        </article>
+        <article class="card">
+          <h3><code>GITHUB_TOKEN</code></h3>
+          <p>Optional token for PR review commands and comment posting. GitHub helpers live under `src/lib/github`.</p>
+        </article>
+        <article class="card">
+          <h3><code>EXCELSIOR_DB_PATH</code></h3>
+          <p>Overrides the SQLite metadata database path. Useful for tests and isolated runs.</p>
+        </article>
+        <article class="card">
+          <h3><code>EXCELSIOR_SESSIONS_DIR</code></h3>
+          <p>Overrides the JSONL session event directory. Tests also use exported setters for isolation.</p>
+        </article>
+      </div>
+
+      <h2>Persistence Files</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 980 360" role="img">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ab4ff"></path>
+            </marker>
+          </defs>
+          <rect class="box" x="60" y="70" width="190" height="78"></rect>
+          <text class="label" x="104" y="104">SQLite DB</text>
+          <text class="small" x="92" y="128">data/index.db</text>
+
+          <rect class="box warn" x="60" y="215" width="190" height="78"></rect>
+          <text class="label" x="101" y="249">JSONL logs</text>
+          <text class="small" x="84" y="273">data/sessions/*.jsonl</text>
+
+          <rect class="box good" x="365" y="70" width="230" height="78"></rect>
+          <text class="label" x="418" y="104">Session metadata</text>
+          <text class="small" x="395" y="128">title, timestamps, workspace</text>
+
+          <rect class="box good" x="365" y="215" width="230" height="78"></rect>
+          <text class="label" x="423" y="249">Runtime events</text>
+          <text class="small" x="400" y="273">stream, tool, checkpoint events</text>
+
+          <rect class="box alt" x="710" y="140" width="210" height="78"></rect>
+          <text class="label" x="753" y="174">Restore UI</text>
+          <text class="small" x="742" y="198">completed event replay</text>
+
+          <path class="arrow" d="M 250 109 L 365 109"></path>
+          <path class="arrow" d="M 250 254 L 365 254"></path>
+          <path class="arrow" d="M 595 254 C 665 245 685 205 710 184"></path>
+          <path class="arrow" d="M 595 109 C 665 120 685 150 710 174"></path>
+        </svg>
+      </div>
+
+      <h2>Test Coverage Map</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Test file</th>
+              <th>Area covered</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>run.test.ts</code>, <code>streamTypes.test.ts</code></td>
+              <td>Runtime streaming and stream part normalization.</td>
+            </tr>
+            <tr>
+              <td><code>runRecorderIntegration.test.ts</code>, <code>jsonlEventStore.test.ts</code></td>
+              <td>Event persistence, checkpoints, raw versus completed restore.</td>
+            </tr>
+            <tr>
+              <td><code>projection.test.ts</code></td>
+              <td>Event-to-display projection and child/sub-agent rendering state.</td>
+            </tr>
+            <tr>
+              <td><code>featureRegistry.test.ts</code>, <code>commands.test.ts</code>, <code>chatSubmit.test.ts</code></td>
+              <td>Feature-owned command registry and slash command submission.</td>
+            </tr>
+            <tr>
+              <td><code>fsTools.test.ts</code>, <code>tools/runCommand.test.ts</code></td>
+              <td>Workspace-bounded tools and shell command safety.</td>
+            </tr>
+            <tr>
+              <td><code>safeTextInput.test.ts</code>, <code>keymap.test.ts</code></td>
+              <td>Input editing and keyboard routing.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Operational Invariants</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3>Completed restore is checkpoint-safe</h3>
+          <p>Normal restore loads only through the last `TURN_COMPLETE`. Do not change that unless the crash recovery model changes too.</p>
+        </article>
+        <article class="card">
+          <h3>Tools stay workspace-bounded</h3>
+          <p>Filesystem tools must validate path or pattern boundaries before touching disk. Writes still require confirmation.</p>
+        </article>
+        <article class="card">
+          <h3>Cancellation propagates</h3>
+          <p>Parent cancellation should abort active streams, child runs, and long-running tool work through `AbortSignal`.</p>
+        </article>
+        <article class="card">
+          <h3>Projection remains pure</h3>
+          <p>Projection functions should stay deterministic and side-effect free, because they serve both live display and replay.</p>
+        </article>
+      </div>
+
+      <h2>Debugging Checklist</h2>
+      <ol>
+        <li>If UI is wrong but JSONL is correct, inspect `src/lib/projection` and chat components.</li>
+        <li>If restored history is missing, inspect `TURN_COMPLETE` placement and `loadUntilLastCheckpoint()`.</li>
+        <li>If a tool acts oddly, inspect the tool factory and `ToolContext` propagation.</li>
+        <li>If sub-agent rows leak between runs, inspect `SubAgentEventSink` plumbing and manager lifetime.</li>
+        <li>If commands do not route, inspect `getSubmittedCommand()`, `handleCommand()`, and the feature registry.</li>
+      </ol>
+
+      <h2>Maintenance Notes</h2>
+      <div class="callout">
+        <p>
+          Runtime files under `data/` are local state, not source. The codebase should remain testable with temporary DB and
+          session paths. When adding persistence behavior, prefer test-only configuration hooks over touching global runtime data.
+        </p>
+      </div>
+
+      <div class="footer">Back to <a href="index.html">Overview</a></div>
+    </main>
+  </div>
+</body>
+</html>

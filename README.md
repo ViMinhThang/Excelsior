@@ -59,7 +59,8 @@ src/
 `- tui/            # Ink UI screens, components, hooks, commands
 ```
 
-See [`docs/architecture.md`](docs/architecture.md) for current runtime boundaries.
+See [`docs/architecture.md`](docs/architecture.md) for current runtime boundaries, or open
+[`docs/wiki/index.html`](docs/wiki/index.html) for the full HTML architecture wiki.
 
 Slash commands are feature-owned: add commands, panels, and feature-specific helpers under `src/features/<feature>/`, then register the feature in `src/features/index.ts`.
 

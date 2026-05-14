@@ -34,6 +34,7 @@ describe("filesystem tool workspace bounds", () => {
   it("allows reads inside the workspace", async () => {
     const result = await (createViewTool(ctx()) as any).execute({ filePath: "inside.txt" });
     expect(result).toContain("needle");
+    expect(result).not.toContain("[File:");
   });
 
   it("rejects reads outside the workspace", async () => {

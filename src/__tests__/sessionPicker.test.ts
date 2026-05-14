@@ -5,6 +5,7 @@ import {
   getRelativeSessionTime,
   getSessionDisplayTitle,
   getSessionPickerRows,
+  SESSION_PICKER_HINT,
   moveSessionSelection,
 } from "../features/session/sessionPicker.js";
 
@@ -52,5 +53,9 @@ describe("session picker helpers", () => {
   it("formats relative session times", () => {
     expect(getRelativeSessionTime(session("ses_1"), Date.parse("2026-05-14T00:00:30.000Z"))).toBe("just now");
     expect(getRelativeSessionTime(session("ses_1"), Date.parse("2026-05-14T02:00:00.000Z"))).toBe("2h ago");
+  });
+
+  it("documents the selected-session delete shortcut", () => {
+    expect(SESSION_PICKER_HINT).toContain("Ctrl+D+D remove");
   });
 });

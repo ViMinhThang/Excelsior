@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Architecture - Excelsior Wiki</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>Excelsior Wiki</h1>
+        <p>Architecture and ownership map.</p>
+      </div>
+      <nav>
+        <div class="nav-section">
+          <h2>Pages</h2>
+          <a href="index.html">Overview</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="data-flow.html">Data Flow</a>
+          <a href="code-tour.html">Code Tour</a>
+          <a href="tools-features.html">Tools and Features</a>
+          <a href="operations.html">Operations</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <div class="eyebrow">Architecture</div>
+        <h1>Layered, event-driven, feature-owned</h1>
+        <p class="lead">
+          The codebase is organized around a small number of hard boundaries. React/Ink renders state. `AgentManager`
+          owns UI-facing state. `ChatService` and `startRun` wire model runs. Runtime objects produce events. Persistence
+          records events and metadata. Projection code translates events into chat blocks and model history.
+        </p>
+      </section>
+
+      <h2>Layer Diagram</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 980 620" role="img">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ab4ff"></path>
+            </marker>
+          </defs>
+          <rect class="box alt" x="70" y="40" width="840" height="80"></rect>
+          <text class="label" x="100" y="78">TUI layer</text>
+          <text class="small" x="100" y="103">`app.tsx`, `Router`, `ChatScreen`, `SettingsScreen`, chat components, hooks</text>
+
+          <rect class="box good" x="70" y="150" width="840" height="80"></rect>
+          <text class="label" x="100" y="188">Feature layer</text>
+          <text class="small" x="100" y="213">`features/*`: slash command definitions, panels, session service, review command glue</text>
+
+          <rect class="box" x="70" y="260" width="840" height="80"></rect>
+          <text class="label" x="100" y="298">Application layer</text>
+          <text class="small" x="100" y="323">`AgentManager`, `ChatService`, `runSession`: coordinates state, sessions, and run wiring</text>
+
+          <rect class="box alt" x="70" y="370" width="840" height="80"></rect>
+          <text class="label" x="100" y="408">Runtime layer</text>
+          <text class="small" x="100" y="433">`AgentRun`, `RunOrchestrator`, `agentStream`, confirmation bus, sub-agent sink</text>
+
+          <rect class="box warn" x="70" y="480" width="400" height="80"></rect>
+          <text class="label" x="100" y="518">Persistence layer</text>
+          <text class="small" x="100" y="543">SQLite metadata, JSONL event store, `RunRecorder`</text>
+
+          <rect class="box" x="510" y="480" width="400" height="80"></rect>
+          <text class="label" x="540" y="518">Integration layer</text>
+          <text class="small" x="540" y="543">DeepSeek agent, tools, GitHub helpers, shell commands</text>
+
+          <path class="arrow" d="M 490 120 L 490 150"></path>
+          <path class="arrow" d="M 490 230 L 490 260"></path>
+          <path class="arrow" d="M 490 340 L 490 370"></path>
+          <path class="arrow" d="M 390 450 L 300 480"></path>
+          <path class="arrow" d="M 590 450 L 700 480"></path>
+        </svg>
+      </div>
+
+      <h2>Responsibility Chart</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3>State ownership</h3>
+          <p><code>AgentManager</code> is the UI-facing store. It exposes a snapshot through <code>useSyncExternalStore</code> via <code>useAgentManager</code>, and everything in the TUI reads from that snapshot.</p>
+          <div class="bar"><span style="width: 88%"></span></div>
+          <p class="muted">High ownership concentration by design: one observable store reduces accidental React state forks.</p>
+        </article>
+        <article class="card">
+          <h3>Persistence ownership</h3>
+          <p><code>RunRecorder</code> owns event append, checkpoint append, raw loading, completed loading, and deletion. SQLite helpers own metadata tables only.</p>
+          <div class="bar"><span style="width: 78%"></span></div>
+          <p class="muted">Events and metadata are separate because they have different write patterns.</p>
+        </article>
+      </div>
+
+      <h2>Primary Boundaries</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Boundary</th>
+              <th>Code</th>
+              <th>What crosses it</th>
+              <th>What should not cross it</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>TUI to application</td>
+              <td><code>useAgentManager</code>, <code>useChatScreenState</code></td>
+              <td>Send, cancel, switch session, snapshots.</td>
+              <td>Raw event mutation or direct persistence calls, except command-specific reset helpers.</td>
+            </tr>
+            <tr>
+              <td>Application to runtime</td>
+              <td><code>ChatService.startRun</code>, <code>startRun</code></td>
+              <td>Messages, session id, recorder, sub-agent sink, tool context.</td>
+              <td>React UI concerns or Ink components.</td>
+            </tr>
+            <tr>
+              <td>Runtime to persistence</td>
+              <td><code>RunOrchestrator</code>, <code>RunRecorder</code></td>
+              <td>Append-only runtime events and turn checkpoints.</td>
+              <td>Rendered chat blocks or model history projections.</td>
+            </tr>
+            <tr>
+              <td>Events to display</td>
+              <td><code>projectionMerger</code>, <code>projectEvents</code></td>
+              <td>Immutable event arrays in, projected blocks out.</td>
+              <td>Side effects, file writes, network requests.</td>
+            </tr>
+            <tr>
+              <td>Features to app shell</td>
+              <td><code>FeatureRegistry</code></td>
+              <td>Command definitions and panel definitions.</td>
+              <td>Global switch statements for every command.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Why Event-Driven?</h2>
+      <p>
+        Agent runs are not a single response string. They include user input, streamed text chunks, tool-call starts, tool-call
+        results, sub-agent attachment events, errors, cancellation, and completion checkpoints. Representing that as an ordered
+        event stream allows the same data to serve four jobs: live UI, persisted restore, future model context, and debugging.
+      </p>
+
+      <div class="callout">
+        <p>
+          The most important architectural invariant is that projections are deterministic. If you replay the same completed
+          event sequence, you should get the same chat blocks and AI history. This is why projection code is kept under
+          <code>src/lib/projection</code> and does not reach into React or persistence.
+        </p>
+      </div>
+
+      <h2>Runtime Collaboration</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 1020 340" role="img">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ab4ff"></path>
+            </marker>
+          </defs>
+          <rect class="box" x="40" y="45" width="170" height="72"></rect>
+          <text class="label" x="74" y="76">AgentManager</text>
+          <text class="small" x="72" y="100">state + sessions</text>
+
+          <rect class="box" x="290" y="45" width="170" height="72"></rect>
+          <text class="label" x="334" y="76">ChatService</text>
+          <text class="small" x="314" y="100">agent and tools</text>
+
+          <rect class="box alt" x="540" y="45" width="170" height="72"></rect>
+          <text class="label" x="592" y="76">startRun</text>
+          <text class="small" x="570" y="100">context factory</text>
+
+          <rect class="box alt" x="790" y="45" width="170" height="72"></rect>
+          <text class="label" x="826" y="76">Orchestrator</text>
+          <text class="small" x="824" y="100">stream runner</text>
+
+          <rect class="box good" x="540" y="215" width="170" height="72"></rect>
+          <text class="label" x="586" y="246">AgentRun</text>
+          <text class="small" x="574" y="270">event source</text>
+
+          <rect class="box warn" x="790" y="215" width="170" height="72"></rect>
+          <text class="label" x="824" y="246">RunRecorder</text>
+          <text class="small" x="824" y="270">JSONL append</text>
+
+          <path class="arrow" d="M 210 82 L 290 82"></path>
+          <path class="arrow" d="M 460 82 L 540 82"></path>
+          <path class="arrow" d="M 710 82 L 790 82"></path>
+          <path class="arrow" d="M 875 117 L 875 215"></path>
+          <path class="arrow" d="M 790 251 L 710 251"></path>
+          <path class="arrow" d="M 625 215 L 625 117"></path>
+          <path class="arrow" d="M 540 251 C 330 265 215 210 125 117"></path>
+        </svg>
+      </div>
+
+      <h2>Architectural Tradeoffs</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3>Chosen: JSONL events plus SQLite metadata</h3>
+          <p>Streaming events are frequent and append-only, which fits JSONL. Session titles, workspaces, settings, and error logs are relational metadata, which fits SQLite.</p>
+        </article>
+        <article class="card">
+          <h3>Chosen: feature-owned commands</h3>
+          <p>Commands and panels live next to feature-specific helpers. This avoids one central command file growing into a mixed-purpose controller.</p>
+        </article>
+        <article class="card">
+          <h3>Chosen: one observable store</h3>
+          <p>SessionManager is a plain service. AgentManager is the only UI-facing observable store, so React rendering has one subscription surface.</p>
+        </article>
+        <article class="card">
+          <h3>Chosen: projections over stored UI</h3>
+          <p>The app stores facts as events, not rendered blocks. This lets display behavior evolve without migrating every old chat transcript.</p>
+        </article>
+      </div>
+
+      <div class="footer">Next: <a href="data-flow.html">Data Flow</a></div>
+    </main>
+  </div>
+</body>
+</html>

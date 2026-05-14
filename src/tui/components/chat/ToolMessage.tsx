@@ -3,7 +3,6 @@ import { Box, Text } from "ink";
 import StatusIndicator from "./StatusIndicator.js";
 import { theme } from "../../theme.js";
 import { createToolDisplay } from "../../lib/toolDisplay.js";
-import { formatToolPreview } from "../../lib/subAgentDisplay.js";
 
 interface ToolMessageProps {
   toolName?: string;
@@ -38,28 +37,6 @@ function formatCliCommand(toolName?: string, argsStr?: string): string {
   }
 }
 
-function renderCommandWithPathHighlight(cmdText: string): React.ReactNode {
-  const pathRegex = /\b([\w-]+\/(?:[\w-]+\/)*[\w-]+\.(?:ts|tsx|js|jsx|json|py|md|css|html|yml|yaml|sh))\b/g;
-  const segments: { text: string; isPath: boolean }[] = [];
-  let lastIndex = 0;
-  let match;
-
-  while ((match = pathRegex.exec(cmdText)) !== null) {
-    if (match.index > lastIndex) segments.push({ text: cmdText.slice(lastIndex, match.index), isPath: false });
-    segments.push({ text: match[0], isPath: true });
-    lastIndex = pathRegex.lastIndex;
-  }
-
-  if (lastIndex < cmdText.length) segments.push({ text: cmdText.slice(lastIndex), isPath: false });
-  if (segments.length === 0) return cmdText;
-
-  return segments.map((seg, idx) => (
-    <Text key={idx} color={seg.isPath ? "#88c0d0" : undefined} bold={seg.isPath}>
-      {seg.text}
-    </Text>
-  ));
-}
-
 const ToolMessage: React.FC<ToolMessageProps> = ({
   toolName,
   toolArgs,
@@ -70,34 +47,39 @@ const ToolMessage: React.FC<ToolMessageProps> = ({
 }) => {
   const display = createToolDisplay({ toolName, toolArgs, status, content });
   const cmd = formatCliCommand(toolName, toolArgs);
+  const innerContent = (
+    <Box flexDirection="column">
+      <Box flexDirection="row" gap={1}>
+        <StatusIndicator status={status} />
+        <Text color={theme.colors.muted} dimColor>
+          {cmd}
+        </Text>
+      </Box>
+      {(display.detail || display.resultPreview?.length || status === "completed") && (
+        <Box flexDirection="column" paddingLeft={2}>
+          {display.detail ? (
+            <Text color={theme.colors.muted} dimColor>↳ {display.detail}</Text>
+          ) : null}
+          {display.resultPreview?.map((line, index) => {
+            const prefix = !display.detail && index === 0 ? "↳ " : "  ";
+            return <Text key={`preview_line_${index}`} color={theme.colors.muted} dimColor>{prefix}{line}</Text>;
+          })}
+          {display.omittedResultLines ? (
+            <Text color={theme.colors.muted} dimColor>  … ({display.omittedResultLines} more lines)</Text>
+          ) : null}
+          {status === "completed" && (
+            <Text color={theme.colors.muted} dimColor>
+              {(!display.detail && (!display.resultPreview || display.resultPreview.length === 0)) ? "↳ " : "  "}Completed
+            </Text>
+          )}
+        </Box>
+      )}
+    </Box>
+  );
 
   return (
     <Box marginTop={marginTop} paddingLeft={1} paddingBottom={nested ? 0 : 1}>
-      <Box flexDirection="column">
-        <Box flexDirection="row" gap={1}>
-          {status !== "completed" && <StatusIndicator status={status} />}
-          <Text color={theme.colors.muted} dimColor>{renderCommandWithPathHighlight(cmd)}</Text>
-        </Box>
-        {(display.detail || display.resultPreview?.length || status === "completed") && (
-          <Box flexDirection="column" paddingLeft={2}>
-            {display.detail ? (
-              <Text color={theme.colors.muted} dimColor>{theme.glyphs.branch} {formatToolPreview(display.detail, undefined, 96)}</Text>
-            ) : null}
-            {display.resultPreview?.map((line, index) => {
-              const prefix = !display.detail && index === 0 ? `${theme.glyphs.branch} ` : "  ";
-              return <Text key={`preview_line_${index}`} color={theme.colors.muted} dimColor>{prefix}{line}</Text>;
-            })}
-            {display.omittedResultLines ? (
-              <Text color={theme.colors.muted} dimColor>  {theme.glyphs.ellipsis} ({display.omittedResultLines} more lines)</Text>
-            ) : null}
-            {status === "completed" && (
-              <Text color={theme.colors.muted} dimColor>
-                {(!display.detail && (!display.resultPreview || display.resultPreview.length === 0)) ? `${theme.glyphs.branch} ` : "  "}Completed
-              </Text>
-            )}
-          </Box>
-        )}
-      </Box>
+      {innerContent}
     </Box>
   );
 };

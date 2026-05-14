@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tools and Features - Excelsior Wiki</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>Excelsior Wiki</h1>
+        <p>Slash commands, tools, safety, sub-agents.</p>
+      </div>
+      <nav>
+        <div class="nav-section">
+          <h2>Pages</h2>
+          <a href="index.html">Overview</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="data-flow.html">Data Flow</a>
+          <a href="code-tour.html">Code Tour</a>
+          <a href="tools-features.html">Tools and Features</a>
+          <a href="operations.html">Operations</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <div class="eyebrow">Features and tools</div>
+        <h1>How user capabilities are added</h1>
+        <p class="lead">
+          Excelsior has two extension surfaces: app features and agent tools. Features define slash commands and UI panels.
+          Tools are AI-callable functions exposed to the model with workspace bounds, confirmations, cancellation, and output formatting.
+        </p>
+      </section>
+
+      <h2>Feature-Owned Slash Commands</h2>
+      <p>
+        Features implement the `AppFeature` contract: an id, command definitions, and optional panels. The registry validates
+        uniqueness and supplies command lookup, panel lookup, autocomplete data, and grouped help text.
+      </p>
+      <pre><code>AppFeature
+  id: "session"
+  commands: [CommandDefinition]
+  panels: [FeaturePanelDefinition]</code></pre>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1000 390" role="img">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ab4ff"></path>
+            </marker>
+          </defs>
+          <rect class="box good" x="50" y="70" width="180" height="78"></rect>
+          <text class="label" x="93" y="104">Feature</text>
+          <text class="small" x="78" y="128">commands + panels</text>
+
+          <rect class="box" x="320" y="70" width="190" height="78"></rect>
+          <text class="label" x="358" y="104">FeatureRegistry</text>
+          <text class="small" x="352" y="128">unique names + lookup</text>
+
+          <rect class="box alt" x="600" y="70" width="180" height="78"></rect>
+          <text class="label" x="650" y="104">Chat hook</text>
+          <text class="small" x="626" y="128">submit + autocomplete</text>
+
+          <rect class="box warn" x="600" y="235" width="180" height="78"></rect>
+          <text class="label" x="650" y="269">Panel UI</text>
+          <text class="small" x="628" y="293">feature-owned view</text>
+
+          <rect class="box" x="835" y="70" width="130" height="78"></rect>
+          <text class="label" x="870" y="104">User</text>
+          <text class="small" x="855" y="128">slash command</text>
+
+          <path class="arrow" d="M 230 109 L 320 109"></path>
+          <path class="arrow" d="M 510 109 L 600 109"></path>
+          <path class="arrow" d="M 835 109 L 780 109"></path>
+          <path class="arrow" d="M 690 148 L 690 235"></path>
+        </svg>
+      </div>
+
+      <h2>Current Features</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Commands</th>
+              <th>Code</th>
+              <th>Behavior</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>core</td>
+              <td><code>/help</code>, <code>/clear</code>, <code>/reset</code></td>
+              <td><code>src/features/core/feature.ts</code></td>
+              <td>Help text, clear visible chat, delete persisted history.</td>
+            </tr>
+            <tr>
+              <td>settings</td>
+              <td><code>/settings</code></td>
+              <td><code>src/features/settings/feature.ts</code></td>
+              <td>Navigates to settings screen.</td>
+            </tr>
+            <tr>
+              <td>session</td>
+              <td><code>/session</code> plus subcommands</td>
+              <td><code>src/features/session</code></td>
+              <td>Session picker panel, create/open/rename/delete operations.</td>
+            </tr>
+            <tr>
+              <td>review</td>
+              <td><code>/review</code>, <code>/review-post</code></td>
+              <td><code>src/features/review/feature.ts</code></td>
+              <td>Fetches PR diffs and asks the agent to run a specialist multi-agent review.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Agent Tool Surface</h2>
+      <p>
+        `createAgent()` builds a `ToolLoopAgent` with base file tools and any extra tools supplied by `ChatService`.
+        `createFileTools(ctx)` registers shell, file, listing, viewing, editing, globbing, and ripgrep search tools.
+      </p>
+      <div class="grid three">
+        <article class="card">
+          <h3>Read tools</h3>
+          <p><code>view</code>, <code>ls</code>, <code>glob</code>, and <code>ripgrep</code> inspect files inside the workspace.</p>
+        </article>
+        <article class="card">
+          <h3>Write tools</h3>
+          <p><code>write</code> and <code>edit</code> validate paths and request confirmation before modifying files.</p>
+        </article>
+        <article class="card">
+          <h3>Shell tool</h3>
+          <p><code>runCommand</code> runs executables with structured args, blocks dangerous patterns, and confirms write-like commands.</p>
+        </article>
+      </div>
+
+      <h2>Tool Safety Flow</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 1030 420" role="img">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ab4ff"></path>
+            </marker>
+          </defs>
+          <rect class="box" x="50" y="80" width="170" height="72"></rect>
+          <text class="label" x="84" y="112">Tool call</text>
+          <text class="small" x="72" y="136">model request</text>
+
+          <rect class="box alt" x="300" y="80" width="180" height="72"></rect>
+          <text class="label" x="334" y="112">ToolContext</text>
+          <text class="small" x="326" y="136">capabilities + abort</text>
+
+          <rect class="box good" x="560" y="80" width="180" height="72"></rect>
+          <text class="label" x="592" y="112">Path bounds</text>
+          <text class="small" x="592" y="136">workspace only</text>
+
+          <rect class="box warn" x="560" y="235" width="180" height="72"></rect>
+          <text class="label" x="592" y="267">Confirmation</text>
+          <text class="small" x="586" y="291">write-like actions</text>
+
+          <rect class="box" x="820" y="155" width="165" height="72"></rect>
+          <text class="label" x="858" y="187">Execute</text>
+          <text class="small" x="840" y="211">return text result</text>
+
+          <path class="arrow" d="M 220 116 L 300 116"></path>
+          <path class="arrow" d="M 480 116 L 560 116"></path>
+          <path class="arrow" d="M 650 152 L 650 235"></path>
+          <path class="arrow" d="M 740 271 C 790 270 800 210 820 195"></path>
+          <path class="arrow" d="M 740 116 C 790 120 800 165 820 185"></path>
+        </svg>
+      </div>
+
+      <h2>Sub-Agent Tool</h2>
+      <p>
+        `spawnSubAgent` is an extra tool injected by `ChatService`. It creates a child `AgentRun`, passes down the parent
+        confirmation and cancellation context, starts a focused agent with role-specific instructions, records child events
+        to the same session, and emits run-scoped sub-agent notifications for the owning manager.
+      </p>
+      <div class="callout">
+        <p>
+          Sub-agents should be used for bounded specialist analysis such as security review, bug hunting, style review, or
+          infrastructure review. The sub-agent instructions explicitly prohibit further delegation to avoid nested agent trees.
+        </p>
+      </div>
+
+      <h2>Adding A New Feature</h2>
+      <ol>
+        <li>Create `src/features/my-feature/feature.ts` exporting an `AppFeature`.</li>
+        <li>Add command definitions with `name`, `description`, optional `usage`, and `execute(args, context)`.</li>
+        <li>If the feature needs UI, add a panel component and register it under `panels`.</li>
+        <li>Add the feature to `appFeatures` in `src/features/index.ts`.</li>
+        <li>Add registry and behavior tests.</li>
+      </ol>
+
+      <h2>Adding A New Tool</h2>
+      <ol>
+        <li>Place implementation under `src/agent/tools` and expose a `createXTool(ctx)` factory.</li>
+        <li>Validate all file paths before any read/write operation.</li>
+        <li>Use `ctx.confirm.request()` for write-like actions.</li>
+        <li>Respect `ctx.abortSignal` for long-running work.</li>
+        <li>Register it in `createFileTools()` or inject it as an extra tool from `ChatService`.</li>
+      </ol>
+
+      <div class="footer">Next: <a href="operations.html">Operations</a></div>
+    </main>
+  </div>
+</body>
+</html>
