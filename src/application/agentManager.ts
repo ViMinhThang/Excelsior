@@ -8,7 +8,10 @@ import {
   buildAIHistory,
 } from "../lib/projection/projectionMerger.js";
 import { loadSessionEvents } from "../lib/persistence/eventPersistence.js";
-import { createSubAgentEventSink, SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
+import {
+  createSubAgentEventSink,
+  SubAgentEventSink,
+} from "../lib/runtime/subAgentEventSink.js";
 import { SessionManager } from "../features/session/manager.js";
 import { ChatService } from "./chatService.js";
 
@@ -50,7 +53,8 @@ export class AgentManager {
 
   constructor(workspaceId?: string, options?: AgentManagerOptions) {
     this._service = options?.chatService ?? new ChatService();
-    this._sessionManager = options?.sessionManager ?? new SessionManager(workspaceId);
+    this._sessionManager =
+      options?.sessionManager ?? new SessionManager(workspaceId);
     this._subAgentEvents = createSubAgentEventSink();
     this._loadInitialData();
     this._subscribeSubAgentEvents();
@@ -69,12 +73,12 @@ export class AgentManager {
     };
   }
 
-  send(content: string): void {
+  send(content: string, options?: { displayContent?: string; silent?: boolean }): void {
     if (this._isLoading || this._disposed) return;
     const trimmed = content.trim();
     if (!trimmed) return;
 
-    const sessionId = this._sessionManager.ensureSession(trimmed);
+    const sessionId = this._sessionManager.ensureSession();
     this._sessions = this._sessionManager.listSessions();
     const history = this._buildAIHistory();
 
@@ -86,6 +90,8 @@ export class AgentManager {
       sessionId,
       workspaceId: this._sessionManager.getWorkspaceId(),
       subAgentEvents: this._subAgentEvents,
+      displayContent: options?.displayContent,
+      silent: options?.silent,
     });
 
     this._attachRun(result.run, result.childRuns, result.handle);
@@ -96,6 +102,8 @@ export class AgentManager {
     this.cancel();
     this._sessionManager.switchSession(sessionId);
     this._sessions = this._sessionManager.listSessions();
+    this._persistedEvents = [];
+    this._notify();
     await this._reloadSessionEvents();
     this._notify();
   }
@@ -158,7 +166,21 @@ export class AgentManager {
 
     handle.done
       .then(async () => {
-        await this._reloadSessionEvents();
+        // Read the final snapshot directly from the run rather than
+        // this._liveEvents.  The run's subscriber is notified via
+        // setTimeout(0) (macrotask), but this .then runs as a microtask,
+        // so _liveEvents may be one batch behind and missing the final
+        // text-delta events.
+        const finalEvents = this._run
+          ? [...this._run.getSnapshot()]
+          : this._liveEvents;
+        if (finalEvents.length > 0) {
+          const ids = new Set(finalEvents.map((e) => e.id));
+          this._persistedEvents = [
+            ...this._persistedEvents.filter((e) => !ids.has(e.id)),
+            ...finalEvents,
+          ];
+        }
         this._setLoading(false);
         this._notify();
       })
@@ -208,12 +230,21 @@ export class AgentManager {
   }
 
   private _subscribeSubAgentEvents(): void {
-    this._subAgentUnsubs.push(this._subAgentEvents.on("spawned", () => this._scheduleNotify()));
-    this._subAgentUnsubs.push(this._subAgentEvents.on("output", () => this._scheduleNotify()));
-    this._subAgentUnsubs.push(this._subAgentEvents.on("done", () => this._scheduleNotify()));
+    this._subAgentUnsubs.push(
+      this._subAgentEvents.on("spawned", () => this._scheduleNotify()),
+    );
+    this._subAgentUnsubs.push(
+      this._subAgentEvents.on("output", () => this._scheduleNotify()),
+    );
+    this._subAgentUnsubs.push(
+      this._subAgentEvents.on("done", () => this._scheduleNotify()),
+    );
   }
 
-  private _buildAIHistory(): Array<{ role: "user" | "assistant" | "system"; content: string }> {
+  private _buildAIHistory(): Array<{
+    role: "user" | "assistant" | "system";
+    content: string;
+  }> {
     return buildAIHistory({
       liveEvents: this._liveEvents,
       persistedEvents: this._persistedEvents,

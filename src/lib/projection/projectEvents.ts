@@ -182,7 +182,7 @@ function flushAll(
   options?: ProjectOptions,
   forceFrozen = true,
 ): ProjectionReducerState {
-  return flushTool(flushAssistant(state, forceFrozen), options);
+  return flushAssistant(flushTool(state, options), forceFrozen);
 }
 
 function handleChildRunAttached(state: ProjectionReducerState, evt: AnyAgentEvent): ProjectionReducerState {

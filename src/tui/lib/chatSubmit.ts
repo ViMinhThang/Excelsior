@@ -9,7 +9,7 @@ export interface FeatureRuntimeContextDeps {
   clear: () => void;
   deleteAllSessions: () => void;
   resetInput: () => void;
-  send: (content: string) => void;
+  send: (content: string, options?: { displayContent?: string; silent?: boolean }) => void;
   postComment: FeatureRuntimeContext["postComment"];
   switchSession: FeatureRuntimeContext["switchSession"];
   createSession: FeatureRuntimeContext["createSession"];
@@ -33,7 +33,9 @@ export interface SubmitChatInputDeps {
   handleCommand?: typeof defaultHandleCommand;
 }
 
-export function createFeatureRuntimeContext(deps: FeatureRuntimeContextDeps): FeatureRuntimeContext {
+export function createFeatureRuntimeContext(
+  deps: FeatureRuntimeContextDeps,
+): FeatureRuntimeContext {
   return {
     navigate: deps.navigate,
     goBack: deps.goBack,
@@ -43,9 +45,9 @@ export function createFeatureRuntimeContext(deps: FeatureRuntimeContextDeps): Fe
       deps.setCommandResult(null);
     },
     deleteAllSessions: deps.deleteAllSessions,
-    send: (content) => {
+    send: (content, options) => {
       deps.resetInput();
-      deps.send(content);
+      deps.send(content, options);
     },
     postComment: deps.postComment,
     switchSession: deps.switchSession,

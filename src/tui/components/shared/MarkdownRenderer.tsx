@@ -1,6 +1,7 @@
 import React, { memo, ReactNode, useMemo } from "react";
 import chalk from "chalk";
 import { highlight } from "cli-highlight";
+import hljs from "highlight.js";
 import { Box, Text } from "ink";
 import { lexer } from "marked";
 import type { Token, Tokens } from "marked";
@@ -29,11 +30,14 @@ const highlightTheme = {
   meta: chalk.hex("#f5c2e7"),
 };
 
+const KNOWN_LANGUAGES = new Set(hljs.listLanguages());
+
 export function highlightCode(code: string, lang?: string): ReactNode {
   try {
     const cleanedLang = lang?.trim().split(/\s+/)[0]?.toLowerCase();
+    const validLang = cleanedLang && KNOWN_LANGUAGES.has(cleanedLang) ? cleanedLang : undefined;
     const colored = highlight(code, {
-      language: cleanedLang,
+      language: validLang,
       theme: highlightTheme,
       ignoreIllegals: true,
     });

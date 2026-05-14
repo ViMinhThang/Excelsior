@@ -43,7 +43,7 @@ const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, role, isSelected }) =>
     : `${agent.toolCalls?.length || 0} toolcalls${theme.glyphs.separator}${durationStr}`;
 
   const topPrefix = isRunning ? theme.glyphs.spinner[frame] : theme.glyphs.output;
-  const bottomPrefix = isRunning ? theme.glyphs.branch : status.glyph;
+  const bottomPrefix = (agent.status === "running" || agent.status === "done") ? theme.glyphs.branch : status.glyph;
 
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={1}>
@@ -54,7 +54,7 @@ const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, role, isSelected }) =>
         </Text>
       </Box>
       <Box flexDirection="row">
-        <Text color={status.color}>{bottomPrefix} </Text>
+        <Text color={agent.status === "done" ? theme.colors.muted : status.color}>{bottomPrefix} </Text>
         <Text color={theme.colors.muted} dimColor={!isRunning}>
           {activityStatusLine}
         </Text>

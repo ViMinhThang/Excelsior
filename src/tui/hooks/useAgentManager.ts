@@ -4,7 +4,7 @@ import { Session } from "../../lib/runtime/session.js";
 
 export interface UseAgentManagerReturn {
   state: ChatSessionState;
-  send: (content: string) => void;
+  send: (content: string, options?: { displayContent?: string; silent?: boolean }) => void;
   cancel: () => void;
   clear: () => void;
   switchSession: (sessionId: string) => void;
@@ -30,7 +30,7 @@ export function useAgentManager(): UseAgentManagerReturn {
 
   return {
     state,
-    send: useCallback((content: string) => ref.current?.send(content), []),
+    send: useCallback((content: string, options?: { displayContent?: string; silent?: boolean }) => ref.current?.send(content, options), []),
     cancel: useCallback(() => ref.current?.cancel(), []),
     clear: useCallback(() => ref.current?.clear(), []),
     switchSession: useCallback((id: string) => ref.current?.switchSession(id), []),
