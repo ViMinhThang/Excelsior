@@ -6,6 +6,7 @@ export const coreFeature: AppFeature = {
     {
       name: "help",
       description: "List all available commands",
+      usage: "/help",
       execute: async (_args, context) => {
         context.appendMessage("system", context.getHelpText());
       },
@@ -13,6 +14,7 @@ export const coreFeature: AppFeature = {
     {
       name: "clear",
       description: "Clear chat messages from the screen",
+      usage: "/clear",
       execute: async (_args, context) => {
         context.clearMessages();
         context.appendMessage("system", "Chat history cleared from UI.");
@@ -21,6 +23,7 @@ export const coreFeature: AppFeature = {
     {
       name: "reset",
       description: "Delete all conversation history from database",
+      usage: "/reset",
       execute: async (_args, context) => {
         context.deleteAllSessions();
         context.clearMessages();

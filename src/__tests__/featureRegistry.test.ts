@@ -35,6 +35,15 @@ describe("feature registry", () => {
 
   it("generates help text from registered features", () => {
     const registry = createFeatureRegistry([feature("core", "help")]);
-    expect(registry.getHelpText()).toBe("Available commands:\n/help - help command");
+    expect(registry.getHelpText()).toBe("Available commands:\n\nCore\n/help - help command");
+  });
+
+  it("includes command usage in help text", () => {
+    const registry = createFeatureRegistry([{
+      id: "review",
+      commands: [{ name: "review", description: "review command", usage: "/review 42", execute: () => {} }],
+    }]);
+
+    expect(registry.getHelpText()).toContain("usage: /review 42");
   });
 });
