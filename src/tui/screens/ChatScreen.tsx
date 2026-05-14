@@ -10,7 +10,7 @@ import { useChatScreenState } from '../hooks/useChatScreenState.js';
 import { createToolDisplay } from '../lib/toolDisplay.js';
 import { theme } from '../theme.js';
 import Panel from '../components/shared/Panel.js';
-import { DisplayBlock } from '../../lib/eventTypes.js';
+import { ProjectedBlock, toSubAgentViewModel, SubAgentViewModel } from '../../lib/projection/display.js';
 
 const renderAppHeader = () => (
   <Box key="app-header">
@@ -20,7 +20,7 @@ const renderAppHeader = () => (
 
 const ChatScreen = () => {
   const [headerItems, setHeaderItems] = useState<string[]>([]);
-  
+
   useEffect(() => {
     setHeaderItems(['app-header']);
   }, []);
@@ -33,6 +33,8 @@ const ChatScreen = () => {
     subAgentIndex,
     messages,
     isLoading,
+    currentSessionId,
+    workspaceRootPath,
     pending,
     suggestion,
     commandResult,
@@ -46,7 +48,7 @@ const ChatScreen = () => {
       })
     : null;
 
-  const displayBlocks = messages as DisplayBlock[];
+  const displayBlocks = messages as ProjectedBlock[];
 
   return (
     <Box flexDirection="column">
@@ -55,7 +57,7 @@ const ChatScreen = () => {
       </Static>
 
       {chatMode === "subagent-detail" && subAgents.length > 0 && subAgents[subAgentIndex] ? (
-        <SubAgentDetail agent={subAgents[subAgentIndex]} />
+        <SubAgentDetail agent={toSubAgentViewModel((subAgents[subAgentIndex] as ProjectedBlock & { type: "sub-agent" }).state, subAgents[subAgentIndex].id, (subAgents[subAgentIndex] as ProjectedBlock & { type: "sub-agent" }).role)} />
       ) : (
         <>
           <Box flexDirection="column">
@@ -103,7 +105,7 @@ const ChatScreen = () => {
               <Box flexDirection="column" marginTop={1} paddingLeft={2} borderTop>
                 <Text color={theme.colors.text} bold>(y) accept</Text>
                 <Text color={theme.colors.text} bold>(a) accept all edits (for this session)</Text>
-                <Text color={theme.colors.text} bold>[(n) deny</Text>
+                <Text color={theme.colors.text} bold>(n) deny</Text>
               </Box>
             </Box>
           </Box>
@@ -117,6 +119,10 @@ const ChatScreen = () => {
           maxVisibleCount={suggestion.maxVisibleCount}
         />
       )}
+
+      <Box marginTop={1} paddingLeft={1}>
+        <Text color={theme.colors.muted} dimColor>workspace: {workspaceRootPath}</Text>
+      </Box>
     </Box>
   );
 };

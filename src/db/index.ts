@@ -5,6 +5,11 @@ const DEFAULT_DB_PATH = join(process.cwd(), "data", "index.db");
 
 let _defaultDb: Database.Database | null = null;
 
+function columnExists(db: Database.Database, table: string, column: string): boolean {
+  const cols = db.pragma(`table_info(${table})`) as Array<{ name: string }>;
+  return cols.some((c) => c.name === column);
+}
+
 export function createDb(dbPath?: string): Database.Database {
   const path = dbPath ?? DEFAULT_DB_PATH;
   const db = new Database(path);
@@ -18,26 +23,17 @@ export function createDb(dbPath?: string): Database.Database {
       metadata TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS agent_events (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      sequence INTEGER NOT NULL,
-      type TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      data TEXT NOT NULL,
-      parent_event_id TEXT,
-      related_tool_call_id TEXT
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_agent_events_session
-      ON agent_events(session_id, sequence);
-
-    CREATE INDEX IF NOT EXISTS idx_agent_events_parent
-      ON agent_events(parent_event_id);
-
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS workspaces (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      root_path TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS error_logs (
@@ -46,9 +42,30 @@ export function createDb(dbPath?: string): Database.Database {
       stack TEXT,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-
-    DROP TABLE IF EXISTS observation;
   `);
+
+  // Migration: add workspace_id to sessions (if not already present)
+  if (!columnExists(db, "sessions", "workspace_id")) {
+    db.exec(`ALTER TABLE sessions ADD COLUMN workspace_id TEXT;`);
+  }
+
+  // Migration: add title to sessions (if not already present)
+  if (!columnExists(db, "sessions", "title")) {
+    db.exec(`ALTER TABLE sessions ADD COLUMN title TEXT;`);
+  }
+
+  // Migration: ensure default workspace exists
+  const defaultWsId = "ws_default";
+  const existing = db.prepare("SELECT id FROM workspaces WHERE id = ?").get(defaultWsId) as any;
+  if (!existing) {
+    const now = new Date().toISOString();
+    db.prepare(
+      "INSERT OR IGNORE INTO workspaces (id, name, root_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+    ).run(defaultWsId, "default", process.cwd(), now, now);
+  }
+
+  // Migration: backfill workspace_id on sessions that lack it
+  db.prepare("UPDATE sessions SET workspace_id = ? WHERE workspace_id IS NULL").run(defaultWsId);
 
   return db;
 }

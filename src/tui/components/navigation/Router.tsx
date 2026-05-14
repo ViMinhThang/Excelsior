@@ -5,7 +5,6 @@ import { useNavigation } from '../../context/NavigationContext.js';
 import { useEvent } from '../../hooks/useEvent.js';
 import ChatScreen from '../../screens/ChatScreen.js';
 import SettingsScreen from '../../screens/SettingsScreen.js';
-import ReviewScreen from '../../screens/ReviewScreen.js';
 
 interface ScreenDispatcherProps {
   screen: Screen;
@@ -17,8 +16,6 @@ const ScreenDispatcher = memo(function ScreenDispatcher({ screen }: ScreenDispat
       return <ChatScreen />;
     case 'settings':
       return <SettingsScreen />;
-    case 'review':
-      return <ReviewScreen />;
     default:
       return null;
   }
@@ -34,8 +31,7 @@ const Router = () => {
 
   const handleInput = useEvent((input: string, key: any) => {
     if (key.ctrl && input === 'c') onExit();
-    if (key.escape && currentScreen !== 'review') onGoBack();
-    if (key.backspace && currentScreen !== 'review' && currentScreen !== 'settings' && currentScreen !== 'chat') onGoBack();
+    if (key.backspace && currentScreen !== 'settings' && currentScreen !== 'chat') onGoBack();
     if (key.ctrl && input === 's' && currentScreen === 'chat') onNavigate('settings');
     if (input === 'c' && currentScreen === 'settings') onNavigate('chat');
   });

@@ -277,6 +277,8 @@
       <a href="#sequence-confirm" class="sub">Tool Confirmation Flow</a>
       <a href="#sequence-cancel" class="sub">Cancellation Flow</a>
       <a href="#sequence-causation" class="sub">Event Causation Chain</a>
+      <a href="#problem-facade" class="section">7. AgentManager Facade</a>
+      <a href="#problem-facade" class="sub">Problem · Solution</a>
       <a href="#summary" class="section">Summary</a>
     </nav>
     <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()">Toggle Dark / Light Mode</button>
@@ -1278,13 +1280,143 @@ const handle = this.orchestrator.startRun(session, {
 
     <hr>
 
-    <!-- ==================== SUMMARY ==================== -->
-    <h2 id="summary">Summary</h2>
+    <!-- ==================== FACADE ==================== -->
+    <h2 id="problem-facade">7. Coordination Sprawl → AgentManager Facade</h2>
 
-    <p>The refactoring shifts Excelsior from an "advanced prototype" with soft boundaries
-    to an architecture with explicit ownership, typed contracts, and clean layer separation.</p>
+    <div class="row">
+      <div class="card">
+        <strong><span class="badge bad">Problem</span></strong>
+        The audit showed <strong>19 files</strong> to understand "how does the UI stay in sync?"
+        and <strong>56 files</strong> transitively for a single send-message action.
+        Developers had to coordinate ChatService + useChatSender + useChatHistory + useChat
+        + manual attachSession() + manual projection wiring.
+      </div>
+      <div class="card">
+        <strong><span class="badge good">Solution</span></strong>
+        <code>AgentManager</code> facade and <code>useAgentManager()</code> hook collapse
+        the 19-file sync mechanism into 1 public interface. The UI now writes:
+        <code>const { state, send } = useAgentManager()</code>
+      </div>
+    </div>
 
-    <h3>Files Changed or Created</h3>
+    <h3>Before: Three hooks + manual wiring</h3>
+    <div class="diagram">  useChatSender                    useChatHistory                  useChat
+  ┌────────────────────┐         ┌────────────────────┐         ┌──────────────────┐
+  │ sendMessage()      │         │ attachSession()    │         │ composes both    │
+  │ createSession()    │         │ useSyncExternalStore│         │ manages memory   │
+  │ persistSession()   │         │ mergeEvents()      │         └───────┬──────────┘
+  │ startRun()         │         │ projectEvents()    │                 │
+  │ handle.done        │         │ SubAgentStore      │                 │
+  └────────┬───────────┘         └────────┬───────────┘                 │
+           │                              │                            │
+           │      useChatScreenState       │                            │
+           │   ┌───────────────────────────┘────────────────────────────┘
+           │   │
+           │   │  const { displayBlocks, isLoading, sendMessage } = useChat()
+           │   │  const session = sendMessage(trimmed)
+           │   │  if (session) attachSession(session)   // ← MANUAL TWO-STEP
+           │   │
+           │   ▼
+            │  (must know that sendMessage returns session
+            │   that must be separately wired to display)
+
+    <h3>After: One facade, one hook</h3>
+    <div class="diagram">  AgentManager                        useAgentManager                    UI
+  ┌─────────────────────────────┐     ┌──────────────────────┐
+  │ owns ChatService            │     │ useSyncExternalStore │     useChatScreenState
+  │ owns session subscription   │     │ calls subscribe()    │   ┌──────────────────┐
+  │ owns event projection       │◄────│ calls getSnapshot()  │──►│ state.display    │
+  │ owns sub-agent bus listener │     │ returns:            │   │  .Blocks         │
+  │ owns history loading        │     │  state              │   │ state.isLoading  │
+  │ owns persistence            │     │  send(c)            │   │ send(content)    │
+  └─────────────────────────────┘     │  cancel()           │   │ cancel()         │
+                                      │  loadMore()         │   └──────────────────┘
+                                      │  clear()            │
+                                      └──────────────────────┘
+
+  // Consumer code:
+  const { state: { displayBlocks, isLoading, hasMore },
+          send, cancel, loadMore } = useAgentManager();
+  // state.displayBlocks — always up to date
+  // state.isLoading — set automatically
+  // send(content) — creates session, orchestrates, projects, all internally</div>
+
+    <div class="filepath">src/features/session/agentManager.ts</div>
+    <pre><code>export class AgentManager {
+  private _service = new ChatService();
+  private _listeners = new Set&lt;() =&gt; void&gt;();
+  private _session: AgentSession | null = null;
+  private _childSessions = new Map&lt;string, AgentSession&gt;();
+
+  getSnapshot(): AgentState {
+    return {
+      displayBlocks: this._computeDisplayBlocks(),
+      isLoading: this._isLoading,
+      hasMore: this._loadedCount &lt; this._totalCount,
+    };
+  }
+
+  subscribe(cb: () =&gt; void): () =&gt; void { ... }
+
+  send(content: string): void {
+    if (this._isLoading) return;
+    const result = this._service.startRun(content, { ... });
+    this._session = result.session;
+    this._childSessions = result.childSessions;
+    result.session.subscribe(() =&gt; {
+      this._liveEvents = session.getSnapshot();
+      this._notify();
+    });
+    result.handle.done.then(() =&gt; {
+      this._isLoading = false; this._notify();
+    });
+  }
+
+  cancel(): void { ... }
+  loadMore(): void { ... }
+  clear(): void { ... }
+  dispose(): void { ... }
+
+  private _computeDisplayBlocks(): DisplayBlock[] {
+    return groupEventsForDisplay(this._mergeEvents(), {
+      getChildEvents: (id) =&gt;
+        this._childSessions.get(id)?.getSnapshot() ?? [],
+    });
+  }
+}</code></pre>
+
+    <div class="filepath">src/features/session/useAgentManager.ts</div>
+    <pre><code>export function useAgentManager() {
+  const ref = useRef&lt;AgentManager&gt;(new AgentManager());
+
+  useEffect(() =&gt; () =&gt; ref.current?.dispose(), []);
+
+  const state = useSyncExternalStore(
+    useCallback(cb =&gt; ref.current!.subscribe(cb), []),
+    useCallback(() =&gt; ref.current!.getSnapshot(), []),
+  );
+
+  return {
+    state,
+    send: useCallback(c =&gt; ref.current?.send(c), []),
+    cancel: useCallback(() =&gt; ref.current?.cancel(), []),
+    loadMore: useCallback(() =&gt; ref.current?.loadMore(), []),
+    clear: useCallback(() =&gt; ref.current?.clear(), []),
+  };
+}</code></pre>
+
+    <div class="card">
+      <strong>What the facade eliminates (from the 19-file sync chain):</strong>
+      <ul>
+        <li><code>useChatSender.ts</code> — session creation, history building, persistence wiring, agent setup</li>
+        <li><code>useChatHistory.ts</code> — useSyncExternalStore, event merging, SubAgentProjectionStore</li>
+        <li><code>useChat.ts</code> — orchestration composition, memory management</li>
+        <li>Manual <code>attachSession(session)</code> two-step in useChatScreenState</li>
+        <li><code>submittingRef</code> pattern for double-submit prevention</li>
+        <li><code>_subAgentVersion</code> global counter pattern</li>
+      </ul>
+    </div>
+
     <table>
       <tr><th>Phase</th><th>File</th><th>Change</th></tr>
       <tr><td>0a</td><td><code>src/lib/runtime/events.ts</code></td><td>Added <code>version</code>, <code>causationId</code>, <code>correlationId</code></td></tr>
@@ -1307,6 +1439,8 @@ const handle = this.orchestrator.startRun(session, {
       <tr><td>4</td><td><code>src/agent/tools/fs/edit.ts</code></td><td>Uses <code>ctx.confirm</code></td></tr>
       <tr><td>4</td><td><code>src/agent/tools/index.ts</code></td><td>Accepts <code>ToolContext</code></td></tr>
       <tr><td>4</td><td><code>src/agent/agent.ts</code></td><td>Accepts <code>ToolContext</code></td></tr>
+      <tr><td>F</td><td><code>src/features/session/agentManager.ts</code></td><td>New — Facade hiding 19-file sync chain</td></tr>
+      <tr><td>F</td><td><code>src/features/session/useAgentManager.ts</code></td><td>New — React hook wrapping AgentManager</td></tr>
     </table>
 
     <h3>Architecture Evolution</h3>

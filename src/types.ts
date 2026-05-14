@@ -2,8 +2,6 @@ export type StreamPart =
   | {
       type: "text-delta";
       text: string;
-      textDelta?: string;
-      [key: string]: unknown;
     }
   | {
       type: "tool-call";
@@ -11,20 +9,17 @@ export type StreamPart =
       name?: string;
       toolCallId: string;
       input?: unknown;
-      [key: string]: unknown;
     }
   | {
       type: "tool-result";
       toolCallId: string;
       output?: { type: string; value: unknown };
-      [key: string]: unknown;
     }
   | {
       type: "tool-error";
       toolCallId: string;
       toolName?: string;
       error?: unknown;
-      [key: string]: unknown;
     };
 
 export type ConfirmEvents = {
@@ -87,19 +82,8 @@ export interface ToolCallInfo {
   status: "pending" | "completed" | "error";
 }
 
-export type Screen = "chat" | "settings" | "review";
+export type Screen = "chat" | "settings";
 
-export type ReviewScreenMode = "browser" | "review" | "results";
-
-export interface PullRequest {
-  number: number;
-  title: string;
-  author: string;
-  headRefName: string;
-  createdAt: string;
-}
-
-export const PAGE_SIZE = 50;
 
 export interface CommandContext {
   navigate: (screen: Screen) => void;
@@ -109,6 +93,15 @@ export interface CommandContext {
     content: string,
   ) => void;
   clearMessages: () => void;
+  deleteAllSessions: () => void;
+  send: (content: string) => void;
+  postComment: (prNumber: number, body: string) => Promise<string>;
+  switchSession: (sessionId: string) => void;
+  createSession: (title?: string) => void;
+  deleteSession: (sessionId: string) => void;
+  renameSession: (sessionId: string, title: string) => void;
+  listSessions: () => Array<{ id: string; title?: string }>;
+  currentSessionId: string | null;
 }
 
 export interface Command {

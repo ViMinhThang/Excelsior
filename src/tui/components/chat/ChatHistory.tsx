@@ -5,13 +5,13 @@ import AgentMessage from './AgentMessage.js';
 import ToolMessage from './ToolMessage.js';
 import SubAgentRow from '../review/SubAgentRow.js';
 
-import { DisplayBlock } from '../../../lib/eventTypes.js';
+import { ProjectedBlock } from '../../../lib/projection/display.js';
 
 interface ChatHistoryProps {
-  blocks: DisplayBlock[];
+  blocks: ProjectedBlock[];
 }
 
-function renderBlock(block: DisplayBlock): React.ReactNode {
+function renderBlock(block: ProjectedBlock): React.ReactNode {
   if (block.type === 'user') {
     return <UserMessage key={block.id} content={block.content} timestamp={block.timestamp} />;
   }
@@ -41,7 +41,7 @@ function renderBlock(block: DisplayBlock): React.ReactNode {
   return null;
 }
 
-function renderStaticBlock(block: DisplayBlock) {
+function renderStaticBlock(block: ProjectedBlock) {
   return (
     <Box key={block.id} flexDirection="column">
       {renderBlock(block)}
@@ -50,8 +50,8 @@ function renderStaticBlock(block: DisplayBlock) {
 }
 
 const ChatHistory: React.FC<ChatHistoryProps> = ({ blocks }) => {
-  const frozenBlocks: DisplayBlock[] = [];
-  const liveBlocks: DisplayBlock[] = [];
+  const frozenBlocks: ProjectedBlock[] = [];
+  const liveBlocks: ProjectedBlock[] = [];
 
   for (const block of blocks) {
     if (block.isFrozen) {
