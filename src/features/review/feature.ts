@@ -22,14 +22,22 @@ export const reviewFeature: AppFeature = {
 
         try {
           const diff = await fetchPRDiff(prNumber);
-          context.appendMessage("system", `Running code review on PR #${prNumber}...`);
+          context.appendMessage(
+            "system",
+            `Running code review on PR #${prNumber}...`,
+          );
           context.send(
-            `Review PR #${prNumber}\n\n` +
-              `I need you to perform a comprehensive code review of this PR diff. ` +
+            `### NEW CODE REVIEW: PR #${prNumber} ###\n\n` +
+              `IMPORTANT: This is a fresh review request for PR #${prNumber}. ` +
+              `Please ignore any previous PR reviews or sub-agent findings in the chat history. ` +
+              `Perform a comprehensive code review of the diff provided below. ` +
               `Spawn specialist sub-agents for different analysis categories ` +
               `(bug hunting, security, code style, infrastructure, readability) ` +
-              `and synthesize their findings.\n\n` +
+              `and synthesize their findings into a single final report. ` +
+              `IMPORTANT: Do not checkout other branches or modify the local git repository. ` +
+              `Avoid spawning multiple sub-agents for the same category.\n\n` +
               `\`\`\`diff\n${diff}\n\`\`\``,
+            { displayContent: `● Reviewing PR #${prNumber}` },
           );
         } catch (err: unknown) {
           context.appendMessage(
@@ -41,17 +49,23 @@ export const reviewFeature: AppFeature = {
     },
     {
       name: "review-post",
-      description: "Post a comment to a PR (e.g. /review-post 42 \"Looks good\")",
+      description: 'Post a comment to a PR (e.g. /review-post 42 "Looks good")',
       usage: "/review-post <pr-number> <comment body>",
       execute: async (args, context) => {
         const prNumber = parseInt(args[0], 10);
         if (isNaN(prNumber) || args.length < 2) {
-          context.appendMessage("system", "Usage: /review-post <pr-number> <comment body>");
+          context.appendMessage(
+            "system",
+            "Usage: /review-post <pr-number> <comment body>",
+          );
           return;
         }
 
         const body = args.slice(1).join(" ");
-        context.appendMessage("system", `Posting comment to PR #${prNumber}...`);
+        context.appendMessage(
+          "system",
+          `Posting comment to PR #${prNumber}...`,
+        );
         const result = await context.postComment(prNumber, body);
         context.appendMessage("system", result);
       },

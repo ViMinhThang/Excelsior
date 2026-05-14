@@ -75,8 +75,8 @@ const ToolMessage: React.FC<ToolMessageProps> = ({
     <Box marginTop={marginTop} paddingLeft={1} paddingBottom={nested ? 0 : 1}>
       <Box flexDirection="column">
         <Box flexDirection="row" gap={1}>
-          <StatusIndicator status={status} />
-          <Text color={theme.colors.muted}>{renderCommandWithPathHighlight(cmd)}</Text>
+          {status !== "completed" && <StatusIndicator status={status} />}
+          <Text color={theme.colors.muted} dimColor>{renderCommandWithPathHighlight(cmd)}</Text>
         </Box>
         {(display.detail || display.resultPreview?.length || status === "completed") && (
           <Box flexDirection="column" paddingLeft={2}>

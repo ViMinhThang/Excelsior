@@ -61,6 +61,19 @@ const ChatHistory: React.FC<ChatHistoryProps> = ({ blocks }) => {
     }
   }
 
+  // When there are no live blocks (run completed), render everything as
+  // regular (non-Static) blocks.  Ink's <Static> is append-only and skips
+  // items whose keys it has already rendered.  Blocks that were live during
+  // streaming share the same key as their frozen replay — so <Static> drops
+  // them, causing the final text to vanish.
+  if (liveBlocks.length === 0) {
+    return (
+      <Box flexDirection="column">
+        {frozenBlocks.map((block) => renderBlock(block))}
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column">
       <Static items={frozenBlocks}>

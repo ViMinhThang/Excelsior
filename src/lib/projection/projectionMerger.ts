@@ -19,13 +19,11 @@ export interface ProjectionInput {
 
 export function mergeEvents(input: ProjectionInput): AnyAgentEvent[] {
   const { liveEvents, persistedEvents } = input;
-  if (liveEvents.length === 0) return persistedEvents;
+  if (liveEvents.length === 0) return persistedEvents.filter((e) => !e.parentEventId);
   const liveIds = new Set(liveEvents.map((e) => e.id));
-  const filtered = persistedEvents.filter((e) => !liveIds.has(e.id));
-  if (filtered.length === persistedEvents.length) {
-    return [...persistedEvents, ...liveEvents];
-  }
-  return [...filtered, ...liveEvents];
+  const filtered = persistedEvents.filter((e) => !liveIds.has(e.id) && !e.parentEventId);
+  const filteredLive = liveEvents.filter((e) => !e.parentEventId);
+  return [...filtered, ...filteredLive];
 }
 
 export function computeDisplayBlocks(input: ProjectionInput): ProjectedBlock[] {

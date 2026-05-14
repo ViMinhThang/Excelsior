@@ -71,7 +71,7 @@ describe("AgentManager session ownership", () => {
     expect(manager.getSnapshot().currentSessionId).toBeNull();
   });
 
-  it("titles a new session from the first user prompt", () => {
+  it("creates an untitled session when send is called without a title", () => {
     const sessionManager = fakeSessionManager();
     const chatService = {
       startRun: vi.fn((_content: string, options: any) => ({
@@ -88,7 +88,7 @@ describe("AgentManager session ownership", () => {
 
     manager.send("  review the project architecture  ");
 
-    expect(manager.getSnapshot().sessions[0].title).toBe("review the project architecture");
+    expect(manager.getSnapshot().sessions[0].title).toBe("Untitled");
     expect(chatService.startRun).toHaveBeenCalledWith(
       "review the project architecture",
       expect.objectContaining({ sessionId: "ses_1" }),

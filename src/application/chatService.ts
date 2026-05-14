@@ -19,6 +19,8 @@ export class ChatService {
       workspaceId?: string;
       recorder?: RunRecorder;
       subAgentEvents?: SubAgentEventSink;
+      silent?: boolean;
+      displayContent?: string;
     },
   ) {
     const aiMessages: Array<{ role: string; content: string }> = [];
@@ -44,20 +46,22 @@ export class ChatService {
             ...options?.extraTools,
           },
           runCtx.ctx,
-      ),
+        ),
       sessionId: options?.sessionId,
       recorder: options?.recorder,
       subAgentEvents: options?.subAgentEvents,
     });
 
-    run.emit("user-input", { content });
+    if (!options?.silent) {
+      run.emit("user-input", { content: options?.displayContent || content });
+    }
 
     const sessionId = options?.sessionId ?? run.id;
     persistSession({
       id: sessionId,
       startedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      metadata: { userInput: content },
+      metadata: { userInput: options?.displayContent || content },
       workspaceId: options?.workspaceId ?? "ws_default",
     });
 

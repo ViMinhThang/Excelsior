@@ -6,7 +6,10 @@ export interface CommandDefinition {
   name: string;
   description: string;
   usage?: string;
-  execute: (args: string[], context: FeatureRuntimeContext) => Promise<void> | void;
+  execute: (
+    args: string[],
+    context: FeatureRuntimeContext,
+  ) => Promise<void> | void;
 }
 
 export interface FeaturePanelProps {
@@ -33,7 +36,7 @@ export interface FeatureRuntimeContext {
   ) => void;
   clearMessages: () => void;
   deleteAllSessions: () => void;
-  send: (content: string) => void;
+  send: (content: string, options?: { displayContent?: string; silent?: boolean }) => void;
   postComment: (prNumber: number, body: string) => Promise<string>;
   switchSession: (sessionId: string) => void;
   createSession: (title?: string) => Session | undefined;
