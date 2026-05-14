@@ -53,7 +53,7 @@ RULES:
   • view: Read files (supports specific line ranges)
   • ls: List contents of a directory
   • glob: Find filenames matching patterns (e.g. "**/*.tsx")
-  • grep: Search within files for patterns or literals
+  • ripgrep: Search within files for patterns or literals
   • write: Create or fully overwrite a file
   • edit: Target and replace unique snippets within existing files
 - Use runCommand ONLY for invoking external tooling (e.g. npm, git, node, python) that cannot be performed natively.

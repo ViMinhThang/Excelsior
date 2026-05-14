@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { Box, Text, Static } from 'ink';
+import { Box, Static } from 'ink';
 import UserMessage from './UserMessage.js';
 import AgentMessage from './AgentMessage.js';
 import ToolMessage from './ToolMessage.js';

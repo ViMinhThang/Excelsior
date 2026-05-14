@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Text, useInput } from "ink";
 import chalk from "chalk";
+import { truncateVisible } from "../../lib/textFormat.js";
 
 interface SafeTextInputProps {
   value: string;
@@ -10,6 +11,7 @@ interface SafeTextInputProps {
   focus?: boolean;
   mask?: string;
   showCursor?: boolean;
+  maxDisplayWidth?: number;
 }
 
 export function shouldIgnoreTextInputKey(input: string, key: any): boolean {
@@ -22,6 +24,24 @@ export function shouldIgnoreTextInputKey(input: string, key: any): boolean {
   );
 }
 
+export function getSingleLineInputPreview(
+  value: string,
+  cursorOffset: number,
+  maxDisplayWidth: number,
+): { text: string; cursorOffset: number } {
+  const beforeCursor = value.slice(0, cursorOffset);
+  const lineStart = beforeCursor.lastIndexOf("\n") + 1;
+  const lineEnd = value.indexOf("\n", cursorOffset);
+  const rawLine = value.slice(lineStart, lineEnd === -1 ? value.length : lineEnd).replace(/\r/g, "");
+  const rawCursorOffset = Math.max(0, cursorOffset - lineStart);
+  const text = truncateVisible(rawLine, maxDisplayWidth);
+
+  return {
+    text,
+    cursorOffset: Math.min(rawCursorOffset, text.length),
+  };
+}
+
 const SafeTextInput: React.FC<SafeTextInputProps> = ({
   value: originalValue,
   onChange,
@@ -30,6 +50,7 @@ const SafeTextInput: React.FC<SafeTextInputProps> = ({
   focus = true,
   mask,
   showCursor = true,
+  maxDisplayWidth = 96,
 }) => {
   const [state, setState] = useState({
     cursorOffset: (originalValue || "").length,
@@ -55,9 +76,12 @@ const SafeTextInput: React.FC<SafeTextInputProps> = ({
   }, [originalValue, focus, showCursor]);
 
   const cursorActualWidth = 0;
-  const value = mask ? mask.repeat(originalValue.length) : originalValue;
+  const rawDisplayValue = mask ? mask.repeat(originalValue.length) : originalValue;
+  const preview = getSingleLineInputPreview(rawDisplayValue, cursorOffset, maxDisplayWidth);
+  const value = preview.text;
+  const displayCursorOffset = preview.cursorOffset;
   let renderedValue = value;
-  let renderedPlaceholder = placeholder ? chalk.grey(placeholder) : undefined;
+  let renderedPlaceholder = placeholder ? chalk.grey(truncateVisible(placeholder, maxDisplayWidth)) : undefined;
 
   if (showCursor && focus) {
     renderedPlaceholder =
@@ -69,13 +93,13 @@ const SafeTextInput: React.FC<SafeTextInputProps> = ({
     let i = 0;
     for (const char of value) {
       renderedValue +=
-        i >= cursorOffset - cursorActualWidth && i <= cursorOffset
+        i >= displayCursorOffset - cursorActualWidth && i <= displayCursorOffset
           ? chalk.inverse(char)
           : char;
       i++;
     }
 
-    if (value.length > 0 && cursorOffset === value.length) {
+    if (value.length > 0 && displayCursorOffset === value.length) {
       renderedValue += chalk.inverse(" ");
     }
   }
