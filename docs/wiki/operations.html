@@ -79,7 +79,7 @@
         </article>
         <article class="card">
           <h3><code>GITHUB_TOKEN</code></h3>
-          <p>Optional token for PR review commands and comment posting. GitHub helpers live under `src/lib/github`.</p>
+          <p>Optional token for PR review commands and comment posting. GitHub helpers live under `packages/agent-host/src/lib/github`.</p>
         </article>
         <article class="card">
           <h3><code>EXCELSIOR_DB_PATH</code></h3>
@@ -190,7 +190,7 @@
 
       <h2>Debugging Checklist</h2>
       <ol>
-        <li>If UI is wrong but JSONL is correct, inspect `src/lib/projection` and chat components.</li>
+        <li>If UI is wrong but JSONL is correct, inspect `packages/agent-host/src/lib/projection` and chat components.</li>
         <li>If restored history is missing, inspect `TURN_COMPLETE` placement and `loadUntilLastCheckpoint()`.</li>
         <li>If a tool acts oddly, inspect the tool factory and `ToolContext` propagation.</li>
         <li>If Plan/Act behavior is wrong, inspect `AgentManager` mode state, `ChatService.startRun()` options, and `createToolContext()`.</li>

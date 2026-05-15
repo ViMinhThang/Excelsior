@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Session } from "../lib/runtime/session.js";
+import type { Session } from "../../packages/agent-host/src/lib/runtime/session.js";
 import {
   getInitialSessionIndex,
   getRelativeSessionTime,
@@ -7,7 +7,7 @@ import {
   getSessionPickerRows,
   SESSION_PICKER_HINT,
   moveSessionSelection,
-} from "../features/session/sessionPicker.js";
+} from "../../apps/tui/src/features/session/sessionPicker.js";
 
 function session(id: string, title?: string, userInput = ""): Session {
   return {

@@ -52,7 +52,7 @@
 
           <rect class="box good" x="70" y="150" width="840" height="80"></rect>
           <text class="label" x="100" y="188">Feature layer</text>
-          <text class="small" x="100" y="213">`features/*`: slash command definitions, panels, session service, review command glue</text>
+          <text class="small" x="100" y="213">`@excelsior/agent-host`: command registry, runtime, sessions, review command glue</text>
 
           <rect class="box" x="70" y="260" width="840" height="80"></rect>
           <text class="label" x="100" y="298">Application layer</text>
@@ -132,7 +132,7 @@
             </tr>
             <tr>
               <td>Features to app shell</td>
-              <td><code>FeatureRegistry</code></td>
+              <td><code>CommandRegistry</code></td>
               <td>Command definitions and panel definitions, including app features such as `/mode`.</td>
               <td>Global switch statements for every command.</td>
             </tr>
@@ -157,7 +157,7 @@
         <p>
           The most important architectural invariant is that projections are deterministic. If you replay the same completed
           event sequence, you should get the same chat blocks and AI history. This is why projection code is kept under
-          <code>src/lib/projection</code> and does not reach into React or persistence.
+          <code>packages/agent-host/src/lib/projection</code> and does not reach into React or persistence.
         </p>
       </div>
 

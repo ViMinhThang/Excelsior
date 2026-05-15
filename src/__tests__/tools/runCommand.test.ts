@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { createRunCommandTool } from "../../agent/tools/runCommand/runCommand.js";
-import { runCommandSchema } from "../../agent/tools/runCommand/type.js";
-import { PLAN_MODE_BLOCKED_MESSAGE } from "../../lib/runtime/agentMode.js";
+import { createRunCommandTool } from "../../../packages/agent-host/src/agent/tools/runCommand/runCommand.js";
+import { runCommandSchema } from "../../../packages/agent-host/src/agent/tools/runCommand/type.js";
+import { PLAN_MODE_BLOCKED_MESSAGE } from "../../../packages/agent-host/src/lib/runtime/agentMode.js";
 
 const runCommandTool = createRunCommandTool();
 

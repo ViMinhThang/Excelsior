@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseKeyCombo } from "../tui/lib/parseKeyCombo.js";
+import { parseKeyCombo } from "../../apps/tui/src/lib/parseKeyCombo.js";
 
 describe("parseKeyCombo logic", () => {
   it("correctly parses simple character keypresses", () => {
