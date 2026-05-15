@@ -6,7 +6,7 @@ Excelsior is an Ink-based terminal AI coding assistant. The runtime is event-dri
 
 ```text
 @excelsior/core
-  Serializable UI/backend contracts, shared view types, modes, commands, panels
+  Serializable UI/backend contracts, shared domain models, view types, modes, commands, panels
 
 @excelsior/agent-host
   Local backend facade for agent state, commands, settings, sessions, confirmations
@@ -21,6 +21,7 @@ Excelsior is an Ink-based terminal AI coding assistant. The runtime is event-dri
 - Apps consume package exports; packages do not import implementation from root `src`.
 - `@excelsior/core` has no React, Ink, persistence, GitHub, filesystem, or model SDK dependencies.
 - `AgentHost` is the TUI-facing contract. `LocalAgentHost` adapts backend state to serializable `AgentClientState`.
+- Workspace identity crosses the client boundary as `state.workspace`, with `rootPath` grouped under that domain object.
 - `AgentManager` owns UI-facing state inside `@excelsior/agent-host` and exposes snapshots through `useSyncExternalStore`.
 - `SessionManager` is a plain session service; it has no listeners or React-facing store contract.
 - `RunRecorder` owns event append, checkpoint append, raw event loading, checkpoint-safe loading, and deletion.

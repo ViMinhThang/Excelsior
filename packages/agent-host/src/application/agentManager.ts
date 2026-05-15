@@ -1,7 +1,7 @@
 import type { AgentRun } from "../lib/runtime/agentRun.js";
 import type { AnyAgentEvent } from "../lib/runtime/events.js";
 import type { ProjectedBlock } from "../lib/projection/display.js";
-import type { Session } from "../lib/runtime/session.js";
+import type { Session, Workspace, AgentMessage } from "@excelsior/core";
 import type { RunHandle } from "../lib/runtime/runOrchestrator.js";
 import {
   computeDisplayBlocks,
@@ -22,7 +22,7 @@ export interface ChatSessionState {
   sessions: Session[];
   activeRun: AgentRun | null;
   currentSessionId: string | null;
-  workspaceRootPath: string;
+  workspace: Workspace;
   mode: AgentMode;
 }
 
@@ -76,7 +76,10 @@ export class AgentManager {
     };
   }
 
-  send(content: string, options?: { displayContent?: string; silent?: boolean }): void {
+  send(
+    content: string,
+    options?: { displayContent?: string; silent?: boolean },
+  ): void {
     if (this._isLoading || this._disposed) return;
     const trimmed = content.trim();
     if (!trimmed) return;
@@ -88,7 +91,7 @@ export class AgentManager {
     this._setLoading(true);
     this._childRuns.clear();
 
-    const result = this._service.startRun(trimmed, {
+    const result = this._service.submitUserTurn(trimmed, {
       history: { current: history },
       sessionId,
       workspaceId: this._sessionManager.getWorkspaceId(),
@@ -181,11 +184,6 @@ export class AgentManager {
 
     handle.done
       .then(async () => {
-        // Read the final snapshot directly from the run rather than
-        // this._liveEvents.  The run's subscriber is notified via
-        // setTimeout(0) (macrotask), but this .then runs as a microtask,
-        // so _liveEvents may be one batch behind and missing the final
-        // text-delta events.
         const finalEvents = this._run
           ? [...this._run.getSnapshot()]
           : this._liveEvents;
@@ -256,10 +254,7 @@ export class AgentManager {
     );
   }
 
-  private _buildAIHistory(): Array<{
-    role: "user" | "assistant" | "system";
-    content: string;
-  }> {
+  private _buildAIHistory(): AgentMessage[] {
     return buildAIHistory({
       liveEvents: this._liveEvents,
       persistedEvents: this._persistedEvents,
@@ -278,7 +273,7 @@ export class AgentManager {
       sessions: this._sessions,
       activeRun: this._run,
       currentSessionId: this._sessionManager.getCurrentSessionId(),
-      workspaceRootPath: this._sessionManager.getWorkspaceRootPath(),
+      workspace: this._sessionManager.getWorkspace(),
       mode: this._mode,
     };
   }

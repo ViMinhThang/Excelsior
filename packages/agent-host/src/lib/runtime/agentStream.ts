@@ -1,8 +1,5 @@
-// Invariant: streamAgentResponse always emits run-start before
-//   any other event, and run-end as the last event.
-//   Retries are applied for transient errors (429, 502, 503, 504).
-
 import type { ToolLoopAgent } from "ai";
+import type { AgentMessage } from "@excelsior/core";
 import {
   StreamPart,
   getTextDelta,
@@ -12,22 +9,20 @@ import {
 } from "./streamTypes.js";
 import { AgentRun } from "./agentRun.js";
 import { withRetry, isTransientError } from "./retry.js";
-import { RUN_START, RUN_END, TEXT_DELTA, TOOL_CALL_START, TOOL_CALL_END, ERROR } from "./eventNames.js";
+import {
+  RUN_START,
+  RUN_END,
+  TEXT_DELTA,
+  TOOL_CALL_START,
+  TOOL_CALL_END,
+  ERROR,
+} from "./eventNames.js";
 
 export async function streamAgentResponse(
   agent: ToolLoopAgent<any, any>,
-  messages: Array<{
-    role: string;
-    content: string | Array<{ type: string; text: string }>;
-    tool_call_id?: string;
-    tool_calls?: Array<{
-      id: string;
-      type: string;
-      function: { name: string; arguments: string };
-    }>;
-  }>,
+  messages: AgentMessage[],
   run: AgentRun,
-  signal?: AbortSignal,
+  signal: AbortSignal,
 ): Promise<void> {
   let isCancelled = false;
 
@@ -40,13 +35,13 @@ export async function streamAgentResponse(
       baseDelayMs: 1000,
       onRetry: (error, attempt) => {
         run.emit(TEXT_DELTA, {
-          delta: `\n[Retry ${attempt}/3] API error: ${error.message} - retrying...\n`,
+          delta: `\nRetry ${attempt}/3  API error: ${error.message} - retrying...\n`,
         });
       },
     });
 
     for await (const rawPart of stream.fullStream) {
-      if (signal?.aborted) {
+      if (signal.aborted) {
         isCancelled = true;
         break;
       }

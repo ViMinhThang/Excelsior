@@ -1,8 +1,8 @@
 import { RunOrchestrator, RunHandle } from "../lib/runtime/runOrchestrator.js";
-import { AgentRun } from "../lib/runtime/agentRun.js";
+import { AgentRun } from "./../lib/runtime/agentRun.js";
 import { AnyAgentEvent } from "../lib/runtime/events.js";
 import { createToolContext, ToolContext } from "../lib/tool/context.js";
-import type { AgentMode } from "../lib/runtime/agentMode.js";
+import type { AgentMode, AgentMessage } from "@excelsior/core";
 import { confirmBus } from "../lib/runtime/confirmBus.js";
 import { defaultRunRecorder, RunRecorder } from "../lib/persistence/runRecorder.js";
 import { createSubAgentEventSink, SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
@@ -16,8 +16,8 @@ export interface RunContext {
   subAgentEvents: SubAgentEventSink;
 }
 
-export interface RunConfig {
-  messages: Array<{ role: string; content: string }>;
+export interface RunSessionConfig {
+  messages: AgentMessage[];
   createAgent: (runCtx: RunContext) => ToolLoopAgent<any, any>;
   onEvent?: (event: AnyAgentEvent, allEvents: AnyAgentEvent[]) => void;
   signal?: AbortSignal;
@@ -28,7 +28,7 @@ export interface RunConfig {
   mode?: AgentMode;
 }
 
-export interface RunResult {
+export interface RunSessionResult {
   run: AgentRun;
   childRuns: Map<string, AgentRun>;
   handle: RunHandle;
@@ -37,34 +37,20 @@ export interface RunResult {
 
 const orchestrator = new RunOrchestrator();
 
-function mergeSignals(a?: AbortSignal, b?: AbortController): AbortSignal {
-  if (!a) return b!.signal;
-  const controller = new AbortController();
-  if (a.aborted) { controller.abort(a.reason); return controller.signal; }
-  a.addEventListener("abort", () => controller.abort(a.reason), { once: true });
-  b?.signal.addEventListener("abort", () => controller.abort(b.signal.reason), { once: true });
-  return controller.signal;
-}
-
-export function startRun(config: RunConfig): RunResult {
+export function createRunSession(config: RunSessionConfig): RunSessionResult {
   const sessionId = config.sessionId ?? `ses_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  const run = new AgentRun(sessionId);
+  const run = new AgentRun(sessionId, undefined, undefined, config.signal);
   const childRuns = new Map<string, AgentRun>();
   const recorder = config.recorder ?? defaultRunRecorder;
   const subAgentEvents = config.subAgentEvents ?? createSubAgentEventSink();
 
-  const abortController = new AbortController();
-  run.abortController = abortController;
-
-  const combinedSignal = mergeSignals(config.signal, abortController);
-
-  const ctx = createToolContext({ abortSignal: combinedSignal, confirmBus, mode: config.mode });
+  const ctx = createToolContext({ abortSignal: run.abortSignal, confirmBus, mode: config.mode });
   const runCtx: RunContext = { ctx, run, childRuns, recorder, subAgentEvents };
 
   const handle = orchestrator.startRun(run, {
     messages: config.messages,
     createAgent: () => config.createAgent(runCtx),
-    signal: combinedSignal,
+    signal: run.abortSignal,
     onEvent: config.onEvent,
     sessionId,
     recorder,

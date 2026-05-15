@@ -1,27 +1,32 @@
 import { AnyAgentEvent } from "../runtime/events.js";
 import { ReadModel, projectEvents } from "./readModel.js";
 import { CHILD_RUN_ATTACHED, RUN_START, RUN_END, USER_INPUT, TEXT_DELTA, TOOL_CALL_END, TOOL_CALL_START, ERROR, TURN_COMPLETE } from "../runtime/eventNames.js";
-
-export type AIHistoryMessage = { role: "user" | "assistant" | "system"; content: string };
+import type { AgentMessage } from "@excelsior/core";
 
 export function projectEventsToAIHistory(
   events: readonly AnyAgentEvent[],
-): AIHistoryMessage[] {
+): AgentMessage[] {
   return projectEvents(aiHistoryModel, events);
 }
 
-export const aiHistoryModel: ReadModel<AIHistoryMessage[], AnyAgentEvent> = {
+export const aiHistoryModel: ReadModel<AgentMessage[], AnyAgentEvent> = {
   initialState: () => [],
   apply(history, event) {
     let assistantBuf = "";
     const last = history[history.length - 1];
-    if (last?.role === "assistant" && !last.content.startsWith("[Tool:") && !last.content.startsWith("[Error]")) {
-      assistantBuf = last.content;
+    const lastContent = typeof last?.content === "string" ? last.content : "";
+    if (
+      last?.role === "assistant" &&
+      !lastContent.startsWith("[Tool:") &&
+      !lastContent.startsWith("[Error]")
+    ) {
+      assistantBuf = lastContent;
       history.pop();
     }
     switch (event.type) {
       case USER_INPUT:
-        if (assistantBuf) history.push({ role: "assistant", content: assistantBuf });
+        if (assistantBuf)
+          history.push({ role: "assistant", content: assistantBuf });
         history.push({ role: "user", content: event.data.content });
         break;
       case TEXT_DELTA:

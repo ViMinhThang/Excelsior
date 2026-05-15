@@ -91,7 +91,7 @@ export class LocalAgentHost implements AgentHost, AgentCommandHost {
       isLoading: snapshot.isLoading,
       sessions: snapshot.sessions,
       currentSessionId: snapshot.currentSessionId,
-      workspaceRootPath: snapshot.workspaceRootPath,
+      workspace: snapshot.workspace,
       mode: snapshot.mode,
       pendingConfirmation: this.pendingConfirmation,
     };

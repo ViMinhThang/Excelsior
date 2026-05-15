@@ -35,6 +35,14 @@ export class DisposableScope {
     return this._abortController.signal;
   }
 
+  abort(reason?: unknown): void {
+    if (!this._abortController) {
+      this._abortController = new AbortController();
+    }
+    this._abortController.abort(reason);
+    this.dispose();
+  }
+
   dispose(): void {
     if (this._disposed) return;
     this._disposed = true;

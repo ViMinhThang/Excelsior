@@ -81,6 +81,18 @@ describe("AgentRun", () => {
     expect(signal.aborted).toBe(true);
   });
 
+  it("parent abort signal cancels the run signal", () => {
+    const parent = new AbortController();
+    const child = new AgentRun("ses_test", undefined, undefined, parent.signal);
+    const signal = child.abortSignal;
+
+    parent.abort("stopped");
+
+    expect(child.isCancelled).toBe(true);
+    expect(signal.aborted).toBe(true);
+    expect(signal.reason).toBe("stopped");
+  });
+
   it("isCancelled returns true after cancel", () => {
     expect(run.isCancelled).toBe(false);
     run.cancel();

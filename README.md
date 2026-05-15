@@ -46,7 +46,7 @@ npm run dev
 
 ```text
 packages/
-|- core/           # serializable UI/backend contracts and shared view types
+|- core/           # serializable UI/backend contracts, domain models, shared view types
 `- agent-host/     # backend facade plus runtime, persistence, tools, commands
 
 apps/

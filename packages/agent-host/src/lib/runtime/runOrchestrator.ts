@@ -5,6 +5,7 @@ import { streamAgentResponse } from "./agentStream.js";
 import { Unsubscribe } from "./bus.js";
 import { RUN_START } from "./eventNames.js";
 import type { RunRecorder } from "../persistence/runRecorder.js";
+import type { AgentMessage } from "@excelsior/core";
 
 export interface AgentFactory {
   (
@@ -14,9 +15,9 @@ export interface AgentFactory {
 }
 
 export interface RunConfig {
-  messages: Array<{ role: string; content: string }>;
+  messages: AgentMessage[];
   createAgent: AgentFactory;
-  signal?: AbortSignal;
+  signal: AbortSignal;
   onEvent?: (event: AnyAgentEvent, allEvents: AnyAgentEvent[]) => void;
   sessionId?: string;
   recorder?: RunRecorder;

@@ -23,6 +23,11 @@ describe("LocalAgentHost", () => {
       displayBlocks: [],
       isLoading: false,
       currentSessionId: null,
+      workspace: expect.objectContaining({
+        id: expect.any(String),
+        name: expect.any(String),
+        rootPath: expect.any(String),
+      }),
       mode: "plan",
       pendingConfirmation: null,
     });

@@ -1,5 +1,10 @@
 import { randomUUID } from "crypto";
-import { RUN_START, RUN_END, CHILD_RUN_ATTACHED, TURN_COMPLETE } from "./eventNames.js";
+import {
+  RUN_START,
+  RUN_END,
+  CHILD_RUN_ATTACHED,
+  TURN_COMPLETE,
+} from "./eventNames.js";
 
 export const EVENT_SCHEMA_VERSION = 1;
 
@@ -7,12 +12,22 @@ export type AgentEventDataMap = {
   [RUN_START]: Record<string, never>;
   [RUN_END]: { cancelled: boolean };
   [TURN_COMPLETE]: { runId: string };
-  [CHILD_RUN_ATTACHED]: { childRunId: string; parentToolCallId: string; role: string };
+  [CHILD_RUN_ATTACHED]: {
+    childRunId: string;
+    parentToolCallId: string;
+    role: string;
+  };
   "user-input": { content: string };
   "text-delta": { delta: string };
   "tool-call-start": { toolName: string; toolArgs: string; toolCallId: string };
-  "tool-call-end": { toolCallId: string; result: string; status: string; toolName: string; toolArgs: string };
-  "error": { message: string };
+  "tool-call-end": {
+    toolCallId: string;
+    result: string;
+    status: string;
+    toolName: string;
+    toolArgs: string;
+  };
+  error: { message: string };
 };
 
 export type AgentEventType = keyof AgentEventDataMap;
@@ -32,7 +47,7 @@ export interface AgentEvent<T extends AgentEventType = AgentEventType> {
 }
 
 export type AnyAgentEvent = {
-  [T in AgentEventType]: { type: T } & AgentEvent<T>;
+  [T in AgentEventType]: AgentEvent<T>;
 }[AgentEventType];
 
 export function makeEvent<T extends AgentEventType>(
@@ -57,7 +72,11 @@ export function makeEvent<T extends AgentEventType>(
     correlationId: overrides?.correlationId ?? runId,
     timestamp: new Date().toISOString(),
     data,
-    ...(overrides?.parentEventId ? { parentEventId: overrides.parentEventId } : {}),
-    ...(overrides?.relatedToolCallId ? { relatedToolCallId: overrides.relatedToolCallId } : {}),
+    ...(overrides?.parentEventId
+      ? { parentEventId: overrides.parentEventId }
+      : {}),
+    ...(overrides?.relatedToolCallId
+      ? { relatedToolCallId: overrides.relatedToolCallId }
+      : {}),
   } as AgentEvent<T>;
 }

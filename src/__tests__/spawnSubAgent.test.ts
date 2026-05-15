@@ -97,13 +97,15 @@ describe("spawnSubAgent tool safety context", () => {
       abortSignal: abortController.signal,
       workspaceRoot: process.cwd(),
     };
-    const tool = createSpawnSubAgentTool(parentRun, new Map(), "ses_test", ctx);
+    const childRuns = new Map<string, AgentRun>();
+    const tool = createSpawnSubAgentTool(parentRun, childRuns, "ses_test", ctx);
 
     const pending = (tool as any).execute({ role: "Reviewer", instruction: "check" }, { toolCallId: "tc1" });
     abortController.abort();
     await pending;
 
     expect(captured.signal?.aborted).toBe(true);
+    expect([...childRuns.values()][0].isCancelled).toBe(true);
     captured.waitForAbort = false;
   });
 
