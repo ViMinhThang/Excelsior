@@ -2,6 +2,7 @@ import { RunOrchestrator, RunHandle } from "../lib/runtime/runOrchestrator.js";
 import { AgentRun } from "../lib/runtime/agentRun.js";
 import { AnyAgentEvent } from "../lib/runtime/events.js";
 import { createToolContext, ToolContext } from "../lib/tool/context.js";
+import type { AgentMode } from "../lib/runtime/agentMode.js";
 import { confirmBus } from "../lib/runtime/confirmBus.js";
 import { defaultRunRecorder, RunRecorder } from "../lib/persistence/runRecorder.js";
 import { createSubAgentEventSink, SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
@@ -24,6 +25,7 @@ export interface RunConfig {
   workspaceId?: string;
   recorder?: RunRecorder;
   subAgentEvents?: SubAgentEventSink;
+  mode?: AgentMode;
 }
 
 export interface RunResult {
@@ -56,7 +58,7 @@ export function startRun(config: RunConfig): RunResult {
 
   const combinedSignal = mergeSignals(config.signal, abortController);
 
-  const ctx = createToolContext({ abortSignal: combinedSignal, confirmBus });
+  const ctx = createToolContext({ abortSignal: combinedSignal, confirmBus, mode: config.mode });
   const runCtx: RunContext = { ctx, run, childRuns, recorder, subAgentEvents };
 
   const handle = orchestrator.startRun(run, {

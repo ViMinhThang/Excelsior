@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createRunCommandTool } from "../../agent/tools/runCommand/runCommand.js";
 import { runCommandSchema } from "../../agent/tools/runCommand/type.js";
+import { PLAN_MODE_BLOCKED_MESSAGE } from "../../lib/runtime/agentMode.js";
 
 const runCommandTool = createRunCommandTool();
 
@@ -48,6 +49,21 @@ describe("runCommandTool", () => {
       const result = await (runCommandTool as any).execute({ command: "date", args: [] });
       expect(result.trim().length).toBeGreaterThan(0);
       expect(result).not.toContain("Executable not found");
+    });
+
+    it("blocks write-like commands in plan mode", async () => {
+      const tool = createRunCommandTool({ mode: "plan", capabilities: new Set(["shell"]) });
+      const result = await (tool as any).execute({ command: "mkdir", args: ["new-dir"] });
+      expect(result).toBe(PLAN_MODE_BLOCKED_MESSAGE);
+    });
+
+    it("allows non-mutating commands in plan mode", async () => {
+      const tool = createRunCommandTool({ mode: "plan", capabilities: new Set(["shell"]) });
+      const result = await (tool as any).execute({
+        command: "node",
+        args: ["-e", "console.log('plan ok')"],
+      });
+      expect(result).toContain("plan ok");
     });
   });
 

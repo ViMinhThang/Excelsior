@@ -12,6 +12,7 @@ import { getChatModeHint } from '../lib/modeHints.js';
 import { theme } from '../theme.js';
 import Panel from '../components/shared/Panel.js';
 import { ProjectedBlock, toSubAgentViewModel } from '../../lib/projection/display.js';
+import { formatAgentMode } from '../../lib/runtime/agentMode.js';
 
 const renderAppHeader = () => (
   <Box key="app-header">
@@ -41,6 +42,7 @@ const ChatScreen = () => {
     pending,
     suggestion,
     commandResult,
+    mode,
   } = useChatScreenState();
 
   const pendingDisplay = pending
@@ -61,6 +63,8 @@ const ChatScreen = () => {
     activePanelId,
     subAgentCount: subAgents.length,
   });
+  const diffLines = pending?.diff ? pending.diff.split("\n") : [];
+  const visibleDiffLines = diffLines.slice(0, 80);
 
   return (
     <Box flexDirection="column">
@@ -126,6 +130,21 @@ const ChatScreen = () => {
             </Box>
             <Box flexDirection="column" paddingLeft={theme.spacing.toolIndent}>
               <Text color={theme.colors.text}>  {pendingDisplay.detail || "waiting for approval"}</Text>
+              {pending.diff && (
+                <Box flexDirection="column" marginTop={1} paddingLeft={2}>
+                  <Text color={theme.colors.muted} dimColor>
+                    {pending.action ?? "change"} {pending.filePath ?? ""}
+                  </Text>
+                  {visibleDiffLines.map((line, index) => (
+                    <Text key={`${index}-${line}`} color={theme.colors.muted} dimColor>
+                      {line || " "}
+                    </Text>
+                  ))}
+                  {diffLines.length > visibleDiffLines.length && (
+                    <Text color={theme.colors.muted} dimColor>... diff truncated</Text>
+                  )}
+                </Box>
+              )}
               <Box flexDirection="column" marginTop={1} paddingLeft={2} borderTop>
                 <Text color={theme.colors.text} bold>(y) accept</Text>
                 <Text color={theme.colors.text} bold>(a) accept all edits (for this session)</Text>
@@ -145,7 +164,7 @@ const ChatScreen = () => {
       )}
 
       <Box marginTop={1} paddingLeft={1}>
-        <Text color={theme.colors.muted} dimColor>{footerHint}</Text>
+        <Text color={theme.colors.muted} dimColor>{footerHint}{theme.glyphs.separator}mode: {formatAgentMode(mode)}</Text>
       </Box>
 
       <Box paddingLeft={1}>

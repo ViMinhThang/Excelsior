@@ -21,6 +21,9 @@ function baseContext(setCommandResult = vi.fn()) {
     openPanel: vi.fn(),
     closePanel: vi.fn(),
     getHelpText: vi.fn(() => "Available commands"),
+    mode: "plan",
+    setMode: vi.fn(),
+    toggleMode: vi.fn(() => "act"),
   });
 }
 

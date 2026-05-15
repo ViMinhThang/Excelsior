@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { AgentManager, ChatSessionState } from "../../application/agentManager.js";
 import { Session } from "../../lib/runtime/session.js";
+import type { AgentMode } from "../../lib/runtime/agentMode.js";
 
 export interface UseAgentManagerReturn {
   state: ChatSessionState;
@@ -13,6 +14,8 @@ export interface UseAgentManagerReturn {
   renameSession: (sessionId: string, title: string) => void;
   listSessions: () => Session[];
   getCurrentSessionId: () => string | null;
+  setMode: (mode: AgentMode) => void;
+  toggleMode: () => AgentMode | undefined;
 }
 
 export function useAgentManager(): UseAgentManagerReturn {
@@ -39,5 +42,7 @@ export function useAgentManager(): UseAgentManagerReturn {
     renameSession: useCallback((id: string, title: string) => ref.current?.renameSession(id, title), []),
     listSessions: useCallback(() => ref.current?.listSessions() ?? [], []),
     getCurrentSessionId: useCallback(() => ref.current?.getCurrentSessionId() ?? null, []),
+    setMode: useCallback((mode: AgentMode) => ref.current?.setMode(mode), []),
+    toggleMode: useCallback(() => ref.current?.toggleMode(), []),
   };
 }

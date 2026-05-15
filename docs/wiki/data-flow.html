@@ -65,7 +65,7 @@
           <path class="arrow" d="M 480 185 L 480 215"></path>
           <text class="small" x="500" y="204">ensure session + build history</text>
           <path class="arrow" d="M 480 250 L 695 250"></path>
-          <text class="small" x="520" y="240">ChatService.startRun()</text>
+          <text class="small" x="520" y="240">ChatService.startRun(mode)</text>
           <path class="arrow" d="M 695 295 L 695 325"></path>
           <text class="small" x="715" y="314">streamAgentResponse()</text>
           <path class="arrow" d="M 695 360 L 885 360"></path>
@@ -100,6 +100,20 @@ turn-complete</code></pre>
           <p>`RunOrchestrator` records non-start events through `RunRecorder`. `startRun` appends a `TURN_COMPLETE` checkpoint when the run promise resolves.</p>
         </article>
       </div>
+
+      <h2>Plan/Act Tool Flow</h2>
+      <p>
+        The current mode lives in `AgentManager` state and is passed into `ChatService.startRun()`, `startRun()`,
+        `createToolContext()`, and finally each tool factory. Plan mode allows read-only file tools and non-mutating
+        command checks. It blocks `write`, `edit`, and write-like `runCommand` before filesystem mutation or shell
+        execution. Act mode keeps confirmation, but `write` and `edit` attach a compact unified diff to the request.
+      </p>
+      <pre><code>AgentManager mode
+ChatService.startRun({ mode })
+createToolContext({ mode, confirmBus, abortSignal })
+tool executes:
+  plan + mutation => blocked message
+  act + write/edit => validate, diff, confirm, apply</code></pre>
 
       <h2>Projection Pipeline</h2>
       <div class="diagram">
@@ -220,12 +234,17 @@ turn-complete</code></pre>
             <tr>
               <td><code>FeatureRuntimeContext</code></td>
               <td><code>src/features/featureTypes.ts</code></td>
-              <td>Small service surface exposed to slash command implementations.</td>
+              <td>Small service surface exposed to slash command implementations, including mode read/write helpers.</td>
             </tr>
             <tr>
               <td><code>ToolContext</code></td>
               <td><code>src/lib/tool/context.ts</code></td>
-              <td>Capabilities, confirmation flow, abort signal, and workspace root passed into tools.</td>
+              <td>Capabilities, Plan/Act mode, confirmation flow, abort signal, and workspace root passed into tools.</td>
+            </tr>
+            <tr>
+              <td><code>ConfirmRequest</code></td>
+              <td><code>src/lib/runtime/confirmTypes.ts</code></td>
+              <td>Structured approval payload with tool name, args, optional file path, action, and unified diff.</td>
             </tr>
           </tbody>
         </table>

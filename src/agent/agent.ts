@@ -11,7 +11,7 @@ export function createAgent(
   ctx?: ToolContext,
 ) {
   const platform = process.platform;
-  const systemPrompt = buildSystemPrompt(platform);
+  const systemPrompt = buildSystemPrompt(platform, ctx?.mode);
   const apiKey = getSetting("DEEPSEEK_API_KEY");
   const deepseek = createDeepSeek({
     apiKey: apiKey || process.env.DEEPSEEK_API_KEY,

@@ -21,6 +21,9 @@ export interface FeatureRuntimeContextDeps {
   openPanel: FeatureRuntimeContext["openPanel"];
   closePanel: FeatureRuntimeContext["closePanel"];
   getHelpText: FeatureRuntimeContext["getHelpText"];
+  mode: FeatureRuntimeContext["mode"];
+  setMode: FeatureRuntimeContext["setMode"];
+  toggleMode: FeatureRuntimeContext["toggleMode"];
 }
 
 export interface SubmitChatInputDeps {
@@ -60,6 +63,9 @@ export function createFeatureRuntimeContext(
     openPanel: deps.openPanel,
     closePanel: deps.closePanel,
     getHelpText: deps.getHelpText,
+    mode: deps.mode,
+    setMode: deps.setMode,
+    toggleMode: deps.toggleMode,
   };
 }
 

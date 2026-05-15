@@ -4,9 +4,11 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { createViewTool } from "../agent/tools/fs/view.js";
 import { createWriteTool } from "../agent/tools/fs/write.js";
+import { createEditTool } from "../agent/tools/fs/edit.js";
 import { createRipgrepTool } from "../agent/tools/fs/ripgrep.js";
 import { createGlobTool } from "../agent/tools/fs/glob.js";
 import type { ToolContext } from "../lib/tool/context.js";
+import { PLAN_MODE_BLOCKED_MESSAGE } from "../lib/runtime/agentMode.js";
 
 describe("filesystem tool workspace bounds", () => {
   let workspaceRoot: string;
@@ -50,6 +52,72 @@ describe("filesystem tool workspace bounds", () => {
     }) as any).execute({ filePath: "../escape.txt", content: "x" });
 
     expect(result).toContain("outside the workspace");
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("blocks write and edit in plan mode", async () => {
+    const planCtx: ToolContext = { ...ctx(), mode: "plan" };
+    const writeResult = await (createWriteTool(planCtx) as any).execute({
+      filePath: "created.txt",
+      content: "x",
+    });
+    const editResult = await (createEditTool(planCtx) as any).execute({
+      filePath: "inside.txt",
+      oldText: "needle",
+      newText: "changed",
+    });
+
+    expect(writeResult).toBe(PLAN_MODE_BLOCKED_MESSAGE);
+    expect(editResult).toBe(PLAN_MODE_BLOCKED_MESSAGE);
+  });
+
+  it("includes a unified diff when confirming file creation", async () => {
+    const request = vi.fn(async () => false);
+    await (createWriteTool({
+      ...ctx(),
+      mode: "act",
+      confirm: { getListenerCount: () => 1, request },
+    }) as any).execute({ filePath: "created.txt", content: "hello\n" });
+
+    expect(request).toHaveBeenCalledWith(
+      "writeFile",
+      JSON.stringify({ filePath: "created.txt" }),
+      expect.objectContaining({
+        action: "create",
+        filePath: "created.txt",
+        diff: expect.stringContaining("+hello"),
+      }),
+    );
+  });
+
+  it("includes a unified diff when confirming edits after validating oldText", async () => {
+    const request = vi.fn(async () => false);
+    await (createEditTool({
+      ...ctx(),
+      mode: "act",
+      confirm: { getListenerCount: () => 1, request },
+    }) as any).execute({ filePath: "inside.txt", oldText: "needle", newText: "changed" });
+
+    expect(request).toHaveBeenCalledWith(
+      "editFile",
+      JSON.stringify({ filePath: "inside.txt" }),
+      expect.objectContaining({
+        action: "edit",
+        filePath: "inside.txt",
+        diff: expect.stringContaining("-needle"),
+      }),
+    );
+  });
+
+  it("does not request edit confirmation when oldText is missing", async () => {
+    const request = vi.fn(async () => true);
+    const result = await (createEditTool({
+      ...ctx(),
+      mode: "act",
+      confirm: { getListenerCount: () => 1, request },
+    }) as any).execute({ filePath: "inside.txt", oldText: "missing", newText: "changed" });
+
+    expect(result).toContain("oldText");
     expect(request).not.toHaveBeenCalled();
   });
 

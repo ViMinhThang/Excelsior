@@ -14,6 +14,7 @@ import {
 } from "../lib/runtime/subAgentEventSink.js";
 import { SessionManager } from "../features/session/manager.js";
 import { ChatService } from "./chatService.js";
+import type { AgentMode } from "../lib/runtime/agentMode.js";
 
 export interface ChatSessionState {
   displayBlocks: ProjectedBlock[];
@@ -22,6 +23,7 @@ export interface ChatSessionState {
   activeRun: AgentRun | null;
   currentSessionId: string | null;
   workspaceRootPath: string;
+  mode: AgentMode;
 }
 
 export interface AgentManagerOptions {
@@ -50,6 +52,7 @@ export class AgentManager {
 
   private _disposed = false;
   private _snapshot: ChatSessionState | null = null;
+  private _mode: AgentMode = "plan";
 
   constructor(workspaceId?: string, options?: AgentManagerOptions) {
     this._service = options?.chatService ?? new ChatService();
@@ -92,6 +95,7 @@ export class AgentManager {
       subAgentEvents: this._subAgentEvents,
       displayContent: options?.displayContent,
       silent: options?.silent,
+      mode: this._mode,
     });
 
     this._attachRun(result.run, result.childRuns, result.handle);
@@ -136,6 +140,17 @@ export class AgentManager {
 
   getCurrentSessionId(): string | null {
     return this._sessionManager.getCurrentSessionId();
+  }
+
+  setMode(mode: AgentMode): void {
+    this._mode = mode;
+    this._notify();
+  }
+
+  toggleMode(): AgentMode {
+    this._mode = this._mode === "plan" ? "act" : "plan";
+    this._notify();
+    return this._mode;
   }
 
   private _setLoading(loading: boolean): void {
@@ -264,6 +279,7 @@ export class AgentManager {
       activeRun: this._run,
       currentSessionId: this._sessionManager.getCurrentSessionId(),
       workspaceRootPath: this._sessionManager.getWorkspaceRootPath(),
+      mode: this._mode,
     };
   }
 
