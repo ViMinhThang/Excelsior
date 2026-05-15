@@ -1,52 +1,38 @@
-import type { AgentRun } from "../lib/runtime/agentRun.js";
-import type { AnyAgentEvent } from "../lib/runtime/events.js";
-import type { ProjectedBlock } from "../lib/projection/display.js";
-import type { Session, Workspace, AgentMessage } from "@excelsior/core";
-import type { RunHandle } from "../lib/runtime/runOrchestrator.js";
+import type { AgentMessage, Session } from "@excelsior/core";
 import {
   computeDisplayBlocks,
   buildAIHistory,
 } from "../lib/projection/projectionMerger.js";
-import { loadSessionEvents } from "../lib/persistence/eventPersistence.js";
 import {
   createSubAgentEventSink,
-  SubAgentEventSink,
+  type SubAgentEventSink,
 } from "../lib/runtime/subAgentEventSink.js";
 import { SessionManager } from "../sessionManager.js";
 import { ChatService } from "./chatService.js";
 import type { AgentMode } from "../lib/runtime/agentMode.js";
+import { AgentManagerRunLifecycle } from "./agentManager/runLifecycle.js";
+import { AgentManagerSessionState } from "./agentManager/sessionState.js";
+import { subscribeSubAgentNotifications } from "./agentManager/subAgentNotifications.js";
+import type {
+  AgentManagerOptions,
+  AgentSessionService,
+  ChatSessionState,
+  ChatTurnService,
+  SendOptions,
+} from "./agentManager/types.js";
 
-export interface ChatSessionState {
-  displayBlocks: ProjectedBlock[];
-  isLoading: boolean;
-  sessions: Session[];
-  activeRun: AgentRun | null;
-  currentSessionId: string | null;
-  workspace: Workspace;
-  mode: AgentMode;
-}
-
-export interface AgentManagerOptions {
-  chatService?: ChatService;
-  sessionManager?: SessionManager;
-}
+export type {
+  AgentManagerOptions,
+  AgentSessionService,
+  ChatSessionState,
+  ChatTurnService,
+};
 
 export class AgentManager {
   private _listeners = new Set<() => void>();
-  private _service: ChatService;
-  private _sessionManager: SessionManager;
-
-  private _run: AgentRun | null = null;
-  private _childRuns = new Map<string, AgentRun>();
-  private _handle: RunHandle | null = null;
-  private _isLoading = false;
-  private _unsubLive: (() => void) | null = null;
-
-  private _sessions: Session[] = [];
-  private _persistedEvents: AnyAgentEvent[] = [];
-  private _liveEvents: readonly AnyAgentEvent[] = [];
-
-  private _subAgentEvents: SubAgentEventSink;
+  private readonly _sessionState: AgentManagerSessionState;
+  private readonly _runLifecycle: AgentManagerRunLifecycle;
+  private readonly _subAgentEvents: SubAgentEventSink;
   private _subAgentUnsubs: Array<() => void> = [];
   private _notifyTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -55,12 +41,23 @@ export class AgentManager {
   private _mode: AgentMode = "plan";
 
   constructor(workspaceId?: string, options?: AgentManagerOptions) {
-    this._service = options?.chatService ?? new ChatService();
-    this._sessionManager =
+    const service = options?.chatService ?? new ChatService();
+    const sessionManager =
       options?.sessionManager ?? new SessionManager(workspaceId);
+
+    this._sessionState = new AgentManagerSessionState(sessionManager);
+    this._runLifecycle = new AgentManagerRunLifecycle(
+      service,
+      () => this._notify(),
+      (events) => this._sessionState.appendFinalEvents(events),
+    );
     this._subAgentEvents = createSubAgentEventSink();
-    this._loadInitialData();
-    this._subscribeSubAgentEvents();
+
+    this._sessionState.loadInitialData();
+    this._subAgentUnsubs = subscribeSubAgentNotifications(
+      this._subAgentEvents,
+      () => this._scheduleNotify(),
+    );
     this._updateSnapshot();
   }
 
@@ -76,73 +73,55 @@ export class AgentManager {
     };
   }
 
-  send(
-    content: string,
-    options?: { displayContent?: string; silent?: boolean },
-  ): void {
-    if (this._isLoading || this._disposed) return;
+  send(content: string, options?: SendOptions): void {
+    if (this._runLifecycle.isLoading || this._disposed) return;
     const trimmed = content.trim();
     if (!trimmed) return;
 
-    const sessionId = this._sessionManager.ensureSession();
-    this._sessions = this._sessionManager.listSessions();
+    const sessionId = this._sessionState.ensureSession();
     const history = this._buildAIHistory();
 
-    this._setLoading(true);
-    this._childRuns.clear();
-
-    const result = this._service.submitUserTurn(trimmed, {
-      history: { current: history },
+    this._runLifecycle.startTurn(trimmed, {
+      history,
       sessionId,
-      workspaceId: this._sessionManager.getWorkspaceId(),
+      workspaceId: this._sessionState.workspaceId,
       subAgentEvents: this._subAgentEvents,
       displayContent: options?.displayContent,
       silent: options?.silent,
       mode: this._mode,
     });
-
-    this._attachRun(result.run, result.childRuns, result.handle);
-    this._notify();
   }
 
   async switchSession(sessionId: string): Promise<void> {
     this.cancel();
-    this._sessionManager.switchSession(sessionId);
-    this._sessions = this._sessionManager.listSessions();
-    this._persistedEvents = [];
+    this._sessionState.beginSwitchSession(sessionId);
     this._notify();
-    await this._reloadSessionEvents();
+    await this._sessionState.reloadCurrentSessionEvents();
     this._notify();
   }
 
   createSession(title?: string): Session {
-    const session = this._sessionManager.createSession(title);
-    this._sessions = this._sessionManager.listSessions();
+    const session = this._sessionState.createSession(title);
     this._notify();
     return session;
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    await this._sessionManager.deleteSession(sessionId);
-    this._sessions = this._sessionManager.listSessions();
-    if (this._sessionManager.getCurrentSessionId() === null) {
-      this._persistedEvents = [];
-    }
+    await this._sessionState.deleteSession(sessionId);
     this._notify();
   }
 
   renameSession(sessionId: string, title: string): void {
-    this._sessionManager.renameSession(sessionId, title);
-    this._sessions = this._sessionManager.listSessions();
+    this._sessionState.renameSession(sessionId, title);
     this._notify();
   }
 
   listSessions(): Session[] {
-    return this._sessionManager.listSessions();
+    return this._sessionState.listSessions();
   }
 
   getCurrentSessionId(): string | null {
-    return this._sessionManager.getCurrentSessionId();
+    return this._sessionState.currentSessionId;
   }
 
   setMode(mode: AgentMode): void {
@@ -156,68 +135,18 @@ export class AgentManager {
     return this._mode;
   }
 
-  private _setLoading(loading: boolean): void {
-    this._isLoading = loading;
-    if (!loading) {
-      this._liveEvents = [];
-      this._unsubLive?.();
-      this._unsubLive = null;
-      this._run = null;
-      this._handle = null;
-    }
-  }
-
-  private _attachRun(
-    run: AgentRun,
-    childRuns: Map<string, AgentRun>,
-    handle: RunHandle,
-  ): void {
-    this._run = run;
-    this._childRuns = childRuns;
-    this._handle = handle;
-
-    this._unsubLive?.();
-    this._unsubLive = run.subscribe(() => {
-      this._liveEvents = run.getSnapshot();
-      this._notify();
-    });
-
-    handle.done
-      .then(async () => {
-        const finalEvents = this._run
-          ? [...this._run.getSnapshot()]
-          : this._liveEvents;
-        if (finalEvents.length > 0) {
-          const ids = new Set(finalEvents.map((e) => e.id));
-          this._persistedEvents = [
-            ...this._persistedEvents.filter((e) => !ids.has(e.id)),
-            ...finalEvents,
-          ];
-        }
-        this._setLoading(false);
-        this._notify();
-      })
-      .catch(() => {
-        this._setLoading(false);
-        this._notify();
-      });
-  }
-
   cancel(): void {
-    this._handle?.cancel();
-    this._setLoading(false);
-    this._notify();
+    this._runLifecycle.cancel();
   }
 
   clear(): void {
     this.cancel();
-    this._sessions = [];
-    this._persistedEvents = [];
+    this._sessionState.clearViewState();
     this._notify();
   }
 
-  get run(): AgentRun | null {
-    return this._run;
+  get run() {
+    return this._runLifecycle.run;
   }
 
   dispose(): void {
@@ -233,47 +162,26 @@ export class AgentManager {
     }
   }
 
-  private _loadInitialData(): void {
-    this._sessions = this._sessionManager.listSessions();
-  }
-
-  private async _reloadSessionEvents(): Promise<void> {
-    const sid = this._sessionManager.getCurrentSessionId();
-    this._persistedEvents = sid ? await loadSessionEvents(sid) : [];
-  }
-
-  private _subscribeSubAgentEvents(): void {
-    this._subAgentUnsubs.push(
-      this._subAgentEvents.on("spawned", () => this._scheduleNotify()),
-    );
-    this._subAgentUnsubs.push(
-      this._subAgentEvents.on("output", () => this._scheduleNotify()),
-    );
-    this._subAgentUnsubs.push(
-      this._subAgentEvents.on("done", () => this._scheduleNotify()),
-    );
-  }
-
   private _buildAIHistory(): AgentMessage[] {
     return buildAIHistory({
-      liveEvents: this._liveEvents,
-      persistedEvents: this._persistedEvents,
-      childRuns: this._childRuns,
+      liveEvents: this._runLifecycle.liveEvents,
+      persistedEvents: this._sessionState.persistedEvents,
+      childRuns: this._runLifecycle.childRuns,
     });
   }
 
   private _updateSnapshot(): void {
     this._snapshot = {
       displayBlocks: computeDisplayBlocks({
-        liveEvents: this._liveEvents,
-        persistedEvents: this._persistedEvents,
-        childRuns: this._childRuns,
+        liveEvents: this._runLifecycle.liveEvents,
+        persistedEvents: this._sessionState.persistedEvents,
+        childRuns: this._runLifecycle.childRuns,
       }),
-      isLoading: this._isLoading,
-      sessions: this._sessions,
-      activeRun: this._run,
-      currentSessionId: this._sessionManager.getCurrentSessionId(),
-      workspace: this._sessionManager.getWorkspace(),
+      isLoading: this._runLifecycle.isLoading,
+      sessions: this._sessionState.sessions,
+      activeRun: this._runLifecycle.run,
+      currentSessionId: this._sessionState.currentSessionId,
+      workspace: this._sessionState.workspace,
       mode: this._mode,
     };
   }

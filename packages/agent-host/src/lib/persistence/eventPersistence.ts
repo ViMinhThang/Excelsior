@@ -4,30 +4,11 @@ import { AnyAgentEvent } from "../runtime/events.js";
 import type { Session } from "../runtime/session.js";
 import * as QUERIES from "./queries.js";
 import { defaultRunRecorder } from "./runRecorder.js";
-
-interface SessionRow {
-  id: string;
-  started_at: string;
-  updated_at: string;
-  metadata: string | null;
-  workspace_id: string | null;
-  title: string | null;
-}
+import { rowToSession, type SessionDbRow } from "./rowTypes.js";
 
 interface ExistingSessionRow {
   started_at: string;
   title: string | null;
-}
-
-function rowToSession(row: SessionRow): Session {
-  return {
-    id: row.id,
-    startedAt: row.started_at,
-    updatedAt: row.updated_at,
-    metadata: row.metadata ? JSON.parse(row.metadata) : { userInput: "" },
-    workspaceId: row.workspace_id ?? undefined,
-    title: row.title ?? undefined,
-  };
 }
 
 export function persistSession(session: Session, db?: Database.Database): void {
@@ -43,8 +24,8 @@ export function persistSession(session: Session, db?: Database.Database): void {
       existing?.started_at ?? session.startedAt,
       session.updatedAt,
       JSON.stringify(session.metadata ?? {}),
-      (session as any).workspaceId ?? null,
-      (session as any).title ?? existing?.title ?? null,
+      session.workspaceId ?? null,
+      session.title ?? existing?.title ?? null,
     );
 }
 
@@ -52,7 +33,7 @@ export function loadSessions(db?: Database.Database): Session[] {
   const _db = db ?? getDb();
   const rows = _db
     .prepare(QUERIES.SELECT_PARENT_SESSIONS)
-    .all() as SessionRow[];
+    .all() as SessionDbRow[];
   return rows.reverse().map(rowToSession);
 }
 
@@ -61,12 +42,12 @@ export function loadChildSessions(parentSessionId?: string, db?: Database.Databa
   if (parentSessionId) {
     const rows = _db
       .prepare(QUERIES.SELECT_CHILD_SESSIONS_EXCLUDING)
-      .all(parentSessionId) as SessionRow[];
+      .all(parentSessionId) as SessionDbRow[];
     return rows.map(rowToSession);
   }
   const rows = _db
     .prepare(QUERIES.SELECT_CHILD_SESSIONS_ALL)
-    .all() as SessionRow[];
+    .all() as SessionDbRow[];
   return rows.map(rowToSession);
 }
 
@@ -78,7 +59,7 @@ export function loadSessionsByWorkspace(workspaceId: string, db?: Database.Datab
   const _db = db ?? getDb();
   const rows = _db
     .prepare(QUERIES.SELECT_SESSIONS_BY_WORKSPACE)
-    .all(workspaceId) as SessionRow[];
+    .all(workspaceId) as SessionDbRow[];
   return rows.map(rowToSession);
 }
 

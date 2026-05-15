@@ -18,6 +18,7 @@
           <h2>Pages</h2>
           <a href="index.html">Overview</a>
           <a href="architecture.html">Architecture</a>
+          <a href="frameworks.html">Mini Frameworks</a>
           <a href="data-flow.html">Data Flow</a>
           <a href="code-tour.html">Code Tour</a>
           <a href="tools-features.html">Tools and Features</a>
@@ -39,7 +40,7 @@
       <h2>Boot And App Shell</h2>
       <div class="grid two">
         <article class="card">
-          <h3><code>src/index.ts</code></h3>
+          <h3><code>apps/tui/src/index.ts</code></h3>
           <p>Starts the process. It initializes the database, renders the Ink app, and registers global crash logging for uncaught exceptions and unhandled rejections.</p>
           <p class="muted">Important detail: database initialization also creates the persistence directory for file-backed SQLite databases.</p>
         </article>
@@ -132,11 +133,11 @@
       <div class="grid two">
         <article class="card">
           <h3><code>AgentRun</code></h3>
-          <p>Mutable event source for one run. It assigns sequence numbers, creates immutable events, broadcasts them through a bus, stores snapshots, debounces UI notifications, and cancels via abort controllers.</p>
+          <p>Agent-host's typed adapter over <code>@excelsior/run-runtime</code>. It preserves Excelsior event types while the generic package owns sequencing, immutable events, snapshots, subscriptions, and cancellation.</p>
         </article>
         <article class="card">
           <h3><code>RunOrchestrator</code></h3>
-          <p>Starts `streamAgentResponse`, records emitted events through `RunRecorder`, and returns a `RunHandle` with `cancel()` and `done`.</p>
+          <p>Generic orchestration from <code>@excelsior/run-runtime</code>. Agent-host passes an execution adapter that streams the model and a recorder callback for persisted events.</p>
         </article>
         <article class="card">
           <h3><code>agentStream.ts</code></h3>
@@ -144,7 +145,7 @@
         </article>
         <article class="card">
           <h3><code>events.ts</code></h3>
-          <p>Defines the event schema and `makeEvent()`. Event ids are UUID-backed, and event objects include causation/correlation metadata for replay and debugging.</p>
+          <p>Defines Excelsior's event names and data map. The generic event envelope is created by <code>@excelsior/run-runtime</code>.</p>
         </article>
       </div>
 
@@ -205,16 +206,17 @@
 
       <h2>Projection Internals</h2>
       <p>
-        Projection is the codebase's reducer layer. It consumes ordered events and produces either UI blocks or model history.
+        Projection is the codebase's read-model layer. Generic event folding lives in <code>@excelsior/projection</code>;
+        agent-host read models consume ordered runtime events and produce either UI blocks or model history.
         This layer is pure: no file system, no React, no network.
       </p>
       <div class="grid two">
         <article class="card">
-          <h3><code>projectEvents.ts</code></h3>
+          <h3><code>chatTranscriptProjection.ts</code></h3>
           <p>Builds display blocks. It buffers assistant text, flushes tool calls, attaches child run state to sub-agent blocks, and freezes terminal blocks.</p>
         </article>
         <article class="card">
-          <h3><code>projectHistory.ts</code></h3>
+          <h3><code>aiHistoryProjection.ts</code></h3>
           <p>Builds the compact AI history for future turns. Tool results become assistant messages with `[Tool: name(args)]` labels.</p>
         </article>
         <article class="card">
@@ -222,7 +224,7 @@
           <p>Merges persisted and live events, deduping by id. Live events win when a run is active; parent-event child events are filtered out of parent display.</p>
         </article>
         <article class="card">
-          <h3><code>projectChildren.ts</code></h3>
+          <h3><code>subAgentProjection.ts</code></h3>
           <p>Converts child run events into sub-agent state: latest line, full output, tool-call list, output parts, timing, and status.</p>
         </article>
       </div>
@@ -241,7 +243,7 @@
             <tr>
               <td>Add a slash command</td>
               <td><code>packages/agent-host/src/commands.ts</code>, then <code>commandRegistry</code></td>
-              <td><code>featureRegistry.test.ts</code>, command-specific tests</td>
+              <td><code>agentCommands.test.ts</code>, command-specific tests</td>
             </tr>
             <tr>
               <td>Change Plan/Act behavior</td>
@@ -265,7 +267,7 @@
             </tr>
             <tr>
               <td>Change cancellation or streaming</td>
-              <td><code>agentStream.ts</code>, <code>runOrchestrator.ts</code>, <code>agentRun.ts</code></td>
+              <td><code>@excelsior/run-runtime</code>, <code>createRunSession</code>, <code>agentStream.ts</code>, <code>agentRun.ts</code></td>
               <td><code>run.test.ts</code>, <code>spawnSubAgent.test.ts</code></td>
             </tr>
           </tbody>

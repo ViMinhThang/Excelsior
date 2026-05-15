@@ -62,7 +62,7 @@ export function createDb(dbPath?: string): Database.Database {
 
   // Migration: ensure default workspace exists
   const defaultWsId = "ws_default";
-  const existing = db.prepare("SELECT id FROM workspaces WHERE id = ?").get(defaultWsId) as any;
+  const existing = db.prepare("SELECT id FROM workspaces WHERE id = ?").get(defaultWsId) as { id: string } | undefined;
   if (!existing) {
     const now = new Date().toISOString();
     db.prepare(

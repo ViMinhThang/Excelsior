@@ -1,12 +1,18 @@
-import { RunOrchestrator, RunHandle } from "../lib/runtime/runOrchestrator.js";
-import { AgentRun } from "./../lib/runtime/agentRun.js";
-import { AnyAgentEvent } from "../lib/runtime/events.js";
+import { RunOrchestrator, type RunHandle } from "@excelsior/run-runtime";
+import { AgentRun } from "../lib/runtime/agentRun.js";
+import { AgentEventDataMap, AnyAgentEvent } from "../lib/runtime/events.js";
 import { createToolContext, ToolContext } from "../lib/tool/context.js";
 import type { AgentMode, AgentMessage } from "@excelsior/core";
 import { confirmBus } from "../lib/runtime/confirmBus.js";
 import { defaultRunRecorder, RunRecorder } from "../lib/persistence/runRecorder.js";
 import { createSubAgentEventSink, SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
-import type { ToolLoopAgent } from "ai";
+import { ERROR, PERSISTENCE_ERROR, RUN_START } from "../lib/runtime/eventNames.js";
+import {
+  streamAgentResponse as defaultStreamAgentResponse,
+  type StreamCapableAgent,
+} from "../lib/runtime/agentStream.js";
+
+export type AgentResponseStreamer = typeof defaultStreamAgentResponse;
 
 export interface RunContext {
   ctx: ToolContext;
@@ -18,28 +24,27 @@ export interface RunContext {
 
 export interface RunSessionConfig {
   messages: AgentMessage[];
-  createAgent: (runCtx: RunContext) => ToolLoopAgent<any, any>;
-  onEvent?: (event: AnyAgentEvent, allEvents: AnyAgentEvent[]) => void;
+  createAgent: (runCtx: RunContext) => StreamCapableAgent;
   signal?: AbortSignal;
   sessionId?: string;
-  workspaceId?: string;
   recorder?: RunRecorder;
   subAgentEvents?: SubAgentEventSink;
   mode?: AgentMode;
+  streamAgentResponse?: AgentResponseStreamer;
 }
 
 export interface RunSessionResult {
   run: AgentRun;
   childRuns: Map<string, AgentRun>;
-  handle: RunHandle;
+  handle: RunHandle<AgentEventDataMap>;
   sessionId: string;
 }
 
-const orchestrator = new RunOrchestrator();
+const orchestrator = new RunOrchestrator<AgentEventDataMap>();
 
 export function createRunSession(config: RunSessionConfig): RunSessionResult {
   const sessionId = config.sessionId ?? `ses_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  const run = new AgentRun(sessionId, undefined, undefined, config.signal);
+  const run = new AgentRun({ sessionId, parentSignal: config.signal });
   const childRuns = new Map<string, AgentRun>();
   const recorder = config.recorder ?? defaultRunRecorder;
   const subAgentEvents = config.subAgentEvents ?? createSubAgentEventSink();
@@ -47,22 +52,46 @@ export function createRunSession(config: RunSessionConfig): RunSessionResult {
   const ctx = createToolContext({ abortSignal: run.abortSignal, confirmBus, mode: config.mode });
   const runCtx: RunContext = { ctx, run, childRuns, recorder, subAgentEvents };
 
-  const handle = orchestrator.startRun(run, {
-    messages: config.messages,
-    createAgent: () => config.createAgent(runCtx),
-    signal: run.abortSignal,
-    onEvent: config.onEvent,
-    sessionId,
-    recorder,
+  const handle = orchestrator.start(run, {
+    execute: async ({ signal, emit }) => {
+      await (config.streamAgentResponse ?? defaultStreamAgentResponse)({
+        agent: config.createAgent(runCtx),
+        messages: config.messages,
+        signal,
+        emit,
+      });
+    },
+    persist: {
+      filter: (event) =>
+        event.type !== RUN_START && event.type !== PERSISTENCE_ERROR,
+      write: (event) => recorder.recordEvent(sessionId, event),
+      onError: (error, event) => {
+        run.emit(PERSISTENCE_ERROR, {
+          message: `Failed to persist run event: ${formatError(error)}`,
+          failedEventType: event.type,
+        });
+      },
+    },
+    onError: (error) => {
+      run.emit(ERROR, { message: formatError(error) });
+    },
   });
 
-  const checkpointedHandle: RunHandle = {
+  const checkpointedHandle: RunHandle<AgentEventDataMap> = {
     ...handle,
     done: handle.done.then(async (events) => {
-      await recorder.recordTurnComplete(sessionId, run.id, events.length + 1);
+      await recorder.recordTurnComplete(sessionId, run.id, getNextSequence(run.getSnapshot()));
       return events;
     }),
   };
 
   return { run, childRuns, handle: checkpointedHandle, sessionId };
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function getNextSequence(events: readonly AnyAgentEvent[]): number {
+  return events.reduce((max, event) => Math.max(max, event.sequence), -1) + 1;
 }

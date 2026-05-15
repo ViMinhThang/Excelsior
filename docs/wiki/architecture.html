@@ -18,6 +18,7 @@
           <h2>Pages</h2>
           <a href="index.html">Overview</a>
           <a href="architecture.html">Architecture</a>
+          <a href="frameworks.html">Mini Frameworks</a>
           <a href="data-flow.html">Data Flow</a>
           <a href="code-tour.html">Code Tour</a>
           <a href="tools-features.html">Tools and Features</a>
@@ -60,7 +61,7 @@
 
           <rect class="box alt" x="70" y="370" width="840" height="80"></rect>
           <text class="label" x="100" y="408">Runtime layer</text>
-          <text class="small" x="100" y="433">`AgentRun`, `RunOrchestrator`, `agentStream`, confirmation bus, sub-agent sink</text>
+          <text class="small" x="100" y="433">`@excelsior/run-runtime`, `AgentRun`, `agentStream`, confirmation bus, sub-agent sink</text>
 
           <rect class="box warn" x="70" y="480" width="400" height="80"></rect>
           <text class="label" x="100" y="518">Persistence layer</text>
@@ -76,6 +77,17 @@
           <path class="arrow" d="M 390 450 L 300 480"></path>
           <path class="arrow" d="M 590 450 L 700 480"></path>
         </svg>
+      </div>
+
+      <h2>Mini Framework Boundary</h2>
+      <div class="callout good">
+        <p>
+          The current package split intentionally separates generic mechanics from Excelsior-specific behavior.
+          <code>@excelsior/projection</code> owns event-to-state folding. <code>@excelsior/run-runtime</code> owns
+          cancellable eventful run lifecycle. <code>@excelsior/agent-host</code> owns AI SDK streaming, event meanings,
+          tools, sessions, persistence, and sub-agent behavior. The full reasoning is documented in
+          <a href="frameworks.html">Mini Frameworks</a>.
+        </p>
       </div>
 
       <h2>Responsibility Chart</h2>
@@ -115,19 +127,19 @@
             <tr>
               <td>Application to runtime</td>
               <td><code>ChatService.submitUserTurn</code>, <code>createRunSession</code></td>
-              <td>Messages, session id, recorder, sub-agent sink, mode, tool context.</td>
+              <td>Messages, session id, recorder, sub-agent sink, mode, tool context, and <code>@excelsior/run-runtime</code> orchestration.</td>
               <td>React UI concerns or Ink components.</td>
             </tr>
             <tr>
               <td>Runtime to persistence</td>
-              <td><code>RunOrchestrator</code>, <code>RunRecorder</code></td>
-              <td>Append-only runtime events and turn checkpoints.</td>
+              <td><code>@excelsior/run-runtime</code>, <code>RunRecorder</code></td>
+              <td>Append-only runtime events, generic run lifecycle, and turn checkpoints.</td>
               <td>Rendered chat blocks or model history projections.</td>
             </tr>
             <tr>
               <td>Events to display</td>
-              <td><code>projectionMerger</code>, <code>projectEvents</code></td>
-              <td>Immutable event arrays in, projected blocks out.</td>
+              <td><code>projectionMerger</code>, <code>chatTranscriptProjection</code>, <code>aiHistoryProjection</code></td>
+              <td>Runtime events through <code>@excelsior/projection</code> read models, projected blocks or AI history out.</td>
               <td>Side effects, file writes, network requests.</td>
             </tr>
             <tr>

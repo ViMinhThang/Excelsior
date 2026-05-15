@@ -1,7 +1,7 @@
-export type BusHandler = (data: any) => void;
+export type BusHandler = (data: unknown) => void;
 export type Unsubscribe = () => void;
 
-export interface Bus<TEvents extends Record<string, any>> {
+export interface Bus<TEvents extends Record<string, unknown>> {
   on<K extends keyof TEvents>(
     event: K,
     handler: (data: TEvents[K]) => void,
@@ -11,15 +11,15 @@ export interface Bus<TEvents extends Record<string, any>> {
   getListenerCount<K extends keyof TEvents>(event: K): number;
 }
 
-export function createBus<TEvents extends Record<string, any>>(): Bus<TEvents> {
-  const listeners = new Map<keyof TEvents, Set<(data: any) => void>>();
+export function createBus<TEvents extends Record<string, unknown>>(): Bus<TEvents> {
+  const listeners = new Map<keyof TEvents, Set<BusHandler>>();
 
   return {
     on<K extends keyof TEvents>(event: K, handler: (data: TEvents[K]) => void) {
       if (!listeners.has(event)) listeners.set(event, new Set());
-      listeners.get(event)!.add(handler);
+      listeners.get(event)!.add(handler as BusHandler);
       return () => {
-        listeners.get(event)!.delete(handler);
+        listeners.get(event)!.delete(handler as BusHandler);
       };
     },
 

@@ -3,8 +3,8 @@ import {
   LocalAgentHost,
   resetDefaultAgentHost,
 } from "@excelsior/agent-host";
-import { resetDb } from "../../packages/agent-host/src/lib/persistence/db.js";
-import { confirmBus } from "../../packages/agent-host/src/lib/runtime/confirmBus.js";
+import { resetDb } from "@excelsior/agent-host/testing/persistence";
+import { confirmBus } from "@excelsior/agent-host/testing/runtime";
 
 describe("LocalAgentHost", () => {
   beforeEach(() => {
