@@ -1,7 +1,3 @@
-// Invariant: After cancel(), no new events are accepted except run-end.
-//   getSnapshot() still returns all events emitted before cancel().
-//   Notifications are debounced (setTimeout(0)) to batch React re-renders.
-
 import { createChannelBus } from "./bus.js";
 import {
   AgentEvent,
@@ -23,7 +19,6 @@ export class AgentRun {
   readonly bus = createChannelBus<RunEventMap>();
   readonly parentEventId?: string;
   readonly correlationId: string;
-  abortController?: AbortController;
 
   private _events: AnyAgentEvent[] = [];
   private _snapshot: readonly AnyAgentEvent[] = [];
@@ -39,11 +34,20 @@ export class AgentRun {
     sessionId?: string,
     parentEventId?: string,
     correlationId?: string,
+    parentSignal?: AbortSignal,
   ) {
     this.id = `run_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     this.sessionId = sessionId ?? this.id;
     this.parentEventId = parentEventId;
     this.correlationId = correlationId ?? this.id;
+
+    if (parentSignal?.aborted) {
+      this._scope.abort(parentSignal.reason);
+    } else if (parentSignal) {
+      const abortFromParent = () => this.cancel(parentSignal.reason);
+      parentSignal.addEventListener("abort", abortFromParent, { once: true });
+      this._scope.add(() => parentSignal.removeEventListener("abort", abortFromParent));
+    }
   }
 
   get abortSignal(): AbortSignal {
@@ -74,27 +78,29 @@ export class AgentRun {
     this._notify();
   }
 
-  cancel(): void {
+  cancel(reason?: unknown): void {
     if (this._aborted) return;
     this._aborted = true;
-    this.abortController?.abort();
-    this._scope.dispose();
-    if (this._notifyTimer !== null) {
-      clearTimeout(this._notifyTimer);
-      this._notifyTimer = null;
-      this._notifyPending = false;
-    }
+    this._scope.abort(reason);
+    this._clearNotifyTimer();
   }
 
   flushNotify(): void {
-    if (this._notifyTimer !== null) {
-      clearTimeout(this._notifyTimer);
-      this._notifyTimer = null;
-      this._notifyPending = false;
+    if (this._clearNotifyTimer()) {
       for (const listener of this._listeners) {
         listener();
       }
     }
+  }
+
+  private _clearNotifyTimer(): boolean {
+    if (this._notifyTimer !== null) {
+      clearTimeout(this._notifyTimer);
+      this._notifyTimer = null;
+      this._notifyPending = false;
+      return true;
+    }
+    return false;
   }
 
   getSnapshot(): readonly AnyAgentEvent[] {

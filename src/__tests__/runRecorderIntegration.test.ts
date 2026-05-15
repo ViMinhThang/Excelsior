@@ -32,10 +32,10 @@ function fakeRecorder() {
 
 describe("run recorder integration", () => {
   it("records parent run events and checkpoint through RunRecorder", async () => {
-    const { startRun } = await import("../../packages/agent-host/src/application/runSession.js");
+    const { createRunSession } = await import("../../packages/agent-host/src/application/runSession.js");
     const { recorder, events, checkpoints } = fakeRecorder();
 
-    const result = startRun({
+    const result = createRunSession({
       sessionId: "ses_test",
       messages: [{ role: "user", content: "hello" }],
       createAgent: () => ({} as any),
@@ -51,7 +51,7 @@ describe("run recorder integration", () => {
   });
 
   it("surfaces recorder failures as run errors", async () => {
-    const { startRun } = await import("../../packages/agent-host/src/application/runSession.js");
+    const { createRunSession } = await import("../../packages/agent-host/src/application/runSession.js");
     const recorder: RunRecorder = {
       async recordEvent() {
         throw new Error("disk full");
@@ -67,7 +67,7 @@ describe("run recorder integration", () => {
       async deleteAllSessionEvents() {},
     };
 
-    const result = startRun({
+    const result = createRunSession({
       sessionId: "ses_test",
       messages: [{ role: "user", content: "hello" }],
       createAgent: () => ({} as any),

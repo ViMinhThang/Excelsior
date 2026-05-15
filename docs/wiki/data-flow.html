@@ -65,7 +65,7 @@
           <path class="arrow" d="M 480 185 L 480 215"></path>
           <text class="small" x="500" y="204">ensure session + build history</text>
           <path class="arrow" d="M 480 250 L 695 250"></path>
-          <text class="small" x="520" y="240">ChatService.startRun(mode)</text>
+          <text class="small" x="520" y="240">ChatService.submitUserTurn(mode)</text>
           <path class="arrow" d="M 695 295 L 695 325"></path>
           <text class="small" x="715" y="314">streamAgentResponse()</text>
           <path class="arrow" d="M 695 360 L 885 360"></path>
@@ -97,19 +97,19 @@ turn-complete</code></pre>
         </article>
         <article class="card">
           <h3>Persisted events</h3>
-          <p>`RunOrchestrator` records non-start events through `RunRecorder`. `startRun` appends a `TURN_COMPLETE` checkpoint when the run promise resolves.</p>
+          <p>`RunOrchestrator` records non-start events through `RunRecorder`. `createRunSession` appends a `TURN_COMPLETE` checkpoint when the run promise resolves.</p>
         </article>
       </div>
 
       <h2>Plan/Act Tool Flow</h2>
       <p>
-        The current mode lives in `AgentManager` state and is passed into `ChatService.startRun()`, `startRun()`,
+        The current mode lives in `AgentManager` state and is passed into `ChatService.submitUserTurn()`, `createRunSession()`,
         `createToolContext()`, and finally each tool factory. Plan mode allows read-only file tools and non-mutating
         command checks. It blocks `write`, `edit`, and write-like `runCommand` before filesystem mutation or shell
         execution. Act mode keeps confirmation, but `write` and `edit` attach a compact unified diff to the request.
       </p>
       <pre><code>AgentManager mode
-ChatService.startRun({ mode })
+ChatService.submitUserTurn({ mode })
 createToolContext({ mode, confirmBus, abortSignal })
 tool executes:
   plan + mutation => blocked message

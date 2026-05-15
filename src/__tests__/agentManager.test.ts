@@ -20,7 +20,11 @@ function fakeSessionManager() {
   return {
     getCurrentSessionId: () => currentSessionId,
     getWorkspaceId: () => "ws_test",
-    getWorkspaceRootPath: () => "/tmp/workspace",
+    getWorkspace: () => ({
+      id: "ws_test",
+      name: "Test workspace",
+      rootPath: "/tmp/workspace",
+    }),
     ensureSession: (title?: string) => {
       if (!currentSessionId) {
         const session = makeSession("ses_1", title ?? "Untitled");
@@ -62,6 +66,11 @@ describe("AgentManager session ownership", () => {
     const created = manager.createSession("First");
     expect(manager.getSnapshot().sessions.map((s) => s.title)).toEqual(["First"]);
     expect(manager.getSnapshot().currentSessionId).toBe(created.id);
+    expect(manager.getSnapshot().workspace).toEqual({
+      id: "ws_test",
+      name: "Test workspace",
+      rootPath: "/tmp/workspace",
+    });
 
     manager.renameSession(created.id, "Renamed");
     expect(manager.getSnapshot().sessions[0].title).toBe("Renamed");
@@ -74,7 +83,7 @@ describe("AgentManager session ownership", () => {
   it("creates an untitled session when send is called without a title", () => {
     const sessionManager = fakeSessionManager();
     const chatService = {
-      startRun: vi.fn((_content: string, options: any) => ({
+      submitUserTurn: vi.fn((_content: string, options: any) => ({
         run: new AgentRun(options.sessionId),
         childRuns: new Map(),
         handle: { done: new Promise(() => {}), cancel: vi.fn() },
@@ -89,7 +98,7 @@ describe("AgentManager session ownership", () => {
     manager.send("  review the project architecture  ");
 
     expect(manager.getSnapshot().sessions[0].title).toBe("Untitled");
-    expect(chatService.startRun).toHaveBeenCalledWith(
+    expect(chatService.submitUserTurn).toHaveBeenCalledWith(
       "review the project architecture",
       expect.objectContaining({ sessionId: "ses_1" }),
     );

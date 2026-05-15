@@ -7,6 +7,8 @@ import { ProjectedBlock } from "./display.js";
 import { projectEventsToAIHistory } from "./projectHistory.js";
 import { groupEventsForDisplay } from "./projectEvents.js";
 
+import type { AgentMessage } from "@excelsior/core";
+
 export interface ChildRun {
   getSnapshot(): readonly AnyAgentEvent[];
 }
@@ -21,7 +23,9 @@ function sortRunEvents(events: readonly AnyAgentEvent[]): AnyAgentEvent[] {
   return [...events].sort((a, b) => a.sequence - b.sequence);
 }
 
-function getPersistedChildEvents(events: readonly AnyAgentEvent[]): Map<string, AnyAgentEvent[]> {
+function getPersistedChildEvents(
+  events: readonly AnyAgentEvent[],
+): Map<string, AnyAgentEvent[]> {
   const childEvents = new Map<string, AnyAgentEvent[]>();
 
   for (const event of events) {
@@ -40,9 +44,12 @@ function getPersistedChildEvents(events: readonly AnyAgentEvent[]): Map<string, 
 
 export function mergeEvents(input: ProjectionInput): AnyAgentEvent[] {
   const { liveEvents, persistedEvents } = input;
-  if (liveEvents.length === 0) return persistedEvents.filter((e) => !e.parentEventId);
+  if (liveEvents.length === 0)
+    return persistedEvents.filter((e) => !e.parentEventId);
   const liveIds = new Set(liveEvents.map((e) => e.id));
-  const filtered = persistedEvents.filter((e) => !liveIds.has(e.id) && !e.parentEventId);
+  const filtered = persistedEvents.filter(
+    (e) => !liveIds.has(e.id) && !e.parentEventId,
+  );
   const filteredLive = liveEvents.filter((e) => !e.parentEventId);
   return [...filtered, ...filteredLive];
 }
@@ -62,7 +69,10 @@ export function computeDisplayBlocks(input: ProjectionInput): ProjectedBlock[] {
   });
 }
 
-export function buildAIHistory(input: ProjectionInput): Array<{ role: "user" | "assistant" | "system"; content: string }> {
-  const events = input.liveEvents.length > 0 ? input.liveEvents : input.persistedEvents;
+export function buildAIHistory(
+  input: ProjectionInput,
+): AgentMessage[] {
+  const events =
+    input.liveEvents.length > 0 ? input.liveEvents : input.persistedEvents;
   return projectEventsToAIHistory(events.filter((e) => !e.parentEventId));
 }

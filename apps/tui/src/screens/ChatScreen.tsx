@@ -41,7 +41,7 @@ const ChatScreen = () => {
     activePanelId,
     featureContext,
     isLoading,
-    workspaceRootPath,
+    workspace,
     pending,
     suggestion,
     commandResult,
@@ -171,7 +171,7 @@ const ChatScreen = () => {
       </Box>
 
       <Box paddingLeft={1}>
-        <Text color={theme.colors.muted} dimColor>workspace: {workspaceRootPath}</Text>
+        <Text color={theme.colors.muted} dimColor>workspace: {workspace.rootPath}</Text>
       </Box>
     </Box>
   );

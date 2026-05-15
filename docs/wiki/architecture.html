@@ -32,7 +32,7 @@
         <h1>Layered, event-driven, feature-owned</h1>
         <p class="lead">
           The codebase is organized around a small number of hard boundaries. React/Ink renders state. `AgentManager`
-          owns UI-facing state. `ChatService` and `startRun` wire model runs. Runtime objects produce events. Persistence
+          owns UI-facing state. `ChatService` and `createRunSession` wire model runs. Runtime objects produce events. Persistence
           records events and metadata. Projection code translates events into chat blocks and model history. Tool execution
           is gated by a run-scoped `ToolContext` that carries mode, confirmation, cancellation, and workspace bounds.
         </p>
@@ -114,7 +114,7 @@
             </tr>
             <tr>
               <td>Application to runtime</td>
-              <td><code>ChatService.startRun</code>, <code>startRun</code></td>
+              <td><code>ChatService.submitUserTurn</code>, <code>createRunSession</code></td>
               <td>Messages, session id, recorder, sub-agent sink, mode, tool context.</td>
               <td>React UI concerns or Ink components.</td>
             </tr>
@@ -178,7 +178,7 @@
           <text class="small" x="314" y="100">agent and tools</text>
 
           <rect class="box alt" x="540" y="45" width="170" height="72"></rect>
-          <text class="label" x="592" y="76">startRun</text>
+          <text class="label" x="592" y="76">createRunSession</text>
           <text class="small" x="570" y="100">context factory</text>
 
           <rect class="box alt" x="790" y="45" width="170" height="72"></rect>

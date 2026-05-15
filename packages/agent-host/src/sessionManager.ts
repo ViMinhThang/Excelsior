@@ -1,22 +1,24 @@
-import type { Session } from "@excelsior/core";
+import type { Session, Workspace } from "@excelsior/core";
 import {
   loadSessionsByWorkspace,
   deleteSession as deleteSessionFromDB,
   updateSessionTitle,
   persistSession,
 } from "./lib/persistence/eventPersistence.js";
-import { getDefaultWorkspace } from "./lib/persistence/workspaceStore.js";
+import { getOrCreateDefaultWorkspace } from "./lib/persistence/workspaceStore.js";
 
 export class SessionManager {
-  private _currentWorkspaceId: string;
-  private _workspaceRootPath: string;
+  private _workspace: Workspace;
   private _currentSessionId: string | null = null;
   private _sessions: Session[] = [];
 
   constructor(workspaceId?: string) {
-    const ws = getDefaultWorkspace();
-    this._currentWorkspaceId = workspaceId ?? ws.id;
-    this._workspaceRootPath = ws.rootPath;
+    const ws = getOrCreateDefaultWorkspace();
+    this._workspace = {
+      id: workspaceId ?? ws.id,
+      name: ws.name,
+      rootPath: ws.rootPath,
+    };
     this._reloadSessions();
   }
 
@@ -25,11 +27,11 @@ export class SessionManager {
   }
 
   getWorkspaceId(): string {
-    return this._currentWorkspaceId;
+    return this._workspace.id;
   }
 
-  getWorkspaceRootPath(): string {
-    return this._workspaceRootPath;
+  getWorkspace(): Workspace {
+    return this._workspace;
   }
 
   ensureSession(title?: string): string {
@@ -54,7 +56,7 @@ export class SessionManager {
       startedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       metadata: { userInput: "" },
-      workspaceId: this._currentWorkspaceId,
+      workspaceId: this._workspace.id,
       title: resolvedTitle,
     };
   }
@@ -105,13 +107,13 @@ export class SessionManager {
       startedAt: now,
       updatedAt: now,
       metadata: { userInput: "" },
-      workspaceId: this._currentWorkspaceId,
+      workspaceId: this._workspace.id,
       title,
     });
     return id;
   }
 
   private _reloadSessions(): void {
-    this._sessions = loadSessionsByWorkspace(this._currentWorkspaceId);
+    this._sessions = loadSessionsByWorkspace(this._workspace.id);
   }
 }

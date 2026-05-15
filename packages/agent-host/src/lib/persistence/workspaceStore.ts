@@ -55,7 +55,7 @@ export function deleteWorkspace(id: string, db?: Database.Database): void {
   _db.prepare("DELETE FROM workspaces WHERE id = ?").run(id);
 }
 
-export function getDefaultWorkspace(db?: Database.Database): WorkspaceRow {
+export function getOrCreateDefaultWorkspace(db?: Database.Database): WorkspaceRow {
   const _db = db ?? getDb();
   const row = _db.prepare("SELECT id, name, root_path, created_at, updated_at FROM workspaces WHERE id = 'ws_default'").get() as any;
   if (row) {

@@ -118,7 +118,7 @@
       <h3><code>ChatService</code></h3>
       <p>
         `ChatService` is the boundary between app state and runtime creation. It builds the final message array, creates the
-        agent with base file tools plus `spawnSubAgent`, calls `startRun`, emits the visible `user-input` event, and persists
+        agent with base file tools plus `spawnSubAgent`, calls `createRunSession`, emits the visible `user-input` event, and persists
         session metadata. It also forwards the current mode so tools and the system prompt agree about Plan versus Act behavior.
       </p>
       <div class="callout">
