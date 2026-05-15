@@ -6,9 +6,19 @@
   "exports": {
     ".": "./src/index.ts",
     "./commands": "./src/commands.ts",
+    "./testing/application": "./src/testing/application.ts",
+    "./testing/persistence": "./src/testing/persistence.ts",
+    "./testing/projection": "./src/testing/projection.ts",
+    "./testing/runtime": "./src/testing/runtime.ts",
+    "./testing/session": "./src/testing/session.ts",
+    "./testing/tools": "./src/testing/tools.ts",
+    "./internal/agent-factory": "./src/agent/agent.ts",
+    "./internal/agent-stream": "./src/lib/runtime/agentStream.ts",
     "./internal/persistence": "./src/lib/persistence/db.ts"
   },
   "dependencies": {
-    "@excelsior/core": "1.0.0"
+    "@excelsior/core": "1.0.0",
+    "@excelsior/projection": "1.0.0",
+    "@excelsior/run-runtime": "1.0.0"
   }
 }

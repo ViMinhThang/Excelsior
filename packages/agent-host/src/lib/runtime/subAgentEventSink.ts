@@ -1,5 +1,4 @@
-import { createChannelBus } from "./bus.js";
-import type { Bus } from "./bus.js";
+import { createChannelBus, type Bus } from "@excelsior/run-runtime";
 import { ToolCallInfo } from "./toolCallInfo.js";
 import { SubAgentProjectionPart } from "../projection/display.js";
 

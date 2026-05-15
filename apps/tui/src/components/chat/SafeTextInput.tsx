@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Text, useInput } from "ink";
 import chalk from "chalk";
 import { truncateVisible } from "../../lib/textFormat.js";
+import type { TuiKey } from "../../lib/tuiKey.js";
 
 interface SafeTextInputProps {
   value: string;
@@ -14,8 +15,8 @@ interface SafeTextInputProps {
   maxDisplayWidth?: number;
 }
 
-export function shouldIgnoreTextInputKey(input: string, key: any): boolean {
-  return (
+export function shouldIgnoreTextInputKey(input: string, key: TuiKey): boolean {
+  return Boolean(
     key.upArrow ||
     key.downArrow ||
     key.tab ||

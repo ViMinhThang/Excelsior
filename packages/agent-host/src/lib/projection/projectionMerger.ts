@@ -4,8 +4,8 @@
 
 import { AnyAgentEvent } from "../runtime/events.js";
 import { ProjectedBlock } from "./display.js";
-import { projectEventsToAIHistory } from "./projectHistory.js";
-import { groupEventsForDisplay } from "./projectEvents.js";
+import { projectEventsToAIMessages } from "./aiHistoryProjection.js";
+import { projectEventsToDisplayBlocks } from "./chatTranscriptProjection.js";
 
 import type { AgentMessage } from "@excelsior/core";
 
@@ -19,60 +19,99 @@ export interface ProjectionInput {
   childRuns: Map<string, ChildRun>;
 }
 
-function sortRunEvents(events: readonly AnyAgentEvent[]): AnyAgentEvent[] {
+function sortEventsByRunSequence(
+  events: readonly AnyAgentEvent[],
+): AnyAgentEvent[] {
   return [...events].sort((a, b) => a.sequence - b.sequence);
 }
 
-function getPersistedChildEvents(
+function isParentRunEvent(event: AnyAgentEvent): boolean {
+  return !event.parentEventId;
+}
+
+function indexPersistedChildEventsByRunId(
   events: readonly AnyAgentEvent[],
 ): Map<string, AnyAgentEvent[]> {
-  const childEvents = new Map<string, AnyAgentEvent[]>();
+  const childEventsByRunId = new Map<string, AnyAgentEvent[]>();
 
   for (const event of events) {
     if (!event.parentEventId) continue;
-    const existing = childEvents.get(event.runId) ?? [];
+    const existing = childEventsByRunId.get(event.runId) ?? [];
     existing.push(event);
-    childEvents.set(event.runId, existing);
+    childEventsByRunId.set(event.runId, existing);
   }
 
-  for (const [runId, runEvents] of childEvents) {
-    childEvents.set(runId, sortRunEvents(runEvents));
+  for (const [runId, runEvents] of childEventsByRunId) {
+    childEventsByRunId.set(runId, sortEventsByRunSequence(runEvents));
   }
 
-  return childEvents;
+  return childEventsByRunId;
+}
+
+function selectPersistedParentEventsNotLive(
+  persistedEvents: readonly AnyAgentEvent[],
+  liveEvents: readonly AnyAgentEvent[],
+): AnyAgentEvent[] {
+  const liveIds = new Set(liveEvents.map((event) => event.id));
+  return persistedEvents.filter(
+    (event) => !liveIds.has(event.id) && isParentRunEvent(event),
+  );
+}
+
+function selectLiveParentEvents(
+  liveEvents: readonly AnyAgentEvent[],
+): AnyAgentEvent[] {
+  return liveEvents.filter(isParentRunEvent);
+}
+
+function selectParentDisplayEvents(input: ProjectionInput): AnyAgentEvent[] {
+  const { liveEvents, persistedEvents } = input;
+  if (liveEvents.length === 0) {
+    return persistedEvents.filter(isParentRunEvent);
+  }
+
+  return [
+    ...selectPersistedParentEventsNotLive(persistedEvents, liveEvents),
+    ...selectLiveParentEvents(liveEvents),
+  ];
+}
+
+function createChildEventResolver(
+  input: ProjectionInput,
+  persistedChildEventsByRunId: Map<string, AnyAgentEvent[]>,
+): (childRunId: string) => readonly AnyAgentEvent[] {
+  return (childRunId: string) => {
+    const child = input.childRuns.get(childRunId);
+    if (child) {
+      const snapshot = child.getSnapshot();
+      if (snapshot.length > 0) return snapshot;
+    }
+
+    return persistedChildEventsByRunId.get(childRunId) ?? [];
+  };
+}
+
+function selectAIHistoryEvents(input: ProjectionInput): AnyAgentEvent[] {
+  const events =
+    input.liveEvents.length > 0 ? input.liveEvents : input.persistedEvents;
+  return events.filter(isParentRunEvent);
 }
 
 export function mergeEvents(input: ProjectionInput): AnyAgentEvent[] {
-  const { liveEvents, persistedEvents } = input;
-  if (liveEvents.length === 0)
-    return persistedEvents.filter((e) => !e.parentEventId);
-  const liveIds = new Set(liveEvents.map((e) => e.id));
-  const filtered = persistedEvents.filter(
-    (e) => !liveIds.has(e.id) && !e.parentEventId,
-  );
-  const filteredLive = liveEvents.filter((e) => !e.parentEventId);
-  return [...filtered, ...filteredLive];
+  return selectParentDisplayEvents(input);
 }
 
 export function computeDisplayBlocks(input: ProjectionInput): ProjectedBlock[] {
-  const displayEvents = mergeEvents(input);
-  const persistedChildEvents = getPersistedChildEvents(input.persistedEvents);
-  return groupEventsForDisplay(displayEvents, {
-    getChildEvents: (childRunId: string) => {
-      const child = input.childRuns.get(childRunId);
-      if (child) {
-        const snapshot = child.getSnapshot();
-        if (snapshot.length > 0) return snapshot;
-      }
-      return persistedChildEvents.get(childRunId) ?? [];
-    },
+  const displayEvents = selectParentDisplayEvents(input);
+  const persistedChildEventsByRunId = indexPersistedChildEventsByRunId(
+    input.persistedEvents,
+  );
+
+  return projectEventsToDisplayBlocks(displayEvents, {
+    getChildEvents: createChildEventResolver(input, persistedChildEventsByRunId),
   });
 }
 
-export function buildAIHistory(
-  input: ProjectionInput,
-): AgentMessage[] {
-  const events =
-    input.liveEvents.length > 0 ? input.liveEvents : input.persistedEvents;
-  return projectEventsToAIHistory(events.filter((e) => !e.parentEventId));
+export function buildAIHistory(input: ProjectionInput): AgentMessage[] {
+  return projectEventsToAIMessages(selectAIHistoryEvents(input));
 }

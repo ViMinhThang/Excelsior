@@ -6,8 +6,19 @@ export interface RetryOptions {
   signal?: AbortSignal;
 }
 
+interface RetryErrorLike {
+  name?: string;
+  statusCode?: number | string;
+  message?: string;
+  code?: string;
+}
+
+function asRetryErrorLike(error: unknown): RetryErrorLike {
+  return error && typeof error === "object" ? error as RetryErrorLike : {};
+}
+
 export function isTransientError(error: unknown): boolean {
-  const err = error as any;
+  const err = asRetryErrorLike(error);
   if (err?.name === "AI_APICallError") {
     const status = Number(err.statusCode);
     return status === 429 || status === 502 || status === 503 || status === 504;

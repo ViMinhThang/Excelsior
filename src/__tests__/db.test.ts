@@ -3,8 +3,12 @@ import { existsSync } from "fs";
 import { mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
-import { createDb, resetDb } from "../../packages/agent-host/src/lib/persistence/db.js";
-import { loadSessionsByWorkspace, persistSession } from "../../packages/agent-host/src/lib/persistence/eventPersistence.js";
+import {
+  createDb,
+  loadSessionsByWorkspace,
+  persistSession,
+  resetDb,
+} from "@excelsior/agent-host/testing/persistence";
 import Database from "better-sqlite3";
 
 let db: Database.Database;

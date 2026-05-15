@@ -5,6 +5,7 @@ import { useNavigation } from '../../context/NavigationContext.js';
 import { useEvent } from '../../hooks/useEvent.js';
 import ChatScreen from '../../screens/ChatScreen.js';
 import SettingsScreen from '../../screens/SettingsScreen.js';
+import type { TuiKey } from '../../lib/tuiKey.js';
 
 interface ScreenDispatcherProps {
   screen: Screen;
@@ -12,7 +13,7 @@ interface ScreenDispatcherProps {
 
 export function getGlobalNavigationAction(
   input: string,
-  key: any,
+  key: TuiKey,
   currentScreen: Screen,
 ): "exit" | "back" | "settings" | null {
   if (key.ctrl && input === 'c') return "exit";
@@ -40,7 +41,7 @@ const Router = () => {
   const onGoBack = useEvent(goBack);
   const onExit = useEvent(exit);
 
-  const handleInput = useEvent((input: string, key: any) => {
+  const handleInput = useEvent((input: string, key: TuiKey) => {
     const action = getGlobalNavigationAction(input, key, currentScreen);
     if (action === "exit") onExit();
     if (action === "back") onGoBack();

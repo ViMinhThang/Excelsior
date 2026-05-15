@@ -1,14 +1,19 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { createAgent } from "../agent.js";
+import { createAgent as defaultCreateAgent } from "../agent.js";
 import { AgentRun } from "../../lib/runtime/agentRun.js";
 import { AnyAgentEvent } from "../../lib/runtime/events.js";
-import { streamAgentResponse } from "../../lib/runtime/agentStream.js";
-import { projectChildEventsToSubAgentState } from "../../lib/projection/projectChildren.js";
+import { streamAgentResponse as defaultStreamAgentResponse } from "../../lib/runtime/agentStream.js";
+import { projectSubAgentEvents } from "../../lib/projection/subAgentProjection.js";
 import type { RunRecorder } from "../../lib/persistence/runRecorder.js";
 import type { SubAgentEventSink } from "../../lib/runtime/subAgentEventSink.js";
 import { CHILD_RUN_ATTACHED } from "../../lib/runtime/eventNames.js";
 import type { ToolContext } from "../../lib/tool/context.js";
+
+export interface SpawnSubAgentToolDependencies {
+  createAgent?: typeof defaultCreateAgent;
+  streamAgentResponse?: typeof defaultStreamAgentResponse;
+}
 
 function setupChildEventBus(
   childRun: AgentRun,
@@ -30,7 +35,7 @@ function setupChildEventBus(
       event.type === "tool-call-end" ||
       event.type === "error"
     ) {
-      const state = projectChildEventsToSubAgentState(
+      const state = projectSubAgentEvents(
         allChildEvents,
         "running",
         instruction,
@@ -53,6 +58,7 @@ export function createSpawnSubAgentTool(
   ctx?: ToolContext,
   recorder?: RunRecorder,
   subAgentEvents?: SubAgentEventSink,
+  dependencies: SpawnSubAgentToolDependencies = {},
 ) {
   return tool({
     description:
@@ -74,12 +80,12 @@ export function createSpawnSubAgentTool(
       { toolCallId }: { toolCallId: string },
     ) => {
       const sid = sessionId ?? parentRun.sessionId;
-      const childRun = new AgentRun(
-        sid,
-        parentRun.id,
-        parentRun.correlationId,
-        ctx?.abortSignal,
-      );
+      const childRun = new AgentRun({
+        sessionId: sid,
+        parentEventId: parentRun.id,
+        correlationId: parentRun.correlationId,
+        parentSignal: ctx?.abortSignal,
+      });
       childRunsMap.set(childRun.id, childRun);
       const childCtx = ctx
         ? { ...ctx, abortSignal: childRun.abortSignal }
@@ -99,7 +105,11 @@ export function createSpawnSubAgentTool(
         `\nComplete your assigned task directly.` +
         `\n---\n\n${instruction}`;
 
-      const agent = createAgent(subInstructions, undefined, childCtx);
+      const agent = (dependencies.createAgent ?? defaultCreateAgent)(
+        subInstructions,
+        undefined,
+        childCtx,
+      );
       const allChildEvents: AnyAgentEvent[] = [];
       const unsub =
         recorder && subAgentEvents
@@ -116,12 +126,12 @@ export function createSpawnSubAgentTool(
 
       let terminalError = "";
       try {
-        await streamAgentResponse(
+        await (dependencies.streamAgentResponse ?? defaultStreamAgentResponse)({
           agent,
-          [{ role: "user", content: instruction }],
-          childRun,
-          childRun.abortSignal,
-        );
+          messages: [{ role: "user", content: instruction }],
+          signal: childRun.abortSignal,
+          emit: childRun.emit.bind(childRun),
+        });
       } catch (error: unknown) {
         if (error instanceof Error && error.name !== "AbortError") {
           terminalError = error.message;
@@ -132,7 +142,7 @@ export function createSpawnSubAgentTool(
         childRun.flushNotify();
       }
 
-      const state = projectChildEventsToSubAgentState(
+      const state = projectSubAgentEvents(
         allChildEvents,
         terminalError ? "error" : "done",
         instruction,
