@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { completeCommandInput, getSubmittedCommand } from "../tui/lib/commandSubmission.js";
-import type { CommandDefinition } from "../features/featureTypes.js";
+import { completeCommandInput, getSubmittedCommand } from "../../apps/tui/src/lib/commandSubmission.js";
+import type { CommandDefinition } from "@excelsior/core";
 
 describe("command submission", () => {
   const commands = [

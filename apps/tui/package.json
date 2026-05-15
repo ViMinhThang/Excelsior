@@ -1,0 +1,13 @@
+{
+  "name": "@excelsior/tui",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/app.tsx"
+  },
+  "dependencies": {
+    "@excelsior/agent-host": "1.0.0",
+    "@excelsior/core": "1.0.0"
+  }
+}

@@ -218,32 +218,32 @@ tool executes:
           <tbody>
             <tr>
               <td><code>AnyAgentEvent</code></td>
-              <td><code>src/lib/runtime/events.ts</code></td>
+              <td><code>packages/agent-host/src/lib/runtime/events.ts</code></td>
               <td>Union of every event type emitted by an agent run.</td>
             </tr>
             <tr>
               <td><code>ProjectedBlock</code></td>
-              <td><code>src/lib/projection/display.ts</code></td>
+              <td><code>packages/agent-host/packages/core/src/index.ts</code></td>
               <td>UI-ready chat item: user, assistant, tool call, or sub-agent.</td>
             </tr>
             <tr>
               <td><code>Session</code></td>
-              <td><code>src/lib/runtime/session.ts</code></td>
+              <td><code>packages/core/src/index.ts</code></td>
               <td>Metadata object used by session UI and persistence.</td>
             </tr>
             <tr>
               <td><code>FeatureRuntimeContext</code></td>
-              <td><code>src/features/featureTypes.ts</code></td>
+              <td><code>packages/agent-host/src/commands.ts</code></td>
               <td>Small service surface exposed to slash command implementations, including mode read/write helpers.</td>
             </tr>
             <tr>
               <td><code>ToolContext</code></td>
-              <td><code>src/lib/tool/context.ts</code></td>
+              <td><code>packages/agent-host/src/lib/tool/context.ts</code></td>
               <td>Capabilities, Plan/Act mode, confirmation flow, abort signal, and workspace root passed into tools.</td>
             </tr>
             <tr>
               <td><code>ConfirmRequest</code></td>
-              <td><code>src/lib/runtime/confirmTypes.ts</code></td>
+              <td><code>packages/agent-host/src/lib/runtime/confirmTypes.ts</code></td>
               <td>Structured approval payload with tool name, args, optional file path, action, and unified diff.</td>
             </tr>
           </tbody>

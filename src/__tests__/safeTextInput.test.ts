@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSingleLineInputPreview, shouldIgnoreTextInputKey } from "../tui/components/chat/SafeTextInput.js";
+import { getSingleLineInputPreview, shouldIgnoreTextInputKey } from "../../apps/tui/src/components/chat/SafeTextInput.js";
 
 describe("SafeTextInput", () => {
   it("ignores ctrl-letter input so shortcuts do not leak into chat text", () => {

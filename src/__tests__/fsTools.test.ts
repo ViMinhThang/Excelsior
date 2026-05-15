@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { createViewTool } from "../agent/tools/fs/view.js";
-import { createWriteTool } from "../agent/tools/fs/write.js";
-import { createEditTool } from "../agent/tools/fs/edit.js";
-import { createRipgrepTool } from "../agent/tools/fs/ripgrep.js";
-import { createGlobTool } from "../agent/tools/fs/glob.js";
-import type { ToolContext } from "../lib/tool/context.js";
-import { PLAN_MODE_BLOCKED_MESSAGE } from "../lib/runtime/agentMode.js";
+import { createViewTool } from "../../packages/agent-host/src/agent/tools/fs/view.js";
+import { createWriteTool } from "../../packages/agent-host/src/agent/tools/fs/write.js";
+import { createEditTool } from "../../packages/agent-host/src/agent/tools/fs/edit.js";
+import { createRipgrepTool } from "../../packages/agent-host/src/agent/tools/fs/ripgrep.js";
+import { createGlobTool } from "../../packages/agent-host/src/agent/tools/fs/glob.js";
+import type { ToolContext } from "../../packages/agent-host/src/lib/tool/context.js";
+import { PLAN_MODE_BLOCKED_MESSAGE } from "../../packages/agent-host/src/lib/runtime/agentMode.js";
 
 describe("filesystem tool workspace bounds", () => {
   let workspaceRoot: string;

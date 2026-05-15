@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { AgentRun } from "../lib/runtime/agentRun.js";
+import { AgentRun } from "../../packages/agent-host/src/lib/runtime/agentRun.js";
 
 describe("AgentRun", () => {
   let run: AgentRun;

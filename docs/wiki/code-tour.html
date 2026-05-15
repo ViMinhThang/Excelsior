@@ -44,7 +44,7 @@
           <p class="muted">Important detail: database initialization also creates the persistence directory for file-backed SQLite databases.</p>
         </article>
         <article class="card">
-          <h3><code>src/tui/app.tsx</code></h3>
+          <h3><code>apps/tui/src/app.tsx</code></h3>
           <p>Composes `ErrorBoundary`, `NavigationProvider`, and `Router`. It is intentionally tiny because most behavior belongs to screens, hooks, and managers.</p>
         </article>
         <article class="card">
@@ -151,19 +151,19 @@
       <h2>Mode And Tool Safety Internals</h2>
       <div class="grid two">
         <article class="card">
-          <h3><code>src/lib/runtime/agentMode.ts</code></h3>
+          <h3><code>packages/agent-host/src/lib/runtime/agentMode.ts</code></h3>
           <p>Defines the `plan | act` mode type, display formatting, and the shared Plan-mode blocked message returned by mutating tools.</p>
         </article>
         <article class="card">
-          <h3><code>src/features/mode/feature.ts</code></h3>
+          <h3><code>packages/agent-host/src/commands.ts</code></h3>
           <p>Owns `/mode`, `/mode plan`, and `/mode act`. The keyboard toggle is wired in `useChatScreenState` through the same manager methods.</p>
         </article>
         <article class="card">
-          <h3><code>src/lib/diff/unifiedDiff.ts</code></h3>
+          <h3><code>packages/agent-host/src/lib/diff/unifiedDiff.ts</code></h3>
           <p>Generates compact unified diffs for file creation, overwrite, and targeted edit confirmations without adding a dependency.</p>
         </article>
         <article class="card">
-          <h3><code>src/lib/runtime/confirmTypes.ts</code></h3>
+          <h3><code>packages/agent-host/src/lib/runtime/confirmTypes.ts</code></h3>
           <p>Defines the structured confirmation payload: tool name, args, optional file path, action, and diff text.</p>
         </article>
       </div>
@@ -240,7 +240,7 @@
           <tbody>
             <tr>
               <td>Add a slash command</td>
-              <td><code>src/features/&lt;feature&gt;/feature.ts</code>, then <code>features/index.ts</code></td>
+              <td><code>packages/agent-host/src/commands.ts</code>, then <code>commandRegistry</code></td>
               <td><code>featureRegistry.test.ts</code>, command-specific tests</td>
             </tr>
             <tr>
@@ -250,7 +250,7 @@
             </tr>
             <tr>
               <td>Add a filesystem tool</td>
-              <td><code>src/agent/tools/fs</code> and <code>tools/index.ts</code></td>
+              <td><code>packages/agent-host/src/agent/tools/fs</code> and <code>tools/index.ts</code></td>
               <td><code>fsTools.test.ts</code>, tool-specific unit tests</td>
             </tr>
             <tr>

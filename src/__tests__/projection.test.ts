@@ -3,11 +3,11 @@ import {
   createProjectionState,
   reduceProjectionEvent,
   groupEventsForDisplay,
-} from "../lib/projection/projectEvents.js";
-import { buildAIHistory, computeDisplayBlocks } from "../lib/projection/projectionMerger.js";
-import { projectChildEventsToSubAgentState } from "../lib/projection/projectChildren.js";
-import { projectEventsToAIHistory } from "../lib/projection/projectHistory.js";
-import type { AnyAgentEvent } from "../lib/runtime/events.js";
+} from "../../packages/agent-host/src/lib/projection/projectEvents.js";
+import { buildAIHistory, computeDisplayBlocks } from "../../packages/agent-host/src/lib/projection/projectionMerger.js";
+import { projectChildEventsToSubAgentState } from "../../packages/agent-host/src/lib/projection/projectChildren.js";
+import { projectEventsToAIHistory } from "../../packages/agent-host/src/lib/projection/projectHistory.js";
+import type { AnyAgentEvent } from "../../packages/agent-host/src/lib/runtime/events.js";
 
 function makeEvent(overrides: Partial<AnyAgentEvent> & { type: AnyAgentEvent["type"] }): AnyAgentEvent {
   return {

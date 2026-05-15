@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createToolDisplay, getCommandRisk } from "../tui/lib/toolDisplay.js";
+import { createToolDisplay, getCommandRisk } from "../../apps/tui/src/lib/toolDisplay.js";
 
 describe("tool display model", () => {
   it("summarizes runCommand risk, result, and errors", () => {
