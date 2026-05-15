@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { resetDb } from "../lib/persistence/db.js";
-import { SessionManager } from "../features/session/manager.js";
+import { resetDb } from "../../packages/agent-host/src/lib/persistence/db.js";
+import { SessionManager } from "../../packages/agent-host/src/sessionManager.js";
 
 describe("SessionManager titles", () => {
   let tempDir: string;

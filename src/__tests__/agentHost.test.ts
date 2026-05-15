@@ -1,0 +1,69 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  LocalAgentHost,
+  resetDefaultAgentHost,
+} from "@excelsior/agent-host";
+import { resetDb } from "../../packages/agent-host/src/lib/persistence/db.js";
+import { confirmBus } from "../../packages/agent-host/src/lib/runtime/confirmBus.js";
+
+describe("LocalAgentHost", () => {
+  beforeEach(() => {
+    process.env.EXCELSIOR_DB_PATH = ":memory:";
+    resetDefaultAgentHost();
+    resetDb();
+  });
+
+  it("exposes a serializable client state without runtime instances", () => {
+    const host = new LocalAgentHost();
+
+    const state = host.getState();
+
+    expect(() => JSON.stringify(state)).not.toThrow();
+    expect(state).toMatchObject({
+      displayBlocks: [],
+      isLoading: false,
+      currentSessionId: null,
+      mode: "plan",
+      pendingConfirmation: null,
+    });
+    expect("activeRun" in state).toBe(false);
+
+    host.dispose();
+  });
+
+  it("executes backend-owned commands through the host contract", async () => {
+    const host = new LocalAgentHost();
+
+    const result = await host.executeCommand("/mode act");
+
+    expect(result).toMatchObject({
+      handled: true,
+      message: "Mode switched to Act.",
+      clearInput: true,
+    });
+    expect(host.getState().mode).toBe("act");
+
+    host.dispose();
+  });
+
+  it("keeps tool confirmation state behind the host", () => {
+    const host = new LocalAgentHost();
+
+    confirmBus.emit("request", {
+      callId: "call_1",
+      toolName: "writeFile",
+      args: "{\"filePath\":\"demo.ts\"}",
+      filePath: "demo.ts",
+      action: "edit",
+      diff: "--- demo.ts\n+++ demo.ts",
+    });
+
+    expect(host.getState().pendingConfirmation?.callId).toBe("call_1");
+
+    host.respondToConfirmation("call_1", true);
+
+    expect(host.getState().pendingConfirmation).toBeNull();
+
+    host.dispose();
+  });
+});

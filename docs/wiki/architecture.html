@@ -33,7 +33,8 @@
         <p class="lead">
           The codebase is organized around a small number of hard boundaries. React/Ink renders state. `AgentManager`
           owns UI-facing state. `ChatService` and `startRun` wire model runs. Runtime objects produce events. Persistence
-          records events and metadata. Projection code translates events into chat blocks and model history.
+          records events and metadata. Projection code translates events into chat blocks and model history. Tool execution
+          is gated by a run-scoped `ToolContext` that carries mode, confirmation, cancellation, and workspace bounds.
         </p>
       </section>
 
@@ -51,7 +52,7 @@
 
           <rect class="box good" x="70" y="150" width="840" height="80"></rect>
           <text class="label" x="100" y="188">Feature layer</text>
-          <text class="small" x="100" y="213">`features/*`: slash command definitions, panels, session service, review command glue</text>
+          <text class="small" x="100" y="213">`@excelsior/agent-host`: command registry, runtime, sessions, review command glue</text>
 
           <rect class="box" x="70" y="260" width="840" height="80"></rect>
           <text class="label" x="100" y="298">Application layer</text>
@@ -81,7 +82,7 @@
       <div class="grid two">
         <article class="card">
           <h3>State ownership</h3>
-          <p><code>AgentManager</code> is the UI-facing store. It exposes a snapshot through <code>useSyncExternalStore</code> via <code>useAgentManager</code>, and everything in the TUI reads from that snapshot.</p>
+          <p><code>AgentManager</code> is the UI-facing store. It exposes a snapshot through <code>useSyncExternalStore</code> via <code>useAgentManager</code>, and everything in the TUI reads from that snapshot, including current Plan/Act mode.</p>
           <div class="bar"><span style="width: 88%"></span></div>
           <p class="muted">High ownership concentration by design: one observable store reduces accidental React state forks.</p>
         </article>
@@ -114,7 +115,7 @@
             <tr>
               <td>Application to runtime</td>
               <td><code>ChatService.startRun</code>, <code>startRun</code></td>
-              <td>Messages, session id, recorder, sub-agent sink, tool context.</td>
+              <td>Messages, session id, recorder, sub-agent sink, mode, tool context.</td>
               <td>React UI concerns or Ink components.</td>
             </tr>
             <tr>
@@ -131,9 +132,15 @@
             </tr>
             <tr>
               <td>Features to app shell</td>
-              <td><code>FeatureRegistry</code></td>
-              <td>Command definitions and panel definitions.</td>
+              <td><code>CommandRegistry</code></td>
+              <td>Command definitions and panel definitions, including app features such as `/mode`.</td>
               <td>Global switch statements for every command.</td>
+            </tr>
+            <tr>
+              <td>Tools to user approval</td>
+              <td><code>ToolContext.confirm</code>, <code>confirmBus</code></td>
+              <td>Structured confirmation metadata: tool name, args, file path, action, and optional unified diff.</td>
+              <td>Direct file mutation without mode checks and confirmation.</td>
             </tr>
           </tbody>
         </table>
@@ -150,7 +157,7 @@
         <p>
           The most important architectural invariant is that projections are deterministic. If you replay the same completed
           event sequence, you should get the same chat blocks and AI history. This is why projection code is kept under
-          <code>src/lib/projection</code> and does not reach into React or persistence.
+          <code>packages/agent-host/src/lib/projection</code> and does not reach into React or persistence.
         </p>
       </div>
 
@@ -205,6 +212,10 @@
         <article class="card">
           <h3>Chosen: feature-owned commands</h3>
           <p>Commands and panels live next to feature-specific helpers. This avoids one central command file growing into a mixed-purpose controller.</p>
+        </article>
+        <article class="card">
+          <h3>Chosen: Plan defaults</h3>
+          <p>The app starts in Plan mode. Read-only exploration and safe checks can run immediately, while file writes and write-like commands require switching to Act mode.</p>
         </article>
         <article class="card">
           <h3>Chosen: one observable store</h3>

@@ -79,7 +79,7 @@
         </article>
         <article class="card">
           <h3><code>GITHUB_TOKEN</code></h3>
-          <p>Optional token for PR review commands and comment posting. GitHub helpers live under `src/lib/github`.</p>
+          <p>Optional token for PR review commands and comment posting. GitHub helpers live under `packages/agent-host/src/lib/github`.</p>
         </article>
         <article class="card">
           <h3><code>EXCELSIOR_DB_PATH</code></h3>
@@ -154,7 +154,7 @@
             </tr>
             <tr>
               <td><code>fsTools.test.ts</code>, <code>tools/runCommand.test.ts</code></td>
-              <td>Workspace-bounded tools and shell command safety.</td>
+              <td>Workspace-bounded tools, Plan/Act blocking, diff confirmation metadata, and shell command safety.</td>
             </tr>
             <tr>
               <td><code>safeTextInput.test.ts</code>, <code>keymap.test.ts</code></td>
@@ -172,7 +172,11 @@
         </article>
         <article class="card">
           <h3>Tools stay workspace-bounded</h3>
-          <p>Filesystem tools must validate path or pattern boundaries before touching disk. Writes still require confirmation.</p>
+          <p>Filesystem tools must validate path or pattern boundaries before touching disk. Plan mode blocks mutation; Act mode writes still require confirmation.</p>
+        </article>
+        <article class="card">
+          <h3>Diffs precede file mutation</h3>
+          <p>`write` and `edit` should compute confirmation diffs after validation and before applying changes. Missing or non-unique `oldText` should fail before approval.</p>
         </article>
         <article class="card">
           <h3>Cancellation propagates</h3>
@@ -186,9 +190,10 @@
 
       <h2>Debugging Checklist</h2>
       <ol>
-        <li>If UI is wrong but JSONL is correct, inspect `src/lib/projection` and chat components.</li>
+        <li>If UI is wrong but JSONL is correct, inspect `packages/agent-host/src/lib/projection` and chat components.</li>
         <li>If restored history is missing, inspect `TURN_COMPLETE` placement and `loadUntilLastCheckpoint()`.</li>
         <li>If a tool acts oddly, inspect the tool factory and `ToolContext` propagation.</li>
+        <li>If Plan/Act behavior is wrong, inspect `AgentManager` mode state, `ChatService.startRun()` options, and `createToolContext()`.</li>
         <li>If sub-agent rows leak between runs, inspect `SubAgentEventSink` plumbing and manager lifetime.</li>
         <li>If commands do not route, inspect `getSubmittedCommand()`, `handleCommand()`, and the feature registry.</li>
       </ol>

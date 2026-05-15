@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import type { AnyAgentEvent } from "../lib/runtime/events.js";
-import type { RunRecorder } from "../lib/persistence/runRecorder.js";
+import type { AnyAgentEvent } from "../../packages/agent-host/src/lib/runtime/events.js";
+import type { RunRecorder } from "../../packages/agent-host/src/lib/persistence/runRecorder.js";
 
-vi.mock("../lib/runtime/agentStream.js", () => ({
+vi.mock("../../packages/agent-host/src/lib/runtime/agentStream.js", () => ({
   streamAgentResponse: vi.fn(async (_agent, _messages, run) => {
     run.emit("text-delta", { delta: "hello" });
   }),
@@ -32,7 +32,7 @@ function fakeRecorder() {
 
 describe("run recorder integration", () => {
   it("records parent run events and checkpoint through RunRecorder", async () => {
-    const { startRun } = await import("../application/runSession.js");
+    const { startRun } = await import("../../packages/agent-host/src/application/runSession.js");
     const { recorder, events, checkpoints } = fakeRecorder();
 
     const result = startRun({
@@ -48,5 +48,41 @@ describe("run recorder integration", () => {
     expect(checkpoints).toEqual([
       { sessionId: "ses_test", runId: result.run.id, sequence: 2 },
     ]);
+  });
+
+  it("surfaces recorder failures as run errors", async () => {
+    const { startRun } = await import("../../packages/agent-host/src/application/runSession.js");
+    const recorder: RunRecorder = {
+      async recordEvent() {
+        throw new Error("disk full");
+      },
+      async recordTurnComplete() {},
+      async loadCompletedEvents() {
+        return [];
+      },
+      async loadRawEvents() {
+        return [];
+      },
+      async deleteSessionEvents() {},
+      async deleteAllSessionEvents() {},
+    };
+
+    const result = startRun({
+      sessionId: "ses_test",
+      messages: [{ role: "user", content: "hello" }],
+      createAgent: () => ({} as any),
+      recorder,
+    });
+
+    const events = await result.handle.done;
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "error",
+          data: { message: "Failed to persist run event: disk full" },
+        }),
+      ]),
+    );
   });
 });

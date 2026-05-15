@@ -1,0 +1,14 @@
+{
+  "name": "@excelsior/agent-host",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./commands": "./src/commands.ts",
+    "./internal/persistence": "./src/lib/persistence/db.ts"
+  },
+  "dependencies": {
+    "@excelsior/core": "1.0.0"
+  }
+}

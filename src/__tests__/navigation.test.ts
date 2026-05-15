@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getGlobalNavigationAction } from "../tui/components/navigation/Router.js";
+import { getGlobalNavigationAction } from "../../apps/tui/src/components/navigation/Router.js";
 
 describe("global navigation keys", () => {
   it("does not leave settings when typing c", () => {

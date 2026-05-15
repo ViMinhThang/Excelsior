@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getChatModeHint } from "../tui/lib/modeHints.js";
+import { getChatModeHint } from "../../apps/tui/src/lib/modeHints.js";
 
 describe("chat mode hints", () => {
   it("shows Ctrl+O only when sub-agent blocks exist", () => {
