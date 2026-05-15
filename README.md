@@ -45,24 +45,21 @@ npm run dev
 ## Architecture
 
 ```text
+packages/
+|- core/           # serializable UI/backend contracts and shared view types
+`- agent-host/     # backend facade plus runtime, persistence, tools, commands
+
+apps/
+`- tui/            # @excelsior/tui Ink app, screens, hooks, components, panels
+
 src/
-|- agent/          # model setup, prompts, tools, sub-agent tool
-|- application/    # AgentManager, ChatService, run wiring
-|- features/       # plain feature services such as SessionManager
-|- lib/
-|  |- github/      # GitHub API integration and repo detection
-|  |- persistence/ # SQLite metadata, JSONL event recorder
-|  |- projection/  # event-to-display/history read models
-|  |- runtime/     # AgentRun, RunOrchestrator, stream handling
-|  |- tool/        # ToolContext and capabilities
-|  `- utils/       # small shared library helpers
-`- tui/            # Ink UI screens, components, hooks, commands
+`- __tests__/      # integration and package-boundary tests
 ```
 
 See [`docs/architecture.md`](docs/architecture.md) for current runtime boundaries, or open
 [`docs/wiki/index.html`](docs/wiki/index.html) for the full HTML architecture wiki.
 
-Slash commands are feature-owned: add commands, panels, and feature-specific helpers under `src/features/<feature>/`, then register the feature in `src/features/index.ts`.
+Slash command behavior lives behind `@excelsior/agent-host`; UI-specific panels live in `@excelsior/tui`.
 
 ## Development
 

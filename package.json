@@ -1,11 +1,16 @@
 {
-  "name": "tui-agent",
+  "name": "excelsior",
   "version": "1.0.0",
   "description": "",
   "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
+    "dev": "tsx apps/tui/src/index.ts",
+    "dev:tui": "tsx apps/tui/src/index.ts",
+    "start": "node dist/apps/tui/src/index.js",
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest"

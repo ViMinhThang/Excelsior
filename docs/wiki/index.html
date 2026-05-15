@@ -34,6 +34,7 @@
           Excelsior is a terminal coding assistant built with Ink, React, the AI SDK, DeepSeek, SQLite, and JSONL event logs.
           Its core idea is simple: a user message becomes an event-driven agent run; the run streams events; projections turn
           those events into UI blocks and future model history; persistence stores enough state to restore complete turns.
+          Plan/Act mode keeps exploration separate from mutation, and write/edit confirmations show diffs before disk changes.
         </p>
       </section>
 
@@ -50,7 +51,7 @@
         </article>
         <article class="card">
           <h3>Feature model</h3>
-          <p>Slash commands are feature-owned. Each feature owns its command definitions, panel UI, and helper code, then joins the app through one registry.</p>
+          <p>Slash commands are feature-owned. Each feature owns its command definitions, panel UI, and helper code, then joins the app through one registry. `/mode` is implemented the same way.</p>
           <a href="tools-features.html">Read the feature system</a>
         </article>
       </section>
@@ -76,7 +77,7 @@
           <text class="small" x="610" y="104">message + agent wiring</text>
 
           <rect class="box good" x="310" y="210" width="190" height="90"></rect>
-          <text class="label" x="338" y="248">FeatureRegistry</text>
+          <text class="label" x="338" y="248">CommandRegistry</text>
           <text class="small" x="338" y="274">slash commands + panels</text>
 
           <rect class="box alt" x="580" y="210" width="190" height="90"></rect>
@@ -130,7 +131,7 @@
             </tr>
             <tr>
               <td><a href="tools-features.html">Tools and Features</a></td>
-              <td>Covers slash commands, feature modules, tool safety, confirmations, and sub-agent delegation.</td>
+              <td>Covers slash commands, feature modules, Plan/Act safety, diff confirmations, and sub-agent delegation.</td>
               <td>You want to add a command, panel, tool, or specialist workflow.</td>
             </tr>
             <tr>

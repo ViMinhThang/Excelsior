@@ -11,9 +11,9 @@ import {
   deleteAllSessionsEvents,
   resetSessionsDirForTests,
   setSessionsDirForTests,
-} from "../lib/persistence/jsonlEventStore.js";
-import { makeEvent, AnyAgentEvent } from "../lib/runtime/events.js";
-import { TURN_COMPLETE } from "../lib/runtime/eventNames.js";
+} from "../../packages/agent-host/src/lib/persistence/jsonlEventStore.js";
+import { makeEvent, AnyAgentEvent } from "../../packages/agent-host/src/lib/runtime/events.js";
+import { TURN_COMPLETE } from "../../packages/agent-host/src/lib/runtime/eventNames.js";
 
 function sid(label: string): string {
   return `ses_test_${label}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;

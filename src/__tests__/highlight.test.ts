@@ -1,6 +1,6 @@
 process.env.FORCE_COLOR = "3";
 import { describe, expect, it } from "vitest";
-import { formatMarkdownTable, highlightCode, highlightFilenames, normalizePipeTables } from "../tui/components/shared/MarkdownRenderer.js";
+import { formatMarkdownTable, highlightCode, highlightFilenames, normalizePipeTables } from "../../apps/tui/src/components/shared/MarkdownRenderer.js";
 import React from "react";
 
 /** Utility to detect presence of standard ANSI escape codes in content string */

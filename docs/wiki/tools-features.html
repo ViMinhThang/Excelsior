@@ -32,7 +32,8 @@
         <h1>How user capabilities are added</h1>
         <p class="lead">
           Excelsior has two extension surfaces: app features and agent tools. Features define slash commands and UI panels.
-          Tools are AI-callable functions exposed to the model with workspace bounds, confirmations, cancellation, and output formatting.
+          Tools are AI-callable functions exposed to the model with workspace bounds, Plan/Act mode, confirmations, cancellation,
+          diff previews, and output formatting.
         </p>
       </section>
 
@@ -58,7 +59,7 @@
           <text class="small" x="78" y="128">commands + panels</text>
 
           <rect class="box" x="320" y="70" width="190" height="78"></rect>
-          <text class="label" x="358" y="104">FeatureRegistry</text>
+          <text class="label" x="358" y="104">CommandRegistry</text>
           <text class="small" x="352" y="128">unique names + lookup</text>
 
           <rect class="box alt" x="600" y="70" width="180" height="78"></rect>
@@ -95,25 +96,31 @@
             <tr>
               <td>core</td>
               <td><code>/help</code>, <code>/clear</code>, <code>/reset</code></td>
-              <td><code>src/features/core/feature.ts</code></td>
+              <td><code>packages/agent-host/src/commands.ts</code></td>
               <td>Help text, clear visible chat, delete persisted history.</td>
+            </tr>
+            <tr>
+              <td>mode</td>
+              <td><code>/mode</code>, <code>/mode plan</code>, <code>/mode act</code></td>
+              <td><code>packages/agent-host/src/commands.ts</code></td>
+              <td>Shows or switches the current Plan/Act mode. The keyboard shortcut is <code>Ctrl+M</code>.</td>
             </tr>
             <tr>
               <td>settings</td>
               <td><code>/settings</code></td>
-              <td><code>src/features/settings/feature.ts</code></td>
+              <td><code>packages/agent-host/src/commands.ts</code></td>
               <td>Navigates to settings screen.</td>
             </tr>
             <tr>
               <td>session</td>
               <td><code>/session</code> plus subcommands</td>
-              <td><code>src/features/session</code></td>
+              <td><code>apps/tui/src/features/session</code></td>
               <td>Session picker panel, create/open/rename/delete operations.</td>
             </tr>
             <tr>
               <td>review</td>
               <td><code>/review</code>, <code>/review-post</code></td>
-              <td><code>src/features/review/feature.ts</code></td>
+              <td><code>packages/agent-host/src/commands.ts</code></td>
               <td>Fetches PR diffs and asks the agent to run a specialist multi-agent review.</td>
             </tr>
           </tbody>
@@ -132,12 +139,42 @@
         </article>
         <article class="card">
           <h3>Write tools</h3>
-          <p><code>write</code> and <code>edit</code> validate paths and request confirmation before modifying files.</p>
+          <p><code>write</code> and <code>edit</code> validate paths, block in Plan mode, and request confirmation with a unified diff in Act mode.</p>
         </article>
         <article class="card">
           <h3>Shell tool</h3>
-          <p><code>runCommand</code> runs executables with structured args, blocks dangerous patterns, and confirms write-like commands.</p>
+          <p><code>runCommand</code> runs executables with structured args, blocks dangerous patterns, blocks write-like commands in Plan mode, and confirms them in Act mode.</p>
         </article>
+      </div>
+
+      <h2>Plan/Act Mode</h2>
+      <p>
+        Plan mode is the startup default. It is meant for inspection, reasoning, and asking clarifying questions before
+        changing files. Act mode allows mutation, but existing confirmations still apply. The mode is stored in TUI state
+        for v1, exposed through <code>FeatureRuntimeContext</code>, and passed into every run through <code>ToolContext</code>.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Mode</th>
+              <th>Allowed</th>
+              <th>Blocked or confirmed</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Plan</td>
+              <td><code>view</code>, <code>ls</code>, <code>glob</code>, <code>ripgrep</code>, safe <code>runCommand</code> checks.</td>
+              <td><code>write</code>, <code>edit</code>, and write-like <code>runCommand</code> return a clear blocked result.</td>
+            </tr>
+            <tr>
+              <td>Act</td>
+              <td>All normal tool behavior.</td>
+              <td><code>write</code> and <code>edit</code> show a diff in the confirmation panel before applying changes.</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <h2>Tool Safety Flow</h2>
@@ -154,7 +191,7 @@
 
           <rect class="box alt" x="300" y="80" width="180" height="72"></rect>
           <text class="label" x="334" y="112">ToolContext</text>
-          <text class="small" x="326" y="136">capabilities + abort</text>
+          <text class="small" x="326" y="136">mode + confirm + abort</text>
 
           <rect class="box good" x="560" y="80" width="180" height="72"></rect>
           <text class="label" x="592" y="112">Path bounds</text>
@@ -162,7 +199,7 @@
 
           <rect class="box warn" x="560" y="235" width="180" height="72"></rect>
           <text class="label" x="592" y="267">Confirmation</text>
-          <text class="small" x="586" y="291">write-like actions</text>
+          <text class="small" x="586" y="291">write-like actions + diffs</text>
 
           <rect class="box" x="820" y="155" width="165" height="72"></rect>
           <text class="label" x="858" y="187">Execute</text>
@@ -191,18 +228,19 @@
 
       <h2>Adding A New Feature</h2>
       <ol>
-        <li>Create `src/features/my-feature/feature.ts` exporting an `AppFeature`.</li>
+        <li>Create an `AgentCommand` entry in `packages/agent-host/src/commands.ts`.</li>
         <li>Add command definitions with `name`, `description`, optional `usage`, and `execute(args, context)`.</li>
         <li>If the feature needs UI, add a panel component and register it under `panels`.</li>
-        <li>Add the feature to `appFeatures` in `src/features/index.ts`.</li>
+        <li>Add the feature to `the command registry in `packages/agent-host/src/commands.ts`.</li>
         <li>Add registry and behavior tests.</li>
       </ol>
 
       <h2>Adding A New Tool</h2>
       <ol>
-        <li>Place implementation under `src/agent/tools` and expose a `createXTool(ctx)` factory.</li>
+        <li>Place implementation under `packages/agent-host/src/agent/tools` and expose a `createXTool(ctx)` factory.</li>
         <li>Validate all file paths before any read/write operation.</li>
-        <li>Use `ctx.confirm.request()` for write-like actions.</li>
+        <li>Check `ctx.mode` before mutation; Plan mode must return the shared blocked message.</li>
+        <li>Use `ctx.confirm.request()` for write-like actions, including diff metadata for file writes/edits.</li>
         <li>Respect `ctx.abortSignal` for long-running work.</li>
         <li>Register it in `createFileTools()` or inject it as an extra tool from `ChatService`.</li>
       </ol>

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { AgentManager } from "../application/agentManager.js";
-import { AgentRun } from "../lib/runtime/agentRun.js";
-import type { Session } from "../lib/runtime/session.js";
+import { AgentManager } from "../../packages/agent-host/src/application/agentManager.js";
+import { AgentRun } from "../../packages/agent-host/src/lib/runtime/agentRun.js";
+import type { Session } from "../../packages/agent-host/src/lib/runtime/session.js";
 
 function makeSession(id: string, title: string): Session {
   return {
@@ -52,7 +52,7 @@ function fakeSessionManager() {
 }
 
 describe("AgentManager session ownership", () => {
-  it("refreshes snapshot after session CRUD with a plain SessionManager service", () => {
+  it("refreshes snapshot after session CRUD with a plain SessionManager service", async () => {
     const sessionManager = fakeSessionManager();
     const manager = new AgentManager(undefined, {
       sessionManager: sessionManager as any,
@@ -66,7 +66,7 @@ describe("AgentManager session ownership", () => {
     manager.renameSession(created.id, "Renamed");
     expect(manager.getSnapshot().sessions[0].title).toBe("Renamed");
 
-    manager.deleteSession(created.id);
+    await manager.deleteSession(created.id);
     expect(manager.getSnapshot().sessions).toEqual([]);
     expect(manager.getSnapshot().currentSessionId).toBeNull();
   });
