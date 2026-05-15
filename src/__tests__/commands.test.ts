@@ -20,6 +20,8 @@ describe("Commands", () => {
       openPanel: [],
       closePanel: [],
       getHelpText: [],
+      setMode: [],
+      toggleMode: [],
       currentSessionId: null,
     };
     const ctx: FeatureRuntimeContext = {
@@ -42,6 +44,12 @@ describe("Commands", () => {
       openPanel: (panelId) => called.openPanel.push(panelId),
       closePanel: () => called.closePanel.push(true),
       getHelpText: () => { called.getHelpText.push(true); return "Available commands:\n/help - List all available commands"; },
+      mode: "plan",
+      setMode: (mode) => called.setMode.push(mode),
+      toggleMode: () => {
+        called.toggleMode.push(true);
+        return "act";
+      },
     };
     return { ctx, called };
   }
@@ -53,6 +61,7 @@ describe("Commands", () => {
       expect(names).toContain("clear");
       expect(names).toContain("reset");
       expect(names).toContain("settings");
+      expect(names).toContain("mode");
       expect(names).toContain("review");
       expect(names).toContain("review-post");
       expect(names).toContain("session");
@@ -135,6 +144,26 @@ describe("Commands", () => {
       await handleCommand("/session", ctx);
       expect(called.openPanel).toEqual([SESSION_PANEL_ID]);
       expect(called.appendMessage).toEqual([]);
+    });
+
+    it("/mode reports the current mode", async () => {
+      const { ctx, called } = mockContext();
+      await handleCommand("/mode", ctx);
+      expect(called.appendMessage[0].content).toContain("Current mode: Plan");
+    });
+
+    it("/mode act switches to act mode", async () => {
+      const { ctx, called } = mockContext();
+      await handleCommand("/mode act", ctx);
+      expect(called.setMode).toEqual(["act"]);
+      expect(called.appendMessage[0].content).toContain("Mode switched to Act");
+    });
+
+    it("/mode plan switches to plan mode", async () => {
+      const { ctx, called } = mockContext();
+      await handleCommand("/mode plan", ctx);
+      expect(called.setMode).toEqual(["plan"]);
+      expect(called.appendMessage[0].content).toContain("Mode switched to Plan");
     });
   });
 });

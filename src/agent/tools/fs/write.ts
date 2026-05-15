@@ -3,6 +3,8 @@ import { z } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ToolContext } from "../../../lib/tool/context.js";
+import { createUnifiedDiff, type DiffAction } from "../../../lib/diff/unifiedDiff.js";
+import { PLAN_MODE_BLOCKED_MESSAGE } from "../../../lib/runtime/agentMode.js";
 import { resolveWorkspacePath } from "./workspacePath.js";
 
 export const writeSchema = z.object({
@@ -22,10 +24,28 @@ export function createWriteTool(ctx?: ToolContext) {
         return `Error writing file: ${error instanceof Error ? error.message : String(error)}`;
       }
 
+      if (ctx?.mode === "plan") {
+        return PLAN_MODE_BLOCKED_MESSAGE;
+      }
+
       if (ctx?.confirm && ctx.confirm.getListenerCount() > 0) {
+        let existingContent = "";
+        let action: DiffAction = "create";
+        try {
+          existingContent = await fs.readFile(fullPath, "utf-8");
+          action = "overwrite";
+        } catch {
+          existingContent = "";
+        }
+
         const approved = await ctx.confirm.request(
           "writeFile",
           JSON.stringify({ filePath }),
+          {
+            action,
+            filePath,
+            diff: createUnifiedDiff(filePath, existingContent, content),
+          },
         );
         if (!approved) return "Denied by user.";
       }

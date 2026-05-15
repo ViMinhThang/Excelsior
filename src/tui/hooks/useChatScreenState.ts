@@ -12,14 +12,16 @@ import { useCommandResult } from "./useCommandResult.js";
 import { completeCommandInput } from "../lib/commandSubmission.js";
 import { createFeatureRuntimeContext, submitChatInput } from "../lib/chatSubmit.js";
 import { appFeatureRegistry } from "../../features/index.js";
+import { formatAgentMode } from "../../lib/runtime/agentMode.js";
 
 export function useChatScreenState() {
   const { navigate, goBack } = useNavigation();
 
   const {
-    state: { displayBlocks, isLoading, sessions, currentSessionId, workspaceRootPath },
+    state: { displayBlocks, isLoading, sessions, currentSessionId, workspaceRootPath, mode },
     send, cancel, clear,
     switchSession, createSession, deleteSession, renameSession, listSessions,
+    setMode, toggleMode,
   } = useAgentManager();
 
   const { input, setInput, inputRef, resetInput, navigateUp, navigateDown } = useInputHistory(displayBlocks);
@@ -62,6 +64,9 @@ export function useChatScreenState() {
     openPanel,
     closePanel,
     getHelpText: () => appFeatureRegistry.getHelpText(),
+    mode,
+    setMode,
+    toggleMode,
   }), [
     navigate,
     goBack,
@@ -78,6 +83,9 @@ export function useChatScreenState() {
     currentSessionId,
     openPanel,
     closePanel,
+    mode,
+    setMode,
+    toggleMode,
   ]);
 
   const handleSubmit = useCallback(() => {
@@ -128,6 +136,10 @@ export function useChatScreenState() {
     "escape": () => {
       if (isLoading) cancel();
     },
+    "ctrl+m": () => {
+      const nextMode = toggleMode();
+      if (nextMode) setCommandResult(`Mode switched to ${formatAgentMode(nextMode)}.`);
+    },
     "ctrl+o": () => {
       openSubAgent();
     },
@@ -157,5 +169,6 @@ export function useChatScreenState() {
     suggestion,
     handleSubmit,
     commandResult,
+    mode,
   };
 }

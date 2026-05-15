@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
-import type { ConfirmBus } from "../runtime/confirmTypes.js";
+import type { ConfirmBus, ConfirmRequest } from "../runtime/confirmTypes.js";
+import type { AgentMode } from "../runtime/agentMode.js";
 
 export type ToolCapability =
   | "fs:read"
@@ -11,7 +12,11 @@ export type ToolCapability =
 
 export interface ConfirmCapability {
   getListenerCount(): number;
-  request(toolName: string, args: string): Promise<boolean>;
+  request(
+    toolName: string,
+    args: string,
+    metadata?: Partial<Omit<ConfirmRequest, "callId" | "toolName" | "args">>,
+  ): Promise<boolean>;
 }
 
 export interface ToolContext {
@@ -19,12 +24,14 @@ export interface ToolContext {
   confirm?: ConfirmCapability;
   abortSignal?: AbortSignal;
   workspaceRoot?: string;
+  mode?: AgentMode;
 }
 
 export function createToolContext(options?: {
   abortSignal?: AbortSignal;
   confirmBus?: ConfirmBus;
   workspaceRoot?: string;
+  mode?: AgentMode;
 }): ToolContext {
   const capabilities = new Set<ToolCapability>();
   capabilities.add("fs:read");
@@ -34,13 +41,14 @@ export function createToolContext(options?: {
     capabilities,
     abortSignal: options?.abortSignal,
     workspaceRoot: options?.workspaceRoot ?? process.cwd(),
+    mode: options?.mode ?? "act",
   };
 
   if (options?.confirmBus) {
     capabilities.add("fs:write");
     ctx.confirm = {
       getListenerCount: () => options.confirmBus!.getListenerCount("request"),
-      request: (toolName: string, args: string) =>
+      request: (toolName: string, args: string, metadata = {}) =>
         new Promise<boolean>((resolve) => {
           const callId = randomUUID();
           const unsub = options.confirmBus!.on("response", (resp) => {
@@ -53,6 +61,7 @@ export function createToolContext(options?: {
             callId,
             toolName,
             args,
+            ...metadata,
           });
         }),
     };

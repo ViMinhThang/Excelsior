@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { spawn } from "child_process";
 import type { ToolContext } from "../../../lib/tool/context.js";
+import { PLAN_MODE_BLOCKED_MESSAGE } from "../../../lib/runtime/agentMode.js";
 import { runCommandSchema } from "./type.js";
 
 const MAX_OUTPUT_LENGTH = 100_000;
@@ -170,8 +171,13 @@ export function createRunCommandTool(ctx?: ToolContext) {
       const danger = isDangerous(fullString);
       if (danger) return danger;
       if (ctx?.abortSignal?.aborted) return "Command cancelled.";
+      const writeCommand = isWriteCommand(fullString);
 
-      if (ctx?.confirm && ctx.confirm.getListenerCount() > 0 && isWriteCommand(fullString)) {
+      if (ctx?.mode === "plan" && writeCommand) {
+        return PLAN_MODE_BLOCKED_MESSAGE;
+      }
+
+      if (ctx?.confirm && ctx.confirm.getListenerCount() > 0 && writeCommand) {
         const approved = await ctx.confirm.request(
           "runCommand",
           JSON.stringify({ command, args }),

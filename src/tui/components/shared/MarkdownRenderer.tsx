@@ -257,7 +257,7 @@ const BlockRenderer: React.FC<{ token: Token; index: number }> = ({ token, index
       return null;
     case "heading": {
       const heading = token as Tokens.Heading;
-      return <Box key={key} marginTop={index > 0 ? 1 : 0}><Text bold color={theme.colors.text}><InlineRenderer tokens={heading.tokens} /></Text></Box>;
+      return <Box key={key} marginTop={index > 0 ? 1 : 0}><Text bold><InlineRenderer tokens={heading.tokens} /></Text></Box>;
     }
     case "paragraph":
       return <Box key={key} marginTop={index > 0 ? 1 : 0}><Text><InlineRenderer tokens={(token as Tokens.Paragraph).tokens} /></Text></Box>;
@@ -303,7 +303,7 @@ const BlockRenderer: React.FC<{ token: Token; index: number }> = ({ token, index
         rows: (table.rows ?? []).map((row: any) => (row as any[]).map((cell) => getRawText(cell.tokens))),
         align: table.align ?? [],
       });
-      return <Box key={key} marginTop={index > 0 ? 1 : 0} flexDirection="column">{lines.map((line, li) => <Text key={`table_line_${index}_${li}`} color={theme.colors.text} wrap="truncate-end">{line}</Text>)}</Box>;
+      return <Box key={key} marginTop={index > 0 ? 1 : 0} flexDirection="column">{lines.map((line, li) => <Text key={`table_line_${index}_${li}`} wrap="truncate-end">{line}</Text>)}</Box>;
     }
     case "html":
       return <Text key={key}>{escapeXml((token as Tokens.HTML).text)}</Text>;

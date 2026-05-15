@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { AgentRun } from "../lib/runtime/agentRun.js";
+import { mkdtemp, rm, writeFile } from "fs/promises";
+import { join } from "path";
+import { tmpdir } from "os";
 import type { ToolContext } from "../lib/tool/context.js";
 import { createWriteTool } from "../agent/tools/fs/write.js";
 import { createEditTool } from "../agent/tools/fs/edit.js";
@@ -58,23 +61,30 @@ describe("spawnSubAgent tool safety context", () => {
 
   it("passes confirmation context to child agent tools", async () => {
     const { createSpawnSubAgentTool } = await import("../agent/spawn/spawnSubAgent.js");
+    const workspaceRoot = await mkdtemp(join(tmpdir(), "excelsior-child-"));
+    await writeFile(join(workspaceRoot, "child.txt"), "x", "utf-8");
     const request = vi.fn(async () => false);
     const parentRun = new AgentRun("ses_test");
     const ctx: ToolContext = {
       capabilities: new Set(["fs:read", "fs:write", "shell"]),
-      workspaceRoot: process.cwd(),
+      workspaceRoot,
+      mode: "act",
       confirm: { getListenerCount: () => 1, request },
     };
 
-    const tool = createSpawnSubAgentTool(parentRun, new Map(), "ses_test", ctx);
-    await (tool as any).execute({ role: "Reviewer", instruction: "check" }, { toolCallId: "tc1" });
+    try {
+      const tool = createSpawnSubAgentTool(parentRun, new Map(), "ses_test", ctx);
+      await (tool as any).execute({ role: "Reviewer", instruction: "check" }, { toolCallId: "tc1" });
 
-    expect(captured.ctx?.confirm).toBe(ctx.confirm);
-    await (createWriteTool(captured.ctx) as any).execute({ filePath: "child.txt", content: "x" });
-    await (createEditTool(captured.ctx) as any).execute({ filePath: "child.txt", oldText: "x", newText: "y" });
-    await (createRunCommandTool(captured.ctx) as any).execute({ command: "npm", args: ["install"] });
+      expect(captured.ctx?.confirm).toBe(ctx.confirm);
+      await (createWriteTool(captured.ctx) as any).execute({ filePath: "new-child.txt", content: "x" });
+      await (createEditTool(captured.ctx) as any).execute({ filePath: "child.txt", oldText: "x", newText: "y" });
+      await (createRunCommandTool(captured.ctx) as any).execute({ command: "npm", args: ["install"] });
 
-    expect(request).toHaveBeenCalledTimes(3);
+      expect(request).toHaveBeenCalledTimes(3);
+    } finally {
+      await rm(workspaceRoot, { recursive: true, force: true });
+    }
   });
 
   it("aborts the child stream when the parent context aborts", async () => {

@@ -4,6 +4,7 @@ import { createAgent } from "../agent/agent.js";
 import { createSpawnSubAgentTool } from "../agent/spawn/spawnSubAgent.js";
 import type { RunRecorder } from "../lib/persistence/runRecorder.js";
 import type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
+import type { AgentMode } from "../lib/runtime/agentMode.js";
 
 export interface AIHistoryRef {
   current: Array<{ role: "user" | "assistant" | "system"; content: string }>;
@@ -21,6 +22,7 @@ export class ChatService {
       subAgentEvents?: SubAgentEventSink;
       silent?: boolean;
       displayContent?: string;
+      mode?: AgentMode;
     },
   ) {
     const aiMessages: Array<{ role: string; content: string }> = [];
@@ -50,6 +52,7 @@ export class ChatService {
       sessionId: options?.sessionId,
       recorder: options?.recorder,
       subAgentEvents: options?.subAgentEvents,
+      mode: options?.mode,
     });
 
     if (!options?.silent) {

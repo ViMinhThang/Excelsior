@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import type { Session } from "../lib/runtime/session.js";
 import type { Screen } from "../tui/lib/navigationTypes.js";
+import type { AgentMode } from "../lib/runtime/agentMode.js";
 
 export interface CommandDefinition {
   name: string;
@@ -48,4 +49,7 @@ export interface FeatureRuntimeContext {
   openPanel: (panelId: string) => void;
   closePanel: () => void;
   getHelpText: () => string;
+  mode: AgentMode;
+  setMode: (mode: AgentMode) => void;
+  toggleMode: () => AgentMode | undefined;
 }

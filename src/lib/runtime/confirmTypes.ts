@@ -1,5 +1,16 @@
+import type { DiffAction } from "../diff/unifiedDiff.js";
+
+export type ConfirmRequest = {
+  callId: string;
+  toolName: string;
+  args: string;
+  diff?: string;
+  filePath?: string;
+  action?: DiffAction;
+};
+
 export type ConfirmEvents = {
-  request: { callId: string; toolName: string; args: string };
+  request: ConfirmRequest;
   response: { callId: string; approved: boolean };
 };
 
@@ -11,6 +22,6 @@ export interface ConfirmBus {
   ): () => void;
   emit(
     event: "request",
-    data: { callId: string; toolName: string; args: string },
+    data: ConfirmRequest,
   ): void;
 }
