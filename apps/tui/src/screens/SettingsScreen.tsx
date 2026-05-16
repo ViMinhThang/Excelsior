@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, type FC } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useDatabase } from '../hooks/useDatabase.js';
 import { useNavigation } from '../context/NavigationContext.js';
@@ -9,7 +9,7 @@ interface SettingsScreenProps {
   onClose?: () => void;
 }
 
-const SettingsScreen: React.FC<SettingsScreenProps> = ({ onClose }) => {
+const SettingsScreen: FC<SettingsScreenProps> = ({ onClose }) => {
   const { getApiKey, saveApiKey, getGithubToken, saveGithubToken } = useDatabase();
   const { goBack } = useNavigation();
   const [apiKey, setApiKey] = useState(() => getApiKey());

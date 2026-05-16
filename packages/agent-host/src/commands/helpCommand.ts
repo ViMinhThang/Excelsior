@@ -4,23 +4,23 @@ import type { AgentCommand } from "./types.js";
 const HELP_GROUPS = [
   {
     title: "Core",
-    names: ["help", "clear", "reset"],
+    category: "core",
   },
   {
     title: "Mode",
-    names: ["mode"],
+    category: "mode",
   },
   {
     title: "Settings",
-    names: ["settings"],
+    category: "settings",
   },
   {
     title: "Session",
-    names: ["session"],
+    category: "session",
   },
   {
     title: "Review",
-    names: ["review", "review-post"],
+    category: "review",
   },
 ];
 
@@ -28,7 +28,7 @@ export function formatHelpText(commands: CommandDefinition[]): string {
   const body = HELP_GROUPS
     .map((group) => {
       const entries = commands
-        .filter((command) => group.names.includes(command.name))
+        .filter((command) => command.category === group.category)
         .map((command) => {
           const usage = command.usage ? `\n  usage: ${command.usage}` : "";
           return `/${command.name} - ${command.description}${usage}`;
@@ -45,6 +45,7 @@ export function createHelpCommand(getDefinitions: () => CommandDefinition[]): Ag
   return {
     definition: {
       name: "help",
+      category: "core",
       description: "List all available commands",
       usage: "/help",
     },

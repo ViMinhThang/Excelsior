@@ -6,7 +6,6 @@ import type {
 import {
   AgentRun,
   type AgentEventDataMap,
-  type AnyAgentEvent,
 } from "@excelsior/agent-host/testing/runtime";
 import type { Session } from "@excelsior/agent-host/testing/session";
 import type { RunHandle } from "@excelsior/run-runtime";
@@ -72,25 +71,8 @@ export function createPendingRunHandle(
 ): RunHandle<AgentEventDataMap> {
   return {
     done: new Promise(() => {}),
+    completion: new Promise(() => {}),
     cancel,
-  };
-}
-
-export function createResolvableRunHandle(getRun: () => AgentRun): {
-  handle: RunHandle<AgentEventDataMap>;
-  resolveDone(): void;
-} {
-  let resolveDone!: (events: AnyAgentEvent[]) => void;
-  const done = new Promise<AnyAgentEvent[]>((resolve) => {
-    resolveDone = resolve;
-  });
-
-  return {
-    handle: {
-      done,
-      cancel: vi.fn(),
-    },
-    resolveDone: () => resolveDone(getRun().getSnapshot()),
   };
 }
 

@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Box, Text } from "ink";
 import type { Session } from "@excelsior/core";
 import { useKeymap } from "../../hooks/useKeymap.js";

@@ -96,7 +96,7 @@ describe("chat transcript projection", () => {
         type: "assistant",
         content: "Thinking...",
       });
-      expect((blocks[0] as any).isFrozen).toBeFalsy();
+      expect(blocks[0].isFrozen).toBeFalsy();
     });
 
     it("full round-trip: user + assistant + tool", () => {
@@ -137,7 +137,7 @@ describe("chat transcript projection", () => {
         status: "pending",
         content: "",
       });
-      expect((blocks[0] as any).isFrozen).toBeFalsy();
+      expect(blocks[0].isFrozen).toBeFalsy();
     });
 
     it("flushes a pending sub-agent tool as a running sub-agent block", () => {
@@ -159,7 +159,7 @@ describe("chat transcript projection", () => {
         role: "Bug Hunter",
         state: { status: "running" },
       });
-      expect((blocks[0] as any).isFrozen).toBeFalsy();
+      expect(blocks[0].isFrozen).toBeFalsy();
     });
 
     it("updates a flushed regular tool when its result arrives late", () => {
@@ -281,7 +281,8 @@ describe("chat transcript projection", () => {
       expect(blocks).toHaveLength(1);
       expect(requestedChildRunId).toBe("child1");
       expect(blocks[0]).toMatchObject({ type: "sub-agent", role: "Bug Hunter" });
-      const subBlock = blocks[0] as any;
+      const subBlock = blocks[0];
+      if (subBlock.type !== "sub-agent") throw new Error("Expected sub-agent block");
       expect(subBlock.state.status).toBe("done");
     });
 

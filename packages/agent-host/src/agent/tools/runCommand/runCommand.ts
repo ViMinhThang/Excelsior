@@ -1,73 +1,15 @@
 import { tool } from "ai";
 import { spawn } from "child_process";
 import type { ToolContext } from "../../../lib/tool/context.js";
-import { PLAN_MODE_BLOCKED_MESSAGE } from "../../../lib/runtime/agentMode.js";
+import { classifyCommandRisk } from "../../../lib/tool/commandRisk.js";
+import { authorizeToolAction } from "../../../lib/tool/policy.js";
+import { getWorkspaceRoot } from "../../../lib/tool/workspace.js";
 import { runCommandSchema } from "./type.js";
 
 const MAX_OUTPUT_LENGTH = 100_000;
 const DEFAULT_TIMEOUT = 30_000;
 
 const isWindows = process.platform === "win32";
-
-const DANGEROUS_PATTERNS = [
-  /rm\s+-rf\s+\//i,
-  /rm\s+-rf\s+~(\/|\s|$)/i,
-  /rm\s+-rf\s+\/\*/i,
-  /mkfs/i,
-  /dd\s+if=/i,
-  /:\s*\(\)\s*\{/, // fork bomb
-  />\s*\/dev\/sd/i,
-  /chmod\s+(-R\s+)?777\s+\//i,
-  /shutdown/i,
-  /reboot/i,
-  /halt/i,
-  /poweroff/i,
-  // Windows-specific dangerous patterns
-  ...(isWindows
-    ? [
-        /rmdir\s+\/s\s+\\/i,
-        /del\s+\/[fqs]\s+\\/i,
-        /format\s+\w:|format\s+\/q/i,
-        /diskpart/i,
-        /reg\s+(delete|add)\s+/i,
-      ]
-    : []),
-];
-
-const baseWritePatterns: RegExp[] = [
-  // Redirection (write to file)
-  /(?:>>|(?:^|[|;])\s*>)/i,
-  // Write-like bash commands
-  /\b(rm|mv|cp|mkdir|touch|chmod|chown|ln|dd)\b\s/i,
-  /\bsed\s+-i\b/i,
-  /\b(npm|pnpm|yarn|npx)\s+(install|add|publish|remove|update|init|config\s+set)\b/i,
-  /\bgit\s+(commit|push|reset|merge|rebase|revert|cherry-pick|branch\s+-[dD]|tag|checkout\s+-b|remote\s+(add|rm)|fetch\s+\S+\s+--force)\b/i,
-  /\b(docker\s+(build|push|tag|commit|rm|rmi|network\s+rm|volume\s+rm))\b/i,
-];
-
-if (isWindows) {
-  baseWritePatterns.push(
-    // PowerShell write cmdlets
-    /\b(Set-Content|Add-Content|Out-File|Remove-Item|Move-Item|Copy-Item|Rename-Item|New-Item|Clear-Content)\b/i,
-    // cmd write commands
-    /\b(copy|move|del|erase|rename|mkdir|mklink)\b\s/i,
-  );
-}
-
-const WRITE_PATTERNS = baseWritePatterns;
-
-function isDangerous(commandString: string): string | null {
-  for (const pattern of DANGEROUS_PATTERNS) {
-    if (pattern.test(commandString)) {
-      return `Blocked dangerous command matching pattern: ${pattern}`;
-    }
-  }
-  return null;
-}
-
-function isWriteCommand(commandString: string): boolean {
-  return WRITE_PATTERNS.some((pattern) => pattern.test(commandString));
-}
 
 function windowsShellCompatibility(command: string, args: string[]): { command: string; args: string[] } | null {
   if (!isWindows || args.length > 0) return null;
@@ -103,7 +45,7 @@ function runProcess(command: string, args: string[], ctx?: ToolContext): Promise
     };
 
     const child = spawn(command, args, {
-      cwd: process.cwd(),
+      cwd: getWorkspaceRoot(ctx),
       shell: false,
     });
 
@@ -167,25 +109,25 @@ export function createRunCommandTool(ctx?: ToolContext) {
     description: "Run an executable with distinct parameters in the current directory",
     inputSchema: runCommandSchema,
     execute: async ({ command, args }) => {
-      const fullString = [command, ...(args || [])].join(" ");
-      const danger = isDangerous(fullString);
-      if (danger) return danger;
-      if (ctx?.abortSignal?.aborted) return "Command cancelled.";
-      const writeCommand = isWriteCommand(fullString);
-
-      if (ctx?.mode === "plan" && writeCommand) {
-        return PLAN_MODE_BLOCKED_MESSAGE;
-      }
-
-      if (ctx?.confirm && ctx.confirm.getListenerCount() > 0 && writeCommand) {
-        const approved = await ctx.confirm.request(
-          "runCommand",
-          JSON.stringify({ command, args }),
-        );
-        if (!approved) return "Denied by user.";
-      }
-
       const normalizedArgs = args || [];
+      const classification = classifyCommandRisk(command, normalizedArgs);
+      if (classification.blockedMessage) return classification.blockedMessage;
+      if (ctx?.abortSignal?.aborted) return "Command cancelled.";
+
+      const authorization = await authorizeToolAction(ctx, {
+        toolName: "runCommand",
+        capability: "shell",
+        modePolicy: classification.kind === "write" ? "write" : "shell",
+        risk: classification.risk,
+        confirmation: classification.kind === "write"
+          ? {
+              toolName: "runCommand",
+              args: JSON.stringify({ command, args }),
+            }
+          : undefined,
+      });
+      if (!authorization.allowed) return authorization.message;
+
       const result = await runProcess(command, normalizedArgs, ctx);
       if (!result.notFound) return result.output;
 

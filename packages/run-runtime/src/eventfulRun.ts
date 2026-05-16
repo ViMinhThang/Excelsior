@@ -15,7 +15,9 @@ export interface EventfulRunOptions<TEvents extends { [K in keyof TEvents]: unkn
   parentSignal?: AbortSignal;
   eventVersion?: number;
   terminalEventTypes?: readonly (keyof TEvents & string)[];
+  createRunId?: () => string;
   createEventId?: () => string;
+  now?: () => Date | string;
 }
 
 export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
@@ -37,16 +39,20 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
   private _terminalEventTypes: Set<string>;
   private _eventVersion: number;
   private _createEventId?: () => string;
+  private _now?: () => Date | string;
 
   constructor(options?: EventfulRunOptions<TEvents>) {
     const idPrefix = options?.idPrefix ?? "run";
-    this.id = `${idPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    this.id =
+      options?.createRunId?.() ??
+      `${idPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     this.sessionId = options?.sessionId ?? this.id;
     this.parentEventId = options?.parentEventId;
     this.correlationId = options?.correlationId ?? this.id;
     this._terminalEventTypes = new Set(options?.terminalEventTypes ?? []);
     this._eventVersion = options?.eventVersion ?? 1;
     this._createEventId = options?.createEventId;
+    this._now = options?.now;
 
     if (options?.parentSignal?.aborted) {
       this._aborted = true;
@@ -79,6 +85,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
       correlationId: this.correlationId,
       causationId: this._lastEventId ?? undefined,
       createEventId: this._createEventId,
+      now: this._now,
       ...overrides,
     });
     this._lastEventId = event.id;

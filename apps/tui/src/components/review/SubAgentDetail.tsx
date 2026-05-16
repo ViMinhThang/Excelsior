@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import { memo, type FC } from "react";
 import { Box, Text } from "ink";
 import type { SubAgentViewModel } from "@excelsior/core";
 import ToolMessage from "../chat/ToolMessage.js";
@@ -9,7 +9,7 @@ interface SubAgentDetailProps {
   agent: SubAgentViewModel;
 }
 
-const SubAgentDetail: React.FC<SubAgentDetailProps> = ({ agent }) => {
+const SubAgentDetail: FC<SubAgentDetailProps> = ({ agent }) => {
   const statusColor = agent.status === "running" ? theme.colors.activity : agent.status === "error" ? theme.colors.error : theme.colors.success;
   const statusLabel = agent.status === "running" ? "running" : agent.status === "error" ? "error" : "done";
   const hasParts = agent.outputParts && agent.outputParts.length > 0;

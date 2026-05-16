@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo, type FC } from 'react';
 import { Box, Text } from 'ink';
 import { MarkdownRenderer } from '../shared/MarkdownRenderer.js';
 import { theme } from '../../theme.js';
@@ -8,7 +8,7 @@ interface AgentMessageProps {
   timestamp?: string;
 }
 
-const AgentMessage: React.FC<AgentMessageProps> = ({ content }) => {
+const AgentMessage: FC<AgentMessageProps> = ({ content }) => {
   return (
     <Box flexDirection="row" gap={1} paddingX={1} flexGrow={1} paddingBottom={1}>
       <Text color={theme.colors.accent}>●</Text>

@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import { memo, type FC } from "react";
 import { Box, Text } from "ink";
 import StatusIndicator from "./StatusIndicator.js";
 import { theme } from "../../theme.js";
@@ -40,7 +40,7 @@ function formatCliCommand(toolName?: string, argsStr?: string): string {
   }
 }
 
-const ToolMessage: React.FC<ToolMessageProps> = ({
+const ToolMessage: FC<ToolMessageProps> = ({
   toolName,
   toolArgs,
   status = "completed",

@@ -47,7 +47,7 @@ describe("Database", () => {
     });
 
     it("workspaces table exists with default workspace", () => {
-      const row = db.prepare("SELECT id, name FROM workspaces WHERE id = 'ws_default'").get() as any;
+      const row = db.prepare("SELECT id, name FROM workspaces WHERE id = 'ws_default'").get() as { id: string; name: string } | undefined;
       expect(row).toBeDefined();
       expect(row.name).toBe("default");
     });

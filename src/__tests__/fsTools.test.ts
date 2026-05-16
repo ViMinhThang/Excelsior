@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import {
+  authorizeToolAction,
   createEditTool,
   createGlobTool,
   createRipgrepTool,
@@ -12,6 +13,66 @@ import {
   PLAN_MODE_BLOCKED_MESSAGE,
   type ToolContext,
 } from "@excelsior/agent-host/testing/tools";
+
+describe("tool authorization policy", () => {
+  it("denies missing capabilities with a stable message", async () => {
+    const result = await authorizeToolAction(
+      { capabilities: new Set(["fs:read"]) },
+      { toolName: "writeFile", capability: "fs:write", modePolicy: "write" },
+    );
+
+    expect(result).toEqual({ allowed: false, message: "Missing tool capability: fs:write" });
+  });
+
+  it("blocks write actions in plan mode", async () => {
+    const result = await authorizeToolAction(
+      { capabilities: new Set(["fs:write"]), mode: "plan" },
+      { toolName: "writeFile", capability: "fs:write", modePolicy: "write" },
+    );
+
+    expect(result).toEqual({ allowed: false, message: PLAN_MODE_BLOCKED_MESSAGE });
+  });
+
+  it("requests confirmation only when a listener exists", async () => {
+    const request = vi.fn(async () => false);
+    const result = await authorizeToolAction(
+      {
+        capabilities: new Set(["fs:write"]),
+        mode: "act",
+        confirm: { getListenerCount: () => 0, request },
+      },
+      {
+        toolName: "writeFile",
+        capability: "fs:write",
+        modePolicy: "write",
+        confirmation: { toolName: "writeFile", args: "{}" },
+      },
+    );
+
+    expect(result).toEqual({ allowed: true });
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("returns denied when confirmation is rejected", async () => {
+    const request = vi.fn(async () => false);
+    const result = await authorizeToolAction(
+      {
+        capabilities: new Set(["fs:write"]),
+        mode: "act",
+        confirm: { getListenerCount: () => 1, request },
+      },
+      {
+        toolName: "writeFile",
+        capability: "fs:write",
+        modePolicy: "write",
+        confirmation: { toolName: "writeFile", args: "{}" },
+      },
+    );
+
+    expect(result).toEqual({ allowed: false, message: "Denied by user." });
+    expect(request).toHaveBeenCalledWith("writeFile", "{}", undefined);
+  });
+});
 
 describe("filesystem tool workspace bounds", () => {
   let workspaceRoot: string;
@@ -40,6 +101,19 @@ describe("filesystem tool workspace bounds", () => {
     const result = await executeTool(createViewTool(ctx()), { filePath: "inside.txt" });
     expect(result).toContain("needle");
     expect(result).not.toContain("[File:");
+  });
+
+  it("enforces read capabilities for read-only tools", async () => {
+    const readlessCtx: ToolContext = {
+      capabilities: new Set(["fs:write"]),
+      workspaceRoot,
+    };
+
+    const result = await executeTool(createViewTool(readlessCtx), {
+      filePath: "inside.txt",
+    });
+
+    expect(result).toBe("Missing tool capability: fs:read");
   });
 
   it("rejects reads outside the workspace", async () => {
@@ -112,6 +186,29 @@ describe("filesystem tool workspace bounds", () => {
         diff: expect.stringContaining("-needle"),
       }),
     );
+  });
+
+  it("applies approved writes and edits in act mode", async () => {
+    const request = vi.fn(async () => true);
+    const confirmedCtx: ToolContext = {
+      ...ctx(),
+      mode: "act",
+      confirm: { getListenerCount: () => 1, request },
+    };
+
+    const writeResult = await executeTool(createWriteTool(confirmedCtx), {
+      filePath: "created.txt",
+      content: "hello\n",
+    });
+    const editResult = await executeTool(createEditTool(confirmedCtx), {
+      filePath: "created.txt",
+      oldText: "hello",
+      newText: "changed",
+    });
+
+    expect(writeResult).toContain("Successfully wrote");
+    expect(editResult).toContain("Successfully replaced");
+    await expect(readFile(join(workspaceRoot, "created.txt"), "utf-8")).resolves.toBe("changed\n");
   });
 
   it("does not request edit confirmation when oldText is missing", async () => {

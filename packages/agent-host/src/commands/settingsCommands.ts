@@ -4,6 +4,7 @@ export function createSettingsCommand(): AgentCommand {
   return {
     definition: {
       name: "settings",
+      category: "settings",
       description: "View or set configuration settings (e.g. apiKey, githubToken)",
       usage: "/settings",
     },

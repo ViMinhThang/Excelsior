@@ -13,6 +13,8 @@ export type { EventfulRunOptions, RunEventMap } from "./eventfulRun.js";
 export { EventfulRun } from "./eventfulRun.js";
 export type {
   RunConfig,
+  RunCompletion,
+  RunCompletionStatus,
   RunExecutionContext,
   RunHandle,
   RunPersistenceConfig,

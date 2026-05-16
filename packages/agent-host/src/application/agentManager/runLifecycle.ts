@@ -48,6 +48,7 @@ export class AgentManagerRunLifecycle {
       history: { current: options.history },
       sessionId: options.sessionId,
       workspaceId: options.workspaceId,
+      workspaceRoot: options.workspaceRoot,
       subAgentEvents: options.subAgentEvents,
       displayContent: options.displayContent,
       silent: options.silent,
@@ -90,16 +91,17 @@ export class AgentManagerRunLifecycle {
       this.notify();
     });
 
-    handle.done
-      .then(async () => {
-        const finalEvents = this._run
-          ? [...this._run.getSnapshot()]
-          : this._liveEvents;
-        this.appendFinalEvents(finalEvents);
+    handle.completion
+      .then((completion) => {
+        if (this._handle !== handle) return;
+        if (completion.status === "completed" || completion.status === "failed") {
+          this.appendFinalEvents([...run.getSnapshot()]);
+        }
         this.setLoading(false);
         this.notify();
       })
       .catch(() => {
+        if (this._handle !== handle) return;
         this.setLoading(false);
         this.notify();
       });

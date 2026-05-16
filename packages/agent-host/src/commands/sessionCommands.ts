@@ -9,6 +9,7 @@ export function createSessionCommand(): AgentCommand {
   return {
     definition: {
       name: "session",
+      category: "session",
       description: "Open the session picker",
       usage: SESSION_USAGE,
     },

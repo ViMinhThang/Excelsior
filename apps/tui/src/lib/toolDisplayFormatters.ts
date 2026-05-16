@@ -1,5 +1,5 @@
-import { type ToolFormatter, type ToolFormatterContext } from "./toolDisplayTypes.js";
-import { asString, genericSummary, normalizeToolText, getCommandRisk, countLines, plural } from "./toolDisplayUtils.js";
+import { type ToolFormatter } from "./toolDisplayTypes.js";
+import { asString, genericSummary, getCommandRisk, countLines, plural } from "./toolDisplayUtils.js";
 
 const TOOL_FORMATTERS: Record<string, ToolFormatter> = {
   runCommand: ({ args, normalizedContent, preview, tone, status }) => {

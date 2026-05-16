@@ -9,6 +9,10 @@ export type {
 } from "@excelsior/core";
 
 export type { AgentHost } from "./host/AgentHost.js";
+export {
+  initializeAgentHostRuntime,
+  logAgentHostError,
+} from "./host/bootstrap.js";
 export { LocalAgentHost } from "./host/LocalAgentHost.js";
 export {
   getDefaultAgentHost,

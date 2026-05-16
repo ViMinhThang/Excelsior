@@ -1,4 +1,4 @@
-import React, { memo, useMemo } from "react";
+import { memo, useMemo, type FC } from "react";
 import { Box, Text } from "ink";
 import { lexer } from "marked";
 import type { Token, Tokens } from "marked";
@@ -9,7 +9,7 @@ import { theme } from "../../theme.js";
 export { highlightCode, highlightFilenames } from "../../lib/markdown/highlight.js";
 export { normalizePipeTables, formatMarkdownTable, MarkdownTableInput } from "../../lib/markdown/tables.js";
 
-const InlineRenderer: React.FC<{ tokens: Token[] }> = ({ tokens }) => (
+const InlineRenderer: FC<{ tokens: Token[] }> = ({ tokens }) => (
   <>
     {tokens.map((token, i) => {
       const key = `inline_${token.type}_${i}`;
@@ -46,7 +46,7 @@ const InlineRenderer: React.FC<{ tokens: Token[] }> = ({ tokens }) => (
   </>
 );
 
-const BlockRenderer: React.FC<{ token: Token; index: number }> = ({ token, index }) => {
+const BlockRenderer: FC<{ token: Token; index: number }> = ({ token, index }) => {
   const key = `block_${token.type}_${index}`;
   switch (token.type) {
     case "space":

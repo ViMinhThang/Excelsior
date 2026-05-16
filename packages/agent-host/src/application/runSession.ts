@@ -30,6 +30,7 @@ export interface RunSessionConfig {
   recorder?: RunRecorder;
   subAgentEvents?: SubAgentEventSink;
   mode?: AgentMode;
+  workspaceRoot?: string;
   streamAgentResponse?: AgentResponseStreamer;
 }
 
@@ -49,7 +50,12 @@ export function createRunSession(config: RunSessionConfig): RunSessionResult {
   const recorder = config.recorder ?? defaultRunRecorder;
   const subAgentEvents = config.subAgentEvents ?? createSubAgentEventSink();
 
-  const ctx = createToolContext({ abortSignal: run.abortSignal, confirmBus, mode: config.mode });
+  const ctx = createToolContext({
+    abortSignal: run.abortSignal,
+    confirmBus,
+    mode: config.mode,
+    workspaceRoot: config.workspaceRoot,
+  });
   const runCtx: RunContext = { ctx, run, childRuns, recorder, subAgentEvents };
 
   const handle = orchestrator.start(run, {

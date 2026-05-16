@@ -12,6 +12,21 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe("package architecture boundaries", () => {
+  it("does not introduce casual any in app or package source", () => {
+    const offenders = sourceFiles("packages")
+      .concat(sourceFiles("apps"))
+      .map((file) => ({
+        file,
+        text: readFileSync(file, "utf-8"),
+      }))
+      .filter(({ text }) =>
+        /\bas any\b|:\s*any\b|<any\b|Record<string,\s*any>/.test(text),
+      )
+      .map(({ file }) => file);
+
+    expect(offenders).toEqual([]);
+  });
+
   it("does not let packages import implementation from root src", () => {
     const offenders = sourceFiles("packages")
       .map((file) => ({
@@ -19,6 +34,18 @@ describe("package architecture boundaries", () => {
         text: readFileSync(file, "utf-8"),
       }))
       .filter(({ text }) => /\.\.\/\.\.\/\.\.\/src|from\s+["'][^"']*\/src\//.test(text))
+      .map(({ file }) => file);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps apps on public package APIs instead of internal host paths", () => {
+    const offenders = sourceFiles("apps")
+      .map((file) => ({
+        file,
+        text: readFileSync(file, "utf-8"),
+      }))
+      .filter(({ text }) => /@excelsior\/agent-host\/internal\//.test(text))
       .map(({ file }) => file);
 
     expect(offenders).toEqual([]);

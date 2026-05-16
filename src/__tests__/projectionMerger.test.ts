@@ -111,7 +111,8 @@ describe("projection merger", () => {
 
     expect(blocks).toHaveLength(1);
     expect(blocks[0]).toMatchObject({ type: "sub-agent", role: "Bug Hunter" });
-    const subAgent = blocks[0] as any;
+    const subAgent = blocks[0];
+    if (subAgent.type !== "sub-agent") throw new Error("Expected sub-agent block");
     expect(subAgent.state.fullOutput).toBe("child output");
     expect(subAgent.state.toolCalls).toHaveLength(1);
     expect(subAgent.state.toolCalls[0]).toMatchObject({ toolName: "view", status: "completed" });
@@ -157,6 +158,8 @@ describe("projection merger", () => {
       childRuns: new Map([[childRunId, makeChildRun([liveChild])]]),
     });
 
-    expect((blocks[0] as any).state.fullOutput).toBe("live child");
+    const subAgent = blocks[0];
+    if (subAgent.type !== "sub-agent") throw new Error("Expected sub-agent block");
+    expect(subAgent.state.fullOutput).toBe("live child");
   });
 });

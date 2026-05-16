@@ -2,13 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   PERSISTENCE_ERROR,
   streamAgentResponse,
+  type AgentEventEmitter,
   type AgentResponseStreamer,
   type AnyAgentEvent,
   type RunRecorder,
+  type StreamCapableAgent,
 } from "@excelsior/agent-host/testing/runtime";
 
 const streamTextDelta: AgentResponseStreamer = async ({ emit }) => {
   emit("text-delta", { delta: "hello" });
+};
+
+const noopAgent: StreamCapableAgent = {
+  stream: async () => ({ fullStream: [] }),
 };
 
 function fakeRecorder() {
@@ -41,9 +47,9 @@ describe("run recorder integration", () => {
     const result = createRunSession({
       sessionId: "ses_test",
       messages: [{ role: "user", content: "hello" }],
-      createAgent: () => ({} as any),
+      createAgent: () => noopAgent,
       recorder,
-      streamAgentResponse: streamTextDelta as any,
+      streamAgentResponse: streamTextDelta,
     });
 
     await result.handle.done;
@@ -56,7 +62,7 @@ describe("run recorder integration", () => {
 
   it("streams through a minimal event sink without requiring AgentRun", async () => {
     const emitted: Array<{ type: string; data: unknown; relatedToolCallId?: string }> = [];
-    const agent = {
+    const agent: StreamCapableAgent = {
       stream: async () => ({
         fullStream: [
           { type: "text-delta", text: "hello" },
@@ -67,12 +73,12 @@ describe("run recorder integration", () => {
     };
 
     await streamAgentResponse({
-      agent: agent as any,
+      agent,
       messages: [],
       signal: new AbortController().signal,
       emit: ((type, data, overrides) => {
         emitted.push({ type, data, relatedToolCallId: overrides?.relatedToolCallId });
-      }) as any,
+      }) as AgentEventEmitter,
     });
 
     expect(emitted.map((event) => event.type)).toEqual([
@@ -107,9 +113,9 @@ describe("run recorder integration", () => {
     const result = createRunSession({
       sessionId: "ses_test",
       messages: [{ role: "user", content: "hello" }],
-      createAgent: () => ({} as any),
+      createAgent: () => noopAgent,
       recorder,
-      streamAgentResponse: streamTextDelta as any,
+      streamAgentResponse: streamTextDelta,
     });
 
     const events = await result.handle.done;
@@ -137,7 +143,7 @@ describe("run recorder integration", () => {
     const result = createRunSession({
       sessionId: "ses_test",
       messages: [{ role: "user", content: "hello" }],
-      createAgent: () => ({} as any),
+      createAgent: () => noopAgent,
       recorder,
       streamAgentResponse: async () => {
         throw new Error("model exploded");

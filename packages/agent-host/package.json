@@ -4,17 +4,46 @@
   "type": "module",
   "private": true,
   "exports": {
-    ".": "./src/index.ts",
-    "./commands": "./src/commands.ts",
-    "./testing/application": "./src/testing/application.ts",
-    "./testing/persistence": "./src/testing/persistence.ts",
-    "./testing/projection": "./src/testing/projection.ts",
-    "./testing/runtime": "./src/testing/runtime.ts",
-    "./testing/session": "./src/testing/session.ts",
-    "./testing/tools": "./src/testing/tools.ts",
-    "./internal/agent-factory": "./src/agent/agent.ts",
-    "./internal/agent-stream": "./src/lib/runtime/agentStream.ts",
-    "./internal/persistence": "./src/lib/persistence/db.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./commands": {
+      "types": "./src/commands.ts",
+      "development": "./src/commands.ts",
+      "default": "./dist/commands.js"
+    },
+    "./testing/application": {
+      "types": "./src/testing/application.ts",
+      "development": "./src/testing/application.ts",
+      "default": "./dist/testing/application.js"
+    },
+    "./testing/persistence": {
+      "types": "./src/testing/persistence.ts",
+      "development": "./src/testing/persistence.ts",
+      "default": "./dist/testing/persistence.js"
+    },
+    "./testing/projection": {
+      "types": "./src/testing/projection.ts",
+      "development": "./src/testing/projection.ts",
+      "default": "./dist/testing/projection.js"
+    },
+    "./testing/runtime": {
+      "types": "./src/testing/runtime.ts",
+      "development": "./src/testing/runtime.ts",
+      "default": "./dist/testing/runtime.js"
+    },
+    "./testing/session": {
+      "types": "./src/testing/session.ts",
+      "development": "./src/testing/session.ts",
+      "default": "./dist/testing/session.js"
+    },
+    "./testing/tools": {
+      "types": "./src/testing/tools.ts",
+      "development": "./src/testing/tools.ts",
+      "default": "./dist/testing/tools.js"
+    }
   },
   "dependencies": {
     "@excelsior/core": "1.0.0",

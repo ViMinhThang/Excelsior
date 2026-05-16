@@ -5,7 +5,10 @@ import {
   updateSessionTitle,
   persistSession,
 } from "./lib/persistence/eventPersistence.js";
-import { getOrCreateDefaultWorkspace } from "./lib/persistence/workspaceStore.js";
+import {
+  getOrCreateDefaultWorkspace,
+  loadWorkspace,
+} from "./lib/persistence/workspaceStore.js";
 
 export class SessionManager {
   private _workspace: Workspace;
@@ -13,9 +16,11 @@ export class SessionManager {
   private _sessions: Session[] = [];
 
   constructor(workspaceId?: string) {
-    const ws = getOrCreateDefaultWorkspace();
+    const ws = workspaceId
+      ? loadWorkspace(workspaceId) ?? getOrCreateDefaultWorkspace()
+      : getOrCreateDefaultWorkspace();
     this._workspace = {
-      id: workspaceId ?? ws.id,
+      id: ws.id,
       name: ws.name,
       rootPath: ws.rootPath,
     };

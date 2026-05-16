@@ -152,8 +152,8 @@
       <h2>Mode And Tool Safety Internals</h2>
       <div class="grid two">
         <article class="card">
-          <h3><code>packages/agent-host/src/lib/runtime/agentMode.ts</code></h3>
-          <p>Defines the `plan | act` mode type, display formatting, and the shared Plan-mode blocked message returned by mutating tools.</p>
+          <h3><code>packages/core/src/index.ts</code></h3>
+          <p>Defines the shared `plan | act` mode type, display formatting, and the Plan-mode blocked message returned by mutating tools.</p>
         </article>
         <article class="card">
           <h3><code>packages/agent-host/src/commands.ts</code></h3>
@@ -247,7 +247,7 @@
             </tr>
             <tr>
               <td>Change Plan/Act behavior</td>
-              <td><code>agentMode.ts</code>, <code>AgentManager</code>, <code>ToolContext</code>, relevant tool factories</td>
+              <td><code>packages/core/src/index.ts</code>, <code>AgentManager</code>, <code>ToolContext</code>, relevant tool factories</td>
               <td><code>commands.test.ts</code>, <code>fsTools.test.ts</code>, <code>tools/runCommand.test.ts</code></td>
             </tr>
             <tr>

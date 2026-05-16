@@ -1,4 +1,4 @@
-import { useRef, useCallback, useLayoutEffect } from "react";
+import { useRef, useCallback } from "react";
 
 /**
  * useEvent is a custom hook that creates a stable callback reference

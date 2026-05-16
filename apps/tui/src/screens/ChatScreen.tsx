@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { Box, Text, Static } from 'ink';
 import AppHeader from '../components/shared/AppHeader.js';
 import ChatHistory from '../components/chat/ChatHistory.js';
