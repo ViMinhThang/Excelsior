@@ -9,7 +9,7 @@ import {
 } from "../lib/runtime/subAgentEventSink.js";
 import { SessionManager } from "../sessionManager.js";
 import { ChatService } from "./chatService.js";
-import type { AgentMode } from "../lib/runtime/agentMode.js";
+import type { AgentMode } from "@excelsior/core";
 import { AgentManagerRunLifecycle } from "./agentManager/runLifecycle.js";
 import { AgentManagerSessionState } from "./agentManager/sessionState.js";
 import { subscribeSubAgentNotifications } from "./agentManager/subAgentNotifications.js";
@@ -85,6 +85,7 @@ export class AgentManager {
       history,
       sessionId,
       workspaceId: this._sessionState.workspaceId,
+      workspaceRoot: this._sessionState.workspace.rootPath,
       subAgentEvents: this._subAgentEvents,
       displayContent: options?.displayContent,
       silent: options?.silent,

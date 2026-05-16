@@ -1,6 +1,6 @@
 import type { AgentMessage, Session, Workspace } from "@excelsior/core";
 import type { RunHandle } from "@excelsior/run-runtime";
-import type { AgentMode } from "../../lib/runtime/agentMode.js";
+import type { AgentMode } from "@excelsior/core";
 import type { AgentRun } from "../../lib/runtime/agentRun.js";
 import type {
   AgentEventDataMap,
@@ -34,6 +34,7 @@ export interface RunLifecycleStartOptions extends SendOptions {
   mode: AgentMode;
   sessionId: string;
   workspaceId: string;
+  workspaceRoot: string;
   subAgentEvents: SubAgentEventSink;
 }
 
@@ -53,6 +54,7 @@ export interface ChatTurnService {
     history: { current: AgentMessage[] };
     sessionId: string;
     workspaceId: string;
+    workspaceRoot: string;
     subAgentEvents: SubAgentEventSink;
     displayContent?: string;
     silent?: boolean;

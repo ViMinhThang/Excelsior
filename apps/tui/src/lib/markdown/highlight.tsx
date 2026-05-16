@@ -1,4 +1,4 @@
-import React, { type ReactNode } from "react";
+import type { ReactNode } from "react";
 import chalk from "chalk";
 import { highlight } from "cli-highlight";
 import hljs from "highlight.js";

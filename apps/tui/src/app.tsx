@@ -1,4 +1,3 @@
-import React from 'react';
 import { NavigationProvider } from './context/NavigationContext.js';
 import { AgentHostProvider } from './context/AgentHostContext.js';
 import Router from './components/navigation/Router.js';

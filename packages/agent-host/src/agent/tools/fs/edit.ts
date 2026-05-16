@@ -3,8 +3,8 @@ import { z } from "zod";
 import fs from "node:fs/promises";
 import type { ToolContext } from "../../../lib/tool/context.js";
 import { createUnifiedDiff } from "../../../lib/diff/unifiedDiff.js";
-import { PLAN_MODE_BLOCKED_MESSAGE } from "../../../lib/runtime/agentMode.js";
-import { resolveWorkspacePath } from "./workspacePath.js";
+import { authorizeToolAction } from "../../../lib/tool/policy.js";
+import { resolveWorkspacePath } from "../../../lib/tool/workspace.js";
 
 export const editSchema = z.object({
   filePath: z.string().describe("Path to file to edit"),
@@ -24,9 +24,12 @@ export function createEditTool(ctx?: ToolContext) {
         return `Error editing file: ${error instanceof Error ? error.message : String(error)}`;
       }
 
-      if (ctx?.mode === "plan") {
-        return PLAN_MODE_BLOCKED_MESSAGE;
-      }
+      const authorization = await authorizeToolAction(ctx, {
+        toolName: "editFile",
+        capability: "fs:write",
+        modePolicy: "write",
+      });
+      if (!authorization.allowed) return authorization.message;
 
       try {
         const content = await fs.readFile(fullPath, "utf-8");
@@ -40,18 +43,21 @@ export function createEditTool(ctx?: ToolContext) {
         }
 
         const updated = content.replace(oldText, newText);
-        if (ctx?.confirm && ctx.confirm.getListenerCount() > 0) {
-          const approved = await ctx.confirm.request(
-            "editFile",
-            JSON.stringify({ filePath }),
-            {
+        const confirmation = await authorizeToolAction(ctx, {
+          toolName: "editFile",
+          capability: "fs:write",
+          modePolicy: "write",
+          confirmation: {
+            toolName: "editFile",
+            args: JSON.stringify({ filePath }),
+            metadata: {
               action: "edit",
               filePath,
               diff: createUnifiedDiff(filePath, content, updated),
             },
-          );
-          if (!approved) return "Denied by user.";
-        }
+          },
+        });
+        if (!confirmation.allowed) return confirmation.message;
 
         await fs.writeFile(fullPath, updated, "utf-8");
         return `Successfully replaced the block in ${filePath}.`;

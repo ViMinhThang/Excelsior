@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ToolContext } from "../../../lib/tool/context.js";
+import type { ToolContext } from "./context.js";
 
 export function getWorkspaceRoot(ctx?: ToolContext): string {
   return path.resolve(ctx?.workspaceRoot ?? process.cwd());

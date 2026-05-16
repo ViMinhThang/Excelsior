@@ -1,4 +1,4 @@
-import React from "react";
+import type { FC } from "react";
 import { Box, Text } from "ink";
 import type { ConfirmRequest } from "@excelsior/core";
 import type { ToolDisplay } from "../../lib/toolDisplay.js";
@@ -10,7 +10,7 @@ interface PendingActionPanelProps {
   display: ToolDisplay;
 }
 
-const PendingActionPanel: React.FC<PendingActionPanelProps> = ({ pending, display }) => {
+const PendingActionPanel: FC<PendingActionPanelProps> = ({ pending, display }) => {
   const diffLines = pending.diff ? pending.diff.split("\n") : [];
   const visibleDiffLines = diffLines.slice(0, 80);
 

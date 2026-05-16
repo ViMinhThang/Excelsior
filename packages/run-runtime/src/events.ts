@@ -30,6 +30,11 @@ export interface RunEventOverrides {
 export interface MakeRunEventOptions extends RunEventOverrides {
   eventVersion: number;
   createEventId?: () => string;
+  now?: () => Date | string;
+}
+
+function formatTimestamp(value: Date | string): string {
+  return typeof value === "string" ? value : value.toISOString();
 }
 
 export function makeRunEvent<
@@ -50,7 +55,7 @@ export function makeRunEvent<
     version: options.eventVersion,
     causationId: options.causationId ?? "",
     correlationId: options.correlationId ?? runId,
-    timestamp: new Date().toISOString(),
+    timestamp: formatTimestamp(options.now?.() ?? new Date()),
     data,
     ...(options.parentEventId ? { parentEventId: options.parentEventId } : {}),
     ...(options.relatedToolCallId ? { relatedToolCallId: options.relatedToolCallId } : {}),

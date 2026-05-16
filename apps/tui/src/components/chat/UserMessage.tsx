@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo, type FC } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../../theme.js';
 
@@ -7,7 +7,7 @@ interface UserMessageProps {
   timestamp?: string;
 }
 
-const UserMessage: React.FC<UserMessageProps> = ({ content }) => {
+const UserMessage: FC<UserMessageProps> = ({ content }) => {
   return (
     <Box flexDirection="row" gap={1} paddingX={1} paddingBottom={1}>
       <Text color="#5e81ac">●</Text>

@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { mkdtemp, rm } from "fs/promises";
+import { join } from "path";
+import { tmpdir } from "os";
 import {
+  classifyCommandRisk,
   createRunCommandTool,
   executeTool,
   PLAN_MODE_BLOCKED_MESSAGE,
@@ -23,6 +27,29 @@ describe("runCommandTool", () => {
     it("rejects missing args", () => {
       const result = runCommandSchema.safeParse({ command: "node" });
       expect(result.success).toBe(false);
+    });
+  });
+
+  describe("risk classification", () => {
+    it("classifies dangerous commands as blocked", () => {
+      expect(classifyCommandRisk("rm", ["-rf", "/"])).toMatchObject({
+        kind: "dangerous",
+        risk: "blocked",
+      });
+    });
+
+    it("classifies write-like commands as high risk", () => {
+      expect(classifyCommandRisk("mkdir", ["new-dir"])).toMatchObject({
+        kind: "write",
+        risk: "high",
+      });
+    });
+
+    it("classifies read-like commands as low risk", () => {
+      expect(classifyCommandRisk("node", ["--version"])).toMatchObject({
+        kind: "read",
+        risk: "low",
+      });
     });
   });
 
@@ -70,6 +97,61 @@ describe("runCommandTool", () => {
         args: ["-e", "console.log('plan ok')"],
       });
       expect(result).toContain("plan ok");
+    });
+
+    it("requests confirmation for write-like commands in act mode", async () => {
+      const request = vi.fn(async () => false);
+      const tool = createRunCommandTool({
+        mode: "act",
+        capabilities: new Set(["shell"]),
+        confirm: { getListenerCount: () => 1, request },
+      });
+
+      const result = await executeTool(tool, { command: "mkdir", args: ["new-dir"] });
+
+      expect(result).toBe("Denied by user.");
+      expect(request).toHaveBeenCalledWith(
+        "runCommand",
+        JSON.stringify({ command: "mkdir", args: ["new-dir"] }),
+        undefined,
+      );
+    });
+
+    it("runs read-like commands without confirmation", async () => {
+      const request = vi.fn(async () => false);
+      const tool = createRunCommandTool({
+        mode: "act",
+        capabilities: new Set(["shell"]),
+        confirm: { getListenerCount: () => 1, request },
+      });
+
+      const result = await executeTool(tool, {
+        command: "node",
+        args: ["-e", "console.log('read ok')"],
+      });
+
+      expect(result).toContain("read ok");
+      expect(request).not.toHaveBeenCalled();
+    });
+
+    it("runs commands from the configured workspace root", async () => {
+      const workspaceRoot = await mkdtemp(join(tmpdir(), "excelsior-command-"));
+      try {
+        const tool = createRunCommandTool({
+          mode: "act",
+          capabilities: new Set(["shell"]),
+          workspaceRoot,
+        });
+
+        const result = await executeTool(tool, {
+          command: "node",
+          args: ["-e", "console.log(process.cwd())"],
+        });
+
+        expect(result.trim()).toBe(workspaceRoot);
+      } finally {
+        await rm(workspaceRoot, { recursive: true, force: true });
+      }
     });
   });
 

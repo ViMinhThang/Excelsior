@@ -40,6 +40,26 @@ describe("@excelsior/run-runtime EventfulRun", () => {
     run.cancel();
   });
 
+  it("uses injected run ids, event ids, and timestamps for deterministic tests", () => {
+    const run = new EventfulRun<TestEvents>({
+      createRunId: () => "run_test",
+      createEventId: () => "evt_test",
+      now: () => "2026-01-02T03:04:05.000Z",
+    });
+
+    run.emit("message", { text: "hello" });
+
+    expect(run.id).toBe("run_test");
+    expect(run.sessionId).toBe("run_test");
+    expect(run.getSnapshot()[0]).toMatchObject({
+      id: "evt_test",
+      runId: "run_test",
+      correlationId: "run_test",
+      timestamp: "2026-01-02T03:04:05.000Z",
+    });
+    run.cancel();
+  });
+
   it("increments sequence numbers and causation ids", () => {
     let id = 0;
     const run = new EventfulRun<TestEvents>({
@@ -128,10 +148,14 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
     await expect(handle.done).resolves.toMatchObject([
       { type: "message", data: { text: "hello" } },
     ]);
+    await expect(handle.completion).resolves.toMatchObject({
+      status: "completed",
+      events: [{ type: "message", data: { text: "hello" } }],
+    });
     run.cancel();
   });
 
-  it("cancel aborts the run and removes the event listener", async () => {
+  it("cancel aborts the run, reports cancelled completion, and removes the event listener", async () => {
     const run = new EventfulRun<TestEvents>();
     const orchestrator = new RunOrchestrator<TestEvents>();
 
@@ -144,10 +168,59 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
       },
     });
 
-    handle.cancel();
+    handle.cancel("stop");
     await handle.done;
 
     expect(run.isCancelled).toBe(true);
+    expect(run.bus.getListenerCount("event")).toBe(0);
+    await expect(handle.completion).resolves.toMatchObject({
+      status: "cancelled",
+      cancelReason: "stop",
+    });
+  });
+
+  it("reports parent aborts as cancelled completion", async () => {
+    const parent = new AbortController();
+    const run = new EventfulRun<TestEvents>({ parentSignal: parent.signal });
+    const orchestrator = new RunOrchestrator<TestEvents>();
+
+    const handle = orchestrator.start(run, {
+      execute: async ({ signal }) => {
+        if (signal.aborted) return;
+        await new Promise<void>((resolve) => {
+          signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+      },
+    });
+
+    parent.abort("parent stop");
+
+    await expect(handle.completion).resolves.toMatchObject({
+      status: "cancelled",
+      cancelReason: "parent stop",
+    });
+    await expect(handle.done).resolves.toEqual([]);
+    expect(run.bus.getListenerCount("event")).toBe(0);
+  });
+
+  it("reports abort errors as cancelled completion while preserving done rejection", async () => {
+    const run = new EventfulRun<TestEvents>();
+    const orchestrator = new RunOrchestrator<TestEvents>();
+    const abortError = new Error("aborted by transport");
+    abortError.name = "AbortError";
+
+    const handle = orchestrator.start(run, {
+      execute: async () => {
+        throw abortError;
+      },
+    });
+    const doneExpectation = expect(handle.done).rejects.toBe(abortError);
+
+    await expect(handle.completion).resolves.toMatchObject({
+      status: "cancelled",
+      cancelReason: abortError,
+    });
+    await doneExpectation;
     expect(run.bus.getListenerCount("event")).toBe(0);
   });
 
@@ -180,10 +253,12 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
     const run = new EventfulRun<TestEvents>();
     const orchestrator = new RunOrchestrator<TestEvents>();
     const onPersistError = vi.fn();
+    const attempts: string[] = [];
 
     const handle = orchestrator.start(run, {
       persist: {
-        write: async () => {
+        write: async (event) => {
+          if (event.type === "message") attempts.push(event.data.text);
           throw new Error("disk full");
         },
         onError: onPersistError,
@@ -196,6 +271,7 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
 
     await handle.done;
 
+    expect(attempts).toEqual(["a", "b"]);
     expect(onPersistError).toHaveBeenCalledTimes(1);
     expect(onPersistError).toHaveBeenCalledWith(
       expect.objectContaining({ message: "disk full" }),
@@ -204,11 +280,11 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
     run.cancel();
   });
 
-  it("waits for pending persistence writes before resolving done", async () => {
+  it("waits for pending persistence writes and listener cleanup before resolving completion", async () => {
     const run = new EventfulRun<TestEvents>();
     const orchestrator = new RunOrchestrator<TestEvents>();
     let releaseWrite: (() => void) | null = null;
-    let doneResolved = false;
+    let completionResolved = false;
 
     const handle = orchestrator.start(run, {
       persist: {
@@ -223,16 +299,52 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
       },
     });
 
-    handle.done.then(() => {
-      doneResolved = true;
+    handle.completion.then(() => {
+      completionResolved = true;
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(doneResolved).toBe(false);
+    expect(completionResolved).toBe(false);
+    expect(run.bus.getListenerCount("event")).toBe(1);
 
     releaseWrite?.();
-    await handle.done;
+    await handle.completion;
 
-    expect(doneResolved).toBe(true);
+    expect(completionResolved).toBe(true);
+    expect(run.bus.getListenerCount("event")).toBe(0);
+    run.cancel();
+  });
+
+  it("persists events FIFO without overlapping delayed writes", async () => {
+    const run = new EventfulRun<TestEvents>();
+    const orchestrator = new RunOrchestrator<TestEvents>();
+    const order: string[] = [];
+
+    const handle = orchestrator.start(run, {
+      persist: {
+        write: async (event) => {
+          if (event.type !== "message") return;
+          order.push(`start:${event.data.text}`);
+          await Promise.resolve();
+          order.push(`end:${event.data.text}`);
+        },
+      },
+      execute: async ({ emit }) => {
+        emit("message", { text: "a" });
+        emit("message", { text: "b" });
+        emit("message", { text: "c" });
+      },
+    });
+
+    await handle.completion;
+
+    expect(order).toEqual([
+      "start:a",
+      "end:a",
+      "start:b",
+      "end:b",
+      "start:c",
+      "end:c",
+    ]);
     run.cancel();
   });
 
@@ -240,19 +352,25 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
     const run = new EventfulRun<TestEvents>();
     const orchestrator = new RunOrchestrator<TestEvents>();
     const onError = vi.fn();
+    const error = new Error("boom");
 
     const handle = orchestrator.start(run, {
       onError,
       execute: async ({ emit }) => {
         emit("message", { text: "before" });
-        throw new Error("boom");
+        throw error;
       },
     });
 
     await expect(handle.done).resolves.toMatchObject([
       { type: "message", data: { text: "before" } },
     ]);
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "boom" }));
+    await expect(handle.completion).resolves.toMatchObject({
+      status: "failed",
+      error,
+      events: [{ type: "message", data: { text: "before" } }],
+    });
+    expect(onError).toHaveBeenCalledWith(error);
     run.cancel();
   });
 });

@@ -1,6 +1,5 @@
-import type { SubAgentProjectionPart } from "../display.js";
+import type { SubAgentProjectionPart, ToolCallInfo } from "@excelsior/core";
 import type { AnyAgentEvent } from "../../runtime/events.js";
-import type { ToolCallInfo } from "../../runtime/toolCallInfo.js";
 
 export type SubAgentProjectionStatus = "running" | "done" | "error";
 export type SubAgentToolStatus = "pending" | "completed" | "error";

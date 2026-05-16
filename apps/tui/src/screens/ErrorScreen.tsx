@@ -1,4 +1,4 @@
-import React from 'react';
+import type { FC } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
 
@@ -6,7 +6,7 @@ interface ErrorScreenProps {
   error: Error;
 }
 
-const ErrorScreen: React.FC<ErrorScreenProps> = ({ error }) => {
+const ErrorScreen: FC<ErrorScreenProps> = ({ error }) => {
   return (
     <Box flexDirection="column" padding={1} borderStyle="single" borderColor={theme.colors.error}>
       <Box marginBottom={1}>

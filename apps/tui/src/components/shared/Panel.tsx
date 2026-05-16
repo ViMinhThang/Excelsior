@@ -1,4 +1,4 @@
-import React, { ReactNode, memo } from "react";
+import { memo, type FC, type ReactNode } from "react";
 import { Box, Text } from "ink";
 import { theme } from "../../theme.js";
 
@@ -19,7 +19,7 @@ interface PanelProps {
   paddingY?: number;
 }
 
-const Panel: React.FC<PanelProps> = ({
+const Panel: FC<PanelProps> = ({
   title,
   titleColor = theme.colors.muted,
   children,

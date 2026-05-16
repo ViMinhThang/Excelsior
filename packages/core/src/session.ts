@@ -6,3 +6,9 @@ export interface Session {
   workspaceId?: string;
   title?: string;
 }
+
+export interface Workspace {
+  id: string;
+  name: string;
+  rootPath: string;
+}

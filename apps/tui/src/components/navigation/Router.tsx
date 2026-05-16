@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { Box, useInput, useApp } from 'ink';
 import { Screen } from '../../lib/navigationTypes.js';
 import { useNavigation } from '../../context/NavigationContext.js';

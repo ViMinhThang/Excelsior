@@ -18,6 +18,7 @@ export class ChatService {
       extraTools?: Record<string, unknown>;
       sessionId?: string;
       workspaceId?: string;
+      workspaceRoot?: string;
       recorder?: RunRecorder;
       subAgentEvents?: SubAgentEventSink;
       silent?: boolean;
@@ -53,6 +54,7 @@ export class ChatService {
       recorder: options?.recorder,
       subAgentEvents: options?.subAgentEvents,
       mode: options?.mode,
+      workspaceRoot: options?.workspaceRoot,
     });
 
     if (!options?.silent) {

@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useState } from "react";
+import { memo, useEffect, useState, type FC } from "react";
 import { Box, Text } from "ink";
 import type { ProjectedSubAgent } from "@excelsior/core";
 import { theme } from "../../theme.js";
@@ -17,7 +17,7 @@ const formatDuration = (ms: number) => {
   return `${mins}m ${remSecs}s`;
 };
 
-const SubAgentRow: React.FC<SubAgentRowProps> = ({ agent, role, isSelected }) => {
+const SubAgentRow: FC<SubAgentRowProps> = ({ agent, role, isSelected }) => {
   const isRunning = agent.status === "running";
   const [now, setNow] = useState(Date.now());
 

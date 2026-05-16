@@ -1,4 +1,4 @@
-import type { Token, Tokens } from "marked";
+import type { Token } from "marked";
 import stringWidth from "string-width";
 import { truncateVisible } from "../textFormat.js";
 

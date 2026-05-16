@@ -3,7 +3,8 @@ import { z } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ToolContext } from "../../../lib/tool/context.js";
-import { resolveWorkspacePath } from "./workspacePath.js";
+import { authorizeToolAction } from "../../../lib/tool/policy.js";
+import { resolveWorkspacePath } from "../../../lib/tool/workspace.js";
 
 export const lsSchema = z.object({
   directoryPath: z.string().optional().describe("Path to the directory to list. Defaults to '.'"),
@@ -14,6 +15,13 @@ export function createLsTool(ctx?: ToolContext) {
     description: "List directory contents with file size and modification details",
     inputSchema: lsSchema,
     execute: async ({ directoryPath }) => {
+      const authorization = await authorizeToolAction(ctx, {
+        toolName: "ls",
+        capability: "fs:read",
+        modePolicy: "read",
+      });
+      if (!authorization.allowed) return authorization.message;
+
       try {
         const targetDir = resolveWorkspacePath(directoryPath || ".", ctx);
         const entries = await fs.readdir(targetDir, { withFileTypes: true });
@@ -42,5 +50,3 @@ export function createLsTool(ctx?: ToolContext) {
     },
   });
 }
-
-export const lsTool = createLsTool();

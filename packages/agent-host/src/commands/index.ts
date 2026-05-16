@@ -5,6 +5,8 @@ export {
   executeAgentCommand,
   getHelpText,
 } from "./registry.js";
+export { parseCommandInput } from "./parser.js";
+export type { ParsedCommandInput } from "./parser.js";
 export {
   createReviewCommands,
   defaultReviewCommandServices,

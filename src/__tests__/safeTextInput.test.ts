@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getSingleLineInputPreview, shouldIgnoreTextInputKey } from "../../apps/tui/src/components/chat/SafeTextInput.js";
+import {
+  applyTextInputKey,
+  getSingleLineInputPreview,
+  shouldIgnoreTextInputKey,
+} from "../../apps/tui/src/components/chat/SafeTextInput.js";
 
 describe("SafeTextInput", () => {
   it("ignores ctrl-letter input so shortcuts do not leak into chat text", () => {
@@ -26,5 +30,18 @@ describe("SafeTextInput", () => {
 
     expect(preview.text.length).toBeLessThanOrEqual(24);
     expect(preview.text).toContain("...");
+  });
+
+  it("clamps cursor movement after applying arrow keys", () => {
+    expect(applyTextInputKey("abc", 0, "", { leftArrow: true }, true)).toEqual({
+      value: "abc",
+      cursorOffset: 0,
+      cursorWidth: 0,
+    });
+    expect(applyTextInputKey("abc", 3, "", { rightArrow: true }, true)).toEqual({
+      value: "abc",
+      cursorOffset: 3,
+      cursorWidth: 0,
+    });
   });
 });

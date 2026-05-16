@@ -2,7 +2,8 @@ import { tool } from "ai";
 import { z } from "zod";
 import { glob } from "node:fs/promises";
 import type { ToolContext } from "../../../lib/tool/context.js";
-import { getWorkspaceRoot, validateWorkspacePattern } from "./workspacePath.js";
+import { authorizeToolAction } from "../../../lib/tool/policy.js";
+import { getWorkspaceRoot, validateWorkspacePattern } from "../../../lib/tool/workspace.js";
 
 export const globSchema = z.object({
   pattern: z.string().describe("The glob pattern (e.g., 'src/**/*.ts' or '**/package.json')"),
@@ -13,6 +14,13 @@ export function createGlobTool(ctx?: ToolContext) {
     description: "Find file paths matching the given glob pattern using native Node globbing.",
     inputSchema: globSchema,
     execute: async ({ pattern }) => {
+      const authorization = await authorizeToolAction(ctx, {
+        toolName: "glob",
+        capability: "fs:read",
+        modePolicy: "read",
+      });
+      if (!authorization.allowed) return authorization.message;
+
       try {
         validateWorkspacePattern(pattern);
         const matches: string[] = [];
@@ -30,5 +38,3 @@ export function createGlobTool(ctx?: ToolContext) {
     },
   });
 }
-
-export const globTool = createGlobTool();

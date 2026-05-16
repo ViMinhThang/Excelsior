@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, type FC } from "react";
 import { Text } from "ink";
 import { theme } from "../../theme.js";
 
@@ -6,7 +6,7 @@ interface StatusIndicatorProps {
   status: "pending" | "completed" | "error";
 }
 
-const StatusIndicator: React.FC<StatusIndicatorProps> = ({ status }) => {
+const StatusIndicator: FC<StatusIndicatorProps> = ({ status }) => {
   const [frameIndex, setFrameIndex] = useState(0);
 
   useEffect(() => {

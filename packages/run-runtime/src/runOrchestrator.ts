@@ -3,9 +3,19 @@ import type { EventfulRun } from "./eventfulRun.js";
 import type { Unsubscribe } from "./bus.js";
 
 export interface RunHandle<TEvents extends { [K in keyof TEvents]: unknown }> {
-  cancel(): void;
+  cancel(reason?: unknown): void;
   readonly done: Promise<AnyRunEvent<TEvents>[]>;
+  readonly completion: Promise<RunCompletion<TEvents>>;
 }
+
+export type RunCompletionStatus = "completed" | "cancelled" | "failed";
+
+export type RunCompletion<TEvents extends { [K in keyof TEvents]: unknown }> = {
+  status: RunCompletionStatus;
+  events: AnyRunEvent<TEvents>[];
+  error?: unknown;
+  cancelReason?: unknown;
+};
 
 export interface RunExecutionContext<TEvents extends { [K in keyof TEvents]: unknown }> {
   run: EventfulRun<TEvents>;
@@ -35,29 +45,42 @@ export class RunOrchestrator<TEvents extends { [K in keyof TEvents]: unknown }> 
     const shouldRecordEvent = config.persist?.filter ?? (() => true);
     const allEvents = run.getSnapshot().filter(shouldRecordEvent);
     let recordFailed = false;
-    const pendingWrites: Promise<void>[] = [];
+    let writeQueue: Promise<void> = Promise.resolve();
+    let shouldRejectDone = false;
+    let doneRejectionReason: unknown;
 
     const emit: RunExecutionContext<TEvents>["emit"] = (type, data, overrides) => {
       run.emit(type, data, overrides);
     };
 
+    const notifyPersistError = (error: unknown, event: AnyRunEvent<TEvents>): void => {
+      if (recordFailed) return;
+      recordFailed = true;
+      try {
+        config.persist?.onError?.(error, event);
+      } catch {
+        // Persistence error handlers are diagnostic hooks; they should not break run cleanup.
+      }
+    };
+
     const trackWrite = (event: AnyRunEvent<TEvents>): void => {
       if (!config.persist?.write) return;
-      const pending = Promise.resolve(config.persist.write(event)).catch((error: unknown) => {
-        if (recordFailed) return;
-        recordFailed = true;
-        config.persist?.onError?.(error, event);
+      const write = config.persist.write;
+      writeQueue = writeQueue.then(async () => {
+        try {
+          await write(event);
+        } catch (error: unknown) {
+          notifyPersistError(error, event);
+        }
       });
-      pendingWrites.push(pending);
     };
 
     const waitForPendingWrites = async (): Promise<void> => {
-      let settled = 0;
-      while (settled < pendingWrites.length) {
-        const batch = pendingWrites.slice(settled);
-        settled = pendingWrites.length;
-        await Promise.all(batch);
-      }
+      let observedQueue: Promise<void>;
+      do {
+        observedQueue = writeQueue;
+        await observedQueue;
+      } while (observedQueue !== writeQueue);
     };
 
     let unsub: Unsubscribe | null = run.bus.on("event", (event) => {
@@ -67,38 +90,74 @@ export class RunOrchestrator<TEvents extends { [K in keyof TEvents]: unknown }> 
       }
     });
 
-    const done = Promise.resolve()
+    const cleanup = (): void => {
+      unsub?.();
+      unsub = null;
+    };
+
+    const finish = async (
+      completion: RunCompletion<TEvents>,
+    ): Promise<RunCompletion<TEvents>> => {
+      await waitForPendingWrites();
+      cleanup();
+      return completion;
+    };
+
+    const getCancelReason = (fallback?: unknown): unknown => {
+      return run.abortSignal.aborted ? run.abortSignal.reason : fallback;
+    };
+
+    const cancelledCompletion = (fallback?: unknown): RunCompletion<TEvents> => {
+      const cancelReason = getCancelReason(fallback);
+      return cancelReason === undefined
+        ? { status: "cancelled", events: allEvents }
+        : { status: "cancelled", events: allEvents, cancelReason };
+    };
+
+    const isAbortError = (error: unknown): boolean =>
+      config.isAbortError?.(error) ??
+      (error instanceof Error &&
+        (error.name === "AbortError" || error.message.includes("abort")));
+
+    const completion = Promise.resolve()
       .then(() => config.execute({ run, signal: run.abortSignal, emit }))
       .then(async () => {
-        await waitForPendingWrites();
-        unsub?.();
-        unsub = null;
-        return allEvents;
+        return finish(
+          run.isCancelled
+            ? cancelledCompletion()
+            : { status: "completed", events: allEvents },
+        );
       })
       .catch(async (error: unknown) => {
-        const isAbortError =
-          config.isAbortError?.(error) ??
-          (error instanceof Error &&
-            (error.name === "AbortError" || error.message.includes("abort")));
-        if (!isAbortError) {
-          config.onError?.(error);
-          await waitForPendingWrites();
-          unsub?.();
-          unsub = null;
-          return allEvents;
+        if (isAbortError(error)) {
+          shouldRejectDone = true;
+          doneRejectionReason = error;
+          return finish(cancelledCompletion(error));
         }
-        unsub?.();
-        unsub = null;
-        throw error;
+
+        try {
+          config.onError?.(error);
+        } catch (handlerError: unknown) {
+          return finish({ status: "failed", events: allEvents, error: handlerError });
+        }
+
+        return finish({ status: "failed", events: allEvents, error });
       });
 
+    const done = completion.then((result) => {
+      if (shouldRejectDone) {
+        return Promise.reject(doneRejectionReason);
+      }
+      return result.events;
+    });
+    done.catch(() => {});
+
     return {
-      cancel() {
-        run.cancel();
-        unsub?.();
-        unsub = null;
+      cancel(reason?: unknown) {
+        run.cancel(reason);
       },
       done,
+      completion,
     };
   }
 }

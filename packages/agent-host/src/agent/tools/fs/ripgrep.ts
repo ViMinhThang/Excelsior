@@ -3,7 +3,8 @@ import { z } from "zod";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { ToolContext } from "../../../lib/tool/context.js";
-import { getWorkspaceRoot, validateWorkspacePattern } from "./workspacePath.js";
+import { authorizeToolAction } from "../../../lib/tool/policy.js";
+import { getWorkspaceRoot, validateWorkspacePattern } from "../../../lib/tool/workspace.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -42,6 +43,13 @@ export function createRipgrepTool(ctx?: ToolContext) {
     description: "Search across workspace files with ripgrep, ignoring node_modules, .git, and dist by default.",
     inputSchema: ripgrepSchema,
     execute: async ({ query, pathPattern }) => {
+      const authorization = await authorizeToolAction(ctx, {
+        toolName: "ripgrep",
+        capability: "fs:read",
+        modePolicy: "read",
+      });
+      if (!authorization.allowed) return authorization.message;
+
       try {
         const workspaceRoot = getWorkspaceRoot(ctx);
         if (pathPattern) validateWorkspacePattern(pathPattern);
@@ -80,5 +88,3 @@ export function createRipgrepTool(ctx?: ToolContext) {
     },
   });
 }
-
-export const ripgrepTool = createRipgrepTool();

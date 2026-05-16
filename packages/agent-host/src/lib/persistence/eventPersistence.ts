@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
+import type { Session } from "@excelsior/core";
 import { getDb } from "./db.js";
 import { AnyAgentEvent } from "../runtime/events.js";
-import type { Session } from "../runtime/session.js";
 import * as QUERIES from "./queries.js";
 import { defaultRunRecorder } from "./runRecorder.js";
 import { rowToSession, type SessionDbRow } from "./rowTypes.js";
@@ -27,28 +27,6 @@ export function persistSession(session: Session, db?: Database.Database): void {
       session.workspaceId ?? null,
       session.title ?? existing?.title ?? null,
     );
-}
-
-export function loadSessions(db?: Database.Database): Session[] {
-  const _db = db ?? getDb();
-  const rows = _db
-    .prepare(QUERIES.SELECT_PARENT_SESSIONS)
-    .all() as SessionDbRow[];
-  return rows.reverse().map(rowToSession);
-}
-
-export function loadChildSessions(parentSessionId?: string, db?: Database.Database): Session[] {
-  const _db = db ?? getDb();
-  if (parentSessionId) {
-    const rows = _db
-      .prepare(QUERIES.SELECT_CHILD_SESSIONS_EXCLUDING)
-      .all(parentSessionId) as SessionDbRow[];
-    return rows.map(rowToSession);
-  }
-  const rows = _db
-    .prepare(QUERIES.SELECT_CHILD_SESSIONS_ALL)
-    .all() as SessionDbRow[];
-  return rows.map(rowToSession);
 }
 
 export async function loadSessionEvents(sessionId: string): Promise<AnyAgentEvent[]> {

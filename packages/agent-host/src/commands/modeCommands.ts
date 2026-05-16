@@ -6,6 +6,7 @@ export function createModeCommand(): AgentCommand {
   return {
     definition: {
       name: "mode",
+      category: "mode",
       description: "Show or switch Plan/Act mode",
       usage: "/mode | /mode plan | /mode act",
     },

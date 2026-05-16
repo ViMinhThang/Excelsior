@@ -1,4 +1,4 @@
-import React from "react";
+import type { FC } from "react";
 import { Box, Text } from "ink";
 import { formatAgentMode } from "@excelsior/core";
 import type { AgentMode } from "@excelsior/core";
@@ -16,7 +16,7 @@ interface FooterBarProps {
   workspaceRootPath: string;
 }
 
-const FooterBar: React.FC<FooterBarProps> = ({
+const FooterBar: FC<FooterBarProps> = ({
   chatMode,
   isLoading,
   hasPending,

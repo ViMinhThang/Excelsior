@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import { memo, type FC, type ReactNode } from "react";
 import { Box } from "ink";
 import UserMessage from "./UserMessage.js";
 import AgentMessage from "./AgentMessage.js";
@@ -10,7 +10,7 @@ interface ChatHistoryProps {
   blocks: ProjectedBlock[];
 }
 
-function renderBlock(block: ProjectedBlock): React.ReactNode {
+function renderBlock(block: ProjectedBlock): ReactNode {
   if (block.type === "user") {
     return <UserMessage key={block.id} content={block.content} timestamp={block.timestamp} />;
   }
@@ -40,7 +40,7 @@ function renderBlock(block: ProjectedBlock): React.ReactNode {
   return null;
 }
 
-const ChatHistory: React.FC<ChatHistoryProps> = ({ blocks }) => {
+const ChatHistory: FC<ChatHistoryProps> = ({ blocks }) => {
   return (
     <Box flexDirection="column">
       {blocks.map((block) => renderBlock(block))}

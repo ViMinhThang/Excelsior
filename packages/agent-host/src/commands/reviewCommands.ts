@@ -15,6 +15,7 @@ export function createReviewCommands(
     {
       definition: {
         name: "review",
+        category: "review",
         description: "Review a pull request by number (e.g. /review 42)",
         usage: "/review <pr-number>",
       },
@@ -23,6 +24,7 @@ export function createReviewCommands(
     {
       definition: {
         name: "review-post",
+        category: "review",
         description: 'Post a comment to a PR (e.g. /review-post 42 "Looks good")',
         usage: "/review-post <pr-number> <comment body>",
       },

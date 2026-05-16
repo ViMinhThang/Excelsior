@@ -1,7 +1,6 @@
-import React, { memo } from "react";
+import { memo } from "react";
 import { Box, Text } from "ink";
 import type { CommandDefinition } from "@excelsior/core";
-import { theme } from "../../theme.js";
 
 interface CommandSuggestionsProps {
   commands: CommandDefinition[];

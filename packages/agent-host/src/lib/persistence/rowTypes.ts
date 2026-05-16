@@ -1,4 +1,4 @@
-import type { Session } from "../runtime/session.js";
+import type { Session } from "@excelsior/core";
 import type { WorkspaceRow } from "./workspaceStore.js";
 
 export interface WorkspaceDbRow {

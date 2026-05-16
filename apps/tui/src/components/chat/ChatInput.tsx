@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import { memo, type FC } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from './SafeTextInput.js';
 import { theme } from '../../theme.js';
@@ -14,12 +14,11 @@ interface ChatInputProps {
   mask?: string;
 }
 
-const ChatInput: React.FC<ChatInputProps> = ({
+const ChatInput: FC<ChatInputProps> = ({
   value,
   onChange,
   onSubmit,
   placeholder = "Type your message...",
-  isLoading,
   focus = true,
   mask,
 }) => {

@@ -7,6 +7,7 @@ import {
   createSubAgentEventSink,
   type AnyAgentEvent,
   type RunRecorder,
+  type StreamCapableAgent,
 } from "@excelsior/agent-host/testing/runtime";
 import {
   createEditTool,
@@ -25,11 +26,14 @@ const captured = {
 };
 
 function createSpawnDependencies() {
+  const noopAgent: StreamCapableAgent = {
+    stream: async () => ({ fullStream: [] }),
+  };
   return {
     createAgent: vi.fn((_instructions, _extraTools, ctx) => {
       captured.ctx = ctx;
-      return {};
-    }) as any,
+      return noopAgent;
+    }),
     streamAgentResponse: vi.fn(async ({ emit, signal }) => {
       captured.signal = signal;
       if (captured.emitText) {
@@ -40,7 +44,7 @@ function createSpawnDependencies() {
         if (signal.aborted) resolve();
         signal.addEventListener("abort", () => resolve(), { once: true });
       });
-    }) as any,
+    }),
   };
 }
 

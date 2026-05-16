@@ -10,6 +10,7 @@ export function createCoreCommands(
     {
       definition: {
         name: "clear",
+        category: "core",
         description: "Clear chat messages from the screen",
         usage: "/clear",
       },
@@ -25,6 +26,7 @@ export function createCoreCommands(
     {
       definition: {
         name: "reset",
+        category: "core",
         description: "Delete all conversation history from database",
         usage: "/reset",
       },
