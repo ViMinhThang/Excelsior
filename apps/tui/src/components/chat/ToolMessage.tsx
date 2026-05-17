@@ -48,6 +48,14 @@ export function formatCliCommand(toolName?: string, argsStr?: string): string {
       const cwd = String(args.cwd || args.Cwd || "");
       return cwd ? `PS ${cwd}> ${command}` : `${command.startsWith("$") ? "" : "$ "}${command}`;
     }
+    case "write": {
+      const filePath = String(args.filePath || args.path || "");
+      return filePath ? `write ${filePath}` : "write";
+    }
+    case "edit": {
+      const filePath = String(args.filePath || args.path || "");
+      return filePath ? `edit ${filePath}` : "edit";
+    }
     case "spawnSubAgent":
     case "browser_subagent":
       return `subagent ${String(args.role || args.TaskSummary || "")}`;

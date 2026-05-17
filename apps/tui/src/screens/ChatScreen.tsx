@@ -3,7 +3,7 @@ import { Box, Text, Static } from 'ink';
 import AppHeader from '../components/shared/AppHeader.js';
 import ChatHistory from '../components/chat/ChatHistory.js';
 import ChatInput from '../components/chat/ChatInput.js';
-import SubAgentActivityFocus from '../components/review/SubAgentActivityFocus.js';
+import SubAgentPickerPanel from '../components/review/SubAgentPickerPanel.js';
 import SubAgentDetail from '../components/review/SubAgentDetail.js';
 import PendingActionPanel from '../components/chat/PendingActionPanel.js';
 import FooterBar from '../components/chat/FooterBar.js';
@@ -11,7 +11,6 @@ import { CommandSuggestions } from '../components/chat/CommandSuggestions.js';
 import CommandPalette from '../components/palette/CommandPalette.js';
 import ToolDetailPanel from '../components/chat/ToolDetailPanel.js';
 import HelpOverlay from '../components/help/HelpOverlay.js';
-import Toast from '../components/shared/Toast.js';
 import ThinkingIndicator from '../components/chat/ThinkingIndicator.js';
 import { useChatScreenState } from '../hooks/useChatScreenState.js';
 import { createToolDisplay } from '../lib/toolDisplay.js';
@@ -51,7 +50,6 @@ const ChatScreen = () => {
     palette,
     helpOpen,
     helpShortcuts,
-    toasts,
   } = useChatScreenState();
 
   const pendingDisplay = pending
@@ -115,12 +113,10 @@ const ChatScreen = () => {
             />
           </Box>
 
-          {chatMode === "subagent-focus" && selectedSubAgent ? (
-            <SubAgentActivityFocus
-              agent={selectedSubAgent.state}
-              role={selectedSubAgent.role}
-              index={subAgentIndex}
-              total={subAgents.length}
+          {chatMode === "subagent-picker" ? (
+            <SubAgentPickerPanel
+              subAgents={subAgents}
+              selectedIndex={subAgentIndex}
             />
           ) : null}
 
@@ -181,8 +177,6 @@ const ChatScreen = () => {
           shortcuts={helpShortcuts}
         />
       )}
-
-      <Toast toasts={toasts} />
 
       <FooterBar
         chatMode={chatMode}

@@ -96,13 +96,13 @@ describe("tool display model", () => {
 
   it("formats default tool without specialized formatter", () => {
     const display = createToolDisplay({
-      toolName: "write",
-      toolArgs: JSON.stringify({ path: "/tmp/x.txt" }),
+      toolName: "fetch",
+      toolArgs: JSON.stringify({ url: "https://example.com" }),
       status: "completed",
-      content: "wrote 42 bytes",
+      content: "fetched 42 bytes",
     });
-    expect(display.label).toBe("write");
-    expect(display.summary).toBe("path: /tmp/x.txt");
+    expect(display.label).toBe("fetch");
+    expect(display.summary).toContain("url:");
   });
 
   it("handles null args gracefully", () => {

@@ -69,6 +69,64 @@ const TOOL_FORMATTERS: Record<string, ToolFormatter> = {
       tone,
     };
   },
+
+  write: ({ args, normalizedContent, tone, status }) => {
+    const filePath = asString(args?.filePath);
+    if (status === "pending") {
+      return {
+        label: "Write",
+        summary: filePath || "file",
+        detail: "waiting for approval or execution",
+        tone,
+      };
+    }
+    const lines = normalizedContent.split(/\r?\n/).filter(Boolean);
+    const successLine = lines[0] || "";
+    const diffLines = lines.slice(1);
+    const added = diffLines.filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
+    const removed = diffLines.filter((l) => l.startsWith("-") && !l.startsWith("---")).length;
+    const diffStats = added + removed > 0 ? ` (+${added} -${removed} lines)` : "";
+    return {
+      label: "Write",
+      summary: filePath || "file",
+      detail: diffLines.length > 0
+        ? `${filePath}${diffStats}`
+        : successLine,
+      resultPreview: diffLines.length > 0 ? diffLines.slice(0, 10) : undefined,
+      omittedResultLines: diffLines.length > 10 ? diffLines.length - 10 : undefined,
+      showCompletion: false,
+      tone,
+    };
+  },
+
+  edit: ({ args, normalizedContent, tone, status }) => {
+    const filePath = asString(args?.filePath);
+    if (status === "pending") {
+      return {
+        label: "Edit",
+        summary: filePath || "file",
+        detail: "waiting for approval or execution",
+        tone,
+      };
+    }
+    const lines = normalizedContent.split(/\r?\n/).filter(Boolean);
+    const successLine = lines[0] || "";
+    const diffLines = lines.slice(1);
+    const added = diffLines.filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
+    const removed = diffLines.filter((l) => l.startsWith("-") && !l.startsWith("---")).length;
+    const diffStats = added + removed > 0 ? ` (+${added} -${removed} lines)` : "";
+    return {
+      label: "Edit",
+      summary: filePath || "file",
+      detail: diffLines.length > 0
+        ? `${filePath}${diffStats}`
+        : successLine,
+      resultPreview: diffLines.length > 0 ? diffLines.slice(0, 10) : undefined,
+      omittedResultLines: diffLines.length > 10 ? diffLines.length - 10 : undefined,
+      showCompletion: false,
+      tone,
+    };
+  },
 };
 
 export { TOOL_FORMATTERS };

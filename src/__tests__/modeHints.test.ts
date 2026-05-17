@@ -27,7 +27,7 @@ describe("chat mode hints", () => {
       activePanelId: null,
       subAgentCount: 1,
       toolCount: 0,
-    })).toContain("Ctrl+O");
+    })).toContain("sub-agent");
   });
 
   it("shows tool focus hints when tool blocks exist", () => {
@@ -61,13 +61,13 @@ describe("chat mode hints", () => {
     })).toBe("Up/Down select | Enter open | Esc close");
 
     expect(getChatModeHint({
-      chatMode: "subagent-focus",
+      chatMode: "subagent-picker",
       isLoading: false,
       hasPending: false,
       activePanelId: null,
       subAgentCount: 1,
       toolCount: 0,
-    })).toBe("Enter detail | Up/Down sub-agents | Ctrl+O/Esc back");
+    })).toBe("Enter view detail | ↑↓ navigate | Esc close");
 
     expect(getChatModeHint({
       chatMode: "subagent-detail",
@@ -76,6 +76,6 @@ describe("chat mode hints", () => {
       activePanelId: null,
       subAgentCount: 1,
       toolCount: 0,
-    })).toBe("Ctrl+O/Esc back | Up/Down switch");
+    })).toBe("Esc back to list | Ctrl+O close");
   });
 });

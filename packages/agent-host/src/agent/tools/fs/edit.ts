@@ -43,6 +43,7 @@ export function createEditTool(ctx?: ToolContext) {
         }
 
         const updated = content.replace(oldText, newText);
+        const diffOutput = createUnifiedDiff(filePath, content, updated);
         const confirmation = await authorizeToolAction(ctx, {
           toolName: "editFile",
           capability: "fs:write",
@@ -53,7 +54,7 @@ export function createEditTool(ctx?: ToolContext) {
             metadata: {
               action: "edit",
               filePath,
-              diff: createUnifiedDiff(filePath, content, updated),
+              diff: diffOutput,
             },
           },
         });
@@ -62,7 +63,7 @@ export function createEditTool(ctx?: ToolContext) {
         await ctx?.revert?.fileCheckpoint.captureBeforeWrite(filePath, fullPath);
         await fs.writeFile(fullPath, updated, "utf-8");
         ctx?.revert?.fileCheckpoint.recordWrite(filePath, fullPath, updated);
-        return `Successfully replaced the block in ${filePath}.`;
+        return `Successfully replaced the block in ${filePath}.\n${diffOutput}`;
       } catch (error: unknown) {
         return `Error editing file: ${error instanceof Error ? error.message : String(error)}`;
       }
