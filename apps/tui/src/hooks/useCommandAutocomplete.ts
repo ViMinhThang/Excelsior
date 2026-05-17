@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { useAgentManager } from "./useAgentManager.js";
+import { useAgentHostClient } from "./useAgentHostClient.js";
 
 export function useCommandAutocomplete(input: string) {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const { getCommands } = useAgentManager();
+  const { getCommands } = useAgentHostClient();
   const commands = useMemo(() => getCommands(), [getCommands]);
 
   const show = input.startsWith("/");

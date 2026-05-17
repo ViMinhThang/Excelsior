@@ -37,7 +37,7 @@ const ThinkingIndicator = () => {
     <Text color={theme.colors.activity}>
       Thinking {frames[frame]}
     </Text>
-    <Text color="dim">
+    <Text color={theme.colors.muted} dimColor>
       Worked for {formatDuration(elapsed)}
     </Text>
     </Box>

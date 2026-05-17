@@ -2,6 +2,8 @@ export { createDb, getDb, getSetting, logError, resetDb, setSetting } from "../l
 export {
   deleteAllSessions,
   deleteSession,
+  dropLastCompletedTurn,
+  getLastCompletedTurn,
   loadSessionEvents,
   loadSessionsByWorkspace,
   persistSession,

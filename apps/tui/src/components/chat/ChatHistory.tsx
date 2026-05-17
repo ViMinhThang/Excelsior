@@ -8,9 +8,15 @@ import type { ProjectedBlock } from "@excelsior/core";
 
 interface ChatHistoryProps {
   blocks: ProjectedBlock[];
+  selectedToolId?: string | null;
+  expandedToolIds?: ReadonlySet<string>;
 }
 
-function renderBlock(block: ProjectedBlock): ReactNode {
+function renderBlock(
+  block: ProjectedBlock,
+  selectedToolId: string | null,
+  expandedToolIds: ReadonlySet<string>,
+): ReactNode {
   if (block.type === "user") {
     return <UserMessage key={block.id} content={block.content} timestamp={block.timestamp} />;
   }
@@ -31,6 +37,8 @@ function renderBlock(block: ProjectedBlock): ReactNode {
         toolArgs={block.toolArgs}
         status={block.status}
         content={block.content}
+        selected={block.id === selectedToolId}
+        expanded={expandedToolIds.has(block.id)}
       />
     );
   }
@@ -40,10 +48,14 @@ function renderBlock(block: ProjectedBlock): ReactNode {
   return null;
 }
 
-const ChatHistory: FC<ChatHistoryProps> = ({ blocks }) => {
+const ChatHistory: FC<ChatHistoryProps> = ({
+  blocks,
+  selectedToolId = null,
+  expandedToolIds = new Set(),
+}) => {
   return (
     <Box flexDirection="column">
-      {blocks.map((block) => renderBlock(block))}
+      {blocks.map((block) => renderBlock(block, selectedToolId, expandedToolIds))}
     </Box>
   );
 };

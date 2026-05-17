@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import type { ProjectedBlock } from "@excelsior/core";
 import { selectSubAgentBlocks } from "../selectors/chat-selectors.js";
 
-export type ChatMode = "input" | "subagent-detail";
+export type ChatMode = "input" | "subagent-detail" | "tool-focus";
 
 export function useSubAgentNavigation(displayBlocks: ProjectedBlock[]) {
   const [chatMode, setChatMode] = useState<ChatMode>("input");

@@ -59,8 +59,10 @@ export function createWriteTool(ctx?: ToolContext) {
       }
 
       try {
+        await ctx?.revert?.fileCheckpoint.captureBeforeWrite(filePath, fullPath);
         await fs.mkdir(path.dirname(fullPath), { recursive: true });
         await fs.writeFile(fullPath, content, "utf-8");
+        ctx?.revert?.fileCheckpoint.recordWrite(filePath, fullPath, content);
         return `Successfully wrote ${content.length} characters to ${filePath}`;
       } catch (error: unknown) {
         return `Error writing file: ${error instanceof Error ? error.message : String(error)}`;

@@ -1,9 +1,18 @@
-export { AgentManager } from "../application/agentManager.js";
+export { AgentApplication } from "../application/AgentApplication.js";
+export { AgentStateStore } from "../application/state/AgentStateStore.js";
+export { TurnController } from "../application/turns/TurnController.js";
+export { SessionController } from "../application/sessions/SessionController.js";
+export { RevertController } from "../application/revert/RevertController.js";
+export { ProjectionService } from "../application/projection/ProjectionService.js";
+export {
+  defaultSessionHistoryStore,
+  type SessionHistoryStore,
+} from "../application/history/SessionHistoryStore.js";
 export type {
-  AgentManagerOptions,
   AgentSessionService,
   ChatSessionState,
   ChatTurnService,
-} from "../application/agentManager.js";
+} from "../application/types.js";
+export type { AgentApplicationOptions } from "../application/AgentApplication.js";
 export { ChatService } from "../application/chatService.js";
 export type { AIHistoryRef } from "../application/chatService.js";

@@ -33,6 +33,12 @@ function fakeRecorder() {
     async loadRawEvents() {
       return events;
     },
+    async getLastCompletedTurn() {
+      return null;
+    },
+    async dropLastCompletedTurn() {
+      return { dropped: false, removedEvents: 0, reason: "no-completed-turn" };
+    },
     async deleteSessionEvents() {},
     async deleteAllSessionEvents() {},
   };
@@ -105,6 +111,12 @@ describe("run recorder integration", () => {
       },
       async loadRawEvents() {
         return [];
+      },
+      async getLastCompletedTurn() {
+        return null;
+      },
+      async dropLastCompletedTurn() {
+        return { dropped: false, removedEvents: 0, reason: "no-completed-turn" };
       },
       async deleteSessionEvents() {},
       async deleteAllSessionEvents() {},

@@ -16,6 +16,13 @@ export const theme = {
     toolPanel: "#2e3440",
     pendingPanel: "#2e3440",
     assistantBorder: "#81a1c1",
+    highlightBrand: "#81a1c1",
+    highlightHeading: "#cba6f7",
+    highlightEmphasis: "#ebcb8b",
+    highlightInline: "#8fbcbb",
+    highlightLink: "#88c0d0",
+    highlightSelected: "#b48ead",
+    highlightAction: "#a3be8c",
   },
   glyphs: {
     active: "\u203a",

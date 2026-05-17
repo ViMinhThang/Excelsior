@@ -69,6 +69,12 @@ describe("spawnSubAgent tool safety context", () => {
       async loadRawEvents() {
         return events;
       },
+      async getLastCompletedTurn() {
+        return null;
+      },
+      async dropLastCompletedTurn() {
+        return { dropped: false, removedEvents: 0, reason: "no-completed-turn" };
+      },
       async deleteSessionEvents() {},
       async deleteAllSessionEvents() {},
     };

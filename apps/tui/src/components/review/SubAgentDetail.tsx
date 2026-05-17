@@ -16,7 +16,7 @@ const SubAgentDetail: FC<SubAgentDetailProps> = ({ agent }) => {
 
   return (
     <Box flexDirection="column" flexGrow={1}>
-      <Text bold color={theme.colors.text}>
+      <Text bold color={theme.colors.highlightHeading}>
         {theme.glyphs.active} {agent.role} <Text color={statusColor}>{theme.glyphs.section} {statusLabel}</Text>
       </Text>
       <Box flexGrow={1} marginTop={1} flexDirection="column">

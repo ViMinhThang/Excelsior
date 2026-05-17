@@ -10,7 +10,7 @@ interface UserMessageProps {
 const UserMessage: FC<UserMessageProps> = ({ content }) => {
   return (
     <Box flexDirection="row" gap={1} paddingX={1} paddingBottom={1}>
-      <Text color="#5e81ac">●</Text>
+      <Text color={theme.colors.highlightBrand}>●</Text>
       <Box flexDirection="column" flexGrow={1}>
         <Text color={theme.colors.text}>{content}</Text>
       </Box>

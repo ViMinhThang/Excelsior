@@ -11,9 +11,17 @@ interface ToolMessageProps {
   content?: string;
   marginTop?: number;
   nested?: boolean;
+  selected?: boolean;
+  expanded?: boolean;
 }
 
-function formatCliCommand(toolName?: string, argsStr?: string): string {
+function basename(input: unknown): string {
+  if (typeof input !== "string" || input.length === 0) return "";
+  const parts = input.split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) ?? input;
+}
+
+export function formatCliCommand(toolName?: string, argsStr?: string): string {
   const name = toolName || "tool";
   let args: Record<string, unknown> = {};
   if (argsStr) {
@@ -26,6 +34,14 @@ function formatCliCommand(toolName?: string, argsStr?: string): string {
   }
 
   switch (name) {
+    case "view": {
+      const filePath = basename(args.filePath || args.path);
+      return filePath ? `view ${filePath}` : "view";
+    }
+    case "ls": {
+      const directoryPath = String(args.directoryPath || args.path || ".");
+      return `ls ${directoryPath}`;
+    }
     case "runCommand":
     case "run_command": {
       const command = String(args.command || args.CommandLine || "");
@@ -47,18 +63,33 @@ const ToolMessage: FC<ToolMessageProps> = ({
   content,
   marginTop,
   nested = false,
+  selected = false,
+  expanded = false,
 }) => {
   const display = createToolDisplay({ toolName, toolArgs, status, content });
   const cmd = formatCliCommand(toolName, toolArgs);
+  const showCompletion = display.showCompletion !== false;
+  const showBody = Boolean(
+    expanded &&
+    (display.detail ||
+      display.resultPreview?.length ||
+      (status === "completed" && showCompletion)),
+  );
+  const commandColor = selected
+    ? theme.colors.highlightSelected
+    : theme.colors.muted;
   const innerContent = (
     <Box flexDirection="column">
       <Box flexDirection="row" gap={1}>
+        <Text color={selected ? theme.colors.highlightSelected : theme.colors.border}>
+          {selected ? "›" : " "}
+        </Text>
         <StatusIndicator status={status} />
-        <Text color={theme.colors.muted} dimColor>
+        <Text color={commandColor} dimColor={!selected}>
           {cmd}
         </Text>
       </Box>
-      {(display.detail || display.resultPreview?.length || status === "completed") && (
+      {showBody && (
         <Box flexDirection="column" paddingLeft={2}>
           {display.detail ? (
             <Text color={theme.colors.muted} dimColor>↳ {display.detail}</Text>
@@ -70,7 +101,7 @@ const ToolMessage: FC<ToolMessageProps> = ({
           {display.omittedResultLines ? (
             <Text color={theme.colors.muted} dimColor>  … ({display.omittedResultLines} more lines)</Text>
           ) : null}
-          {status === "completed" && (
+          {status === "completed" && showCompletion && (
             <Text color={theme.colors.muted} dimColor>
               {(!display.detail && (!display.resultPreview || display.resultPreview.length === 0)) ? "↳ " : "  "}Completed
             </Text>

@@ -1,13 +1,20 @@
-import type { AgentMessage, Session, Workspace } from "@excelsior/core";
+import type {
+  AgentMessage,
+  AgentMode,
+  Session,
+  SendOptions,
+  Workspace,
+} from "@excelsior/core";
 import type { RunHandle } from "@excelsior/run-runtime";
-import type { AgentMode } from "@excelsior/core";
-import type { AgentRun } from "../../lib/runtime/agentRun.js";
+import type { AgentRun } from "../lib/runtime/agentRun.js";
 import type {
   AgentEventDataMap,
   AnyAgentEvent,
-} from "../../lib/runtime/events.js";
-import type { ProjectedBlock } from "../../lib/projection/display.js";
-import type { SubAgentEventSink } from "../../lib/runtime/subAgentEventSink.js";
+} from "../lib/runtime/events.js";
+import type { ProjectedBlock } from "../lib/projection/display.js";
+import type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
+import type { FileCheckpoint } from "../lib/revert/fileCheckpoint.js";
+import type { SessionHistoryStore } from "./history/SessionHistoryStore.js";
 
 export interface ChatSessionState {
   displayBlocks: ProjectedBlock[];
@@ -19,23 +26,23 @@ export interface ChatSessionState {
   mode: AgentMode;
 }
 
-export interface AgentManagerOptions {
+export interface AgentApplicationOptions {
   chatService?: ChatTurnService;
   sessionManager?: AgentSessionService;
+  historyStore?: SessionHistoryStore;
+  fileCheckpoint?: FileCheckpoint;
 }
 
-export interface SendOptions {
-  displayContent?: string;
-  silent?: boolean;
-}
+export type { SendOptions };
 
-export interface RunLifecycleStartOptions extends SendOptions {
+export interface TurnStartOptions extends SendOptions {
   history: AgentMessage[];
   mode: AgentMode;
   sessionId: string;
   workspaceId: string;
   workspaceRoot: string;
   subAgentEvents: SubAgentEventSink;
+  fileCheckpoint?: FileCheckpoint;
 }
 
 export interface StartedRun {
@@ -45,10 +52,6 @@ export interface StartedRun {
   sessionId: string;
 }
 
-export type FinalEventAppender = (
-  events: readonly AnyAgentEvent[],
-) => void;
-
 export interface ChatTurnService {
   submitUserTurn(content: string, options: {
     history: { current: AgentMessage[] };
@@ -56,6 +59,7 @@ export interface ChatTurnService {
     workspaceId: string;
     workspaceRoot: string;
     subAgentEvents: SubAgentEventSink;
+    fileCheckpoint?: FileCheckpoint;
     displayContent?: string;
     silent?: boolean;
     mode: AgentMode;
@@ -72,4 +76,10 @@ export interface AgentSessionService {
   deleteSession(sessionId: string): Promise<void>;
   renameSession(sessionId: string, title: string): void;
   listSessions(): Session[];
+}
+
+export interface ProjectionInputState {
+  liveEvents: readonly AnyAgentEvent[];
+  persistedEvents: AnyAgentEvent[];
+  childRuns: Map<string, { getSnapshot(): readonly AnyAgentEvent[] }>;
 }

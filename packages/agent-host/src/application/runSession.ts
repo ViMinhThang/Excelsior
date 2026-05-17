@@ -11,6 +11,7 @@ import {
   streamAgentResponse as defaultStreamAgentResponse,
   type StreamCapableAgent,
 } from "../lib/runtime/agentStream.js";
+import type { FileCheckpoint } from "../lib/revert/fileCheckpoint.js";
 
 export type AgentResponseStreamer = typeof defaultStreamAgentResponse;
 
@@ -32,6 +33,7 @@ export interface RunSessionConfig {
   mode?: AgentMode;
   workspaceRoot?: string;
   streamAgentResponse?: AgentResponseStreamer;
+  fileCheckpoint?: FileCheckpoint;
 }
 
 export interface RunSessionResult {
@@ -49,12 +51,16 @@ export function createRunSession(config: RunSessionConfig): RunSessionResult {
   const childRuns = new Map<string, AgentRun>();
   const recorder = config.recorder ?? defaultRunRecorder;
   const subAgentEvents = config.subAgentEvents ?? createSubAgentEventSink();
+  config.fileCheckpoint?.beginTurn(sessionId, run.id);
 
   const ctx = createToolContext({
     abortSignal: run.abortSignal,
     confirmBus,
     mode: config.mode,
     workspaceRoot: config.workspaceRoot,
+    revert: config.fileCheckpoint
+      ? { fileCheckpoint: config.fileCheckpoint }
+      : undefined,
   });
   const runCtx: RunContext = { ctx, run, childRuns, recorder, subAgentEvents };
 
@@ -83,10 +89,40 @@ export function createRunSession(config: RunSessionConfig): RunSessionResult {
     },
   });
 
+  let checkpointPromise: Promise<void> | null = null;
+  const recordTurnCompleteOnce = (): Promise<void> => {
+    checkpointPromise ??= recorder
+      .recordTurnComplete(sessionId, run.id, getNextSequence(run.getSnapshot()))
+      .catch((error: unknown) => {
+        run.emit(PERSISTENCE_ERROR, {
+          message: `Failed to persist turn checkpoint: ${formatError(error)}`,
+          failedEventType: "turn-complete",
+        });
+      });
+    return checkpointPromise;
+  };
+
+  const completion = handle.completion.then(
+    async (result) => {
+      if (result.status === "completed" || result.status === "failed") {
+        await recordTurnCompleteOnce();
+        config.fileCheckpoint?.completeTurn(sessionId, run.id);
+      } else {
+        config.fileCheckpoint?.discardActiveTurn(run.id);
+      }
+      return result;
+    },
+    (error: unknown) => {
+      config.fileCheckpoint?.discardActiveTurn(run.id);
+      throw error;
+    },
+  );
+
   const checkpointedHandle: RunHandle<AgentEventDataMap> = {
     ...handle,
+    completion,
     done: handle.done.then(async (events) => {
-      await recorder.recordTurnComplete(sessionId, run.id, getNextSequence(run.getSnapshot()));
+      await completion;
       return events;
     }),
   };

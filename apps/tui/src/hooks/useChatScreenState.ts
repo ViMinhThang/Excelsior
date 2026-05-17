@@ -1,10 +1,11 @@
 import { useEffect } from "react";
 import { useNavigation } from "../context/NavigationContext.js";
-import { useAgentManager } from "./useAgentManager.js";
+import { useAgentHostClient } from "./useAgentHostClient.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";
 import { useCommandAutocomplete } from "./useCommandAutocomplete.js";
 import { useInputHistory } from "./useInputHistory.js";
 import { useSubAgentNavigation } from "./useSubAgentNavigation.js";
+import { useToolNavigation } from "./useToolNavigation.js";
 import { useCommandResult } from "./useCommandResult.js";
 import { useChatPanel } from "./useChatPanel.js";
 import { useChatSubmission } from "./useChatSubmission.js";
@@ -12,7 +13,7 @@ import { useChatKeymaps } from "./useChatKeymaps.js";
 
 export function useChatScreenState() {
   const { navigate } = useNavigation();
-  const agent = useAgentManager();
+  const agent = useAgentHostClient();
   const {
     displayBlocks,
     isLoading,
@@ -25,6 +26,7 @@ export function useChatScreenState() {
 
   const inputHistory = useInputHistory(displayBlocks);
   const subAgentNav = useSubAgentNavigation(displayBlocks);
+  const toolNav = useToolNavigation(displayBlocks);
   const command = useCommandResult(inputHistory.input);
   const confirmation = useToolConfirmation(
     pendingConfirmation,
@@ -75,6 +77,12 @@ export function useChatScreenState() {
     openSubAgent: subAgentNav.openSubAgent,
     nextSubAgent: subAgentNav.nextSubAgent,
     prevSubAgent: subAgentNav.prevSubAgent,
+    openToolFocus: () => {
+      if (toolNav.toolBlocks.length > 0) subAgentNav.setChatMode("tool-focus");
+    },
+    nextTool: toolNav.nextTool,
+    prevTool: toolNav.prevTool,
+    toggleSelectedTool: toolNav.toggleSelectedTool,
     navigateUp: inputHistory.navigateUp,
     navigateDown: inputHistory.navigateDown,
     handleSubmit,
@@ -86,6 +94,9 @@ export function useChatScreenState() {
     chatMode: subAgentNav.chatMode,
     subAgents: subAgentNav.subAgentBlocks,
     subAgentIndex: subAgentNav.subAgentIndex,
+    toolCount: toolNav.toolBlocks.length,
+    selectedToolId: subAgentNav.chatMode === "tool-focus" ? toolNav.selectedToolId : null,
+    expandedToolIds: toolNav.expandedToolIds,
     messages: displayBlocks,
     activePanel: panel.activePanel,
     activePanelId: panel.activePanelId,
