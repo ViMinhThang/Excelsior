@@ -2,9 +2,8 @@ import type { CommandDefinition } from "@excelsior/core";
 import { formatAgentMode } from "@excelsior/core";
 import { completeCommandInput } from "../lib/commandSubmission.js";
 import { useKeymap } from "./useKeymap.js";
-import type { ToastType } from "./useToast.js";
 
-type ChatMode = "input" | "subagent-focus" | "subagent-detail" | "tool-focus" | "tool-detail";
+type ChatMode = "input" | "subagent-picker" | "subagent-detail" | "tool-focus" | "tool-detail";
 
 interface CommandSuggestionState {
   show: boolean;
@@ -41,7 +40,6 @@ interface UseChatKeymapsOptions {
   handleSubmit: () => void;
   openPalette?: () => void;
   toggleHelp?: () => void;
-  showToast?: (message: string, type?: ToastType) => void;
 }
 
 export function useChatKeymaps({
@@ -71,7 +69,6 @@ export function useChatKeymaps({
   handleSubmit,
   openPalette,
   toggleHelp,
-  showToast,
 }: UseChatKeymapsOptions) {
   useKeymap(
     {
@@ -90,20 +87,16 @@ export function useChatKeymaps({
     {
       up: () => prevSubAgent(),
       down: () => nextSubAgent(),
-      left: () => prevSubAgent(),
-      right: () => nextSubAgent(),
       return: () => setChatMode("subagent-detail"),
-      tab: () => setChatMode("subagent-detail"),
       escape: () => setChatMode("input"),
-      "ctrl+o": () => setChatMode("input"),
     },
-    { enabled: chatMode === "subagent-focus", priority: 80 },
+    { enabled: chatMode === "subagent-picker", priority: 80 },
   );
 
   useKeymap(
     {
-      escape: () => setChatMode("input"),
-      "ctrl+o": () => setChatMode("input"),
+      escape: () => setChatMode("subagent-picker"),
+      "ctrl+o": () => setChatMode("subagent-picker"),
     },
     { enabled: chatMode === "subagent-detail", priority: 80 },
   );
@@ -165,11 +158,16 @@ export function useChatKeymaps({
       "ctrl+k": () => {
         openPalette?.();
       },
+      "shift+tab": () => {
+        const nextMode = toggleMode();
+        if (nextMode) {
+          setCommandResult(`Mode switched to ${formatAgentMode(nextMode)}.`);
+        }
+      },
       "ctrl+m": () => {
         const nextMode = toggleMode();
         if (nextMode) {
           setCommandResult(`Mode switched to ${formatAgentMode(nextMode)}.`);
-          showToast?.(`Mode switched to ${formatAgentMode(nextMode)}`, "success");
         }
       },
       "ctrl+o": () => {

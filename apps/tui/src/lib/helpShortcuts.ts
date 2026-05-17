@@ -40,7 +40,7 @@ export function getHelpShortcuts(
         { combo: "Enter", description: "Send message or execute command", context: "Input" },
         { combo: "↑/↓", description: "Input history navigation", context: "Input" },
         { combo: "Tab", description: "Autocomplete command (with / prefix)", context: "Input" },
-        { combo: "Ctrl+M", description: "Toggle plan/act mode", context: "Input" },
+        { combo: "Shift+Tab / Ctrl+M", description: "Toggle plan/act mode", context: "Input" },
         { combo: "Ctrl+K", description: "Open command palette", context: "Input" },
         { combo: "Ctrl+T", description: "Focus tools", context: "Input" },
         { combo: "Ctrl+O", description: "Focus sub-agents", context: "Input" },
@@ -65,18 +65,17 @@ export function getHelpShortcuts(
         { combo: "Ctrl+T", description: "Back to input", context: "Tool Detail" },
       );
       break;
-    case "subagent-focus":
+    case "subagent-picker":
       all.push(
-        { combo: "↑/↓", description: "Navigate sub-agents", context: "Sub-agent Focus" },
-        { combo: "Enter", description: "Open sub-agent detail", context: "Sub-agent Focus" },
-        { combo: "Esc", description: "Back to input", context: "Sub-agent Focus" },
-        { combo: "Ctrl+O", description: "Back to input", context: "Sub-agent Focus" },
+        { combo: "↑/↓", description: "Navigate sub-agents", context: "Sub-agent Picker" },
+        { combo: "Enter", description: "Open sub-agent detail", context: "Sub-agent Picker" },
+        { combo: "Esc", description: "Back to chat", context: "Sub-agent Picker" },
       );
       break;
     case "subagent-detail":
       all.push(
-        { combo: "Esc", description: "Back to input", context: "Sub-agent Detail" },
-        { combo: "Ctrl+O", description: "Back to input", context: "Sub-agent Detail" },
+        { combo: "Esc", description: "Back to list", context: "Sub-agent Detail" },
+        { combo: "Ctrl+O", description: "Close to chat", context: "Sub-agent Detail" },
       );
       break;
   }

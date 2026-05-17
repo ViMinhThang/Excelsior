@@ -31,6 +31,7 @@ export function createWriteTool(ctx?: ToolContext) {
       });
       if (!authorization.allowed) return authorization.message;
 
+      let diffOutput = "";
       if (ctx?.confirm && ctx.confirm.getListenerCount() > 0) {
         let existingContent = "";
         let action: DiffAction = "create";
@@ -40,6 +41,8 @@ export function createWriteTool(ctx?: ToolContext) {
         } catch {
           existingContent = "";
         }
+
+        diffOutput = createUnifiedDiff(filePath, existingContent, content);
 
         const confirmation = await authorizeToolAction(ctx, {
           toolName: "writeFile",
@@ -51,7 +54,7 @@ export function createWriteTool(ctx?: ToolContext) {
             metadata: {
               action,
               filePath,
-              diff: createUnifiedDiff(filePath, existingContent, content),
+              diff: diffOutput,
             },
           },
         });
@@ -63,7 +66,8 @@ export function createWriteTool(ctx?: ToolContext) {
         await fs.mkdir(path.dirname(fullPath), { recursive: true });
         await fs.writeFile(fullPath, content, "utf-8");
         ctx?.revert?.fileCheckpoint.recordWrite(filePath, fullPath, content);
-        return `Successfully wrote ${content.length} characters to ${filePath}`;
+        const result = `Successfully wrote ${content.length} characters to ${filePath}`;
+        return diffOutput ? `${result}\n${diffOutput}` : result;
       } catch (error: unknown) {
         return `Error writing file: ${error instanceof Error ? error.message : String(error)}`;
       }

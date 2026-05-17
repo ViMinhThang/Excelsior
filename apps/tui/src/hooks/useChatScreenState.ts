@@ -12,7 +12,6 @@ import { useChatSubmission } from "./useChatSubmission.js";
 import { useChatKeymaps } from "./useChatKeymaps.js";
 import { useCommandPalette } from "./useCommandPalette.js";
 import { getHelpShortcuts } from "../lib/helpShortcuts.js";
-import { useToast } from "./useToast.js";
 
 export function useChatScreenState() {
   const { navigate } = useNavigation();
@@ -49,7 +48,6 @@ export function useChatScreenState() {
 
   const [helpOpen, setHelpOpen] = useState(false);
   const toggleHelp = useCallback(() => setHelpOpen((v) => !v), []);
-  const { toasts, showToast } = useToast();
   const helpShortcuts = getHelpShortcuts(
     subAgentNav.chatMode,
     !!confirmation.pending,
@@ -110,7 +108,6 @@ export function useChatScreenState() {
     handleSubmit,
     openPalette: palette.toggle,
     toggleHelp,
-    showToast,
   });
 
   return {
@@ -119,7 +116,7 @@ export function useChatScreenState() {
     chatMode: subAgentNav.chatMode,
     subAgents: subAgentNav.subAgentBlocks,
     subAgentIndex: subAgentNav.subAgentIndex,
-    selectedSubAgentId: subAgentNav.chatMode === "subagent-focus"
+    selectedSubAgentId: subAgentNav.chatMode === "subagent-picker" || subAgentNav.chatMode === "subagent-detail"
       ? subAgentNav.subAgentBlocks[subAgentNav.subAgentIndex]?.id ?? null
       : null,
     toolCount: toolNav.toolBlocks.length,
@@ -140,7 +137,5 @@ export function useChatScreenState() {
     palette,
     helpOpen,
     helpShortcuts,
-    toasts,
-    showToast,
   };
 }

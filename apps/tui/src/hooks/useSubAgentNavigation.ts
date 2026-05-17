@@ -4,7 +4,7 @@ import { selectSubAgentBlocks } from "../selectors/chat-selectors.js";
 
 export type ChatMode =
   | "input"
-  | "subagent-focus"
+  | "subagent-picker"
   | "subagent-detail"
   | "tool-focus"
   | "tool-detail";
@@ -21,7 +21,7 @@ export function useSubAgentNavigation(displayBlocks: ProjectedBlock[]) {
   useEffect(() => {
     if (subAgentBlocks.length === 0) {
       setSubAgentIndex(0);
-      if (chatMode === "subagent-detail" || chatMode === "subagent-focus") {
+      if (chatMode === "subagent-detail" || chatMode === "subagent-picker") {
         setChatMode("input");
       }
       return;
@@ -47,7 +47,7 @@ export function useSubAgentNavigation(displayBlocks: ProjectedBlock[]) {
   const openSubAgent = useCallback(() => {
     if (subAgentBlocks.length > 0) {
       setSubAgentIndex(0);
-      setChatMode("subagent-focus");
+      setChatMode("subagent-picker");
     }
   }, [subAgentBlocks.length]);
 

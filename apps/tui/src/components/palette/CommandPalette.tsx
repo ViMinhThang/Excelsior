@@ -90,7 +90,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
         {Array.from(groups.entries()).map(([category, cmds]) => (
           <Box key={category} flexDirection="column">
             <Text color={theme.colors.highlightHeading} bold dimColor>
-              {category}
+              {category}:
             </Text>
             {cmds.map((cmd) => {
               const isSelected = flatIndex === selectedIndex;
