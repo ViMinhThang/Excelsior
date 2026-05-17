@@ -9,6 +9,8 @@ import {
   loadUntilLastCheckpoint,
   deleteSessionEvents,
   deleteAllSessionsEvents,
+  dropLastCompletedTurn,
+  getLastCompletedTurn,
   resetSessionsDirForTests,
   setSessionsDirForTests,
 } from "@excelsior/agent-host/testing/persistence";
@@ -136,6 +138,66 @@ describe("jsonlEventStore", () => {
     expect(raw).toHaveLength(3);
 
     await cleanup(id);
+  });
+
+  it("drops the latest completed turn and its child events", async () => {
+    const id = sid("drop_latest");
+    await appendEvent(id, makeEvent("run_1", "user-input", { content: "first" }, 0) as AnyAgentEvent);
+    await appendEvent(id, makeEvent("run_1", TURN_COMPLETE, { runId: "run_1" }, 1) as AnyAgentEvent);
+    await appendEvent(id, makeEvent("run_2", "user-input", { content: "second" }, 0) as AnyAgentEvent);
+    await appendEvent(id, makeEvent("child_2", "text-delta", { delta: "child" }, 0, {
+      parentEventId: "run_2",
+      correlationId: "run_2",
+    }) as AnyAgentEvent);
+    await appendEvent(id, makeEvent("run_2", TURN_COMPLETE, { runId: "run_2" }, 1) as AnyAgentEvent);
+
+    await expect(getLastCompletedTurn(id)).resolves.toMatchObject({
+      runId: "run_2",
+      eventCount: 3,
+    });
+
+    const result = await dropLastCompletedTurn(id, "run_2");
+
+    expect(result).toEqual({
+      dropped: true,
+      runId: "run_2",
+      removedEvents: 3,
+    });
+    expect((await loadRawSessionEvents(id)).map((event) => event.runId)).toEqual([
+      "run_1",
+      "run_1",
+    ]);
+    await expect(getLastCompletedTurn(id)).resolves.toMatchObject({ runId: "run_1" });
+
+    await cleanup(id);
+  });
+
+  it("does not drop history when the expected latest run id mismatches", async () => {
+    const id = sid("drop_mismatch");
+    await appendEvent(id, makeEvent("run_1", "user-input", { content: "first" }, 0) as AnyAgentEvent);
+    await appendEvent(id, makeEvent("run_1", TURN_COMPLETE, { runId: "run_1" }, 1) as AnyAgentEvent);
+
+    const result = await dropLastCompletedTurn(id, "different_run");
+
+    expect(result).toEqual({
+      dropped: false,
+      runId: "run_1",
+      removedEvents: 0,
+      reason: "latest-turn-mismatch",
+    });
+    await expect(loadRawSessionEvents(id)).resolves.toHaveLength(2);
+
+    await cleanup(id);
+  });
+
+  it("treats sessions without completed turns as no-ops", async () => {
+    const id = sid("drop_empty");
+
+    await expect(dropLastCompletedTurn(id)).resolves.toEqual({
+      dropped: false,
+      removedEvents: 0,
+      reason: "no-completed-turn",
+    });
   });
 
   it("deletes session events file", async () => {

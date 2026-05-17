@@ -194,7 +194,7 @@
         <li>If UI is wrong but JSONL is correct, inspect `packages/agent-host/src/lib/projection` and chat components.</li>
         <li>If restored history is missing, inspect `TURN_COMPLETE` placement and `loadUntilLastCheckpoint()`.</li>
         <li>If a tool acts oddly, inspect the tool factory and `ToolContext` propagation.</li>
-        <li>If Plan/Act behavior is wrong, inspect `AgentManager` mode state, `ChatService.submitUserTurn()` options, and `createToolContext()`.</li>
+        <li>If Plan/Act behavior is wrong, inspect <code>AgentStateStore</code> mode state, <code>ChatService.submitUserTurn()</code> options, and <code>createToolContext()</code>.</li>
         <li>If sub-agent rows leak between runs, inspect `SubAgentEventSink` plumbing and manager lifetime.</li>
         <li>If commands do not route, inspect `getSubmittedCommand()`, `handleCommand()`, and the feature registry.</li>
       </ol>

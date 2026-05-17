@@ -20,16 +20,16 @@ const InlineRenderer: FC<{ tokens: Token[] }> = ({ tokens }) => (
           return <Text key={key}>{highlightFilenames(token.text)}</Text>;
         }
         case "strong":
-          return <Text key={key} bold><InlineRenderer tokens={(token as Tokens.Strong).tokens} /></Text>;
+          return <Text key={key} color={theme.colors.highlightEmphasis} bold><InlineRenderer tokens={(token as Tokens.Strong).tokens} /></Text>;
         case "em":
           return <Text key={key} italic><InlineRenderer tokens={(token as Tokens.Em).tokens} /></Text>;
         case "codespan":
-          return <Text key={key} color={theme.colors.secondary}>{escapeXml((token as Tokens.Codespan).text)}</Text>;
+          return <Text key={key} color={theme.colors.highlightInline}>{escapeXml((token as Tokens.Codespan).text)}</Text>;
         case "del":
           return <Text key={key} dimColor><InlineRenderer tokens={(token as Tokens.Del).tokens} /></Text>;
         case "link": {
           const link = token as Tokens.Link;
-          return <Text key={key} color={theme.colors.activity}><InlineRenderer tokens={link.tokens} /> ({link.href})</Text>;
+          return <Text key={key} color={theme.colors.highlightLink}><InlineRenderer tokens={link.tokens} /> ({link.href})</Text>;
         }
         case "image": {
           const img = token as Tokens.Image;
@@ -46,6 +46,37 @@ const InlineRenderer: FC<{ tokens: Token[] }> = ({ tokens }) => (
   </>
 );
 
+function isTableBorderChar(char: string): boolean {
+  return /^[\u2500-\u257f]$/.test(char);
+}
+
+const TableLine: FC<{ line: string; id: string }> = ({ line, id }) => {
+  const segments: Array<{ text: string; isBorder: boolean }> = [];
+
+  for (const char of line) {
+    const isBorder = isTableBorderChar(char);
+    const last = segments.at(-1);
+    if (last && last.isBorder === isBorder) {
+      last.text += char;
+    } else {
+      segments.push({ text: char, isBorder });
+    }
+  }
+
+  return (
+    <Text wrap="truncate-end">
+      {segments.map((segment, index) => (
+        <Text
+          key={`table_segment_${id}_${index}`}
+          color={segment.isBorder ? theme.colors.border : undefined}
+        >
+          {segment.text}
+        </Text>
+      ))}
+    </Text>
+  );
+};
+
 const BlockRenderer: FC<{ token: Token; index: number }> = ({ token, index }) => {
   const key = `block_${token.type}_${index}`;
   switch (token.type) {
@@ -53,7 +84,7 @@ const BlockRenderer: FC<{ token: Token; index: number }> = ({ token, index }) =>
       return null;
     case "heading": {
       const heading = token as Tokens.Heading;
-      return <Box key={key} marginTop={index > 0 ? 1 : 0}><Text bold><InlineRenderer tokens={heading.tokens} /></Text></Box>;
+      return <Box key={key} marginTop={index > 0 ? 1 : 0}><Text color={theme.colors.highlightHeading} bold><InlineRenderer tokens={heading.tokens} /></Text></Box>;
     }
     case "paragraph":
       return <Box key={key} marginTop={index > 0 ? 1 : 0}><Text><InlineRenderer tokens={(token as Tokens.Paragraph).tokens} /></Text></Box>;
@@ -64,18 +95,14 @@ const BlockRenderer: FC<{ token: Token; index: number }> = ({ token, index }) =>
           key={key}
           marginTop={index > 0 ? 1 : 0}
           flexDirection="column"
-          borderStyle={{ top: "", bottom: "", left: theme.glyphs.output, right: "", topLeft: "", topRight: "", bottomLeft: "", bottomRight: "" }}
-          borderColor={theme.colors.border}
-          paddingLeft={2}
         >
-          {code.lang && <Box><Text color={theme.colors.secondary} dimColor>{code.lang}</Text></Box>}
           <Box>{highlightCode(code.text, code.lang)}</Box>
         </Box>
       );
     }
     case "blockquote": {
       const bq = token as Tokens.Blockquote;
-      return <Box key={key} marginTop={index > 0 ? 1 : 0} borderLeft paddingLeft={1} borderColor={theme.colors.border}><Text dimColor><InlineRenderer tokens={bq.tokens} /></Text></Box>;
+      return <Box key={key} marginTop={index > 0 ? 1 : 0} borderLeft paddingLeft={1} borderColor={theme.colors.border}><Text color={theme.colors.muted} dimColor><InlineRenderer tokens={bq.tokens} /></Text></Box>;
     }
     case "list": {
       const listToken = token as Tokens.List;
@@ -99,7 +126,13 @@ const BlockRenderer: FC<{ token: Token; index: number }> = ({ token, index }) =>
         rows: (table.rows ?? []).map((row) => row.map((cell) => getRawText(cell.tokens))),
         align: table.align ?? [],
       });
-      return <Box key={key} marginTop={index > 0 ? 1 : 0} flexDirection="column">{lines.map((line, li) => <Text key={`table_line_${index}_${li}`} wrap="truncate-end">{line}</Text>)}</Box>;
+      return (
+        <Box key={key} marginTop={index > 0 ? 1 : 0} flexDirection="column">
+          {lines.map((line, li) => (
+            <TableLine key={`table_line_${index}_${li}`} id={`${index}_${li}`} line={line} />
+          ))}
+        </Box>
+      );
     }
     case "html":
       return <Text key={key}>{escapeXml((token as Tokens.HTML).text)}</Text>;

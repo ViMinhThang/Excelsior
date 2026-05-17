@@ -32,10 +32,11 @@
         <div class="eyebrow">Architecture</div>
         <h1>Layered, event-driven, feature-owned</h1>
         <p class="lead">
-          The codebase is organized around a small number of hard boundaries. React/Ink renders state. `AgentManager`
-          owns UI-facing state. `ChatService` and `createRunSession` wire model runs. Runtime objects produce events. Persistence
-          records events and metadata. Projection code translates events into chat blocks and model history. Tool execution
-          is gated by a run-scoped `ToolContext` that carries mode, confirmation, cancellation, and workspace bounds.
+          The codebase is organized around a small number of hard boundaries. React/Ink renders host state. <code>AgentApplication</code>
+          delegates to explicit controllers, and <code>AgentStateStore</code> owns UI-facing state. <code>ChatService</code> and
+          <code>createRunSession</code> wire model runs. Runtime objects produce events. Persistence records events and metadata.
+          Projection code translates events into chat blocks and model history. Tool execution is gated by a run-scoped
+          <code>ToolContext</code> that carries mode, confirmation, cancellation, and workspace bounds.
         </p>
       </section>
 
@@ -57,7 +58,7 @@
 
           <rect class="box" x="70" y="260" width="840" height="80"></rect>
           <text class="label" x="100" y="298">Application layer</text>
-          <text class="small" x="100" y="323">`AgentManager`, `ChatService`, `runSession`: coordinates state, sessions, and run wiring</text>
+          <text class="small" x="100" y="323">`AgentApplication`, controllers, `ChatService`, `runSession`: state, sessions, and run wiring</text>
 
           <rect class="box alt" x="70" y="370" width="840" height="80"></rect>
           <text class="label" x="100" y="408">Runtime layer</text>
@@ -94,9 +95,9 @@
       <div class="grid two">
         <article class="card">
           <h3>State ownership</h3>
-          <p><code>AgentManager</code> is the UI-facing store. It exposes a snapshot through <code>useSyncExternalStore</code> via <code>useAgentManager</code>, and everything in the TUI reads from that snapshot, including current Plan/Act mode.</p>
+          <p><code>AgentStateStore</code> is the backend observable store. <code>AgentApplication</code> exposes snapshots through <code>AgentHost</code>, and the TUI reads them with <code>useAgentHostClient</code>, including current Plan/Act mode.</p>
           <div class="bar"><span style="width: 88%"></span></div>
-          <p class="muted">High ownership concentration by design: one observable store reduces accidental React state forks.</p>
+          <p class="muted">One observable store remains, but turn, session, projection, and revert behavior now have separate owners.</p>
         </article>
         <article class="card">
           <h3>Persistence ownership</h3>
@@ -120,7 +121,7 @@
           <tbody>
             <tr>
               <td>TUI to application</td>
-              <td><code>useAgentManager</code>, <code>useChatScreenState</code></td>
+              <td><code>useAgentHostClient</code>, <code>useChatScreenState</code></td>
               <td>Send, cancel, switch session, snapshots.</td>
               <td>Raw event mutation or direct persistence calls, except command-specific reset helpers.</td>
             </tr>
@@ -182,8 +183,8 @@
             </marker>
           </defs>
           <rect class="box" x="40" y="45" width="170" height="72"></rect>
-          <text class="label" x="74" y="76">AgentManager</text>
-          <text class="small" x="72" y="100">state + sessions</text>
+          <text class="label" x="64" y="76">AgentApplication</text>
+          <text class="small" x="72" y="100">controllers + state</text>
 
           <rect class="box" x="290" y="45" width="170" height="72"></rect>
           <text class="label" x="334" y="76">ChatService</text>
@@ -231,7 +232,7 @@
         </article>
         <article class="card">
           <h3>Chosen: one observable store</h3>
-          <p>SessionManager is a plain service. AgentManager is the only UI-facing observable store, so React rendering has one subscription surface.</p>
+          <p>SessionManager is a plain service. AgentStateStore is the only backend observable store, so React rendering has one subscription surface.</p>
         </article>
         <article class="card">
           <h3>Chosen: projections over stored UI</h3>

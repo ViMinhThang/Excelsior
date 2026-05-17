@@ -2,7 +2,12 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import type { ProjectedBlock } from "@excelsior/core";
 import { selectSubAgentBlocks } from "../selectors/chat-selectors.js";
 
-export type ChatMode = "input" | "subagent-detail";
+export type ChatMode =
+  | "input"
+  | "subagent-picker"
+  | "subagent-detail"
+  | "tool-focus"
+  | "tool-detail";
 
 export function useSubAgentNavigation(displayBlocks: ProjectedBlock[]) {
   const [chatMode, setChatMode] = useState<ChatMode>("input");
@@ -16,7 +21,9 @@ export function useSubAgentNavigation(displayBlocks: ProjectedBlock[]) {
   useEffect(() => {
     if (subAgentBlocks.length === 0) {
       setSubAgentIndex(0);
-      if (chatMode === "subagent-detail") setChatMode("input");
+      if (chatMode === "subagent-detail" || chatMode === "subagent-picker") {
+        setChatMode("input");
+      }
       return;
     }
 
@@ -40,7 +47,7 @@ export function useSubAgentNavigation(displayBlocks: ProjectedBlock[]) {
   const openSubAgent = useCallback(() => {
     if (subAgentBlocks.length > 0) {
       setSubAgentIndex(0);
-      setChatMode("subagent-detail");
+      setChatMode("subagent-picker");
     }
   }, [subAgentBlocks.length]);
 

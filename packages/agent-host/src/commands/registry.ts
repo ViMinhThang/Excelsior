@@ -3,6 +3,7 @@ import { createCoreCommands } from "./coreCommands.js";
 import { formatHelpText } from "./helpCommand.js";
 import { createModeCommand } from "./modeCommands.js";
 import { createReviewCommands, defaultReviewCommandServices } from "./reviewCommands.js";
+import { createRevertCommand } from "./revertCommand.js";
 import { createSessionCommand } from "./sessionCommands.js";
 import { createSettingsCommand } from "./settingsCommands.js";
 import { parseCommandInput } from "./parser.js";
@@ -14,6 +15,7 @@ export function createAgentCommands(
   let commands: AgentCommand[] = [];
   commands = [
     ...createCoreCommands(() => commands.map((command) => command.definition)),
+    createRevertCommand(),
     createModeCommand(),
     createSettingsCommand(),
     createSessionCommand(),

@@ -86,7 +86,7 @@ function SessionPickerInner({ context }: { context: SessionPickerPanelContext })
 
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={1}>
-      <Text color={theme.colors.accent} bold>
+      <Text color={theme.colors.highlightHeading} bold>
         Sessions
       </Text>
       <Text color={theme.colors.muted} dimColor>
@@ -100,7 +100,7 @@ function SessionPickerInner({ context }: { context: SessionPickerPanelContext })
         rows.map((row, index) => (
           <Text
             key={`${context.sessions[index].id}:${index}`}
-            color={index === selectedIndex ? theme.colors.text : theme.colors.muted}
+            color={index === selectedIndex ? theme.colors.highlightSelected : theme.colors.muted}
             bold={index === selectedIndex}
           >
             {row}

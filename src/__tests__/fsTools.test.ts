@@ -6,10 +6,12 @@ import {
   authorizeToolAction,
   createEditTool,
   createGlobTool,
+  createLsTool,
   createRipgrepTool,
   createViewTool,
   createWriteTool,
   executeTool,
+  FileCheckpoint,
   PLAN_MODE_BLOCKED_MESSAGE,
   type ToolContext,
 } from "@excelsior/agent-host/testing/tools";
@@ -101,6 +103,14 @@ describe("filesystem tool workspace bounds", () => {
     const result = await executeTool(createViewTool(ctx()), { filePath: "inside.txt" });
     expect(result).toContain("needle");
     expect(result).not.toContain("[File:");
+  });
+
+  it("lists directory contents without a table header", async () => {
+    const result = await executeTool(createLsTool(ctx()), { directoryPath: "." });
+
+    expect(result).toContain("inside.txt");
+    expect(result).not.toContain("TYPE | NAME");
+    expect(result).not.toContain("MODIFIED");
   });
 
   it("enforces read capabilities for read-only tools", async () => {
@@ -209,6 +219,75 @@ describe("filesystem tool workspace bounds", () => {
     expect(writeResult).toContain("Successfully wrote");
     expect(editResult).toContain("Successfully replaced");
     await expect(readFile(join(workspaceRoot, "created.txt"), "utf-8")).resolves.toBe("changed\n");
+  });
+
+  it("checkpoints approved writes before overwriting files", async () => {
+    const fileCheckpoint = new FileCheckpoint();
+    fileCheckpoint.beginTurn("ses_1", "run_1");
+
+    const result = await executeTool(createWriteTool({
+      ...ctx(),
+      mode: "act",
+      revert: { fileCheckpoint },
+    }), {
+      filePath: "inside.txt",
+      content: "agent edit\n",
+    });
+
+    fileCheckpoint.completeTurn("ses_1", "run_1");
+    expect(result).toContain("Successfully wrote");
+    await expect(readFile(join(workspaceRoot, "inside.txt"), "utf-8")).resolves.toBe("agent edit\n");
+
+    const restore = await fileCheckpoint.restoreLatest();
+
+    expect(restore.conflicts).toEqual([]);
+    await expect(readFile(join(workspaceRoot, "inside.txt"), "utf-8")).resolves.toBe("needle\n");
+  });
+
+  it("checkpoints approved edits before writing updated content", async () => {
+    const fileCheckpoint = new FileCheckpoint();
+    fileCheckpoint.beginTurn("ses_1", "run_1");
+
+    const result = await executeTool(createEditTool({
+      ...ctx(),
+      mode: "act",
+      revert: { fileCheckpoint },
+    }), {
+      filePath: "inside.txt",
+      oldText: "needle",
+      newText: "agent edit",
+    });
+
+    fileCheckpoint.completeTurn("ses_1", "run_1");
+    expect(result).toContain("Successfully replaced");
+    await expect(readFile(join(workspaceRoot, "inside.txt"), "utf-8")).resolves.toBe("agent edit\n");
+
+    const restore = await fileCheckpoint.restoreLatest();
+
+    expect(restore.conflicts).toEqual([]);
+    await expect(readFile(join(workspaceRoot, "inside.txt"), "utf-8")).resolves.toBe("needle\n");
+  });
+
+  it("does not checkpoint rejected write confirmations", async () => {
+    const request = vi.fn(async () => false);
+    const fileCheckpoint = new FileCheckpoint();
+    fileCheckpoint.beginTurn("ses_1", "run_1");
+
+    const result = await executeTool(createWriteTool({
+      ...ctx(),
+      mode: "act",
+      confirm: { getListenerCount: () => 1, request },
+      revert: { fileCheckpoint },
+    }), {
+      filePath: "inside.txt",
+      content: "agent edit\n",
+    });
+
+    fileCheckpoint.completeTurn("ses_1", "run_1");
+
+    expect(result).toBe("Denied by user.");
+    expect(fileCheckpoint.getLatest()).toBeNull();
+    await expect(readFile(join(workspaceRoot, "inside.txt"), "utf-8")).resolves.toBe("needle\n");
   });
 
   it("does not request edit confirmation when oldText is missing", async () => {

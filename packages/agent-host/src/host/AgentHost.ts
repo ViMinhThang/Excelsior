@@ -34,6 +34,7 @@ export interface AgentHost {
   respondToConfirmation(callId: string, approved: boolean): void;
   approveAllConfirmations(): void;
   clearMessages(): void;
+  revertLastTurn(): Promise<CommandResult>;
 
   dispose(): void;
 }

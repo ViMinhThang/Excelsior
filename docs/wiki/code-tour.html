@@ -79,7 +79,7 @@
             <tr>
               <td><code>useChatScreenState.ts</code></td>
               <td>Composes manager state, input history, sub-agent navigation, command autocomplete, command results, feature context, and keymaps.</td>
-              <td>`useAgentManager`, navigation context, feature registry.</td>
+              <td><code>useAgentHostClient</code>, navigation context, feature registry.</td>
               <td>A stable view model for `ChatScreen`.</td>
             </tr>
             <tr>
@@ -99,21 +99,20 @@
       </div>
 
       <h2>Application Services</h2>
-      <h3><code>AgentManager</code></h3>
+      <h3><code>AgentApplication</code></h3>
       <p>
-        `AgentManager` is the center of the UI data model. It stores sessions, persisted events, live events, active run handle,
-        child runs, loading state, current Plan/Act mode, sub-agent event subscriptions, and the latest computed snapshot.
-        The TUI should not assemble this state by itself; it should ask the manager.
+        <code>AgentApplication</code> is the backend facade used by <code>LocalAgentHost</code>. It wires the state store,
+        session controller, turn controller, projection service, revert controller, sub-agent sink, and file checkpoint.
+        The TUI should not assemble this state by itself; it should ask the host facade.
       </p>
       <pre><code>send(content)
-  ensure/create session
-  build AI history from projections
-  start ChatService run with current mode
-  attach run subscriptions
-  notify UI</code></pre>
+  SessionController.ensureSession()
+  ProjectionService.buildAIHistory()
+  TurnController.startTurn()
+  AgentStateStore updates subscribers</code></pre>
       <p>
-        The manager also handles session switching. It cancels active work before switching, clears visible persisted events,
-        loads completed events from JSONL, then recomputes display blocks.
+        Session behavior lives in <code>SessionController</code>. It cancels active work before switching, clears visible
+        persisted events, loads completed events from JSONL through <code>SessionHistoryStore</code>, then updates the state store.
       </p>
 
       <h3><code>ChatService</code></h3>
@@ -247,7 +246,7 @@
             </tr>
             <tr>
               <td>Change Plan/Act behavior</td>
-              <td><code>packages/core/src/index.ts</code>, <code>AgentManager</code>, <code>ToolContext</code>, relevant tool factories</td>
+              <td><code>packages/core/src/index.ts</code>, <code>AgentStateStore</code>, <code>ToolContext</code>, relevant tool factories</td>
               <td><code>commands.test.ts</code>, <code>fsTools.test.ts</code>, <code>tools/runCommand.test.ts</code></td>
             </tr>
             <tr>
