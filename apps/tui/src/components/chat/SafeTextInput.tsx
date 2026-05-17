@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, type FC } from "react";
 import { Text, useInput } from "ink";
 import chalk from "chalk";
 import { truncateVisible } from "../../lib/textFormat.js";
+import type { TuiKey } from "../../lib/tuiKey.js";
 
 interface SafeTextInputProps {
   value: string;
@@ -14,8 +15,8 @@ interface SafeTextInputProps {
   maxDisplayWidth?: number;
 }
 
-export function shouldIgnoreTextInputKey(input: string, key: any): boolean {
-  return (
+export function shouldIgnoreTextInputKey(input: string, key: TuiKey): boolean {
+  return Boolean(
     key.upArrow ||
     key.downArrow ||
     key.tab ||
@@ -42,7 +43,49 @@ export function getSingleLineInputPreview(
   };
 }
 
-const SafeTextInput: React.FC<SafeTextInputProps> = ({
+export function clampCursorOffset(value: string, cursorOffset: number): number {
+  return Math.max(0, Math.min(cursorOffset, value.length));
+}
+
+export function applyTextInputKey(
+  originalValue: string,
+  cursorOffset: number,
+  input: string,
+  key: TuiKey,
+  showCursor: boolean,
+): { value: string; cursorOffset: number; cursorWidth: number } {
+  let nextCursorOffset = cursorOffset;
+  let nextValue = originalValue;
+  let nextCursorWidth = 0;
+
+  if (key.leftArrow) {
+    if (showCursor) nextCursorOffset--;
+  } else if (key.rightArrow) {
+    if (showCursor) nextCursorOffset++;
+  } else if (key.backspace || key.delete) {
+    if (cursorOffset > 0) {
+      nextValue =
+        originalValue.slice(0, cursorOffset - 1) +
+        originalValue.slice(cursorOffset, originalValue.length);
+      nextCursorOffset--;
+    }
+  } else {
+    nextValue =
+      originalValue.slice(0, cursorOffset) +
+      input +
+      originalValue.slice(cursorOffset, originalValue.length);
+    nextCursorOffset += input.length;
+    if (input.length > 1) nextCursorWidth = input.length;
+  }
+
+  return {
+    value: nextValue,
+    cursorOffset: clampCursorOffset(nextValue, nextCursorOffset),
+    cursorWidth: nextCursorWidth,
+  };
+}
+
+const SafeTextInput: FC<SafeTextInputProps> = ({
   value: originalValue,
   onChange,
   onSubmit,
@@ -57,7 +100,7 @@ const SafeTextInput: React.FC<SafeTextInputProps> = ({
     cursorWidth: 0,
   });
 
-  const { cursorOffset, cursorWidth } = state;
+  const { cursorOffset } = state;
 
   useEffect(() => {
     setState((previousState) => {
@@ -112,40 +155,21 @@ const SafeTextInput: React.FC<SafeTextInputProps> = ({
       return;
     }
 
-    let nextCursorOffset = cursorOffset;
-    let nextValue = originalValue;
-    let nextCursorWidth = 0;
-
-    if (key.leftArrow) {
-      if (showCursor) nextCursorOffset--;
-    } else if (key.rightArrow) {
-      if (showCursor) nextCursorOffset++;
-    } else if (key.backspace || key.delete) {
-      if (cursorOffset > 0) {
-        nextValue =
-          originalValue.slice(0, cursorOffset - 1) +
-          originalValue.slice(cursorOffset, originalValue.length);
-        nextCursorOffset--;
-      }
-    } else {
-      nextValue =
-        originalValue.slice(0, cursorOffset) +
-        input +
-        originalValue.slice(cursorOffset, originalValue.length);
-      nextCursorOffset += input.length;
-      if (input.length > 1) nextCursorWidth = input.length;
-    }
-
-    if (cursorOffset < 0) nextCursorOffset = 0;
-    if (cursorOffset > originalValue.length) nextCursorOffset = originalValue.length;
+    const next = applyTextInputKey(
+      originalValue,
+      cursorOffset,
+      input,
+      key,
+      showCursor,
+    );
 
     setState({
-      cursorOffset: nextCursorOffset,
-      cursorWidth: nextCursorWidth,
+      cursorOffset: next.cursorOffset,
+      cursorWidth: next.cursorWidth,
     });
 
-    if (nextValue !== originalValue) {
-      onChange(nextValue);
+    if (next.value !== originalValue) {
+      onChange(next.value);
     }
   }, { isActive: focus });
 

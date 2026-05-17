@@ -1,14 +1,78 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm, writeFile } from "fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { createViewTool } from "../../packages/agent-host/src/agent/tools/fs/view.js";
-import { createWriteTool } from "../../packages/agent-host/src/agent/tools/fs/write.js";
-import { createEditTool } from "../../packages/agent-host/src/agent/tools/fs/edit.js";
-import { createRipgrepTool } from "../../packages/agent-host/src/agent/tools/fs/ripgrep.js";
-import { createGlobTool } from "../../packages/agent-host/src/agent/tools/fs/glob.js";
-import type { ToolContext } from "../../packages/agent-host/src/lib/tool/context.js";
-import { PLAN_MODE_BLOCKED_MESSAGE } from "../../packages/agent-host/src/lib/runtime/agentMode.js";
+import {
+  authorizeToolAction,
+  createEditTool,
+  createGlobTool,
+  createRipgrepTool,
+  createViewTool,
+  createWriteTool,
+  executeTool,
+  PLAN_MODE_BLOCKED_MESSAGE,
+  type ToolContext,
+} from "@excelsior/agent-host/testing/tools";
+
+describe("tool authorization policy", () => {
+  it("denies missing capabilities with a stable message", async () => {
+    const result = await authorizeToolAction(
+      { capabilities: new Set(["fs:read"]) },
+      { toolName: "writeFile", capability: "fs:write", modePolicy: "write" },
+    );
+
+    expect(result).toEqual({ allowed: false, message: "Missing tool capability: fs:write" });
+  });
+
+  it("blocks write actions in plan mode", async () => {
+    const result = await authorizeToolAction(
+      { capabilities: new Set(["fs:write"]), mode: "plan" },
+      { toolName: "writeFile", capability: "fs:write", modePolicy: "write" },
+    );
+
+    expect(result).toEqual({ allowed: false, message: PLAN_MODE_BLOCKED_MESSAGE });
+  });
+
+  it("requests confirmation only when a listener exists", async () => {
+    const request = vi.fn(async () => false);
+    const result = await authorizeToolAction(
+      {
+        capabilities: new Set(["fs:write"]),
+        mode: "act",
+        confirm: { getListenerCount: () => 0, request },
+      },
+      {
+        toolName: "writeFile",
+        capability: "fs:write",
+        modePolicy: "write",
+        confirmation: { toolName: "writeFile", args: "{}" },
+      },
+    );
+
+    expect(result).toEqual({ allowed: true });
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("returns denied when confirmation is rejected", async () => {
+    const request = vi.fn(async () => false);
+    const result = await authorizeToolAction(
+      {
+        capabilities: new Set(["fs:write"]),
+        mode: "act",
+        confirm: { getListenerCount: () => 1, request },
+      },
+      {
+        toolName: "writeFile",
+        capability: "fs:write",
+        modePolicy: "write",
+        confirmation: { toolName: "writeFile", args: "{}" },
+      },
+    );
+
+    expect(result).toEqual({ allowed: false, message: "Denied by user." });
+    expect(request).toHaveBeenCalledWith("writeFile", "{}", undefined);
+  });
+});
 
 describe("filesystem tool workspace bounds", () => {
   let workspaceRoot: string;
@@ -34,22 +98,37 @@ describe("filesystem tool workspace bounds", () => {
   });
 
   it("allows reads inside the workspace", async () => {
-    const result = await (createViewTool(ctx()) as any).execute({ filePath: "inside.txt" });
+    const result = await executeTool(createViewTool(ctx()), { filePath: "inside.txt" });
     expect(result).toContain("needle");
     expect(result).not.toContain("[File:");
   });
 
+  it("enforces read capabilities for read-only tools", async () => {
+    const readlessCtx: ToolContext = {
+      capabilities: new Set(["fs:write"]),
+      workspaceRoot,
+    };
+
+    const result = await executeTool(createViewTool(readlessCtx), {
+      filePath: "inside.txt",
+    });
+
+    expect(result).toBe("Missing tool capability: fs:read");
+  });
+
   it("rejects reads outside the workspace", async () => {
-    const result = await (createViewTool(ctx()) as any).execute({ filePath: join(outsideRoot, "secret.txt") });
+    const result = await executeTool(createViewTool(ctx()), {
+      filePath: join(outsideRoot, "secret.txt"),
+    });
     expect(result).toContain("outside the workspace");
   });
 
   it("validates write paths before requesting confirmation", async () => {
     const request = vi.fn(async () => true);
-    const result = await (createWriteTool({
+    const result = await executeTool(createWriteTool({
       ...ctx(),
       confirm: { getListenerCount: () => 1, request },
-    }) as any).execute({ filePath: "../escape.txt", content: "x" });
+    }), { filePath: "../escape.txt", content: "x" });
 
     expect(result).toContain("outside the workspace");
     expect(request).not.toHaveBeenCalled();
@@ -57,11 +136,11 @@ describe("filesystem tool workspace bounds", () => {
 
   it("blocks write and edit in plan mode", async () => {
     const planCtx: ToolContext = { ...ctx(), mode: "plan" };
-    const writeResult = await (createWriteTool(planCtx) as any).execute({
+    const writeResult = await executeTool(createWriteTool(planCtx), {
       filePath: "created.txt",
       content: "x",
     });
-    const editResult = await (createEditTool(planCtx) as any).execute({
+    const editResult = await executeTool(createEditTool(planCtx), {
       filePath: "inside.txt",
       oldText: "needle",
       newText: "changed",
@@ -73,11 +152,11 @@ describe("filesystem tool workspace bounds", () => {
 
   it("includes a unified diff when confirming file creation", async () => {
     const request = vi.fn(async () => false);
-    await (createWriteTool({
+    await executeTool(createWriteTool({
       ...ctx(),
       mode: "act",
       confirm: { getListenerCount: () => 1, request },
-    }) as any).execute({ filePath: "created.txt", content: "hello\n" });
+    }), { filePath: "created.txt", content: "hello\n" });
 
     expect(request).toHaveBeenCalledWith(
       "writeFile",
@@ -92,11 +171,11 @@ describe("filesystem tool workspace bounds", () => {
 
   it("includes a unified diff when confirming edits after validating oldText", async () => {
     const request = vi.fn(async () => false);
-    await (createEditTool({
+    await executeTool(createEditTool({
       ...ctx(),
       mode: "act",
       confirm: { getListenerCount: () => 1, request },
-    }) as any).execute({ filePath: "inside.txt", oldText: "needle", newText: "changed" });
+    }), { filePath: "inside.txt", oldText: "needle", newText: "changed" });
 
     expect(request).toHaveBeenCalledWith(
       "editFile",
@@ -109,21 +188,47 @@ describe("filesystem tool workspace bounds", () => {
     );
   });
 
-  it("does not request edit confirmation when oldText is missing", async () => {
+  it("applies approved writes and edits in act mode", async () => {
     const request = vi.fn(async () => true);
-    const result = await (createEditTool({
+    const confirmedCtx: ToolContext = {
       ...ctx(),
       mode: "act",
       confirm: { getListenerCount: () => 1, request },
-    }) as any).execute({ filePath: "inside.txt", oldText: "missing", newText: "changed" });
+    };
+
+    const writeResult = await executeTool(createWriteTool(confirmedCtx), {
+      filePath: "created.txt",
+      content: "hello\n",
+    });
+    const editResult = await executeTool(createEditTool(confirmedCtx), {
+      filePath: "created.txt",
+      oldText: "hello",
+      newText: "changed",
+    });
+
+    expect(writeResult).toContain("Successfully wrote");
+    expect(editResult).toContain("Successfully replaced");
+    await expect(readFile(join(workspaceRoot, "created.txt"), "utf-8")).resolves.toBe("changed\n");
+  });
+
+  it("does not request edit confirmation when oldText is missing", async () => {
+    const request = vi.fn(async () => true);
+    const result = await executeTool(createEditTool({
+      ...ctx(),
+      mode: "act",
+      confirm: { getListenerCount: () => 1, request },
+    }), { filePath: "inside.txt", oldText: "missing", newText: "changed" });
 
     expect(result).toContain("oldText");
     expect(request).not.toHaveBeenCalled();
   });
 
   it("rejects glob and ripgrep patterns that escape the workspace", async () => {
-    const globResult = await (createGlobTool(ctx()) as any).execute({ pattern: "../*.txt" });
-    const grepResult = await (createRipgrepTool(ctx()) as any).execute({ query: "secret", pathPattern: "../**/*" });
+    const globResult = await executeTool(createGlobTool(ctx()), { pattern: "../*.txt" });
+    const grepResult = await executeTool(createRipgrepTool(ctx()), {
+      query: "secret",
+      pathPattern: "../**/*",
+    });
 
     expect(globResult).toContain("outside the workspace");
     expect(grepResult).toContain("outside the workspace");

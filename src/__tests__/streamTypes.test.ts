@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { getTextDelta, getToolName, getToolArgs, getToolResult, StreamPart } from "../../packages/agent-host/src/lib/runtime/streamTypes.js";
+import {
+  getTextDelta,
+  getToolArgs,
+  getToolName,
+  getToolResult,
+  type StreamPart,
+} from "@excelsior/agent-host/testing/runtime";
 
 describe("StreamPart type helpers", () => {
   describe("getTextDelta", () => {

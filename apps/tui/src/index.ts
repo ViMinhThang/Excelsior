@@ -1,24 +1,27 @@
-import React from "react";
+import { createElement } from "react";
 import { render } from "ink";
-import { initDb, logError } from "@excelsior/agent-host/internal/persistence";
+import {
+  initializeAgentHostRuntime,
+  logAgentHostError,
+} from "@excelsior/agent-host";
 import App from "./app.js";
 
 async function main() {
-  initDb();
-  render(React.createElement(App));
+  initializeAgentHostRuntime();
+  render(createElement(App));
 }
 
 main().catch((err) => {
-  logError(`Bootstrap Error: ${err.message}`, err.stack);
+  logAgentHostError(`Bootstrap Error: ${err.message}`, err.stack);
   console.error(err);
 });
 
 process.on("uncaughtException", (err) => {
-  logError(`Uncaught Exception: ${err.message}`, err.stack);
+  logAgentHostError(`Uncaught Exception: ${err.message}`, err.stack);
   process.exit(1);
 });
 
 process.on("unhandledRejection", (reason) => {
-  logError(`Unhandled Rejection: ${String(reason)}`);
+  logAgentHostError(`Unhandled Rejection: ${String(reason)}`);
   process.exit(1);
 });

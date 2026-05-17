@@ -1,4 +1,6 @@
-export function parseKeyCombo(input: string, key: any): string {
+import type { TuiKey } from "./tuiKey.js";
+
+export function parseKeyCombo(input: string, key: TuiKey): string {
   const combo: string[] = [];
 
   if (key.ctrl) combo.push("ctrl");

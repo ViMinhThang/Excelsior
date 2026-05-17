@@ -1,7 +1,5 @@
-import { createChannelBus } from "./bus.js";
-import type { Bus } from "./bus.js";
-import { ToolCallInfo } from "./toolCallInfo.js";
-import { SubAgentProjectionPart } from "../projection/display.js";
+import { createChannelBus, type Bus } from "@excelsior/run-runtime";
+import type { SubAgentProjectionPart, ToolCallInfo } from "@excelsior/core";
 
 export type SubAgentEvents = {
   "spawned": { toolCallId: string; role: string };

@@ -1,8 +1,5 @@
-// Invariant: streamAgentResponse always emits run-start before
-//   any other event, and run-end as the last event.
-//   Retries are applied for transient errors (429, 502, 503, 504).
-
-import type { ToolLoopAgent } from "ai";
+import type { AgentMessage } from "@excelsior/core";
+import type { RunEventOverrides } from "@excelsior/run-runtime";
 import {
   StreamPart,
   getTextDelta,
@@ -10,43 +7,60 @@ import {
   getToolArgs,
   getToolResult,
 } from "./streamTypes.js";
-import { AgentRun } from "./agentRun.js";
 import { withRetry, isTransientError } from "./retry.js";
-import { RUN_START, RUN_END, TEXT_DELTA, TOOL_CALL_START, TOOL_CALL_END, ERROR } from "./eventNames.js";
+import {
+  RUN_START,
+  RUN_END,
+  TEXT_DELTA,
+  TOOL_CALL_START,
+  TOOL_CALL_END,
+  ERROR,
+} from "./eventNames.js";
+import type { AgentEventDataMap, AgentEventType } from "./events.js";
 
-export async function streamAgentResponse(
-  agent: ToolLoopAgent<any, any>,
-  messages: Array<{
-    role: string;
-    content: string | Array<{ type: string; text: string }>;
-    tool_call_id?: string;
-    tool_calls?: Array<{
-      id: string;
-      type: string;
-      function: { name: string; arguments: string };
-    }>;
-  }>,
-  run: AgentRun,
-  signal?: AbortSignal,
-): Promise<void> {
+export type AgentEventEmitter = <T extends AgentEventType>(
+  type: T,
+  data: AgentEventDataMap[T],
+  overrides?: RunEventOverrides,
+) => void;
+
+export interface StreamCapableAgent {
+  stream(input: { messages: AgentMessage[] }): Promise<{
+    fullStream: AsyncIterable<unknown>;
+  }>;
+}
+
+export interface StreamAgentResponseConfig {
+  agent: StreamCapableAgent;
+  messages: AgentMessage[];
+  signal: AbortSignal;
+  emit: AgentEventEmitter;
+}
+
+export async function streamAgentResponse({
+  agent,
+  messages,
+  signal,
+  emit,
+}: StreamAgentResponseConfig): Promise<void> {
   let isCancelled = false;
 
-  run.emit(RUN_START, {});
+  emit(RUN_START, {});
 
   try {
-    const stream = await withRetry(() => agent.stream({ messages } as any), {
+    const stream = await withRetry(() => agent.stream({ messages }), {
       signal,
       maxRetries: 3,
       baseDelayMs: 1000,
       onRetry: (error, attempt) => {
-        run.emit(TEXT_DELTA, {
-          delta: `\n[Retry ${attempt}/3] API error: ${error.message} - retrying...\n`,
+        emit(TEXT_DELTA, {
+          delta: `\nRetry ${attempt}/3  API error: ${error.message} - retrying...\n`,
         });
       },
     });
 
     for await (const rawPart of stream.fullStream) {
-      if (signal?.aborted) {
+      if (signal.aborted) {
         isCancelled = true;
         break;
       }
@@ -55,12 +69,12 @@ export async function streamAgentResponse(
 
       if (part.type === "text-delta") {
         const delta = getTextDelta(part);
-        run.emit(TEXT_DELTA, { delta });
+        emit(TEXT_DELTA, { delta });
       } else if (part.type === "tool-call") {
         const toolName = getToolName(part);
         const toolArgs = getToolArgs(part);
         const toolCallId = part.toolCallId;
-        run.emit(
+        emit(
           TOOL_CALL_START,
           { toolName, toolArgs, toolCallId },
           { relatedToolCallId: toolCallId },
@@ -69,7 +83,7 @@ export async function streamAgentResponse(
         const toolCallId = part.toolCallId;
         const result = getToolResult(part);
         const status = part.type === "tool-error" ? "error" : "success";
-        run.emit(
+        emit(
           TOOL_CALL_END,
           {
             toolCallId,
@@ -83,20 +97,20 @@ export async function streamAgentResponse(
       }
     }
 
-    run.emit(RUN_END, { cancelled: isCancelled });
+    emit(RUN_END, { cancelled: isCancelled });
   } catch (error: unknown) {
     const err = error instanceof Error ? error : new Error(String(error));
     if (err.name === "AbortError" || err.message.includes("abort")) {
-      run.emit(RUN_END, { cancelled: true });
+      emit(RUN_END, { cancelled: true });
       return;
     }
 
     if (isTransientError(err)) {
-      run.emit(TEXT_DELTA, {
+      emit(TEXT_DELTA, {
         delta: `\n[Error] API request failed after retries: ${err.message}\n`,
       });
     }
-    run.emit(ERROR, { message: err.message ?? String(error) });
-    run.emit(RUN_END, { cancelled: true });
+    emit(ERROR, { message: err.message ?? String(error) });
+    emit(RUN_END, { cancelled: true });
   }
 }

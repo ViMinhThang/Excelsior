@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import type { ConfirmBus, ConfirmRequest } from "../runtime/confirmTypes.js";
-import type { AgentMode } from "../runtime/agentMode.js";
+import type { AgentMode } from "@excelsior/core";
 
 export type ToolCapability =
   | "fs:read"

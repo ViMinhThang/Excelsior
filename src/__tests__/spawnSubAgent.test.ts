@@ -1,45 +1,61 @@
-import { describe, expect, it, vi } from "vitest";
-import { AgentRun } from "../../packages/agent-host/src/lib/runtime/agentRun.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import type { ToolContext } from "../../packages/agent-host/src/lib/tool/context.js";
-import { createWriteTool } from "../../packages/agent-host/src/agent/tools/fs/write.js";
-import { createEditTool } from "../../packages/agent-host/src/agent/tools/fs/edit.js";
-import { createRunCommandTool } from "../../packages/agent-host/src/agent/tools/runCommand/runCommand.js";
-import type { AnyAgentEvent } from "../../packages/agent-host/src/lib/runtime/events.js";
-import type { RunRecorder } from "../../packages/agent-host/src/lib/persistence/runRecorder.js";
-import { createSubAgentEventSink } from "../../packages/agent-host/src/lib/runtime/subAgentEventSink.js";
+import {
+  AgentRun,
+  createSubAgentEventSink,
+  type AnyAgentEvent,
+  type RunRecorder,
+  type StreamCapableAgent,
+} from "@excelsior/agent-host/testing/runtime";
+import {
+  createEditTool,
+  createRunCommandTool,
+  createSpawnSubAgentTool,
+  createWriteTool,
+  executeTool,
+  type ToolContext,
+} from "@excelsior/agent-host/testing/tools";
 
-const captured = vi.hoisted(() => ({
+const captured = {
   ctx: undefined as ToolContext | undefined,
   signal: undefined as AbortSignal | undefined,
   waitForAbort: false,
   emitText: false,
-}));
+};
 
-vi.mock("../../packages/agent-host/src/agent/agent.js", () => ({
-  createAgent: vi.fn((_instructions, _extraTools, ctx) => {
-    captured.ctx = ctx;
-    return {};
-  }),
-}));
-
-vi.mock("../../packages/agent-host/src/lib/runtime/agentStream.js", () => ({
-  streamAgentResponse: vi.fn(async (_agent, _messages, run, signal: AbortSignal) => {
-    captured.signal = signal;
-    if (captured.emitText) {
-      run.emit("text-delta", { delta: "child output" });
-    }
-    if (!captured.waitForAbort) return;
-    await new Promise<void>((resolve) => {
-      if (signal.aborted) resolve();
-      signal.addEventListener("abort", () => resolve(), { once: true });
-    });
-  }),
-}));
+function createSpawnDependencies() {
+  const noopAgent: StreamCapableAgent = {
+    stream: async () => ({ fullStream: [] }),
+  };
+  return {
+    createAgent: vi.fn((_instructions, _extraTools, ctx) => {
+      captured.ctx = ctx;
+      return noopAgent;
+    }),
+    streamAgentResponse: vi.fn(async ({ emit, signal }) => {
+      captured.signal = signal;
+      if (captured.emitText) {
+        emit("text-delta", { delta: "child output" });
+      }
+      if (!captured.waitForAbort) return;
+      await new Promise<void>((resolve) => {
+        if (signal.aborted) resolve();
+        signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    }),
+  };
+}
 
 describe("spawnSubAgent tool safety context", () => {
+  beforeEach(() => {
+    captured.ctx = undefined;
+    captured.signal = undefined;
+    captured.waitForAbort = false;
+    captured.emitText = false;
+  });
+
   function fakeRecorder() {
     const events: AnyAgentEvent[] = [];
     const recorder: RunRecorder = {
@@ -60,7 +76,6 @@ describe("spawnSubAgent tool safety context", () => {
   }
 
   it("passes confirmation context to child agent tools", async () => {
-    const { createSpawnSubAgentTool } = await import("../../packages/agent-host/src/agent/spawn/spawnSubAgent.js");
     const workspaceRoot = await mkdtemp(join(tmpdir(), "excelsior-child-"));
     await writeFile(join(workspaceRoot, "child.txt"), "x", "utf-8");
     const request = vi.fn(async () => false);
@@ -73,13 +88,25 @@ describe("spawnSubAgent tool safety context", () => {
     };
 
     try {
-      const tool = createSpawnSubAgentTool(parentRun, new Map(), "ses_test", ctx);
-      await (tool as any).execute({ role: "Reviewer", instruction: "check" }, { toolCallId: "tc1" });
+      const tool = createSpawnSubAgentTool(
+        parentRun,
+        new Map(),
+        "ses_test",
+        ctx,
+        undefined,
+        undefined,
+        createSpawnDependencies(),
+      );
+      await executeTool(tool, { role: "Reviewer", instruction: "check" }, { toolCallId: "tc1" });
 
       expect(captured.ctx?.confirm).toBe(ctx.confirm);
-      await (createWriteTool(captured.ctx) as any).execute({ filePath: "new-child.txt", content: "x" });
-      await (createEditTool(captured.ctx) as any).execute({ filePath: "child.txt", oldText: "x", newText: "y" });
-      await (createRunCommandTool(captured.ctx) as any).execute({ command: "npm", args: ["install"] });
+      await executeTool(createWriteTool(captured.ctx), { filePath: "new-child.txt", content: "x" });
+      await executeTool(createEditTool(captured.ctx), {
+        filePath: "child.txt",
+        oldText: "x",
+        newText: "y",
+      });
+      await executeTool(createRunCommandTool(captured.ctx), { command: "npm", args: ["install"] });
 
       expect(request).toHaveBeenCalledTimes(3);
     } finally {
@@ -88,7 +115,6 @@ describe("spawnSubAgent tool safety context", () => {
   });
 
   it("aborts the child stream when the parent context aborts", async () => {
-    const { createSpawnSubAgentTool } = await import("../../packages/agent-host/src/agent/spawn/spawnSubAgent.js");
     captured.waitForAbort = true;
     const parentRun = new AgentRun("ses_test");
     const abortController = new AbortController();
@@ -97,18 +123,27 @@ describe("spawnSubAgent tool safety context", () => {
       abortSignal: abortController.signal,
       workspaceRoot: process.cwd(),
     };
-    const tool = createSpawnSubAgentTool(parentRun, new Map(), "ses_test", ctx);
+    const childRuns = new Map<string, AgentRun>();
+    const tool = createSpawnSubAgentTool(
+      parentRun,
+      childRuns,
+      "ses_test",
+      ctx,
+      undefined,
+      undefined,
+      createSpawnDependencies(),
+    );
 
-    const pending = (tool as any).execute({ role: "Reviewer", instruction: "check" }, { toolCallId: "tc1" });
+    const pending = executeTool(tool, { role: "Reviewer", instruction: "check" }, { toolCallId: "tc1" });
     abortController.abort();
     await pending;
 
     expect(captured.signal?.aborted).toBe(true);
+    expect([...childRuns.values()][0].isCancelled).toBe(true);
     captured.waitForAbort = false;
   });
 
   it("records child events and notifies only the provided sub-agent sink", async () => {
-    const { createSpawnSubAgentTool } = await import("../../packages/agent-host/src/agent/spawn/spawnSubAgent.js");
     captured.emitText = true;
     const parentRun = new AgentRun("ses_test");
     const ctx: ToolContext = {
@@ -123,8 +158,16 @@ describe("spawnSubAgent tool safety context", () => {
     ownedSink.on("output", ownedOutput);
     otherSink.on("output", otherOutput);
 
-    const tool = createSpawnSubAgentTool(parentRun, new Map(), "ses_test", ctx, recorder, ownedSink);
-    await (tool as any).execute({ role: "Reviewer", instruction: "check" }, { toolCallId: "tc1" });
+    const tool = createSpawnSubAgentTool(
+      parentRun,
+      new Map(),
+      "ses_test",
+      ctx,
+      recorder,
+      ownedSink,
+      createSpawnDependencies(),
+    );
+    await executeTool(tool, { role: "Reviewer", instruction: "check" }, { toolCallId: "tc1" });
 
     expect(events.map((event) => event.type)).toEqual(["text-delta"]);
     expect(ownedOutput).toHaveBeenCalledTimes(1);
