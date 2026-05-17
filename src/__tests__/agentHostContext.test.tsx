@@ -4,7 +4,7 @@ import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import type { AgentHost } from "@excelsior/agent-host";
 import { AgentHostProvider } from "../../apps/tui/src/context/AgentHostContext.js";
-import { useAgentManager } from "../../apps/tui/src/hooks/useAgentManager.js";
+import { useAgentHostClient } from "../../apps/tui/src/hooks/useAgentHostClient.js";
 
 function createMockHost(): AgentHost {
   const state = {
@@ -45,12 +45,13 @@ function createMockHost(): AgentHost {
     respondToConfirmation: () => {},
     approveAllConfirmations: () => {},
     clearMessages: () => {},
+    revertLastTurn: async () => ({ handled: true }),
     dispose: () => {},
   };
 }
 
 function Probe() {
-  const { state, getCommands } = useAgentManager();
+  const { state, getCommands } = useAgentHostClient();
   return <Text>{`${state.mode}:${getCommands()[0].name}`}</Text>;
 }
 

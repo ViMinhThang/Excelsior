@@ -59,7 +59,9 @@ export function createEditTool(ctx?: ToolContext) {
         });
         if (!confirmation.allowed) return confirmation.message;
 
+        await ctx?.revert?.fileCheckpoint.captureBeforeWrite(filePath, fullPath);
         await fs.writeFile(fullPath, updated, "utf-8");
+        ctx?.revert?.fileCheckpoint.recordWrite(filePath, fullPath, updated);
         return `Successfully replaced the block in ${filePath}.`;
       } catch (error: unknown) {
         return `Error editing file: ${error instanceof Error ? error.message : String(error)}`;

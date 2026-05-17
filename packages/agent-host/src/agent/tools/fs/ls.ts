@@ -43,7 +43,7 @@ export function createLsTool(ctx?: ToolContext) {
         );
 
         if (stats.length === 0) return "Directory is empty.";
-        return ["TYPE | NAME".padEnd(35) + " | SIZE".padStart(20) + " | MODIFIED", "-".repeat(80), ...stats].join("\n");
+        return stats.join("\n");
       } catch (error: unknown) {
         return `Error listing directory: ${error instanceof Error ? error.message : String(error)}`;
       }

@@ -9,6 +9,7 @@ describe("chat mode hints", () => {
       hasPending: false,
       activePanelId: null,
       subAgentCount: 0,
+      toolCount: 0,
     })).not.toContain("Ctrl+O");
 
     expect(getChatModeHint({
@@ -17,7 +18,28 @@ describe("chat mode hints", () => {
       hasPending: false,
       activePanelId: null,
       subAgentCount: 1,
+      toolCount: 0,
     })).toContain("Ctrl+O");
+  });
+
+  it("shows tool focus hints when tool blocks exist", () => {
+    expect(getChatModeHint({
+      chatMode: "input",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      toolCount: 1,
+    })).toContain("Ctrl+T tools");
+
+    expect(getChatModeHint({
+      chatMode: "tool-focus",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      toolCount: 1,
+    })).toBe("Enter expand/collapse · Up/Down tools · Ctrl+T/Esc back");
   });
 
   it("uses panel and sub-agent detail mode hints", () => {
@@ -27,6 +49,7 @@ describe("chat mode hints", () => {
       hasPending: false,
       activePanelId: "session.picker",
       subAgentCount: 0,
+      toolCount: 0,
     })).toBe("Up/Down select · Enter open · Esc close");
 
     expect(getChatModeHint({
@@ -35,6 +58,7 @@ describe("chat mode hints", () => {
       hasPending: false,
       activePanelId: null,
       subAgentCount: 1,
+      toolCount: 0,
     })).toBe("Ctrl+O/Esc back · Up/Down switch");
   });
 });

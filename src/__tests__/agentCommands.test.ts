@@ -18,6 +18,11 @@ function createHost(): AgentCommandHost {
     renameSession: vi.fn(),
     getMode: vi.fn(() => "plan"),
     setMode: vi.fn(),
+    revertLastTurn: vi.fn(async () => ({
+      handled: true,
+      message: "Reverted latest turn.",
+      clearInput: true,
+    })),
   };
 }
 
@@ -43,6 +48,7 @@ describe("agent command registry", () => {
     const help = getHelpText(commands.map((command) => command.definition));
 
     expect(help).toContain("Core\n/help - List all available commands");
+    expect(help).toContain("/revert - Revert the latest turn's write/edit file changes");
     expect(help).toContain("Mode\n/mode - Show or switch Plan/Act mode");
     expect(help).toContain("Review\n/review - Review a pull request by number");
     expect(help.indexOf("Core")).toBeLessThan(help.indexOf("Mode"));
@@ -70,6 +76,12 @@ describe("agent command registry", () => {
       handled: true,
       openPanelId: "session.picker",
     });
+
+    await expect(executeAgentCommand("/revert", host, commands)).resolves.toMatchObject({
+      handled: true,
+      message: "Reverted latest turn.",
+    });
+    expect(host.revertLastTurn).toHaveBeenCalled();
 
     await expect(executeAgentCommand("/nope", host, commands)).resolves.toMatchObject({
       handled: true,

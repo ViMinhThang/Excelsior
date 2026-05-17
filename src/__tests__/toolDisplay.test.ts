@@ -64,6 +64,36 @@ describe("tool display model", () => {
     expect(display.detail).toContain("line");
   });
 
+  it("keeps successful view results available for explicit expansion", () => {
+    const display = createToolDisplay({
+      toolName: "view",
+      toolArgs: JSON.stringify({ filePath: "package.json" }),
+      status: "completed",
+      content: "1: {\n2:   \"name\": \"excelsior\"",
+    });
+
+    expect(display.showCompletion).toBe(false);
+    expect(display.detail).toBeUndefined();
+    expect(display.resultPreview).toEqual(["1: {", "2:   \"name\": \"excelsior\""]);
+  });
+
+  it("strips legacy ls headers from displayed previews", () => {
+    const display = createToolDisplay({
+      toolName: "ls",
+      toolArgs: JSON.stringify({ directoryPath: "." }),
+      status: "completed",
+      content: [
+        "TYPE | NAME                 | SIZE | MODIFIED",
+        "--------------------------------------------------------------------------------",
+        "DIR  | src                  | - bytes | 2026-05-17",
+      ].join("\n"),
+    });
+
+    expect(display.resultPreview).toEqual([
+      "DIR  | src                  | - bytes | 2026-05-17",
+    ]);
+  });
+
   it("formats default tool without specialized formatter", () => {
     const display = createToolDisplay({
       toolName: "write",

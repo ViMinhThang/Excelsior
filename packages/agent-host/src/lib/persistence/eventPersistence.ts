@@ -33,6 +33,14 @@ export async function loadSessionEvents(sessionId: string): Promise<AnyAgentEven
   return defaultRunRecorder.loadCompletedEvents(sessionId);
 }
 
+export function getLastCompletedTurn(sessionId: string) {
+  return defaultRunRecorder.getLastCompletedTurn(sessionId);
+}
+
+export function dropLastCompletedTurn(sessionId: string, expectedRunId?: string) {
+  return defaultRunRecorder.dropLastCompletedTurn(sessionId, expectedRunId);
+}
+
 export function loadSessionsByWorkspace(workspaceId: string, db?: Database.Database): Session[] {
   const _db = db ?? getDb();
   const rows = _db

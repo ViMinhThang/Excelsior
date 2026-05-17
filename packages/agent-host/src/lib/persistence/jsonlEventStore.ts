@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, unlink, readdir } from "fs/promises";
+import { appendFile, mkdir, readFile, unlink, readdir, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { AnyAgentEvent } from "../runtime/events.js";
@@ -68,6 +68,19 @@ export interface CheckpointResult {
   hasIncompleteRun: boolean;
 }
 
+export interface LastCompletedTurn {
+  runId: string;
+  eventCount: number;
+  checkpointIndex: number;
+}
+
+export interface DropLastCompletedTurnResult {
+  dropped: boolean;
+  runId?: string;
+  removedEvents: number;
+  reason?: "no-completed-turn" | "latest-turn-mismatch";
+}
+
 function timestampMs(event: AnyAgentEvent): number {
   const parsed = Date.parse(event.timestamp);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -97,6 +110,44 @@ function belongsToCompletedRun(event: AnyAgentEvent, completedRunIds: Set<string
   );
 }
 
+function turnCompleteRunId(event: AnyAgentEvent): string | null {
+  if (event.type !== TURN_COMPLETE) return null;
+  return (event.data as { runId?: string }).runId ?? null;
+}
+
+function belongsToRun(event: AnyAgentEvent, runId: string): boolean {
+  const checkpointRunId = turnCompleteRunId(event);
+  if (checkpointRunId) return checkpointRunId === runId;
+
+  return (
+    event.runId === runId ||
+    event.parentEventId === runId ||
+    event.correlationId === runId
+  );
+}
+
+async function waitForSessionQueue(sessionId: string): Promise<void> {
+  await appendQueues.get(sessionId)?.catch(() => {});
+}
+
+function findLastCompletedTurn(events: AnyAgentEvent[]): LastCompletedTurn | null {
+  const checkpoint = events
+    .map((event, index) => ({ event, index }))
+    .filter(({ event }) => event.type === TURN_COMPLETE)
+    .at(-1);
+
+  if (!checkpoint) return null;
+
+  const runId = turnCompleteRunId(checkpoint.event);
+  if (!runId) return null;
+
+  return {
+    runId,
+    checkpointIndex: checkpoint.index,
+    eventCount: events.filter((event) => belongsToRun(event, runId)).length,
+  };
+}
+
 export async function loadUntilLastCheckpoint(sessionId: string): Promise<CheckpointResult> {
   const all = await loadRawSessionEvents(sessionId);
   const checkpoints = all
@@ -120,8 +171,52 @@ export async function loadUntilLastCheckpoint(sessionId: string): Promise<Checkp
   };
 }
 
+export async function getLastCompletedTurn(
+  sessionId: string,
+): Promise<LastCompletedTurn | null> {
+  await waitForSessionQueue(sessionId);
+  return findLastCompletedTurn(await loadRawSessionEvents(sessionId));
+}
+
+export async function dropLastCompletedTurn(
+  sessionId: string,
+  expectedRunId?: string,
+): Promise<DropLastCompletedTurnResult> {
+  await waitForSessionQueue(sessionId);
+  const events = await loadRawSessionEvents(sessionId);
+  const latest = findLastCompletedTurn(events);
+
+  if (!latest) {
+    return { dropped: false, removedEvents: 0, reason: "no-completed-turn" };
+  }
+
+  if (expectedRunId && latest.runId !== expectedRunId) {
+    return {
+      dropped: false,
+      runId: latest.runId,
+      removedEvents: 0,
+      reason: "latest-turn-mismatch",
+    };
+  }
+
+  const remaining = events.filter((event) => !belongsToRun(event, latest.runId));
+  await ensureDir();
+  await writeFile(
+    filePath(sessionId),
+    remaining.map((event) => JSON.stringify(event)).join("\n") +
+      (remaining.length > 0 ? "\n" : ""),
+    "utf-8",
+  );
+
+  return {
+    dropped: true,
+    runId: latest.runId,
+    removedEvents: events.length - remaining.length,
+  };
+}
+
 export async function deleteSessionEvents(sessionId: string): Promise<void> {
-  await appendQueues.get(sessionId)?.catch(() => {});
+  await waitForSessionQueue(sessionId);
   try {
     await unlink(filePath(sessionId));
   } catch {}

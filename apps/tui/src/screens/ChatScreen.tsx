@@ -29,6 +29,9 @@ const ChatScreen = () => {
     chatMode,
     subAgents,
     subAgentIndex,
+    toolCount,
+    selectedToolId,
+    expandedToolIds,
     messages,
     activePanel,
     activePanelId,
@@ -74,7 +77,11 @@ const ChatScreen = () => {
       ) : (
         <>
           <Box flexDirection="column">
-            <ChatHistory blocks={displayBlocks} />
+            <ChatHistory
+              blocks={displayBlocks}
+              selectedToolId={selectedToolId}
+              expandedToolIds={expandedToolIds}
+            />
           </Box>
 
           {isLoading && (
@@ -121,6 +128,7 @@ const ChatScreen = () => {
         hasPending={!!pending}
         activePanelId={activePanelId}
         subAgentCount={subAgents.length}
+        toolCount={toolCount}
         mode={mode}
         workspaceRootPath={workspace.rootPath}
       />

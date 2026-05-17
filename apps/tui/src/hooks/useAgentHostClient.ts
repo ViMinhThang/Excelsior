@@ -9,7 +9,7 @@ import type {
 } from "@excelsior/core";
 import { useAgentHost } from "../context/AgentHostContext.js";
 
-export interface UseAgentManagerReturn {
+export interface UseAgentHostClientReturn {
   state: AgentClientState;
   send: (content: string, options?: SendOptions) => void;
   cancel: () => void;
@@ -28,7 +28,7 @@ export interface UseAgentManagerReturn {
   approveAllConfirmations: () => void;
 }
 
-export function useAgentManager(): UseAgentManagerReturn {
+export function useAgentHostClient(): UseAgentHostClientReturn {
   const host = useAgentHost();
 
   const state = useSyncExternalStore(
@@ -38,20 +38,38 @@ export function useAgentManager(): UseAgentManagerReturn {
 
   return {
     state,
-    send: useCallback((content: string, options?: SendOptions) => host.send(content, options), [host]),
+    send: useCallback(
+      (content: string, options?: SendOptions) => host.send(content, options),
+      [host],
+    ),
     cancel: useCallback(() => host.cancel(), [host]),
     clear: useCallback(() => host.clearMessages(), [host]),
-    executeCommand: useCallback((input: string) => host.executeCommand(input), [host]),
+    executeCommand: useCallback(
+      (input: string) => host.executeCommand(input),
+      [host],
+    ),
     getCommands: useCallback(() => host.getCommands(), [host]),
-    switchSession: useCallback((id: string) => { void host.switchSession(id); }, [host]),
+    switchSession: useCallback((id: string) => {
+      void host.switchSession(id);
+    }, [host]),
     createSession: useCallback((title?: string) => host.createSession(title), [host]),
-    deleteSession: useCallback((id: string) => { void host.deleteSession(id); }, [host]),
-    renameSession: useCallback((id: string, title: string) => host.renameSession(id, title), [host]),
+    deleteSession: useCallback((id: string) => {
+      void host.deleteSession(id);
+    }, [host]),
+    renameSession: useCallback(
+      (id: string, title: string) => host.renameSession(id, title),
+      [host],
+    ),
     listSessions: useCallback(() => host.getState().sessions, [host]),
     getCurrentSessionId: useCallback(() => host.getState().currentSessionId, [host]),
     setMode: useCallback((mode: AgentMode) => host.setMode(mode), [host]),
     toggleMode: useCallback(() => host.toggleMode(), [host]),
-    respondToConfirmation: useCallback((callId: string, approved: boolean) => host.respondToConfirmation(callId, approved), [host]),
+    respondToConfirmation: useCallback(
+      (callId: string, approved: boolean) => {
+        host.respondToConfirmation(callId, approved);
+      },
+      [host],
+    ),
     approveAllConfirmations: useCallback(() => host.approveAllConfirmations(), [host]),
   };
 }

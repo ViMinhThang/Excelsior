@@ -15,6 +15,7 @@ export interface AgentCommandHost {
   renameSession(sessionId: string, title: string): void;
   getMode(): AgentMode;
   setMode(mode: AgentMode): void;
+  revertLastTurn(): Promise<CommandResult>;
 }
 
 export interface ReviewCommandServices {

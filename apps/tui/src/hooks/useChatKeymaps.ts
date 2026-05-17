@@ -3,7 +3,7 @@ import { formatAgentMode } from "@excelsior/core";
 import { completeCommandInput } from "../lib/commandSubmission.js";
 import { useKeymap } from "./useKeymap.js";
 
-type ChatMode = "input" | "subagent-detail";
+type ChatMode = "input" | "subagent-detail" | "tool-focus";
 
 interface CommandSuggestionState {
   show: boolean;
@@ -30,6 +30,10 @@ interface UseChatKeymapsOptions {
   openSubAgent: () => void;
   nextSubAgent: () => void;
   prevSubAgent: () => void;
+  openToolFocus: () => void;
+  nextTool: () => void;
+  prevTool: () => void;
+  toggleSelectedTool: () => void;
   navigateUp: () => void;
   navigateDown: () => void;
   handleSubmit: () => void;
@@ -52,6 +56,10 @@ export function useChatKeymaps({
   openSubAgent,
   nextSubAgent,
   prevSubAgent,
+  openToolFocus,
+  nextTool,
+  prevTool,
+  toggleSelectedTool,
   navigateUp,
   navigateDown,
   handleSubmit,
@@ -77,6 +85,17 @@ export function useChatKeymaps({
       "ctrl+o": () => setChatMode("input"),
     },
     { enabled: chatMode === "subagent-detail", priority: 80 },
+  );
+
+  useKeymap(
+    {
+      up: () => prevTool(),
+      down: () => nextTool(),
+      return: () => toggleSelectedTool(),
+      escape: () => setChatMode("input"),
+      "ctrl+t": () => setChatMode("input"),
+    },
+    { enabled: chatMode === "tool-focus", priority: 80 },
   );
 
   useKeymap(
@@ -113,6 +132,9 @@ export function useChatKeymaps({
       },
       "ctrl+o": () => {
         openSubAgent();
+      },
+      "ctrl+t": () => {
+        openToolFocus();
       },
       up: () => navigateUp(),
       down: () => navigateDown(),

@@ -1,16 +1,25 @@
 import { createRunSession } from "./runSession.js";
-import { persistSession } from "../lib/persistence/eventPersistence.js";
 import { createAgent } from "../agent/agent.js";
 import { createSpawnSubAgentTool } from "../agent/spawn/spawnSubAgent.js";
 import type { RunRecorder } from "../lib/persistence/runRecorder.js";
 import type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
 import type { AgentMode, AgentMessage } from "@excelsior/core";
+import type { FileCheckpoint } from "../lib/revert/fileCheckpoint.js";
+import {
+  defaultSessionMetadataStore,
+  type SessionMetadataStore,
+} from "./sessions/SessionMetadataStore.js";
 
 export interface AIHistoryRef {
   current: AgentMessage[];
 }
 
 export class ChatService {
+  constructor(
+    private readonly sessionMetadataStore: SessionMetadataStore =
+      defaultSessionMetadataStore,
+  ) {}
+
   submitUserTurn(
     content: string,
     options?: {
@@ -24,6 +33,7 @@ export class ChatService {
       silent?: boolean;
       displayContent?: string;
       mode?: AgentMode;
+      fileCheckpoint?: FileCheckpoint;
     },
   ) {
     const aiMessages: AgentMessage[] = [];
@@ -55,6 +65,7 @@ export class ChatService {
       subAgentEvents: options?.subAgentEvents,
       mode: options?.mode,
       workspaceRoot: options?.workspaceRoot,
+      fileCheckpoint: options?.fileCheckpoint,
     });
 
     if (!options?.silent) {
@@ -62,7 +73,7 @@ export class ChatService {
     }
 
     const sessionId = options?.sessionId ?? run.id;
-    persistSession({
+    this.sessionMetadataStore.persist({
       id: sessionId,
       startedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

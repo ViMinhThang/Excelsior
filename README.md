@@ -26,6 +26,7 @@ npm run dev
 | `/help` | List all available commands |
 | `/clear` | Clear chat messages from the screen |
 | `/reset` | Delete all conversation history |
+| `/revert` | Revert the latest turn's `write`/`edit` file changes |
 | `/settings` | Open the Settings screen |
 | `/review <number>` | Fetch a PR diff and run a multi-agent review |
 | `/review-post <number> <body>` | Post a comment to a PR |
@@ -56,7 +57,7 @@ src/
 `- __tests__/      # integration and package-boundary tests
 ```
 
-See [`docs/architecture.md`](docs/architecture.md) for current runtime boundaries, or open
+See [`docs/architecture.md`](docs/architecture.md) and [`docs/runtime-state.md`](docs/runtime-state.md) for current runtime boundaries, or open
 [`docs/wiki/index.html`](docs/wiki/index.html) for the full HTML architecture wiki.
 
 Slash command behavior lives behind `@excelsior/agent-host`; UI-specific panels live in `@excelsior/tui`.
