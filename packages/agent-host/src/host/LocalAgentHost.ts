@@ -27,13 +27,18 @@ export class LocalAgentHost implements AgentHost, AgentCommandHost {
   private snapshot: AgentClientState | null = null;
   private readonly unsubManager: () => void;
 
-  constructor(manager = new AgentManager()) {
+  //easy for testing if we need MockAgentManager() or mock for  HostSettingsService()
+  constructor(
+    manager = new AgentManager(),
+    settings = new HostSettingsService(),
+  ) {
     this.manager = manager;
-    this.settings = new HostSettingsService();
+    this.settings = settings;
     this.confirmations = new HostConfirmationController(() => this.notify());
     this.unsubManager = this.manager.subscribe(() => this.notify());
   }
 
+  //avoid returning new snapshot object causing react to rerender
   getState(): AgentClientState {
     if (this.snapshot) return this.snapshot;
 

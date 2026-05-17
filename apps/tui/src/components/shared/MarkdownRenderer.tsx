@@ -7,7 +7,7 @@ import { normalizePipeTables, formatMarkdownTable, getRawText, getTokenText } fr
 import { theme } from "../../theme.js";
 
 export { highlightCode, highlightFilenames } from "../../lib/markdown/highlight.js";
-export { normalizePipeTables, formatMarkdownTable, MarkdownTableInput } from "../../lib/markdown/tables.js";
+export { normalizePipeTables, formatMarkdownTable, type MarkdownTableInput } from "../../lib/markdown/tables.js";
 
 const InlineRenderer: FC<{ tokens: Token[] }> = ({ tokens }) => (
   <>

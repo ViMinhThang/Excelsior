@@ -88,7 +88,8 @@ export class SessionManager {
   }
 
   private _normalizeTitle(title?: string): string {
-    return title?.trim() || "Untitled";
+    const trimmed = title?.trim() || "Untitled";
+    return trimmed.length > 50 ? trimmed.slice(0, 47) + "..." : trimmed;
   }
 
   private _titleCurrentSessionFromFirstPrompt(title?: string): void {
@@ -96,7 +97,7 @@ export class SessionManager {
     const nextTitle = title?.trim();
     if (!session || !nextTitle) return;
     if (session.metadata.userInput || (session.title && session.title !== "Untitled")) return;
-    updateSessionTitle(session.id, nextTitle);
+    updateSessionTitle(session.id, this._normalizeTitle(nextTitle));
     this._reloadSessions();
   }
 
