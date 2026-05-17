@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigation } from "../context/NavigationContext.js";
 import { useAgentHostClient } from "./useAgentHostClient.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";
@@ -10,6 +10,9 @@ import { useCommandResult } from "./useCommandResult.js";
 import { useChatPanel } from "./useChatPanel.js";
 import { useChatSubmission } from "./useChatSubmission.js";
 import { useChatKeymaps } from "./useChatKeymaps.js";
+import { useCommandPalette } from "./useCommandPalette.js";
+import { getHelpShortcuts } from "../lib/helpShortcuts.js";
+import { useToast } from "./useToast.js";
 
 export function useChatScreenState() {
   const { navigate } = useNavigation();
@@ -42,6 +45,22 @@ export function useChatScreenState() {
     deleteSession: agent.deleteSession,
     resetInput: inputHistory.resetInput,
     setCommandResult: command.setCommandResult,
+  });
+
+  const [helpOpen, setHelpOpen] = useState(false);
+  const toggleHelp = useCallback(() => setHelpOpen((v) => !v), []);
+  const { toasts, showToast } = useToast();
+  const helpShortcuts = getHelpShortcuts(
+    subAgentNav.chatMode,
+    !!confirmation.pending,
+    isLoading,
+    suggestion.show && suggestion.filtered.length > 0,
+    !!panel.activePanelId,
+  );
+
+  const palette = useCommandPalette({
+    commands: agent.getCommands(),
+    executeCommand: (input: string) => { void agent.executeCommand(input); },
   });
 
   useEffect(() => {
@@ -80,12 +99,18 @@ export function useChatScreenState() {
     openToolFocus: () => {
       if (toolNav.toolBlocks.length > 0) subAgentNav.setChatMode("tool-focus");
     },
+    openToolDetail: () => {
+      if (toolNav.selectedToolId) subAgentNav.setChatMode("tool-detail");
+    },
     nextTool: toolNav.nextTool,
     prevTool: toolNav.prevTool,
     toggleSelectedTool: toolNav.toggleSelectedTool,
     navigateUp: inputHistory.navigateUp,
     navigateDown: inputHistory.navigateDown,
     handleSubmit,
+    openPalette: palette.toggle,
+    toggleHelp,
+    showToast,
   });
 
   return {
@@ -94,8 +119,11 @@ export function useChatScreenState() {
     chatMode: subAgentNav.chatMode,
     subAgents: subAgentNav.subAgentBlocks,
     subAgentIndex: subAgentNav.subAgentIndex,
+    selectedSubAgentId: subAgentNav.chatMode === "subagent-focus"
+      ? subAgentNav.subAgentBlocks[subAgentNav.subAgentIndex]?.id ?? null
+      : null,
     toolCount: toolNav.toolBlocks.length,
-    selectedToolId: subAgentNav.chatMode === "tool-focus" ? toolNav.selectedToolId : null,
+    selectedToolId: subAgentNav.chatMode === "tool-focus" || subAgentNav.chatMode === "tool-detail" ? toolNav.selectedToolId : null,
     expandedToolIds: toolNav.expandedToolIds,
     messages: displayBlocks,
     activePanel: panel.activePanel,
@@ -109,5 +137,10 @@ export function useChatScreenState() {
     commandResult: command.commandResult,
     mode,
     featureContext: panel.panelContext,
+    palette,
+    helpOpen,
+    helpShortcuts,
+    toasts,
+    showToast,
   };
 }

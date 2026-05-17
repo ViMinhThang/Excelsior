@@ -28,16 +28,14 @@ const FooterBar: FC<FooterBarProps> = ({
   workspaceRootPath,
 }) => {
   const footerHint = getChatModeHint({ chatMode, isLoading, hasPending, activePanelId, subAgentCount, toolCount });
+  const footerText = `${footerHint} | mode: ${formatAgentMode(mode)} | workspace: ${workspaceRootPath}`;
 
   return (
-    <>
-      <Box marginTop={1} paddingLeft={1}>
-        <Text color={theme.colors.muted} dimColor>{footerHint}{theme.glyphs.separator}mode: {formatAgentMode(mode)}</Text>
-      </Box>
-      <Box paddingLeft={1}>
-        <Text color={theme.colors.muted} dimColor>workspace: {workspaceRootPath}</Text>
-      </Box>
-    </>
+    <Box marginTop={1} paddingLeft={1}>
+      <Text color={theme.colors.muted} dimColor wrap="truncate-end">
+        {footerText}
+      </Text>
+    </Box>
   );
 };
 
