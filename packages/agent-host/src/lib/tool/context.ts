@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { ConfirmBus, ConfirmRequest } from "../runtime/confirmTypes.js";
 import type { AgentMode } from "@excelsior/core";
+import type { FileCheckpoint } from "../revert/fileCheckpoint.js";
 
 export type ToolCapability =
   | "fs:read"
@@ -19,12 +20,17 @@ export interface ConfirmCapability {
   ): Promise<boolean>;
 }
 
+export interface RevertCapability {
+  fileCheckpoint: FileCheckpoint;
+}
+
 export interface ToolContext {
   capabilities: ReadonlySet<ToolCapability>;
   confirm?: ConfirmCapability;
   abortSignal?: AbortSignal;
   workspaceRoot?: string;
   mode?: AgentMode;
+  revert?: RevertCapability;
 }
 
 export function createToolContext(options?: {
@@ -32,6 +38,7 @@ export function createToolContext(options?: {
   confirmBus?: ConfirmBus;
   workspaceRoot?: string;
   mode?: AgentMode;
+  revert?: RevertCapability;
 }): ToolContext {
   const capabilities = new Set<ToolCapability>();
   capabilities.add("fs:read");
@@ -42,6 +49,7 @@ export function createToolContext(options?: {
     abortSignal: options?.abortSignal,
     workspaceRoot: options?.workspaceRoot ?? process.cwd(),
     mode: options?.mode ?? "act",
+    revert: options?.revert,
   };
 
   if (options?.confirmBus) {

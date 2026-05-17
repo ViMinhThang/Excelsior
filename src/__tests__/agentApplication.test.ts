@@ -1,20 +1,34 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
+import { join } from "path";
+import { tmpdir } from "os";
 import {
-  AgentManager,
+  AgentApplication,
+  type AgentSessionService,
   type ChatTurnService,
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
+  makeEvent,
+  TURN_COMPLETE,
   type AgentEventDataMap,
   type AnyAgentEvent,
   type SubAgentEventSink,
 } from "@excelsior/agent-host/testing/runtime";
+import {
+  appendEvent,
+  deleteAllSessionsEvents,
+  loadRawSessionEvents,
+  resetSessionsDirForTests,
+  setSessionsDirForTests,
+} from "@excelsior/agent-host/testing/persistence";
+import type { FileCheckpoint } from "@excelsior/agent-host/testing/tools";
 import type { RunCompletion, RunHandle } from "@excelsior/run-runtime";
 import {
   createFakeChatService,
   createFakeSessionManager,
   createPendingRunHandle,
-} from "./helpers/agentManager.js";
+} from "./helpers/agentApplication.js";
 
 function completionFor(done: Promise<AnyAgentEvent[]>) {
   return done.then((events) => ({ status: "completed" as const, events }));
@@ -38,10 +52,88 @@ function createDeferredRunHandle(cancel = vi.fn()): {
   };
 }
 
-describe("AgentManager session ownership", () => {
+function getNextSequence(events: readonly AnyAgentEvent[]): number {
+  return events.reduce((max, event) => Math.max(max, event.sequence), -1) + 1;
+}
+
+async function persistCompletedRun(sessionId: string, run: AgentRun): Promise<void> {
+  for (const event of run.getSnapshot()) {
+    await appendEvent(sessionId, event);
+  }
+  await appendEvent(
+    sessionId,
+    makeEvent(run.id, TURN_COMPLETE, { runId: run.id }, getNextSequence(run.getSnapshot())) as AnyAgentEvent,
+  );
+}
+
+function createWorkspaceSessionManager(workspaceRoot: string): AgentSessionService {
+  const sessionManager = createFakeSessionManager();
+  return {
+    ...sessionManager,
+    getWorkspace: () => ({
+      id: "ws_test",
+      name: "Test workspace",
+      rootPath: workspaceRoot,
+    }),
+  };
+}
+
+function createCheckpointingChatService(): {
+  chatService: ChatTurnService;
+  getRun(): AgentRun;
+  getFileCheckpoint(): FileCheckpoint;
+  resolveCompletion(completion: RunCompletion<AgentEventDataMap>): void;
+} {
+  let run: AgentRun | null = null;
+  let fileCheckpoint: FileCheckpoint | null = null;
+  let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
+
+  const chatService: ChatTurnService = {
+    submitUserTurn: vi.fn((_content, options) => {
+      run = new AgentRun(options.sessionId);
+      fileCheckpoint = options.fileCheckpoint ?? null;
+      fileCheckpoint?.beginTurn(options.sessionId, run.id);
+      const completion = new Promise<RunCompletion<AgentEventDataMap>>((resolve) => {
+        resolveCompletion = resolve;
+      }).then((result) => {
+        if (result.status === "completed" || result.status === "failed") {
+          fileCheckpoint?.completeTurn(options.sessionId, run!.id);
+        } else {
+          fileCheckpoint?.discardActiveTurn(run!.id);
+        }
+        return result;
+      });
+      return {
+        run,
+        childRuns: new Map(),
+        handle: {
+          completion,
+          done: completion.then((result) => result.events),
+          cancel: vi.fn(),
+        },
+        sessionId: options.sessionId,
+      };
+    }),
+  };
+
+  return {
+    chatService,
+    getRun: () => {
+      if (!run) throw new Error("Run not started");
+      return run;
+    },
+    getFileCheckpoint: () => {
+      if (!fileCheckpoint) throw new Error("File checkpoint not captured");
+      return fileCheckpoint;
+    },
+    resolveCompletion: (completion) => resolveCompletion(completion),
+  };
+}
+
+describe("AgentApplication session ownership", () => {
   it("refreshes snapshot after session CRUD with a plain SessionManager service", async () => {
     const sessionManager = createFakeSessionManager();
-    const manager = new AgentManager(undefined, {
+    const manager = new AgentApplication(undefined, {
       sessionManager,
       chatService: createFakeChatService(),
     });
@@ -73,14 +165,14 @@ describe("AgentManager session ownership", () => {
         sessionId: options.sessionId,
       })),
     };
-    const manager = new AgentManager(undefined, {
+    const manager = new AgentApplication(undefined, {
       sessionManager,
       chatService,
     });
 
     manager.send("  review the project architecture  ");
 
-    expect(manager.getSnapshot().sessions[0].title).toBe("Untitled");
+    expect(manager.getSnapshot().sessions[0].title).toBe("review the project architecture");
     expect(chatService.submitUserTurn).toHaveBeenCalledWith(
       "review the project architecture",
       expect.objectContaining({ sessionId: "ses_1" }),
@@ -107,7 +199,7 @@ describe("AgentManager session ownership", () => {
         };
       }),
     };
-    const manager = new AgentManager(undefined, {
+    const manager = new AgentApplication(undefined, {
       sessionManager,
       chatService,
     });
@@ -143,7 +235,7 @@ describe("AgentManager session ownership", () => {
         };
       }),
     };
-    const manager = new AgentManager(undefined, {
+    const manager = new AgentApplication(undefined, {
       sessionManager,
       chatService,
     });
@@ -181,7 +273,7 @@ describe("AgentManager session ownership", () => {
         };
       }),
     };
-    const manager = new AgentManager(undefined, {
+    const manager = new AgentApplication(undefined, {
       sessionManager,
       chatService,
     });
@@ -210,7 +302,7 @@ describe("AgentManager session ownership", () => {
         sessionId: options.sessionId,
       })),
     };
-    const manager = new AgentManager(undefined, {
+    const manager = new AgentApplication(undefined, {
       sessionManager,
       chatService,
     });
@@ -241,7 +333,7 @@ describe("AgentManager session ownership", () => {
         };
       }),
     };
-    const manager = new AgentManager(undefined, {
+    const manager = new AgentApplication(undefined, {
       sessionManager,
       chatService,
     });
@@ -273,7 +365,7 @@ describe("AgentManager session ownership", () => {
         };
       }),
     };
-    const manager = new AgentManager(undefined, {
+    const manager = new AgentApplication(undefined, {
       sessionManager,
       chatService,
     });
@@ -314,7 +406,7 @@ describe("AgentManager session ownership", () => {
         };
       }),
     };
-    const manager = new AgentManager(undefined, {
+    const manager = new AgentApplication(undefined, {
       sessionManager,
       chatService,
     });
@@ -346,7 +438,7 @@ describe("AgentManager session ownership", () => {
         };
       }),
     };
-    const manager = new AgentManager(undefined, {
+    const manager = new AgentApplication(undefined, {
       sessionManager,
       chatService,
     });
@@ -359,5 +451,95 @@ describe("AgentManager session ownership", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(listener.mock.calls.length).toBeGreaterThan(callsAfterSend);
+  });
+});
+
+describe("AgentApplication revert", () => {
+  let sessionsDir: string;
+  let workspaceRoot: string;
+
+  beforeEach(async () => {
+    sessionsDir = await mkdtemp(join(tmpdir(), "excelsior-revert-sessions-"));
+    workspaceRoot = await mkdtemp(join(tmpdir(), "excelsior-revert-workspace-"));
+    setSessionsDirForTests(sessionsDir);
+  });
+
+  afterEach(async () => {
+    await deleteAllSessionsEvents();
+    resetSessionsDirForTests();
+    await rm(sessionsDir, { recursive: true, force: true });
+    await rm(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it("refuses to revert while a run is active", async () => {
+    const controller = createCheckpointingChatService();
+    const manager = new AgentApplication(undefined, {
+      sessionManager: createWorkspaceSessionManager(workspaceRoot),
+      chatService: controller.chatService,
+    });
+
+    manager.send("change file");
+
+    await expect(manager.revertLastTurn()).resolves.toMatchObject({
+      message: "Cannot revert while a run is active. Cancel it first.",
+    });
+  });
+
+  it("restores checkpointed files and removes the latest turn from history", async () => {
+    const filePath = "demo.txt";
+    const fullPath = join(workspaceRoot, filePath);
+    await writeFile(fullPath, "original", "utf-8");
+    const controller = createCheckpointingChatService();
+    const manager = new AgentApplication(undefined, {
+      sessionManager: createWorkspaceSessionManager(workspaceRoot),
+      chatService: controller.chatService,
+    });
+
+    manager.send("change file");
+    const run = controller.getRun();
+    const fileCheckpoint = controller.getFileCheckpoint();
+    await fileCheckpoint.captureBeforeWrite(filePath, fullPath);
+    await writeFile(fullPath, "agent edit", "utf-8");
+    fileCheckpoint.recordWrite(filePath, fullPath, "agent edit");
+    run.emit("user-input", { content: "change file" });
+    await persistCompletedRun("ses_1", run);
+    controller.resolveCompletion({ status: "completed", events: [...run.getSnapshot()] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const result = await manager.revertLastTurn();
+
+    expect(result.message).toContain("Reverted latest turn");
+    await expect(readFile(fullPath, "utf-8")).resolves.toBe("original");
+    await expect(loadRawSessionEvents("ses_1")).resolves.toEqual([]);
+    expect(manager.getSnapshot().displayBlocks).toEqual([]);
+  });
+
+  it("reports conflicts without changing files or history", async () => {
+    const filePath = "demo.txt";
+    const fullPath = join(workspaceRoot, filePath);
+    await writeFile(fullPath, "original", "utf-8");
+    const controller = createCheckpointingChatService();
+    const manager = new AgentApplication(undefined, {
+      sessionManager: createWorkspaceSessionManager(workspaceRoot),
+      chatService: controller.chatService,
+    });
+
+    manager.send("change file");
+    const run = controller.getRun();
+    const fileCheckpoint = controller.getFileCheckpoint();
+    await fileCheckpoint.captureBeforeWrite(filePath, fullPath);
+    await writeFile(fullPath, "agent edit", "utf-8");
+    fileCheckpoint.recordWrite(filePath, fullPath, "agent edit");
+    run.emit("user-input", { content: "change file" });
+    await persistCompletedRun("ses_1", run);
+    controller.resolveCompletion({ status: "completed", events: [...run.getSnapshot()] });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await writeFile(fullPath, "user edit", "utf-8");
+
+    const result = await manager.revertLastTurn();
+
+    expect(result.message).toContain("Cannot revert");
+    await expect(readFile(fullPath, "utf-8")).resolves.toBe("user edit");
+    await expect(loadRawSessionEvents("ses_1")).resolves.toHaveLength(2);
   });
 });

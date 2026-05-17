@@ -48,7 +48,7 @@
           </defs>
           <text class="label" x="70" y="40">User</text>
           <text class="label" x="220" y="40">ChatScreen hook</text>
-          <text class="label" x="430" y="40">AgentManager</text>
+          <text class="label" x="420" y="40">AgentApplication</text>
           <text class="label" x="650" y="40">Runtime</text>
           <text class="label" x="850" y="40">Recorder</text>
           <text class="label" x="990" y="40">TUI</text>
@@ -64,7 +64,7 @@
           <path class="arrow" d="M 270 140 L 480 140"></path>
           <text class="small" x="300" y="130">submitChatInput()</text>
           <path class="arrow" d="M 480 185 L 480 215"></path>
-          <text class="small" x="500" y="204">ensure session + build history</text>
+          <text class="small" x="500" y="204">SessionController + ProjectionService</text>
           <path class="arrow" d="M 480 250 L 695 250"></path>
           <text class="small" x="520" y="240">ChatService.submitUserTurn(mode)</text>
           <path class="arrow" d="M 695 295 L 695 325"></path>
@@ -94,7 +94,7 @@ turn-complete</code></pre>
       <div class="grid two">
         <article class="card">
           <h3>Live events</h3>
-          <p>While a run is active, `AgentRun` emits events into memory. `AgentManager` subscribes to the run and copies snapshots into `_liveEvents`, then projects them for rendering.</p>
+          <p>While a run is active, <code>AgentRun</code> emits events into memory. <code>TurnController</code> stores live snapshots in <code>AgentStateStore</code>, then <code>ProjectionService</code> projects them for rendering.</p>
         </article>
         <article class="card">
           <h3>Persisted events</h3>
@@ -104,12 +104,12 @@ turn-complete</code></pre>
 
       <h2>Plan/Act Tool Flow</h2>
       <p>
-        The current mode lives in `AgentManager` state and is passed into `ChatService.submitUserTurn()`, `createRunSession()`,
-        `createToolContext()`, and finally each tool factory. Plan mode allows read-only file tools and non-mutating
+        The current mode lives in <code>AgentStateStore</code> and is passed into <code>ChatService.submitUserTurn()</code>,
+        <code>createRunSession()</code>, <code>createToolContext()</code>, and finally each tool factory. Plan mode allows read-only file tools and non-mutating
         command checks. It blocks `write`, `edit`, and write-like `runCommand` before filesystem mutation or shell
         execution. Act mode keeps confirmation, but `write` and `edit` attach a compact unified diff to the request.
       </p>
-      <pre><code>AgentManager mode
+      <pre><code>AgentStateStore mode
 ChatService.submitUserTurn({ mode })
 createToolContext({ mode, confirmBus, abortSignal })
 tool executes:
@@ -153,9 +153,9 @@ tool executes:
 
       <h2>Session Restore Flow</h2>
       <p>
-        Switching sessions calls `AgentManager.switchSession(sessionId)`. The manager cancels the active run, updates
-        `SessionManager`, clears persisted events temporarily, notifies the UI, loads checkpoint-safe events through
-        `loadSessionEvents(sessionId)`, then notifies again. The UI never reads JSONL directly.
+        Switching sessions calls <code>AgentApplication.switchSession(sessionId)</code>. <code>SessionController</code> cancels
+        active work through <code>TurnController</code>, updates <code>SessionManager</code>, clears view state, loads
+        checkpoint-safe events through <code>SessionHistoryStore</code>, then updates <code>AgentStateStore</code>. The UI never reads JSONL directly.
       </p>
       <div class="callout warn">
         <p>

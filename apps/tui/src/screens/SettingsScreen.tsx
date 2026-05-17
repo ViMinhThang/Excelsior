@@ -51,11 +51,11 @@ const SettingsScreen: FC<SettingsScreenProps> = ({ onClose }) => {
   return (
     <Box flexDirection="column" padding={1}>
       <Box marginBottom={1}>
-        <Text color="#5e81ac" bold>Settings</Text>
+        <Text color={theme.colors.highlightHeading} bold>Settings</Text>
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={focusedField === 'apiKey' ? "#5e81ac" : theme.colors.muted}>
+        <Text color={focusedField === 'apiKey' ? theme.colors.highlightSelected : theme.colors.muted}>
           {focusedField === 'apiKey' ? `${theme.glyphs.active}` : " "}DeepSeek API Key
         </Text>
         <ChatInput
@@ -69,7 +69,7 @@ const SettingsScreen: FC<SettingsScreenProps> = ({ onClose }) => {
       </Box>
 
       <Box flexDirection="column" marginBottom={1}>
-        <Text color={focusedField === 'githubToken' ? "#5e81ac" : theme.colors.muted}>
+        <Text color={focusedField === 'githubToken' ? theme.colors.highlightSelected : theme.colors.muted}>
           {focusedField === 'githubToken' ? `${theme.glyphs.active}` : " "}GitHub Token
         </Text>
         <ChatInput

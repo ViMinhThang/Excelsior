@@ -16,7 +16,7 @@ Excelsior is an Ink-based terminal AI coding assistant. The runtime is event-dri
 
 @excelsior/agent-host
   Local backend facade for agent state, commands, settings, sessions, confirmations
-  Owns AgentManager, ChatService, run wiring, runtime, persistence, GitHub helpers, tools
+  Owns AgentApplication, controllers, ChatService, run wiring, runtime, persistence, GitHub helpers, tools
 
 @excelsior/tui
   Ink App, screens, hooks, components, navigation, and UI feature panels
@@ -31,13 +31,19 @@ Excelsior is an Ink-based terminal AI coding assistant. The runtime is event-dri
 - `AgentHost` is the TUI-facing contract. `LocalAgentHost` adapts backend state to serializable `AgentClientState`.
 - Runtime events flow through `@excelsior/projection` read models inside `@excelsior/agent-host` before becoming TUI display state or AI history.
 - Workspace identity crosses the client boundary as `state.workspace`, with `rootPath` grouped under that domain object.
-- `AgentManager` owns UI-facing state inside `@excelsior/agent-host` and exposes snapshots through `useSyncExternalStore`.
+- `AgentApplication` is the TUI-facing application facade inside `@excelsior/agent-host`.
+- `AgentStateStore` owns UI-facing state and exposes snapshots through `useSyncExternalStore`.
+- `SessionController`, `TurnController`, and `RevertController` own session CRUD, active run lifecycle, and latest-turn revert.
+- `ProjectionService` owns conversion from runtime events to display blocks and AI history.
 - `SessionManager` is a plain session service; it has no listeners or React-facing store contract.
 - `RunRecorder` owns event append, checkpoint append, raw event loading, checkpoint-safe loading, and deletion.
 - `loadSessionEvents()` returns checkpoint-safe history. Use raw event loading only for debugging or tests.
 - File tools resolve paths inside the workspace root before reading or writing.
 - Sub-agents receive the parent `ToolContext`, so confirmations and cancellation are consistent across parent and child agents.
 - Slash commands are registered as backend command entries with definitions and handlers. Review commands receive injectable GitHub services for tests.
+- `/revert` restores only latest-turn `write`/`edit` tool changes and trims that turn from checkpointed JSONL history.
+
+See [`runtime-state.md`](runtime-state.md) for the state-flow diagrams and controller responsibilities.
 
 ## Review Flow
 

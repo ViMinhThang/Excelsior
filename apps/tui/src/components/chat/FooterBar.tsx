@@ -12,6 +12,7 @@ interface FooterBarProps {
   hasPending: boolean;
   activePanelId: string | null;
   subAgentCount: number;
+  toolCount: number;
   mode: AgentMode;
   workspaceRootPath: string;
 }
@@ -22,20 +23,19 @@ const FooterBar: FC<FooterBarProps> = ({
   hasPending,
   activePanelId,
   subAgentCount,
+  toolCount,
   mode,
   workspaceRootPath,
 }) => {
-  const footerHint = getChatModeHint({ chatMode, isLoading, hasPending, activePanelId, subAgentCount });
+  const footerHint = getChatModeHint({ chatMode, isLoading, hasPending, activePanelId, subAgentCount, toolCount });
+  const footerText = `${footerHint} | mode: ${formatAgentMode(mode)} | workspace: ${workspaceRootPath}`;
 
   return (
-    <>
-      <Box marginTop={1} paddingLeft={1}>
-        <Text color={theme.colors.muted} dimColor>{footerHint}{theme.glyphs.separator}mode: {formatAgentMode(mode)}</Text>
-      </Box>
-      <Box paddingLeft={1}>
-        <Text color={theme.colors.muted} dimColor>workspace: {workspaceRootPath}</Text>
-      </Box>
-    </>
+    <Box marginTop={1} paddingLeft={1}>
+      <Text color={theme.colors.muted} dimColor wrap="truncate-end">
+        {footerText}
+      </Text>
+    </Box>
   );
 };
 

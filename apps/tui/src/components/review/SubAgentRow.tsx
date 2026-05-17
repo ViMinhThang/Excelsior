@@ -61,7 +61,7 @@ const SubAgentRow: FC<SubAgentRowProps> = ({ agent, role, isSelected }) => {
     <Box flexDirection="column" marginTop={1} paddingLeft={1}>
       <Box flexDirection="row">
         <Text color={theme.colors.muted}>{topPrefix} </Text>
-        <Text bold={isSelected} color={isSelected ? theme.colors.text : theme.colors.muted}>
+        <Text bold={isSelected} color={isSelected ? theme.colors.highlightSelected : theme.colors.muted}>
           {cleanRole}
         </Text>
       </Box>

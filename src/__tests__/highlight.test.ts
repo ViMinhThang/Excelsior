@@ -54,28 +54,14 @@ describe("syntax highlighting logic", () => {
     expect(emptyNode.children).toContain("plain text only");
   });
 
-  it("highlights inline filename mentions inside paragraphs (Custom Implementation)", () => {
-    // This helper didn't change, confirming existing logic remains operational
+  it("renders inline filename mentions as normal text", () => {
     const result = highlightFilenames("Check out useSettingValidator.ts and README.md.");
     expect(result).toBeDefined();
 
-    const segments = result.map(getTextProps);
-
-    const fileSeg1 = segments.find((s) => s.children === "useSettingValidator.ts");
-    expect(fileSeg1).toBeDefined();
-    expect(fileSeg1?.color).toBe("#88c0d0");
-    expect(fileSeg1?.bold).toBe(true);
-
-    const fileSeg2 = segments.find((s) => s.children === "README.md");
-    expect(fileSeg2).toBeDefined();
-    expect(fileSeg2?.color).toBe("#88c0d0");
-    expect(fileSeg2?.bold).toBe(true);
-
-    const plainSeg = segments.find((s) =>
-      typeof s.children === "string" && s.children.includes("Check out "),
-    );
-    expect(plainSeg).toBeDefined();
-    expect(plainSeg?.color).toBeUndefined();
+    const props = getTextProps(result);
+    expect(props.children).toBe("Check out useSettingValidator.ts and README.md.");
+    expect(props.color).toBeUndefined();
+    expect(props.bold).toBeUndefined();
   });
 
   it("truncates long markdown table cells while keeping row widths aligned", () => {

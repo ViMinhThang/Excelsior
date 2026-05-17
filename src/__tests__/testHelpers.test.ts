@@ -3,7 +3,7 @@ import {
   createFakeChatService,
   createFakeSessionManager,
   createPendingRunHandle,
-} from "./helpers/agentManager.js";
+} from "./helpers/agentApplication.js";
 
 describe("test helper fixtures", () => {
   it("creates a fake session manager with workspace and CRUD behavior", async () => {

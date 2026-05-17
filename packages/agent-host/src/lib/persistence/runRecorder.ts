@@ -4,8 +4,12 @@ import {
   appendEvent,
   deleteAllSessionsEvents,
   deleteSessionEvents,
+  dropLastCompletedTurn,
+  getLastCompletedTurn,
   loadRawSessionEvents,
   loadSessionEvents,
+  type DropLastCompletedTurnResult,
+  type LastCompletedTurn,
 } from "./jsonlEventStore.js";
 
 export interface RunRecorder {
@@ -13,6 +17,11 @@ export interface RunRecorder {
   recordTurnComplete(sessionId: string, runId: string, sequence: number): Promise<void>;
   loadCompletedEvents(sessionId: string): Promise<AnyAgentEvent[]>;
   loadRawEvents(sessionId: string): Promise<AnyAgentEvent[]>;
+  getLastCompletedTurn(sessionId: string): Promise<LastCompletedTurn | null>;
+  dropLastCompletedTurn(
+    sessionId: string,
+    expectedRunId?: string,
+  ): Promise<DropLastCompletedTurnResult>;
   deleteSessionEvents(sessionId: string): Promise<void>;
   deleteAllSessionEvents(): Promise<void>;
 }
@@ -33,6 +42,17 @@ export class JsonlRunRecorder implements RunRecorder {
 
   loadRawEvents(sessionId: string): Promise<AnyAgentEvent[]> {
     return loadRawSessionEvents(sessionId);
+  }
+
+  getLastCompletedTurn(sessionId: string): Promise<LastCompletedTurn | null> {
+    return getLastCompletedTurn(sessionId);
+  }
+
+  dropLastCompletedTurn(
+    sessionId: string,
+    expectedRunId?: string,
+  ): Promise<DropLastCompletedTurnResult> {
+    return dropLastCompletedTurn(sessionId, expectedRunId);
   }
 
   deleteSessionEvents(sessionId: string): Promise<void> {

@@ -15,6 +15,7 @@ export interface ToolDisplay {
   detail?: string;
   resultPreview?: string[];
   omittedResultLines?: number;
+  showCompletion?: boolean;
   tone: ToolTone;
   risk?: ToolRisk;
 }

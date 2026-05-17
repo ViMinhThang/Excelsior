@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Box, Text } from "ink";
 import type { CommandDefinition } from "@excelsior/core";
+import { theme } from "../../theme.js";
 
 interface CommandSuggestionsProps {
   commands: CommandDefinition[];
@@ -20,7 +21,7 @@ function CommandSuggestionsInner({ commands: cmds, selectedIndex, maxVisibleCoun
 
         return (
           <Box key={cmd.name} paddingLeft={0}>
-            <Text color={isSelected ? "#31a8ff" : "#4c566a"} bold={isSelected}>
+            <Text color={isSelected ? theme.colors.highlightSelected : theme.colors.border} bold={isSelected}>
               {paddedName}{cmd.description}
             </Text>
           </Box>

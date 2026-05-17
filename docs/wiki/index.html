@@ -47,7 +47,7 @@
         </article>
         <article class="card">
           <h3>UI model</h3>
-          <p>The TUI is a React/Ink shell. `AgentManager` is the observable store consumed by hooks and rendered by `ChatScreen`, panels, and focused components.</p>
+          <p>The TUI is a React/Ink shell. <code>AgentHost</code> exposes client state through <code>useAgentHostClient</code>, while <code>AgentApplication</code> and <code>AgentStateStore</code> own backend state.</p>
           <a href="architecture.html">Read the UI architecture</a>
         </article>
         <article class="card">
@@ -79,8 +79,8 @@
           <text class="small" x="70" y="104">ChatScreen, panels, hooks</text>
 
           <rect class="box" x="310" y="40" width="190" height="90"></rect>
-          <text class="label" x="340" y="78">AgentManager</text>
-          <text class="small" x="340" y="104">observable UI store</text>
+          <text class="label" x="330" y="78">AgentApplication</text>
+          <text class="small" x="336" y="104">controllers + state store</text>
 
           <rect class="box" x="580" y="40" width="190" height="90"></rect>
           <text class="label" x="610" y="78">ChatService</text>

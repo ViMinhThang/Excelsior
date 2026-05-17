@@ -1,5 +1,5 @@
 import type { AgentClientState, ConfirmRequest } from "@excelsior/core";
-import type { ChatSessionState } from "../application/agentManager.js";
+import type { ChatSessionState } from "../application/types.js";
 
 export function createAgentClientState(
   snapshot: ChatSessionState,

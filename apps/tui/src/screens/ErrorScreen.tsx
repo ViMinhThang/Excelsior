@@ -14,13 +14,13 @@ const ErrorScreen: FC<ErrorScreenProps> = ({ error }) => {
       </Box>
 
       <Box marginBottom={1} flexDirection="column">
-        <Text bold color={theme.colors.text}>Message:</Text>
+        <Text bold color={theme.colors.highlightEmphasis}>Message:</Text>
         <Text color={theme.colors.error}>{error.message}</Text>
       </Box>
 
       {error.stack && (
         <Box marginBottom={1} flexDirection="column">
-          <Text bold color={theme.colors.text}>Stack Trace:</Text>
+          <Text bold color={theme.colors.highlightEmphasis}>Stack Trace:</Text>
           <Text color={theme.colors.secondary} dimColor>{error.stack.split('\n').slice(0, 5).join('\n')}</Text>
         </Box>
       )}
