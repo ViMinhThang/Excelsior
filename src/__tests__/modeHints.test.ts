@@ -11,6 +11,14 @@ describe("chat mode hints", () => {
       subAgentCount: 0,
       toolCount: 0,
     })).not.toContain("Ctrl+O");
+    expect(getChatModeHint({
+      chatMode: "input",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      toolCount: 0,
+    })).toContain("Ctrl+K");
 
     expect(getChatModeHint({
       chatMode: "input",
@@ -39,10 +47,10 @@ describe("chat mode hints", () => {
       activePanelId: null,
       subAgentCount: 0,
       toolCount: 1,
-    })).toBe("Enter expand/collapse · Up/Down tools · Ctrl+T/Esc back");
+    })).toBe("Enter expand/collapse | d detail | Up/Down tools | Ctrl+T/Esc back");
   });
 
-  it("uses panel and sub-agent detail mode hints", () => {
+  it("uses panel and sub-agent mode hints", () => {
     expect(getChatModeHint({
       chatMode: "input",
       isLoading: false,
@@ -50,7 +58,16 @@ describe("chat mode hints", () => {
       activePanelId: "session.picker",
       subAgentCount: 0,
       toolCount: 0,
-    })).toBe("Up/Down select · Enter open · Esc close");
+    })).toBe("Up/Down select | Enter open | Esc close");
+
+    expect(getChatModeHint({
+      chatMode: "subagent-focus",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 1,
+      toolCount: 0,
+    })).toBe("Enter detail | Up/Down sub-agents | Ctrl+O/Esc back");
 
     expect(getChatModeHint({
       chatMode: "subagent-detail",
@@ -59,6 +76,6 @@ describe("chat mode hints", () => {
       activePanelId: null,
       subAgentCount: 1,
       toolCount: 0,
-    })).toBe("Ctrl+O/Esc back · Up/Down switch");
+    })).toBe("Ctrl+O/Esc back | Up/Down switch");
   });
 });

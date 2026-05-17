@@ -69,15 +69,20 @@ const ToolMessage: FC<ToolMessageProps> = ({
   const display = createToolDisplay({ toolName, toolArgs, status, content });
   const cmd = formatCliCommand(toolName, toolArgs);
   const showCompletion = display.showCompletion !== false;
+  const hasDetail = Boolean(display.detail || display.resultPreview?.length);
   const showBody = Boolean(
-    expanded &&
-    (display.detail ||
-      display.resultPreview?.length ||
-      (status === "completed" && showCompletion)),
+    expanded && (hasDetail || (status === "completed" && showCompletion)),
   );
   const commandColor = selected
     ? theme.colors.highlightSelected
     : theme.colors.muted;
+
+  const collapsedSummary = !expanded && hasDetail
+    ? display.detail || (
+        display.resultPreview ? `→ ${display.resultPreview.length} line${display.resultPreview.length !== 1 ? "s" : ""}${display.omittedResultLines ? ` + ${display.omittedResultLines} more` : ""}` : null
+      )
+    : null;
+
   const innerContent = (
     <Box flexDirection="column">
       <Box flexDirection="row" gap={1}>
@@ -88,6 +93,11 @@ const ToolMessage: FC<ToolMessageProps> = ({
         <Text color={commandColor} dimColor={!selected}>
           {cmd}
         </Text>
+        {collapsedSummary && (
+          <Text color={theme.colors.muted} dimColor>
+            {" · "}{collapsedSummary}
+          </Text>
+        )}
       </Box>
       {showBody && (
         <Box flexDirection="column" paddingLeft={2}>
@@ -101,10 +111,8 @@ const ToolMessage: FC<ToolMessageProps> = ({
           {display.omittedResultLines ? (
             <Text color={theme.colors.muted} dimColor>  … ({display.omittedResultLines} more lines)</Text>
           ) : null}
-          {status === "completed" && showCompletion && (
-            <Text color={theme.colors.muted} dimColor>
-              {(!display.detail && (!display.resultPreview || display.resultPreview.length === 0)) ? "↳ " : "  "}Completed
-            </Text>
+          {status === "completed" && !hasDetail && showCompletion && (
+            <Text color={theme.colors.muted} dimColor>↳ Completed</Text>
           )}
         </Box>
       )}
