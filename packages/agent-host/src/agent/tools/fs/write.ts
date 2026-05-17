@@ -3,9 +3,9 @@ import { z } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ToolContext } from "../../../lib/tool/context.js";
+import { authorizeToolAction } from "../../../lib/tool/policy.js";
+import { resolveWorkspacePath } from "../../../lib/tool/workspace.js";
 import { createUnifiedDiff, type DiffAction } from "../../../lib/diff/unifiedDiff.js";
-import { PLAN_MODE_BLOCKED_MESSAGE } from "../../../lib/runtime/agentMode.js";
-import { resolveWorkspacePath } from "./workspacePath.js";
 
 export const writeSchema = z.object({
   filePath: z.string().describe("Destination file path"),
@@ -24,9 +24,12 @@ export function createWriteTool(ctx?: ToolContext) {
         return `Error writing file: ${error instanceof Error ? error.message : String(error)}`;
       }
 
-      if (ctx?.mode === "plan") {
-        return PLAN_MODE_BLOCKED_MESSAGE;
-      }
+      const authorization = await authorizeToolAction(ctx, {
+        toolName: "writeFile",
+        capability: "fs:write",
+        modePolicy: "write",
+      });
+      if (!authorization.allowed) return authorization.message;
 
       if (ctx?.confirm && ctx.confirm.getListenerCount() > 0) {
         let existingContent = "";
@@ -38,16 +41,21 @@ export function createWriteTool(ctx?: ToolContext) {
           existingContent = "";
         }
 
-        const approved = await ctx.confirm.request(
-          "writeFile",
-          JSON.stringify({ filePath }),
-          {
-            action,
-            filePath,
-            diff: createUnifiedDiff(filePath, existingContent, content),
+        const confirmation = await authorizeToolAction(ctx, {
+          toolName: "writeFile",
+          capability: "fs:write",
+          modePolicy: "write",
+          confirmation: {
+            toolName: "writeFile",
+            args: JSON.stringify({ filePath }),
+            metadata: {
+              action,
+              filePath,
+              diff: createUnifiedDiff(filePath, existingContent, content),
+            },
           },
-        );
-        if (!approved) return "Denied by user.";
+        });
+        if (!confirmation.allowed) return confirmation.message;
       }
 
       try {

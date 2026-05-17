@@ -11,9 +11,8 @@ import {
   deleteAllSessionsEvents,
   resetSessionsDirForTests,
   setSessionsDirForTests,
-} from "../../packages/agent-host/src/lib/persistence/jsonlEventStore.js";
-import { makeEvent, AnyAgentEvent } from "../../packages/agent-host/src/lib/runtime/events.js";
-import { TURN_COMPLETE } from "../../packages/agent-host/src/lib/runtime/eventNames.js";
+} from "@excelsior/agent-host/testing/persistence";
+import { makeEvent, TURN_COMPLETE, type AnyAgentEvent } from "@excelsior/agent-host/testing/runtime";
 
 function sid(label: string): string {
   return `ses_test_${label}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -47,7 +46,8 @@ describe("jsonlEventStore", () => {
     const loaded = await loadSessionEvents(id);
     expect(loaded).toHaveLength(2);
     expect(loaded[0].type).toBe("user-input");
-    expect((loaded[0] as any).data.content).toBe("hello");
+    if (loaded[0].type !== "user-input") throw new Error("Expected user input");
+    expect(loaded[0].data.content).toBe("hello");
     expect(loaded[1].type).toBe("text-delta");
 
     await cleanup(id);
@@ -175,7 +175,8 @@ describe("jsonlEventStore", () => {
     const loaded = await loadRawSessionEvents(id);
     expect(loaded).toHaveLength(10);
     for (let i = 0; i < 10; i++) {
-      expect((loaded[i] as any).data.delta).toBe(String(i));
+      if (loaded[i].type !== "text-delta") throw new Error("Expected text delta");
+      expect(loaded[i].data.delta).toBe(String(i));
     }
 
     await cleanup(id);

@@ -1,23 +1,24 @@
-import { startRun } from "./runSession.js";
+import { createRunSession } from "./runSession.js";
 import { persistSession } from "../lib/persistence/eventPersistence.js";
 import { createAgent } from "../agent/agent.js";
 import { createSpawnSubAgentTool } from "../agent/spawn/spawnSubAgent.js";
 import type { RunRecorder } from "../lib/persistence/runRecorder.js";
 import type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
-import type { AgentMode } from "../lib/runtime/agentMode.js";
+import type { AgentMode, AgentMessage } from "@excelsior/core";
 
 export interface AIHistoryRef {
-  current: Array<{ role: "user" | "assistant" | "system"; content: string }>;
+  current: AgentMessage[];
 }
 
 export class ChatService {
-  startRun(
+  submitUserTurn(
     content: string,
     options?: {
       history?: AIHistoryRef;
       extraTools?: Record<string, unknown>;
       sessionId?: string;
       workspaceId?: string;
+      workspaceRoot?: string;
       recorder?: RunRecorder;
       subAgentEvents?: SubAgentEventSink;
       silent?: boolean;
@@ -25,13 +26,13 @@ export class ChatService {
       mode?: AgentMode;
     },
   ) {
-    const aiMessages: Array<{ role: string; content: string }> = [];
+    const aiMessages: AgentMessage[] = [];
     if (options?.history?.current) {
       aiMessages.push(...options.history.current);
     }
     aiMessages.push({ role: "user", content });
 
-    const { run, childRuns, handle } = startRun({
+    const { run, childRuns, handle } = createRunSession({
       messages: aiMessages,
       createAgent: (runCtx) =>
         createAgent(
@@ -53,6 +54,7 @@ export class ChatService {
       recorder: options?.recorder,
       subAgentEvents: options?.subAgentEvents,
       mode: options?.mode,
+      workspaceRoot: options?.workspaceRoot,
     });
 
     if (!options?.silent) {

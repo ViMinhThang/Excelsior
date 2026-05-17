@@ -1,22 +1,29 @@
-import type { Session } from "@excelsior/core";
+import type { Session, Workspace } from "@excelsior/core";
 import {
   loadSessionsByWorkspace,
   deleteSession as deleteSessionFromDB,
   updateSessionTitle,
   persistSession,
 } from "./lib/persistence/eventPersistence.js";
-import { getDefaultWorkspace } from "./lib/persistence/workspaceStore.js";
+import {
+  getOrCreateDefaultWorkspace,
+  loadWorkspace,
+} from "./lib/persistence/workspaceStore.js";
 
 export class SessionManager {
-  private _currentWorkspaceId: string;
-  private _workspaceRootPath: string;
+  private _workspace: Workspace;
   private _currentSessionId: string | null = null;
   private _sessions: Session[] = [];
 
   constructor(workspaceId?: string) {
-    const ws = getDefaultWorkspace();
-    this._currentWorkspaceId = workspaceId ?? ws.id;
-    this._workspaceRootPath = ws.rootPath;
+    const ws = workspaceId
+      ? loadWorkspace(workspaceId) ?? getOrCreateDefaultWorkspace()
+      : getOrCreateDefaultWorkspace();
+    this._workspace = {
+      id: ws.id,
+      name: ws.name,
+      rootPath: ws.rootPath,
+    };
     this._reloadSessions();
   }
 
@@ -25,11 +32,11 @@ export class SessionManager {
   }
 
   getWorkspaceId(): string {
-    return this._currentWorkspaceId;
+    return this._workspace.id;
   }
 
-  getWorkspaceRootPath(): string {
-    return this._workspaceRootPath;
+  getWorkspace(): Workspace {
+    return this._workspace;
   }
 
   ensureSession(title?: string): string {
@@ -54,7 +61,7 @@ export class SessionManager {
       startedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       metadata: { userInput: "" },
-      workspaceId: this._currentWorkspaceId,
+      workspaceId: this._workspace.id,
       title: resolvedTitle,
     };
   }
@@ -81,7 +88,8 @@ export class SessionManager {
   }
 
   private _normalizeTitle(title?: string): string {
-    return title?.trim() || "Untitled";
+    const trimmed = title?.trim() || "Untitled";
+    return trimmed.length > 50 ? trimmed.slice(0, 47) + "..." : trimmed;
   }
 
   private _titleCurrentSessionFromFirstPrompt(title?: string): void {
@@ -89,7 +97,7 @@ export class SessionManager {
     const nextTitle = title?.trim();
     if (!session || !nextTitle) return;
     if (session.metadata.userInput || (session.title && session.title !== "Untitled")) return;
-    updateSessionTitle(session.id, nextTitle);
+    updateSessionTitle(session.id, this._normalizeTitle(nextTitle));
     this._reloadSessions();
   }
 
@@ -105,13 +113,13 @@ export class SessionManager {
       startedAt: now,
       updatedAt: now,
       metadata: { userInput: "" },
-      workspaceId: this._currentWorkspaceId,
+      workspaceId: this._workspace.id,
       title,
     });
     return id;
   }
 
   private _reloadSessions(): void {
-    this._sessions = loadSessionsByWorkspace(this._currentWorkspaceId);
+    this._sessions = loadSessionsByWorkspace(this._workspace.id);
   }
 }

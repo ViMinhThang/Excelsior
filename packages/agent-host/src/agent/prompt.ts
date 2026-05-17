@@ -1,6 +1,6 @@
-import { formatAgentMode, type AgentMode } from "../lib/runtime/agentMode.js";
+import { formatAgentMode, type AgentMode } from "@excelsior/core";
 
-export function buildSystemPrompt(platform: string, mode: AgentMode = "act"): string {
+export function buildSystemPrompt(mode: AgentMode = "act"): string {
   return `
 CURRENT MODE: ${formatAgentMode(mode)}
 - Plan mode: inspect, reason, and draft plans only. Do not attempt file changes or write-like shell commands.

@@ -18,6 +18,7 @@
           <h2>Pages</h2>
           <a href="index.html">Overview</a>
           <a href="architecture.html">Architecture</a>
+          <a href="frameworks.html">Mini Frameworks</a>
           <a href="data-flow.html">Data Flow</a>
           <a href="code-tour.html">Code Tour</a>
           <a href="tools-features.html">Tools and Features</a>
@@ -65,7 +66,7 @@
           <path class="arrow" d="M 480 185 L 480 215"></path>
           <text class="small" x="500" y="204">ensure session + build history</text>
           <path class="arrow" d="M 480 250 L 695 250"></path>
-          <text class="small" x="520" y="240">ChatService.startRun(mode)</text>
+          <text class="small" x="520" y="240">ChatService.submitUserTurn(mode)</text>
           <path class="arrow" d="M 695 295 L 695 325"></path>
           <text class="small" x="715" y="314">streamAgentResponse()</text>
           <path class="arrow" d="M 695 360 L 885 360"></path>
@@ -97,19 +98,19 @@ turn-complete</code></pre>
         </article>
         <article class="card">
           <h3>Persisted events</h3>
-          <p>`RunOrchestrator` records non-start events through `RunRecorder`. `startRun` appends a `TURN_COMPLETE` checkpoint when the run promise resolves.</p>
+          <p><code>@excelsior/run-runtime</code> records allowed events through the adapter-provided `RunRecorder` callback. `createRunSession` appends a `TURN_COMPLETE` checkpoint when the run promise resolves.</p>
         </article>
       </div>
 
       <h2>Plan/Act Tool Flow</h2>
       <p>
-        The current mode lives in `AgentManager` state and is passed into `ChatService.startRun()`, `startRun()`,
+        The current mode lives in `AgentManager` state and is passed into `ChatService.submitUserTurn()`, `createRunSession()`,
         `createToolContext()`, and finally each tool factory. Plan mode allows read-only file tools and non-mutating
         command checks. It blocks `write`, `edit`, and write-like `runCommand` before filesystem mutation or shell
         execution. Act mode keeps confirmation, but `write` and `edit` attach a compact unified diff to the request.
       </p>
       <pre><code>AgentManager mode
-ChatService.startRun({ mode })
+ChatService.submitUserTurn({ mode })
 createToolContext({ mode, confirmBus, abortSignal })
 tool executes:
   plan + mutation => blocked message
@@ -136,11 +137,11 @@ tool executes:
           <text class="small" x="358" y="197">dedupe live over persisted</text>
 
           <rect class="box good" x="610" y="75" width="220" height="78"></rect>
-          <text class="label" x="650" y="108">groupEventsForDisplay</text>
+          <text class="label" x="630" y="108">projectEventsToDisplayBlocks</text>
           <text class="small" x="660" y="132">user, assistant, tool blocks</text>
 
           <rect class="box good" x="610" y="205" width="220" height="78"></rect>
-          <text class="label" x="657" y="238">projectEventsToAIHistory</text>
+          <text class="label" x="650" y="238">projectEventsToAIMessages</text>
           <text class="small" x="665" y="262">messages for next run</text>
 
           <path class="arrow" d="M 235 114 C 280 114 285 165 330 165"></path>
@@ -223,7 +224,7 @@ tool executes:
             </tr>
             <tr>
               <td><code>ProjectedBlock</code></td>
-              <td><code>packages/agent-host/packages/core/src/index.ts</code></td>
+              <td><code>packages/core/src/index.ts</code></td>
               <td>UI-ready chat item: user, assistant, tool call, or sub-agent.</td>
             </tr>
             <tr>

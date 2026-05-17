@@ -12,7 +12,11 @@ function createMockHost(): AgentHost {
     isLoading: false,
     sessions: [],
     currentSessionId: null,
-    workspaceRootPath: "C:/workspace",
+    workspace: {
+      id: "ws_test",
+      name: "Test workspace",
+      rootPath: "C:/workspace",
+    },
     mode: "plan" as const,
     pendingConfirmation: null,
   };

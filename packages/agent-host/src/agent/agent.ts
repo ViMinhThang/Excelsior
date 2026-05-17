@@ -4,14 +4,14 @@ import { createFileTools } from "./tools/index.js";
 import { getSetting } from "../lib/persistence/db.js";
 import { buildSystemPrompt } from "./prompt.js";
 import type { ToolContext } from "../lib/tool/context.js";
+import type { StreamCapableAgent } from "../lib/runtime/agentStream.js";
 
 export function createAgent(
   instructions?: string,
-  extraTools?: Record<string, any>,
+  extraTools?: Record<string, unknown>,
   ctx?: ToolContext,
-) {
-  const platform = process.platform;
-  const systemPrompt = buildSystemPrompt(platform, ctx?.mode);
+): StreamCapableAgent {
+  const systemPrompt = buildSystemPrompt(ctx?.mode);
   const apiKey = getSetting("DEEPSEEK_API_KEY");
   const deepseek = createDeepSeek({
     apiKey: apiKey || process.env.DEEPSEEK_API_KEY,
@@ -29,5 +29,5 @@ export function createAgent(
       ...createFileTools(ctx),
       ...extraTools,
     },
-  });
+  }) as StreamCapableAgent;
 }

@@ -2,7 +2,8 @@ import { tool } from "ai";
 import { z } from "zod";
 import fs from "node:fs/promises";
 import type { ToolContext } from "../../../lib/tool/context.js";
-import { resolveWorkspacePath } from "./workspacePath.js";
+import { authorizeToolAction } from "../../../lib/tool/policy.js";
+import { resolveWorkspacePath } from "../../../lib/tool/workspace.js";
 
 export const viewSchema = z.object({
   filePath: z.string().describe("Path to the file to read"),
@@ -15,6 +16,13 @@ export function createViewTool(ctx?: ToolContext) {
     description: "Read file contents with explicit line numbers and optional range slicing.",
     inputSchema: viewSchema,
     execute: async ({ filePath, lineStart, lineEnd }) => {
+      const authorization = await authorizeToolAction(ctx, {
+        toolName: "view",
+        capability: "fs:read",
+        modePolicy: "read",
+      });
+      if (!authorization.allowed) return authorization.message;
+
       try {
         const fullPath = resolveWorkspacePath(filePath, ctx);
         const content = await fs.readFile(fullPath, "utf-8");
@@ -42,5 +50,3 @@ export function createViewTool(ctx?: ToolContext) {
     },
   });
 }
-
-export const viewTool = createViewTool();

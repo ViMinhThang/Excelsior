@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mini Frameworks - Excelsior Wiki</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>Excelsior Wiki</h1>
+        <p>Study guide for the internal framework extraction.</p>
+      </div>
+      <nav>
+        <div class="nav-section">
+          <h2>Pages</h2>
+          <a href="index.html">Overview</a>
+          <a href="architecture.html">Architecture</a>
+          <a href="frameworks.html">Mini Frameworks</a>
+          <a href="data-flow.html">Data Flow</a>
+          <a href="code-tour.html">Code Tour</a>
+          <a href="tools-features.html">Tools and Features</a>
+          <a href="operations.html">Operations</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <section class="hero">
+        <div class="eyebrow">Architecture study guide</div>
+        <h1>Why Excelsior now has mini frameworks</h1>
+        <p class="lead">
+          The refactor split two repeated architectural patterns out of agent-host: deterministic event projection and
+          cancellable eventful runs. The goal was not to make Excelsior abstract for its own sake. The goal was to give
+          developers a map: generic mechanics live in small packages, while product decisions stay in agent-host.
+        </p>
+      </section>
+
+      <div class="summary-strip">
+        <div class="summary-item">
+          <strong>What changed</strong>
+          <p>Two private packages were added: <code>@excelsior/projection</code> and <code>@excelsior/run-runtime</code>.</p>
+        </div>
+        <div class="summary-item">
+          <strong>Why it changed</strong>
+          <p>Generic mechanics were hidden inside product files, which made the architecture harder to read and reuse.</p>
+        </div>
+        <div class="summary-item">
+          <strong>How it changed</strong>
+          <p>Agent-host kept domain behavior and now consumes small framework APIs through adapters and read models.</p>
+        </div>
+        <div class="summary-item">
+          <strong>What stayed stable</strong>
+          <p>Commands, persisted events, session behavior, projections, TUI display, and tests remain behavior-compatible.</p>
+        </div>
+      </div>
+
+      <h2>The Core Idea</h2>
+      <p>
+        A mini framework is useful here only when it captures a stable verb in the system. Projection has the verb
+        <strong>fold ordered events into state</strong>. Run runtime has the verb <strong>manage a cancellable event source</strong>.
+        Those verbs are stable. DeepSeek, Ink screens, slash commands, file tools, and persistence policy are product details,
+        so they stay outside the mini frameworks.
+      </p>
+
+      <div class="callout good">
+        <p>
+          The test for a good extraction is simple: the new package should make the code easier to explain without forcing
+          product-specific concepts into a generic layer. If a package needs to know about React, Ink, the AI SDK, GitHub,
+          SQLite, Plan/Act mode, or sub-agent UI rows, it is no longer a generic mini framework.
+        </p>
+      </div>
+
+      <h2>Before And After</h2>
+      <div class="diagram">
+        <svg viewBox="0 0 1120 560" role="img" aria-label="Before and after package boundary diagram">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ab4ff"></path>
+            </marker>
+          </defs>
+
+          <text class="label" x="70" y="44">Before</text>
+          <rect class="box" x="60" y="70" width="430" height="370"></rect>
+          <text class="label" x="90" y="108">@excelsior/agent-host</text>
+          <text class="small" x="90" y="140">AgentRun</text>
+          <text class="small" x="90" y="166">RunOrchestrator</text>
+          <text class="small" x="90" y="192">bus + DisposableScope</text>
+          <text class="small" x="90" y="218">readModel + projectEvents</text>
+          <text class="small" x="90" y="244">chat transcript projection</text>
+          <text class="small" x="90" y="270">AI history projection</text>
+          <text class="small" x="90" y="296">sub-agent projection</text>
+          <text class="small" x="90" y="322">AI SDK stream adapter</text>
+          <text class="small" x="90" y="348">tools, sessions, recorder</text>
+
+          <text class="label" x="635" y="44">After</text>
+          <rect class="box good" x="610" y="70" width="430" height="92"></rect>
+          <text class="label" x="640" y="108">@excelsior/projection</text>
+          <text class="small" x="640" y="134">ReadModel, defineReadModel, projectEvents</text>
+
+          <rect class="box alt" x="610" y="200" width="430" height="112"></rect>
+          <text class="label" x="640" y="238">@excelsior/run-runtime</text>
+          <text class="small" x="640" y="264">EventfulRun, RunOrchestrator, bus, cancellation</text>
+          <text class="small" x="640" y="286">generic event envelope and subscriptions</text>
+
+          <rect class="box" x="610" y="350" width="430" height="128"></rect>
+          <text class="label" x="640" y="388">@excelsior/agent-host</text>
+          <text class="small" x="640" y="414">AgentRun adapter, event data map, agentStream</text>
+          <text class="small" x="640" y="436">projection read models, tools, sessions, recorder</text>
+          <text class="small" x="640" y="458">ChatService and createRunSession wiring</text>
+
+          <path class="arrow" d="M 490 250 C 545 250 555 116 610 116"></path>
+          <path class="arrow" d="M 490 250 C 545 250 555 256 610 256"></path>
+          <path class="arrow" d="M 825 350 L 825 312"></path>
+          <path class="arrow" d="M 825 350 C 760 320 725 210 725 162"></path>
+        </svg>
+      </div>
+
+      <h2>Package Responsibilities</h2>
+      <div class="package-stack">
+        <div class="package-row">
+          <strong>@excelsior/core</strong>
+          <p>Serializable contracts shared by host and TUI: sessions, workspace, display blocks, command results, mode, confirmations, and panel ids.</p>
+        </div>
+        <div class="package-row">
+          <strong>@excelsior/projection</strong>
+          <p>Generic read-model fold. It knows nothing about Excelsior events, UI blocks, AI messages, files, persistence, or React.</p>
+        </div>
+        <div class="package-row">
+          <strong>@excelsior/run-runtime</strong>
+          <p>Generic eventful run lifecycle. It owns event envelopes, sequence numbers, causation, correlation, snapshots, subscriptions, cancellation, and orchestration hooks.</p>
+        </div>
+        <div class="package-row">
+          <strong>@excelsior/agent-host</strong>
+          <p>Product backend. It defines Excelsior event names, adapts AI SDK streams into events, owns tools, sessions, persistence, commands, sub-agents, and the public host facade.</p>
+        </div>
+        <div class="package-row">
+          <strong>@excelsior/tui</strong>
+          <p>Ink frontend. It consumes the host facade and renders projected state. It should not parse raw model streams or read persistence directly.</p>
+        </div>
+      </div>
+
+      <h2>Projection Framework Deep Dive</h2>
+      <p>
+        Projection was the smaller and safer extraction. The code already had a generic shape: start with initial state,
+        apply each event, return final state. The refactor moved that shape into <code>@excelsior/projection</code> and kept
+        the product read models in agent-host.
+      </p>
+
+      <pre><code>export interface ReadModel&lt;TState, TEvent, TContext = undefined&gt; {
+  initialState(): TState;
+  apply(state: TState, event: TEvent, context?: TContext): TState;
+}
+
+export function projectEvents&lt;TState, TEvent, TContext = undefined&gt;(
+  model: ReadModel&lt;TState, TEvent, TContext&gt;,
+  events: readonly TEvent[],
+  context?: TContext,
+): TState;</code></pre>
+
+      <div class="flow-list">
+        <div class="flow-row">
+          <strong>Before</strong>
+          <p><code>readModel.ts</code> lived inside agent-host next to product projection code, so generic mechanics and Excelsior-specific behavior looked like one thing.</p>
+        </div>
+        <div class="flow-row">
+          <strong>After</strong>
+          <p><code>@excelsior/projection</code> owns the fold. Agent-host owns <code>chatTranscriptProjection</code>, <code>aiHistoryProjection</code>, and <code>subAgentProjection</code>.</p>
+        </div>
+        <div class="flow-row">
+          <strong>Why</strong>
+          <p>Reading the code now tells you which parts are reusable mechanics and which parts are product interpretation of runtime events.</p>
+        </div>
+        <div class="flow-row">
+          <strong>How</strong>
+          <p>Display projection calls <code>projectEvents(CHAT_TRANSCRIPT_MODEL, events, context)</code>, then finalizes pending assistant/tool state for the live UI.</p>
+        </div>
+      </div>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1100 430" role="img" aria-label="Projection read model flow">
+          <defs>
+            <marker id="arrow2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ab4ff"></path>
+            </marker>
+          </defs>
+          <rect class="box warn" x="60" y="70" width="180" height="74"></rect>
+          <text class="label" x="94" y="104">Runtime events</text>
+          <text class="small" x="88" y="126">ordered facts</text>
+
+          <rect class="box good" x="330" y="70" width="210" height="74"></rect>
+          <text class="label" x="366" y="104">@excelsior/projection</text>
+          <text class="small" x="372" y="126">projectEvents()</text>
+
+          <rect class="box" x="630" y="35" width="250" height="74"></rect>
+          <text class="label" x="668" y="69">CHAT_TRANSCRIPT_MODEL</text>
+          <text class="small" x="682" y="91">events to display state</text>
+
+          <rect class="box" x="630" y="145" width="250" height="74"></rect>
+          <text class="label" x="688" y="179">AI_HISTORY_MODEL</text>
+          <text class="small" x="682" y="201">events to next messages</text>
+
+          <rect class="box" x="630" y="255" width="250" height="74"></rect>
+          <text class="label" x="688" y="289">SUB_AGENT_MODEL</text>
+          <text class="small" x="682" y="311">child events to row state</text>
+
+          <rect class="box alt" x="930" y="35" width="130" height="74"></rect>
+          <text class="label" x="956" y="69">TUI blocks</text>
+
+          <rect class="box alt" x="930" y="145" width="130" height="74"></rect>
+          <text class="label" x="958" y="179">AI input</text>
+
+          <rect class="box alt" x="930" y="255" width="130" height="74"></rect>
+          <text class="label" x="954" y="289">Sub-agent UI</text>
+
+          <path class="arrow" d="M 240 107 L 330 107" marker-end="url(#arrow2)"></path>
+          <path class="arrow" d="M 540 107 C 580 107 590 72 630 72" marker-end="url(#arrow2)"></path>
+          <path class="arrow" d="M 540 107 C 580 107 590 182 630 182" marker-end="url(#arrow2)"></path>
+          <path class="arrow" d="M 540 107 C 580 107 590 292 630 292" marker-end="url(#arrow2)"></path>
+          <path class="arrow" d="M 880 72 L 930 72" marker-end="url(#arrow2)"></path>
+          <path class="arrow" d="M 880 182 L 930 182" marker-end="url(#arrow2)"></path>
+          <path class="arrow" d="M 880 292 L 930 292" marker-end="url(#arrow2)"></path>
+        </svg>
+      </div>
+
+      <h2>Run Runtime Framework Deep Dive</h2>
+      <p>
+        The runtime extraction was broader but followed the same rule. The framework owns the lifecycle of an eventful run,
+        not the meaning of an Excelsior agent. Agent-host still decides what a <code>text-delta</code> means, how to stream
+        from the AI SDK, when to record events, and how tool context works.
+      </p>
+
+      <pre><code>const run = new EventfulRun&lt;AgentEventDataMap&gt;({
+  idPrefix: "run",
+  sessionId,
+  parentEventId,
+  correlationId,
+  parentSignal,
+  eventVersion: 1,
+  terminalEventTypes: [RUN_END],
+});
+
+const handle = orchestrator.start(run, {
+  execute: async ({ signal }) =&gt; {
+    await streamAgentResponse(agent, messages, run, signal);
+  },
+  shouldRecordEvent: (event) =&gt; event.type !== RUN_START,
+  recordEvent: (event) =&gt; recorder.recordEvent(sessionId, event),
+});</code></pre>
+
+      <div class="flow-list">
+        <div class="flow-row">
+          <strong>Before</strong>
+          <p><code>AgentRun</code> owned generic run mechanics and Excelsior event typing. <code>RunOrchestrator</code> knew about messages, AI agent creation, stream execution, and recorder behavior.</p>
+        </div>
+        <div class="flow-row">
+          <strong>After</strong>
+          <p><code>EventfulRun</code> owns generic lifecycle. <code>AgentRun</code> is a typed adapter. <code>RunOrchestrator</code> accepts execution and recorder callbacks instead of importing host concepts.</p>
+        </div>
+        <div class="flow-row">
+          <strong>Why</strong>
+          <p>The cancellation/event/subscription lifecycle is useful beyond this exact AI stream. Keeping it generic makes it easier to test and easier to reason about.</p>
+        </div>
+        <div class="flow-row">
+          <strong>How</strong>
+          <p><code>createRunSession</code> is now the adapter boundary. It creates the typed run, tool context, recorder callbacks, and AI stream execution function.</p>
+        </div>
+      </div>
+
+      <div class="diagram">
+        <svg viewBox="0 0 1120 520" role="img" aria-label="Run runtime adapter flow">
+          <defs>
+            <marker id="arrow3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#8ab4ff"></path>
+            </marker>
+          </defs>
+
+          <rect class="box" x="50" y="70" width="190" height="84"></rect>
+          <text class="label" x="88" y="104">AgentManager</text>
+          <text class="small" x="82" y="128">send, cancel, sessions</text>
+
+          <rect class="box" x="320" y="70" width="190" height="84"></rect>
+          <text class="label" x="364" y="104">ChatService</text>
+          <text class="small" x="348" y="128">messages + tools</text>
+
+          <rect class="box alt" x="590" y="70" width="220" height="84"></rect>
+          <text class="label" x="638" y="104">createRunSession</text>
+          <text class="small" x="625" y="128">host adapter boundary</text>
+
+          <rect class="box good" x="890" y="30" width="190" height="84"></rect>
+          <text class="label" x="938" y="64">EventfulRun</text>
+          <text class="small" x="918" y="88">events + cancellation</text>
+
+          <rect class="box good" x="890" y="150" width="190" height="84"></rect>
+          <text class="label" x="926" y="184">RunOrchestrator</text>
+          <text class="small" x="918" y="208">execute + record hooks</text>
+
+          <rect class="box warn" x="590" y="330" width="220" height="84"></rect>
+          <text class="label" x="644" y="364">RunRecorder</text>
+          <text class="small" x="628" y="388">persist allowed events</text>
+
+          <rect class="box" x="890" y="330" width="190" height="84"></rect>
+          <text class="label" x="922" y="364">agentStream.ts</text>
+          <text class="small" x="920" y="388">AI SDK to events</text>
+
+          <path class="arrow" d="M 240 112 L 320 112" marker-end="url(#arrow3)"></path>
+          <path class="arrow" d="M 510 112 L 590 112" marker-end="url(#arrow3)"></path>
+          <path class="arrow" d="M 810 112 C 850 112 850 72 890 72" marker-end="url(#arrow3)"></path>
+          <path class="arrow" d="M 810 112 C 850 112 850 192 890 192" marker-end="url(#arrow3)"></path>
+          <path class="arrow" d="M 985 234 L 985 330" marker-end="url(#arrow3)"></path>
+          <path class="arrow" d="M 890 372 L 810 372" marker-end="url(#arrow3)"></path>
+          <path class="arrow" d="M 700 330 L 700 154" marker-end="url(#arrow3)"></path>
+        </svg>
+      </div>
+
+      <h2>Decision Principles</h2>
+      <div class="decision-list">
+        <div class="decision">
+          <div>
+            <h3>Extract mechanics, not product behavior</h3>
+            <p>Projection and run lifecycle are mechanics. Model streaming, Plan/Act mode, confirmations, sessions, and sub-agent UI are product behavior.</p>
+          </div>
+        </div>
+        <div class="decision">
+          <div>
+            <h3>Preserve public adapters during migration</h3>
+            <p><code>AgentRun</code> kept its existing import path so agent-host code and tests did not need a risky large-bang rewrite.</p>
+          </div>
+        </div>
+        <div class="decision">
+          <div>
+            <h3>Keep persisted event schema stable</h3>
+            <p>The event envelope still has the same fields: id, runId, sequence, type, version, causationId, correlationId, timestamp, data, parentEventId, and relatedToolCallId.</p>
+          </div>
+        </div>
+        <div class="decision">
+          <div>
+            <h3>Test both framework and product usage</h3>
+            <p>Framework tests prove generic behavior. Existing agent-host tests prove the adapter still preserves Excelsior behavior.</p>
+          </div>
+        </div>
+      </div>
+
+      <h2>Change Matrix</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Area</th>
+              <th>Before</th>
+              <th>After</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Projection primitive</td>
+              <td><code>readModel.ts</code> inside agent-host</td>
+              <td><code>@excelsior/projection</code></td>
+              <td>Generic event folding is independent from the agent product.</td>
+            </tr>
+            <tr>
+              <td>Display projection</td>
+              <td><code>projectEvents.ts</code> and <code>groupEventsForDisplay()</code></td>
+              <td><code>chatTranscriptProjection.ts</code> and <code>projectEventsToDisplayBlocks()</code></td>
+              <td>The new name says what is produced, not just how it is computed.</td>
+            </tr>
+            <tr>
+              <td>AI history projection</td>
+              <td>Array mutation and pop/push buffering</td>
+              <td><code>AI_HISTORY_MODEL</code> with <code>{ messages, pendingAssistant }</code></td>
+              <td>Pending assistant text is explicit state, which is easier to reason about and test.</td>
+            </tr>
+            <tr>
+              <td>Sub-agent projection</td>
+              <td>Loop inside <code>projectChildren.ts</code></td>
+              <td><code>SUB_AGENT_MODEL</code> plus finalization</td>
+              <td>Child run output follows the same read-model pattern as transcript and AI history.</td>
+            </tr>
+            <tr>
+              <td>Run source</td>
+              <td><code>AgentRun</code> owned generic lifecycle and host event typing</td>
+              <td><code>EventfulRun</code> generic core, <code>AgentRun</code> typed adapter</td>
+              <td>The generic lifecycle can be tested and understood without AI SDK context.</td>
+            </tr>
+            <tr>
+              <td>Run orchestration</td>
+              <td>Host <code>RunOrchestrator</code> knew messages, agent factory, stream, recorder</td>
+              <td>Generic <code>RunOrchestrator</code> receives execution and recorder callbacks</td>
+              <td>The framework owns lifecycle policy; agent-host owns integration policy.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>What To Study First</h2>
+      <ol class="reading-path">
+        <li>Read <code>packages/projection/src/index.ts</code>. It is tiny on purpose. Understand the fold.</li>
+        <li>Read <code>chatTranscriptProjection.ts</code>. Notice how product behavior sits on top of the generic fold.</li>
+        <li>Read <code>packages/run-runtime/src/eventfulRun.ts</code>. Follow id creation, sequence, causation, snapshot, bus emission, and cancellation.</li>
+        <li>Read <code>packages/agent-host/src/lib/runtime/agentRun.ts</code>. It should feel almost boring because it is now just the typed adapter.</li>
+        <li>Read <code>createRunSession</code>. This is where agent-host adapts tools, stream execution, recorder behavior, and mode into the generic runtime.</li>
+        <li>Read <code>projectionFramework.test.ts</code> and <code>runRuntimeFramework.test.ts</code>. They explain the framework contracts better than comments would.</li>
+      </ol>
+
+      <h2>How To Extend Safely</h2>
+      <div class="grid two">
+        <article class="card">
+          <h3>Adding a new projection</h3>
+          <p>Create a product read model in agent-host. Use <code>@excelsior/projection</code> only for the generic fold. Keep side effects out of the projection.</p>
+        </article>
+        <article class="card">
+          <h3>Adding runtime behavior</h3>
+          <p>If it is about event envelopes, cancellation, subscriptions, or orchestration callbacks, it may belong in run-runtime. If it mentions AI, tools, sessions, or persistence schema, it belongs in agent-host.</p>
+        </article>
+        <article class="card">
+          <h3>Adding an event type</h3>
+          <p>Add it to agent-host's event data map and event name constants. The generic runtime should not know the new event's meaning.</p>
+        </article>
+        <article class="card">
+          <h3>Changing persistence</h3>
+          <p>Change recorder or event store code in agent-host. The generic runtime should only call the callback it is given.</p>
+        </article>
+      </div>
+
+      <h2>Tests That Protect The Split</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Test file</th>
+              <th>What it protects</th>
+              <th>Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>projectionFramework.test.ts</code></td>
+              <td>Generic read-model behavior</td>
+              <td>Proves the projection package is small and framework-like.</td>
+            </tr>
+            <tr>
+              <td><code>projection.test.ts</code></td>
+              <td>Product transcript, AI history, and sub-agent projection</td>
+              <td>Proves the framework extraction did not change user-visible chat behavior.</td>
+            </tr>
+            <tr>
+              <td><code>runRuntimeFramework.test.ts</code></td>
+              <td>Generic eventful run lifecycle and orchestration</td>
+              <td>Proves run-runtime works without AI SDK, persistence, or UI concepts.</td>
+            </tr>
+            <tr>
+              <td><code>run.test.ts</code></td>
+              <td><code>AgentRun</code> adapter behavior</td>
+              <td>Proves the host-facing adapter still behaves like the old runtime surface.</td>
+            </tr>
+            <tr>
+              <td><code>runRecorderIntegration.test.ts</code></td>
+              <td>Recorder callbacks and checkpoint behavior</td>
+              <td>Proves persistence integration still works through the new orchestrator shape.</td>
+            </tr>
+            <tr>
+              <td><code>architecture.test.ts</code></td>
+              <td>Package boundary rules</td>
+              <td>Prevents generic packages from importing product code.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout">
+        <p>
+          The practical payoff is not just reuse. It is cognitive compression. When a developer asks "where does this belong?",
+          the answer is now more obvious: generic folds go to projection, generic run lifecycle goes to run-runtime, and
+          Excelsior-specific behavior stays in agent-host.
+        </p>
+      </div>
+
+      <div class="footer">Next: <a href="data-flow.html">Data Flow</a></div>
+    </main>
+  </div>
+</body>
+</html>

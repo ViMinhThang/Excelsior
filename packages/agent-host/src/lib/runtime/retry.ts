@@ -6,8 +6,19 @@ export interface RetryOptions {
   signal?: AbortSignal;
 }
 
+interface RetryErrorLike {
+  name?: string;
+  statusCode?: number | string;
+  message?: string;
+  code?: string;
+}
+
+function asRetryErrorLike(error: unknown): RetryErrorLike {
+  return error && typeof error === "object" ? error as RetryErrorLike : {};
+}
+
 export function isTransientError(error: unknown): boolean {
-  const err = error as any;
+  const err = asRetryErrorLike(error);
   if (err?.name === "AI_APICallError") {
     const status = Number(err.statusCode);
     return status === 429 || status === 502 || status === 503 || status === 504;
@@ -42,14 +53,11 @@ export async function withRetry<T>(
     signal,
   } = options ?? {};
 
-  let lastError: Error;
-
   for (let attempt = 0; ; attempt++) {
     try {
       if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       return await fn();
     } catch (error: unknown) {
-      lastError = error as Error;
       if (error instanceof DOMException || signal?.aborted) throw error;
       if (attempt >= maxRetries || !isTransientError(error)) throw error;
 

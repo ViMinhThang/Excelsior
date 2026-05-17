@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { AgentRun } from "../../packages/agent-host/src/lib/runtime/agentRun.js";
+import { AgentRun } from "@excelsior/agent-host/testing/runtime";
 
 describe("AgentRun", () => {
   let run: AgentRun;
@@ -79,6 +79,18 @@ describe("AgentRun", () => {
     expect(signal.aborted).toBe(false);
     run.cancel();
     expect(signal.aborted).toBe(true);
+  });
+
+  it("parent abort signal cancels the run signal", () => {
+    const parent = new AbortController();
+    const child = new AgentRun("ses_test", undefined, undefined, parent.signal);
+    const signal = child.abortSignal;
+
+    parent.abort("stopped");
+
+    expect(child.isCancelled).toBe(true);
+    expect(signal.aborted).toBe(true);
+    expect(signal.reason).toBe("stopped");
   });
 
   it("isCancelled returns true after cancel", () => {

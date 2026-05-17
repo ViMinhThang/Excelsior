@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import { memo, type FC } from "react";
 import { Box, Text } from "ink";
 import StatusIndicator from "./StatusIndicator.js";
 import { theme } from "../../theme.js";
@@ -15,29 +15,32 @@ interface ToolMessageProps {
 
 function formatCliCommand(toolName?: string, argsStr?: string): string {
   const name = toolName || "tool";
-  let args: Record<string, any> = {};
+  let args: Record<string, unknown> = {};
   if (argsStr) {
     try {
-      args = JSON.parse(argsStr);
+      const parsed = JSON.parse(argsStr);
+      args = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : {};
     } catch {}
   }
 
   switch (name) {
     case "runCommand":
     case "run_command": {
-      const command = args.command || args.CommandLine || "";
-      const cwd = args.cwd || args.Cwd || "";
+      const command = String(args.command || args.CommandLine || "");
+      const cwd = String(args.cwd || args.Cwd || "");
       return cwd ? `PS ${cwd}> ${command}` : `${command.startsWith("$") ? "" : "$ "}${command}`;
     }
     case "spawnSubAgent":
     case "browser_subagent":
-      return `subagent ${args.role || args.TaskSummary || ""}`;
+      return `subagent ${String(args.role || args.TaskSummary || "")}`;
     default:
       return `${name} ${argsStr ? argsStr.replace(/^{|}$/g, "").trim() : ""}`;
   }
 }
 
-const ToolMessage: React.FC<ToolMessageProps> = ({
+const ToolMessage: FC<ToolMessageProps> = ({
   toolName,
   toolArgs,
   status = "completed",

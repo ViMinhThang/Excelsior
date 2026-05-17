@@ -4,7 +4,11 @@
   "type": "module",
   "private": true,
   "exports": {
-    ".": "./src/app.tsx"
+    ".": {
+      "types": "./src/app.tsx",
+      "development": "./src/app.tsx",
+      "default": "./dist/app.js"
+    }
   },
   "dependencies": {
     "@excelsior/agent-host": "1.0.0",

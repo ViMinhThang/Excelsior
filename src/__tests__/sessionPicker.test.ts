@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Session } from "../../packages/agent-host/src/lib/runtime/session.js";
+import type { Session } from "@excelsior/core";
 import {
   getInitialSessionIndex,
   getRelativeSessionTime,
