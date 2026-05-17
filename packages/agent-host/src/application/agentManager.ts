@@ -77,8 +77,8 @@ export class AgentManager {
     if (this._runLifecycle.isLoading || this._disposed) return;
     const trimmed = content.trim();
     if (!trimmed) return;
-
-    const sessionId = this._sessionState.ensureSession();
+    // set the name of this session is the user's first prompt
+    const sessionId = this._sessionState.ensureSession(trimmed);
     const history = this._buildAIHistory();
 
     this._runLifecycle.startTurn(trimmed, {

@@ -20,7 +20,7 @@ export class AgentManagerRunLifecycle {
 
   constructor(
     private readonly service: ChatTurnService,
-    private readonly notify: () => void,
+    private readonly onStateChange: () => void,
     private readonly appendFinalEvents: FinalEventAppender,
   ) {}
 
@@ -56,13 +56,13 @@ export class AgentManagerRunLifecycle {
     });
 
     this.attachRun(result.run, result.childRuns, result.handle);
-    this.notify();
+    this.onStateChange();
   }
 
   cancel(): void {
     this._handle?.cancel();
     this.setLoading(false);
-    this.notify();
+    this.onStateChange();
   }
 
   private setLoading(loading: boolean): void {
@@ -88,7 +88,7 @@ export class AgentManagerRunLifecycle {
     this._unsubLive?.();
     this._unsubLive = run.subscribe(() => {
       this._liveEvents = run.getSnapshot();
-      this.notify();
+      this.onStateChange();
     });
 
     handle.completion
@@ -98,12 +98,12 @@ export class AgentManagerRunLifecycle {
           this.appendFinalEvents([...run.getSnapshot()]);
         }
         this.setLoading(false);
-        this.notify();
+        this.onStateChange();
       })
       .catch(() => {
         if (this._handle !== handle) return;
         this.setLoading(false);
-        this.notify();
+        this.onStateChange();
       });
   }
 }

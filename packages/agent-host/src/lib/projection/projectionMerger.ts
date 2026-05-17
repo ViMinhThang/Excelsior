@@ -26,22 +26,30 @@ function sortEventsByRunSequence(
 }
 
 function isParentRunEvent(event: AnyAgentEvent): boolean {
+  //if an event dont have a parentEventId mean that it a parentEvent(no event own it)
+  // so we return true if it not a parent event
   return !event.parentEventId;
 }
 
 function indexPersistedChildEventsByRunId(
   events: readonly AnyAgentEvent[],
 ): Map<string, AnyAgentEvent[]> {
+  // a map because a parent event have a lot of child event
   const childEventsByRunId = new Map<string, AnyAgentEvent[]>();
 
   for (const event of events) {
+    // if it is a parent event (it don't have a parent) then skip
     if (!event.parentEventId) continue;
+    // check if the child event id doesnt exist in the map we create a new array
     const existing = childEventsByRunId.get(event.runId) ?? [];
+    // push the event to the array
     existing.push(event);
+    // initilize the map <id,[existing]>
     childEventsByRunId.set(event.runId, existing);
   }
 
   for (const [runId, runEvents] of childEventsByRunId) {
+    // make sure we sort the event by chronological
     childEventsByRunId.set(runId, sortEventsByRunSequence(runEvents));
   }
 
@@ -53,6 +61,9 @@ function selectPersistedParentEventsNotLive(
   liveEvents: readonly AnyAgentEvent[],
 ): AnyAgentEvent[] {
   const liveIds = new Set(liveEvents.map((event) => event.id));
+  //filter out the live event by the live event Id and make sure that we only take the parent event
+  // if live Id has the event return true and then use ! to get it to return false
+  // basically we do this to failed the filter of an item if live id have the event
   return persistedEvents.filter(
     (event) => !liveIds.has(event.id) && isParentRunEvent(event),
   );
@@ -69,7 +80,7 @@ function selectParentDisplayEvents(input: ProjectionInput): AnyAgentEvent[] {
   if (liveEvents.length === 0) {
     return persistedEvents.filter(isParentRunEvent);
   }
-
+  // For a split second the event will be save to persistence and exist in live memory so we need hard filter
   return [
     ...selectPersistedParentEventsNotLive(persistedEvents, liveEvents),
     ...selectLiveParentEvents(liveEvents),
@@ -102,13 +113,18 @@ export function mergeEvents(input: ProjectionInput): AnyAgentEvent[] {
 }
 
 export function computeDisplayBlocks(input: ProjectionInput): ProjectedBlock[] {
+  // get all the event from persistence and live memory (only parent event)
   const displayEvents = selectParentDisplayEvents(input);
+  // get a map cotain the key is the child event Id and the value is an array of event sorted in chronological
   const persistedChildEventsByRunId = indexPersistedChildEventsByRunId(
     input.persistedEvents,
   );
 
   return projectEventsToDisplayBlocks(displayEvents, {
-    getChildEvents: createChildEventResolver(input, persistedChildEventsByRunId),
+    getChildEvents: createChildEventResolver(
+      input,
+      persistedChildEventsByRunId,
+    ),
   });
 }
 
