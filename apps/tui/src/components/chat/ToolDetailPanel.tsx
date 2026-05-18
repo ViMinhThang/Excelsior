@@ -1,4 +1,4 @@
-import { memo, type FC } from "react";
+import { memo, type FC, type ReactNode } from "react";
 import { Box, Text } from "ink";
 import type { ProjectedBlock } from "@excelsior/core";
 import { theme } from "../../theme.js";
@@ -17,6 +17,18 @@ function prettyJson(raw: string): string {
     return raw;
   }
 }
+
+const DetailSection: FC<{
+  title: string;
+  children: ReactNode;
+}> = ({ title, children }) => (
+  <Box flexDirection="column" marginTop={1}>
+    <Text color={theme.colors.highlightHeading} bold>{title}</Text>
+    <Box paddingLeft={1} flexDirection="column">
+      {children}
+    </Box>
+  </Box>
+);
 
 const ToolDetailPanel: FC<ToolDetailPanelProps> = ({ block }) => {
   const display = createToolDisplay({
@@ -39,65 +51,53 @@ const ToolDetailPanel: FC<ToolDetailPanelProps> = ({ block }) => {
     : theme.colors.activity;
 
   return (
-    <Box flexDirection="column" paddingLeft={1} width={40}>
-      <Box>
-        <Text color={theme.colors.highlightHeading} bold>Tool Detail</Text>
+    <Box
+      flexDirection="column"
+      paddingX={1}
+      width={44}
+      borderStyle="single"
+      borderColor={theme.colors.border}
+    >
+      <Box flexDirection="row" gap={1}>
+        <Text color={theme.colors.highlightBrand} bold>Tool Detail</Text>
+        <Text color={theme.colors.muted} dimColor>{display.label}</Text>
       </Box>
 
-      <Box flexDirection="column" marginTop={1}>
-        <Text color={theme.colors.muted} bold>Status</Text>
+      <DetailSection title="Status">
         <Box flexDirection="row" gap={1} paddingLeft={1}>
           <Text color={statusColor}>{statusGlyph}</Text>
           <Text color={statusColor}>{block.status}</Text>
           <Text color={theme.colors.muted} dimColor>{duration}</Text>
         </Box>
-      </Box>
+      </DetailSection>
 
-      <Box flexDirection="column" marginTop={1}>
-        <Text color={theme.colors.muted} bold>Command</Text>
-        <Box paddingLeft={1}>
-          <Text color={theme.colors.text} dimColor wrap="wrap">
-            {cmd}
-          </Text>
-        </Box>
-      </Box>
+      <DetailSection title="Command">
+        <Text color={theme.colors.text} wrap="wrap">{cmd}</Text>
+      </DetailSection>
 
-      <Box flexDirection="column" marginTop={1}>
-        <Text color={theme.colors.muted} bold>Summary</Text>
-        <Box paddingLeft={1}>
-          <Text color={theme.colors.text} dimColor>
-            {display.summary || "-"}
-          </Text>
-        </Box>
-      </Box>
+      <DetailSection title="Summary">
+        <Text color={theme.colors.secondary} wrap="wrap">{display.summary || "-"}</Text>
+      </DetailSection>
 
       {block.toolArgs && (
-        <Box flexDirection="column" marginTop={1}>
-          <Text color={theme.colors.muted} bold>Arguments</Text>
-          <Box paddingLeft={1}>
-            <Text color={theme.colors.text} dimColor wrap="wrap">
-              {prettyJson(block.toolArgs)}
-            </Text>
-          </Box>
-        </Box>
+        <DetailSection title="Arguments">
+          <Text color={theme.colors.muted} dimColor wrap="wrap">
+            {prettyJson(block.toolArgs)}
+          </Text>
+        </DetailSection>
       )}
 
       {block.content && (
-        <Box flexDirection="column" marginTop={1}>
-          <Text color={theme.colors.muted} bold>
-            Output ({block.content.split("\n").length} lines)
+        <DetailSection title={`Output (${block.content.split("\n").length} lines)`}>
+          <Text color={theme.colors.muted} dimColor wrap="wrap">
+            {block.content.split("\n").slice(0, 20).join("\n")}
           </Text>
-          <Box paddingLeft={1}>
-            <Text color={theme.colors.muted} dimColor wrap="wrap">
-              {block.content.split("\n").slice(0, 20).join("\n")}
+          {block.content.split("\n").length > 20 && (
+            <Text color={theme.colors.muted} dimColor>
+              ... ({block.content.split("\n").length - 20} more lines)
             </Text>
-            {block.content.split("\n").length > 20 && (
-              <Text color={theme.colors.muted} dimColor>
-                ... ({block.content.split("\n").length - 20} more lines)
-              </Text>
-            )}
-          </Box>
-        </Box>
+          )}
+        </DetailSection>
       )}
 
       <Box marginTop={1}>

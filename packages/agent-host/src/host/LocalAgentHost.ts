@@ -34,12 +34,14 @@ export class LocalAgentHost implements AgentHost {
   ) {
     this.application = application;
     this.settings = settings;
-    this.confirmations = new HostConfirmationController(() => this.notify());
+    this.confirmations = new HostConfirmationController(() =>
+      this.invalidateAndNotify(),
+    );
     this.commandHost = new CommandHostAdapter(this.application, {
       deleteAllSessions: () => deleteAllPersistedSessions(),
     });
     this.unsubscribeApplication = this.application.subscribe(() =>
-      this.notify(),
+      this.invalidateAndNotify(),
     );
   }
 
@@ -139,7 +141,7 @@ export class LocalAgentHost implements AgentHost {
     this.application.dispose();
   }
 
-  private notify(): void {
+  private invalidateAndNotify(): void {
     this.snapshot = null;
     for (const listener of this.listeners) {
       listener();

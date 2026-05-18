@@ -130,10 +130,25 @@ describe("@excelsior/run-runtime EventfulRun", () => {
     expect(listener).toHaveBeenCalledTimes(1);
     run.cancel();
   });
+
+  it("batches subscriber notifications across multiple emits", async () => {
+    const run = new EventfulRun<TestEvents>();
+    const listener = vi.fn();
+    run.subscribe(listener);
+
+    run.emit("message", { text: "a" });
+    run.emit("message", { text: "b" });
+    run.emit("message", { text: "c" });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(run.getSnapshot()).toHaveLength(3);
+    expect(listener).toHaveBeenCalledTimes(1);
+    run.cancel();
+  });
 });
 
 describe("@excelsior/run-runtime RunOrchestrator", () => {
-  it("calls execute with run, signal, and emit, then resolves done with emitted events", async () => {
+  it("calls execute with run, signal, and emit, then resolves completion with emitted events", async () => {
     const run = new EventfulRun<TestEvents>();
     const orchestrator = new RunOrchestrator<TestEvents>();
 
@@ -145,10 +160,11 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
       },
     });
 
-    await expect(handle.done).resolves.toMatchObject([
+    const completion = await handle.completion;
+    expect(completion.events).toMatchObject([
       { type: "message", data: { text: "hello" } },
     ]);
-    await expect(handle.completion).resolves.toMatchObject({
+    expect(completion).toMatchObject({
       status: "completed",
       events: [{ type: "message", data: { text: "hello" } }],
     });
@@ -169,14 +185,13 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
     });
 
     handle.cancel("stop");
-    await handle.done;
-
-    expect(run.isCancelled).toBe(true);
-    expect(run.bus.getListenerCount("event")).toBe(0);
     await expect(handle.completion).resolves.toMatchObject({
       status: "cancelled",
       cancelReason: "stop",
     });
+
+    expect(run.isCancelled).toBe(true);
+    expect(run.bus.getListenerCount("event")).toBe(0);
   });
 
   it("reports parent aborts as cancelled completion", async () => {
@@ -198,12 +213,12 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
     await expect(handle.completion).resolves.toMatchObject({
       status: "cancelled",
       cancelReason: "parent stop",
+      events: [],
     });
-    await expect(handle.done).resolves.toEqual([]);
     expect(run.bus.getListenerCount("event")).toBe(0);
   });
 
-  it("reports abort errors as cancelled completion while preserving done rejection", async () => {
+  it("reports abort errors as cancelled completion", async () => {
     const run = new EventfulRun<TestEvents>();
     const orchestrator = new RunOrchestrator<TestEvents>();
     const abortError = new Error("aborted by transport");
@@ -214,13 +229,11 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
         throw abortError;
       },
     });
-    const doneExpectation = expect(handle.done).rejects.toBe(abortError);
 
     await expect(handle.completion).resolves.toMatchObject({
       status: "cancelled",
       cancelReason: abortError,
     });
-    await doneExpectation;
     expect(run.bus.getListenerCount("event")).toBe(0);
   });
 
@@ -242,10 +255,10 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
       },
     });
 
-    const events = await handle.done;
+    const result = await handle.completion;
 
     expect(recorded).toEqual(["message"]);
-    expect(events.map((event) => event.type)).toEqual(["message"]);
+    expect(result.events.map((event) => event.type)).toEqual(["message"]);
     run.cancel();
   });
 
@@ -269,7 +282,7 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
       },
     });
 
-    await handle.done;
+    await handle.completion;
 
     expect(attempts).toEqual(["a", "b"]);
     expect(onPersistError).toHaveBeenCalledTimes(1);
@@ -362,10 +375,11 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
       },
     });
 
-    await expect(handle.done).resolves.toMatchObject([
+    const completion = await handle.completion;
+    expect(completion.events).toMatchObject([
       { type: "message", data: { text: "before" } },
     ]);
-    await expect(handle.completion).resolves.toMatchObject({
+    expect(completion).toMatchObject({
       status: "failed",
       error,
       events: [{ type: "message", data: { text: "before" } }],

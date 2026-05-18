@@ -48,6 +48,6 @@ describe("test helper fixtures", () => {
 
     handle.cancel();
 
-    expect(typeof handle.done.then).toBe("function");
+    expect(typeof handle.completion.then).toBe("function");
   });
 });

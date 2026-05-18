@@ -30,8 +30,11 @@ import {
   createPendingRunHandle,
 } from "./helpers/agentApplication.js";
 
-function completionFor(done: Promise<AnyAgentEvent[]>) {
-  return done.then((events) => ({ status: "completed" as const, events }));
+function completionForEvents(events: Promise<AnyAgentEvent[]>) {
+  return events.then((completedEvents) => ({
+    status: "completed" as const,
+    events: completedEvents,
+  }));
 }
 
 function createDeferredRunHandle(cancel = vi.fn()): {
@@ -45,7 +48,6 @@ function createDeferredRunHandle(cancel = vi.fn()): {
   return {
     handle: {
       completion,
-      done: completion.then((result) => result.events),
       cancel,
     },
     resolveCompletion,
@@ -108,7 +110,6 @@ function createCheckpointingChatService(): {
         childRuns: new Map(),
         handle: {
           completion,
-          done: completion.then((result) => result.events),
           cancel: vi.fn(),
         },
         sessionId: options.sessionId,
@@ -183,9 +184,9 @@ describe("AgentApplication session ownership", () => {
 
   it("merges final run events back into the snapshot before clearing loading state", async () => {
     let run!: AgentRun;
-    let resolveDone!: () => void;
-    const done = new Promise<AnyAgentEvent[]>((resolve) => {
-      resolveDone = () => resolve(run.getSnapshot());
+    let resolveEvents!: () => void;
+    const events = new Promise<AnyAgentEvent[]>((resolve) => {
+      resolveEvents = () => resolve(run.getSnapshot());
     });
     const sessionManager = createFakeSessionManager();
     const chatService: ChatTurnService = {
@@ -194,7 +195,7 @@ describe("AgentApplication session ownership", () => {
         return {
           run,
           childRuns: new Map(),
-          handle: { done, completion: completionFor(done), cancel: vi.fn() },
+          handle: { completion: completionForEvents(events), cancel: vi.fn() },
           sessionId: options.sessionId,
         };
       }),
@@ -208,7 +209,7 @@ describe("AgentApplication session ownership", () => {
     run.emit("user-input", { content: "hello" });
     expect(manager.getSnapshot().isLoading).toBe(true);
 
-    resolveDone();
+    resolveEvents();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const snapshot = manager.getSnapshot();
@@ -390,9 +391,9 @@ describe("AgentApplication session ownership", () => {
 
   it("clears restored display state after deleting the current session", async () => {
     let run!: AgentRun;
-    let resolveDone!: () => void;
-    const done = new Promise<AnyAgentEvent[]>((resolve) => {
-      resolveDone = () => resolve(run.getSnapshot());
+    let resolveEvents!: () => void;
+    const events = new Promise<AnyAgentEvent[]>((resolve) => {
+      resolveEvents = () => resolve(run.getSnapshot());
     });
     const sessionManager = createFakeSessionManager();
     const chatService: ChatTurnService = {
@@ -401,7 +402,7 @@ describe("AgentApplication session ownership", () => {
         return {
           run,
           childRuns: new Map(),
-          handle: { done, completion: completionFor(done), cancel: vi.fn() },
+          handle: { completion: completionForEvents(events), cancel: vi.fn() },
           sessionId: options.sessionId,
         };
       }),
@@ -413,7 +414,7 @@ describe("AgentApplication session ownership", () => {
 
     manager.send("hello");
     run.emit("user-input", { content: "hello" });
-    resolveDone();
+    resolveEvents();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(manager.getSnapshot().displayBlocks).toHaveLength(1);
 

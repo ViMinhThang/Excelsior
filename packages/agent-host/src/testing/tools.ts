@@ -7,7 +7,7 @@ export { createRipgrepTool } from "../agent/tools/fs/ripgrep.js";
 export { createViewTool } from "../agent/tools/fs/view.js";
 export { createWriteTool } from "../agent/tools/fs/write.js";
 export { createRunCommandTool } from "../agent/tools/runCommand/runCommand.js";
-export { runCommandSchema } from "../agent/tools/runCommand/type.js";
+export { runCommandSchema } from "../agent/tools/runCommand/types.js";
 export { createSpawnSubAgentTool } from "../agent/spawn/spawnSubAgent.js";
 export { classifyCommandRisk } from "../lib/tool/commandRisk.js";
 export { createToolContext } from "../lib/tool/context.js";

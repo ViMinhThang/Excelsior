@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import type { ProjectedBlock } from "@excelsior/core";
-import { selectSubAgentBlocks } from "../selectors/chat-selectors.js";
+import { selectSubAgentBlocks } from "../selectors/chatSelectors.js";
 
 export type ChatMode =
   | "input"

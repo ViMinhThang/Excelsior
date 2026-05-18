@@ -113,4 +113,51 @@ describe("tool display model", () => {
     expect(display.label).toBe("Run command");
     expect(display.risk).toBe("low");
   });
+
+  it("keeps edit summaries compact while exposing a side-by-side preview", () => {
+    const display = createToolDisplay({
+      toolName: "edit",
+      toolArgs: JSON.stringify({ filePath: "demo.ts" }),
+      status: "completed",
+      content: [
+        "Successfully replaced the block in demo.ts.",
+        "--- demo.ts",
+        "+++ demo.ts",
+        "@@ -1,1 +1,1 @@",
+        "-old",
+        "+new",
+      ].join("\n"),
+    });
+
+    expect(display.detail).toBe("demo.ts (+1 -1 lines)");
+    expect(display.resultPreview).toBeUndefined();
+    expect(display.fileChangePreview).toMatchObject({
+      action: "edit",
+      oldLines: ["old"],
+      newLines: ["new"],
+    });
+  });
+
+  it("keeps write summaries compact while exposing created file previews", () => {
+    const display = createToolDisplay({
+      toolName: "write",
+      toolArgs: JSON.stringify({ filePath: "created.ts" }),
+      status: "completed",
+      content: [
+        "Successfully wrote 10 characters to created.ts",
+        "--- created.ts",
+        "+++ created.ts",
+        "@@ -1,0 +1,1 @@",
+        "+new",
+      ].join("\n"),
+    });
+
+    expect(display.detail).toBe("created.ts (+1 -0 lines)");
+    expect(display.resultPreview).toBeUndefined();
+    expect(display.fileChangePreview).toMatchObject({
+      action: "create",
+      oldLines: [""],
+      newLines: ["new"],
+    });
+  });
 });

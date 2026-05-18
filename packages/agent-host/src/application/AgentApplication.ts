@@ -1,4 +1,9 @@
-import type { AgentMessage, AgentMode, CommandResult, Session } from "@excelsior/core";
+import type {
+  AgentMessage,
+  AgentMode,
+  CommandResult,
+  Session,
+} from "@excelsior/core";
 import { ChatService } from "./chatService.js";
 import { SessionManager } from "../sessionManager.js";
 import { createSubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
@@ -50,10 +55,8 @@ export class AgentApplication {
     );
 
     let sessions!: SessionController;
-    this.turns = new TurnController(
-      service,
-      this.state,
-      (events) => sessions.appendFinalEvents(events),
+    this.turns = new TurnController(service, this.state, (events) =>
+      sessions.appendFinalEvents(events),
     );
     sessions = new SessionController(
       sessionManager,
@@ -89,7 +92,9 @@ export class AgentApplication {
     const trimmed = content.trim();
     if (!trimmed) return;
 
+    // set the session name as the user's first prompt of the session
     const sessionId = this.sessions.ensureSession(trimmed);
+    // take the current history to build the context for LLM
     const history = this.buildAIHistory();
 
     this.turns.startTurn(trimmed, {

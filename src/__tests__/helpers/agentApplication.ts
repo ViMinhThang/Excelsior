@@ -70,7 +70,6 @@ export function createPendingRunHandle(
   cancel = vi.fn(),
 ): RunHandle<AgentEventDataMap> {
   return {
-    done: new Promise(() => {}),
     completion: new Promise(() => {}),
     cancel,
   };

@@ -58,7 +58,7 @@ describe("run recorder integration", () => {
       streamAgentResponse: streamTextDelta,
     });
 
-    await result.handle.done;
+    await result.handle.completion;
 
     expect(events.map((event) => event.type)).toEqual(["text-delta"]);
     expect(checkpoints).toEqual([
@@ -130,7 +130,7 @@ describe("run recorder integration", () => {
       streamAgentResponse: streamTextDelta,
     });
 
-    const events = await result.handle.done;
+    const completion = await result.handle.completion;
     const snapshot = result.run.getSnapshot();
 
     expect(snapshot).toEqual(
@@ -144,7 +144,7 @@ describe("run recorder integration", () => {
         }),
       ]),
     );
-    expect(events.map((event) => event.type)).toEqual(["text-delta"]);
+    expect(completion.events.map((event) => event.type)).toEqual(["text-delta"]);
     expect(recordAttempts).toBe(1);
   });
 
@@ -162,7 +162,7 @@ describe("run recorder integration", () => {
       },
     });
 
-    await result.handle.done;
+    await result.handle.completion;
 
     expect(result.run.getSnapshot()).toEqual(
       expect.arrayContaining([

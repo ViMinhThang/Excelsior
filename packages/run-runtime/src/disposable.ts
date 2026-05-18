@@ -5,8 +5,8 @@ export class DisposableScope {
 
   add(
     disposable:
-      | (() => void)
-      | { dispose(): void }
+      | (() => void) // a simple teardown function (e.g () => clearTimeout(timer))
+      | { dispose(): void } /// Any object that has a dispose metmod
       | AbortController
       | DisposableScope,
   ): void {
