@@ -1,7 +1,5 @@
 import type { FC } from "react";
 import { Box, Text } from "ink";
-import { formatAgentMode } from "@excelsior/core";
-import type { AgentMode } from "@excelsior/core";
 import { theme } from "../../theme.js";
 import { getChatModeHint } from "../../lib/modeHints.js";
 import type { ChatMode } from "../../hooks/useSubAgentNavigation.js";
@@ -13,7 +11,6 @@ interface FooterBarProps {
   activePanelId: string | null;
   subAgentCount: number;
   toolCount: number;
-  mode: AgentMode;
   workspaceRootPath: string;
 }
 
@@ -24,11 +21,10 @@ const FooterBar: FC<FooterBarProps> = ({
   activePanelId,
   subAgentCount,
   toolCount,
-  mode,
   workspaceRootPath,
 }) => {
   const footerHint = getChatModeHint({ chatMode, isLoading, hasPending, activePanelId, subAgentCount, toolCount });
-  const footerText = `${footerHint} | mode: ${formatAgentMode(mode)} | workspace: ${workspaceRootPath}`;
+  const footerText = `${footerHint} | workspace: ${workspaceRootPath}`;
 
   return (
     <Box marginTop={1} paddingLeft={1}>

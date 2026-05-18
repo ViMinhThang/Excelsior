@@ -16,6 +16,7 @@ import { useChatScreenState } from '../hooks/useChatScreenState.js';
 import { createToolDisplay } from '../lib/toolDisplay.js';
 import { theme } from '../theme.js';
 import {
+  formatAgentMode,
   type ProjectedBlock,
   toSubAgentViewModel,
 } from '@excelsior/core';
@@ -129,14 +130,20 @@ const ChatScreen = () => {
           {ActiveFeaturePanel ? (
             <ActiveFeaturePanel context={featureContext} />
           ) : (
-            <ChatInput
-              value={input}
-              onChange={setInput}
-              onSubmit={() => {}}
-              placeholder="Type your coding task here..."
-              isLoading={isLoading}
-              focus={!pending && chatMode === "input"}
-            />
+            <>
+              <ChatInput
+                value={input}
+                onChange={setInput}
+                onSubmit={() => {}}
+                placeholder="Type your coding task here..."
+                isLoading={isLoading}
+                focus={!pending && chatMode === "input"}
+              />
+              <Box paddingLeft={1}>
+                <Text color={theme.colors.highlightEmphasis} bold>(Shift + Tab)</Text>
+                <Text color={theme.colors.muted} dimColor> {formatAgentMode(mode)}</Text>
+              </Box>
+            </>
           )}
           {!ActiveFeaturePanel && chatMode === "input" && commandResult && (
             <Box marginTop={1} paddingLeft={1} flexDirection="column">
@@ -147,7 +154,7 @@ const ChatScreen = () => {
       )}
 
       {pending && pendingDisplay && (
-        <PendingActionPanel pending={pending} display={pendingDisplay} />
+        <PendingActionPanel display={pendingDisplay} />
       )}
 
       {suggestion.show && suggestion.filtered.length > 0 && (
@@ -185,7 +192,6 @@ const ChatScreen = () => {
         activePanelId={activePanelId}
         subAgentCount={subAgents.length}
         toolCount={toolCount}
-        mode={mode}
         workspaceRootPath={workspace.rootPath}
       />
     </Box>
