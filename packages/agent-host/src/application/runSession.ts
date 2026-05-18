@@ -121,10 +121,6 @@ export function createRunSession(config: RunSessionConfig): RunSessionResult {
   const checkpointedHandle: RunHandle<AgentEventDataMap> = {
     ...handle,
     completion,
-    done: handle.done.then(async (events) => {
-      await completion;
-      return events;
-    }),
   };
 
   return { run, childRuns, handle: checkpointedHandle, sessionId };

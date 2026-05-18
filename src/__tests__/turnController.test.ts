@@ -23,7 +23,6 @@ function createDeferredRunHandle(cancel = vi.fn()): {
   return {
     handle: {
       completion,
-      done: completion.then((result) => result.events),
       cancel,
     },
     resolveCompletion,

@@ -78,8 +78,10 @@ const CommandPalette: FC<CommandPaletteProps> = ({
   let flatIndex = 0;
 
   return (
-    <Box flexDirection="column" marginTop={1} paddingLeft={1}>
+    <Box flexDirection="column" marginTop={1} paddingX={1} borderStyle="single" borderColor={theme.colors.border}>
       <Box flexDirection="row" gap={1}>
+        <Text color={theme.colors.highlightBrand} bold>Commands</Text>
+        <Text color={theme.colors.muted}>{theme.glyphs.section}</Text>
         <Text color={theme.colors.highlightBrand}>{">"}</Text>
         <Text color={theme.colors.text}>/{charBuffer}</Text>
         <Text color={theme.colors.muted} dimColor>
@@ -89,14 +91,20 @@ const CommandPalette: FC<CommandPaletteProps> = ({
       <Box flexDirection="column" marginTop={1} paddingLeft={1}>
         {Array.from(groups.entries()).map(([category, cmds]) => (
           <Box key={category} flexDirection="column">
-            <Text color={theme.colors.highlightHeading} bold dimColor>
+            <Text color={theme.colors.highlightHeading} bold>
               {category}:
             </Text>
             {cmds.map((cmd) => {
               const isSelected = flatIndex === selectedIndex;
               flatIndex++;
               return (
-                <Box key={cmd.name} flexDirection="row" gap={1} paddingLeft={1}>
+                <Box
+                  key={cmd.name}
+                  flexDirection="row"
+                  gap={1}
+                  paddingLeft={1}
+                  backgroundColor={isSelected ? theme.colors.panel : undefined}
+                >
                   <Text color={isSelected ? theme.colors.highlightSelected : theme.colors.border}>
                     {isSelected ? "›" : " "}
                   </Text>
@@ -106,7 +114,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
                   >
                     /{cmd.name}
                   </Text>
-                  <Text color={theme.colors.muted} dimColor>
+                  <Text color={isSelected ? theme.colors.secondary : theme.colors.muted} dimColor={!isSelected}>
                     {cmd.description}
                   </Text>
                 </Box>

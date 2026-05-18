@@ -24,12 +24,15 @@ const FooterBar: FC<FooterBarProps> = ({
   workspaceRootPath,
 }) => {
   const footerHint = getChatModeHint({ chatMode, isLoading, hasPending, activePanelId, subAgentCount, toolCount });
-  const footerText = `${footerHint} | workspace: ${workspaceRootPath}`;
 
   return (
-    <Box marginTop={1} paddingLeft={1}>
+    <Box marginTop={1} paddingLeft={1} flexDirection="row">
       <Text color={theme.colors.muted} dimColor wrap="truncate-end">
-        {footerText}
+        {footerHint}
+      </Text>
+      <Text color={theme.colors.border}>{theme.glyphs.separator}</Text>
+      <Text color={theme.colors.muted} dimColor wrap="truncate-start">
+        {workspaceRootPath}
       </Text>
     </Box>
   );

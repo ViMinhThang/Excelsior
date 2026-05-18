@@ -154,7 +154,7 @@ const ChatScreen = () => {
       )}
 
       {pending && pendingDisplay && (
-        <PendingActionPanel display={pendingDisplay} />
+        <PendingActionPanel pending={pending} display={pendingDisplay} />
       )}
 
       {suggestion.show && suggestion.filtered.length > 0 && (

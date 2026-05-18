@@ -1,4 +1,5 @@
 import { createRunSession } from "./runSession.js";
+import { buildContextMessages } from "./context/contextBuilder.js";
 import { createAgent } from "../agent/agent.js";
 import { createSpawnSubAgentTool } from "../agent/spawn/spawnSubAgent.js";
 import type { RunRecorder } from "../lib/persistence/runRecorder.js";
@@ -14,10 +15,14 @@ export interface AIHistoryRef {
   current: AgentMessage[];
 }
 
+export interface ChatServiceDependencies {
+  createRunSession?: typeof createRunSession;
+}
+
 export class ChatService {
   constructor(
-    private readonly sessionMetadataStore: SessionMetadataStore =
-      defaultSessionMetadataStore,
+    private readonly sessionMetadataStore: SessionMetadataStore = defaultSessionMetadataStore,
+    private readonly dependencies: ChatServiceDependencies = {},
   ) {}
 
   submitUserTurn(
@@ -36,13 +41,14 @@ export class ChatService {
       fileCheckpoint?: FileCheckpoint;
     },
   ) {
-    const aiMessages: AgentMessage[] = [];
-    if (options?.history?.current) {
-      aiMessages.push(...options.history.current);
-    }
-    aiMessages.push({ role: "user", content });
+    const aiMessages: AgentMessage[] = [
+      ...(options?.history?.current ?? []),
+      { role: "user", content },
+    ];
 
-    const { run, childRuns, handle } = createRunSession({
+    const startRunSession =
+      this.dependencies.createRunSession ?? createRunSession;
+    const { run, childRuns, handle } = startRunSession({
       messages: aiMessages,
       createAgent: (runCtx) =>
         createAgent(
