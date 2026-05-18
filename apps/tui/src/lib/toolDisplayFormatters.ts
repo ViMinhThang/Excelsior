@@ -1,4 +1,5 @@
 import { type ToolFormatter } from "./toolDisplayTypes.js";
+import { parseFileChangePreview } from "./fileChangePreview.js";
 import { asString, genericSummary, getCommandRisk, countLines, plural } from "./toolDisplayUtils.js";
 
 function stripLsHeader(content: string): string {
@@ -86,14 +87,18 @@ const TOOL_FORMATTERS: Record<string, ToolFormatter> = {
     const added = diffLines.filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
     const removed = diffLines.filter((l) => l.startsWith("-") && !l.startsWith("---")).length;
     const diffStats = added + removed > 0 ? ` (+${added} -${removed} lines)` : "";
+    const fileChangePreview = diffLines.length > 0
+      ? parseFileChangePreview({ toolName: "write", filePath, content: normalizedContent })
+      : undefined;
     return {
       label: "Write",
       summary: filePath || "file",
       detail: diffLines.length > 0
         ? `${filePath}${diffStats}`
         : successLine,
-      resultPreview: diffLines.length > 0 ? diffLines.slice(0, 10) : undefined,
+      resultPreview: diffLines.length > 0 && !fileChangePreview ? diffLines.slice(0, 10) : undefined,
       omittedResultLines: diffLines.length > 10 ? diffLines.length - 10 : undefined,
+      fileChangePreview,
       showCompletion: false,
       tone,
     };
@@ -115,14 +120,18 @@ const TOOL_FORMATTERS: Record<string, ToolFormatter> = {
     const added = diffLines.filter((l) => l.startsWith("+") && !l.startsWith("+++")).length;
     const removed = diffLines.filter((l) => l.startsWith("-") && !l.startsWith("---")).length;
     const diffStats = added + removed > 0 ? ` (+${added} -${removed} lines)` : "";
+    const fileChangePreview = diffLines.length > 0
+      ? parseFileChangePreview({ toolName: "edit", filePath, content: normalizedContent })
+      : undefined;
     return {
       label: "Edit",
       summary: filePath || "file",
       detail: diffLines.length > 0
         ? `${filePath}${diffStats}`
         : successLine,
-      resultPreview: diffLines.length > 0 ? diffLines.slice(0, 10) : undefined,
+      resultPreview: diffLines.length > 0 && !fileChangePreview ? diffLines.slice(0, 10) : undefined,
       omittedResultLines: diffLines.length > 10 ? diffLines.length - 10 : undefined,
+      fileChangePreview,
       showCompletion: false,
       tone,
     };

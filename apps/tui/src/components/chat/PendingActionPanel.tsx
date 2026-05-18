@@ -1,16 +1,14 @@
 import type { FC } from "react";
 import { Box, Text } from "ink";
-import type { ConfirmRequest } from "@excelsior/core";
 import type { ToolDisplay } from "../../lib/toolDisplay.js";
 import { theme } from "../../theme.js";
 import Panel from "../shared/Panel.js";
 
 interface PendingActionPanelProps {
-  pending: ConfirmRequest;
   display: ToolDisplay;
 }
 
-const PendingActionPanel: FC<PendingActionPanelProps> = ({ pending, display }) => {
+const PendingActionPanel: FC<PendingActionPanelProps> = ({ display }) => {
   return (
     <Panel
       title="Action Required"
