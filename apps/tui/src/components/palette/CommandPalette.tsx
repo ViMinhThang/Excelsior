@@ -11,7 +11,7 @@ interface CommandPaletteProps {
   total: number;
   next: () => void;
   prev: () => void;
-  execute: () => void;
+  insertCommand: () => void;
   close: () => void;
 }
 
@@ -33,7 +33,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
   total,
   next,
   prev,
-  execute,
+  insertCommand,
   close,
 }) => {
   const [charBuffer, setCharBuffer] = useState(search);
@@ -45,7 +45,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
       return;
     }
     if (key.return) {
-      execute();
+      insertCommand();
       return;
     }
     if (key.upArrow) {
@@ -106,7 +106,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
                   backgroundColor={isSelected ? theme.colors.panel : undefined}
                 >
                   <Text color={isSelected ? theme.colors.highlightSelected : theme.colors.border}>
-                    {isSelected ? "›" : " "}
+                    {isSelected ? ">" : " "}
                   </Text>
                   <Text
                     color={isSelected ? theme.colors.highlightSelected : theme.colors.text}
@@ -125,7 +125,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
       </Box>
       <Box marginTop={1}>
         <Text color={theme.colors.muted} dimColor>
-          Type to filter · ↑↓ navigate · Enter execute · Esc close · Tab autocomplete
+          Type to filter - Up/Down navigate - Enter insert - Esc close - Tab autocomplete
         </Text>
       </Box>
     </Box>
