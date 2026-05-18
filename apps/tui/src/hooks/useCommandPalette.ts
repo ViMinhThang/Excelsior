@@ -3,12 +3,18 @@ import type { CommandDefinition } from "@excelsior/core";
 
 interface UseCommandPaletteOptions {
   commands: CommandDefinition[];
-  executeCommand: (input: string) => void;
+  setInput: (value: string) => void;
+}
+
+export function getPaletteCommandInput(
+  command: CommandDefinition | undefined,
+): string | null {
+  return command ? `/${command.name} ` : null;
 }
 
 export function useCommandPalette({
   commands,
-  executeCommand,
+  setInput,
 }: UseCommandPaletteOptions) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -51,12 +57,13 @@ export function useCommandPalette({
     setSelectedIndex((i) => (i > 0 ? i - 1 : filtered.length - 1));
   }, [filtered.length]);
 
-  const execute = useCallback(() => {
+  const insertCommand = useCallback(() => {
     const cmd = filtered[selectedIndex];
-    if (!cmd) return;
-    executeCommand(`/${cmd.name} `);
+    const input = getPaletteCommandInput(cmd);
+    if (!input) return;
+    setInput(input);
     close();
-  }, [filtered, selectedIndex, executeCommand, close]);
+  }, [filtered, selectedIndex, setInput, close]);
 
   return {
     isOpen,
@@ -70,6 +77,6 @@ export function useCommandPalette({
     toggle,
     next,
     prev,
-    execute,
+    insertCommand,
   };
 }
