@@ -4,7 +4,7 @@ import type { ToolContext } from "../../../lib/tool/context.js";
 import { classifyCommandRisk } from "../../../lib/tool/commandRisk.js";
 import { authorizeToolAction } from "../../../lib/tool/policy.js";
 import { getWorkspaceRoot } from "../../../lib/tool/workspace.js";
-import { runCommandSchema } from "./type.js";
+import { runCommandSchema } from "./types.js";
 
 const MAX_OUTPUT_LENGTH = 100_000;
 const DEFAULT_TIMEOUT = 30_000;

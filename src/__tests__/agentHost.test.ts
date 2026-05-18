@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   LocalAgentHost,
   resetDefaultAgentHost,
@@ -67,6 +67,31 @@ describe("LocalAgentHost", () => {
 
     host.respondToConfirmation("call_1", true);
 
+    expect(host.getState().pendingConfirmation).toBeNull();
+
+    host.dispose();
+  });
+
+  it("notifies subscribers when confirmation state changes", () => {
+    const host = new LocalAgentHost();
+    const listener = vi.fn();
+    host.subscribe(listener);
+
+    confirmBus.emit("request", {
+      callId: "call_1",
+      toolName: "writeFile",
+      args: "{\"filePath\":\"demo.ts\"}",
+      filePath: "demo.ts",
+      action: "edit",
+      diff: "--- demo.ts\n+++ demo.ts",
+    });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(host.getState().pendingConfirmation?.callId).toBe("call_1");
+
+    host.respondToConfirmation("call_1", false);
+
+    expect(listener).toHaveBeenCalledTimes(2);
     expect(host.getState().pendingConfirmation).toBeNull();
 
     host.dispose();

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ProjectedBlock } from "@excelsior/core";
-import { selectToolBlocks } from "../selectors/tool-selectors.js";
+import { selectToolBlocks } from "../selectors/toolSelectors.js";
 
 export function useToolNavigation(displayBlocks: ProjectedBlock[]) {
   const [selectedToolIndex, setSelectedToolIndex] = useState(0);

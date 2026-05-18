@@ -93,7 +93,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
     this._events.push(event as AnyRunEvent<TEvents>);
     this._snapshot = [...this._events];
     this.bus.emit("event", event as AnyRunEvent<TEvents>);
-    this._notify();
+    this._scheduleNotify();
   }
 
   cancel(reason?: unknown): void {
@@ -130,7 +130,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
     return false;
   }
 
-  private _notify(): void {
+  private _scheduleNotify(): void {
     if (this._notifyPending) return;
     this._notifyPending = true;
     this._notifyTimer = setTimeout(() => {

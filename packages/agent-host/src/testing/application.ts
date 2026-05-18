@@ -15,4 +15,12 @@ export type {
 } from "../application/types.js";
 export type { AgentApplicationOptions } from "../application/AgentApplication.js";
 export { ChatService } from "../application/chatService.js";
-export type { AIHistoryRef } from "../application/chatService.js";
+export type {
+  AIHistoryRef,
+  ChatServiceDependencies,
+} from "../application/chatService.js";
+export {
+  buildContextMessages,
+  DEFAULT_CONTEXT_BUILDER_OPTIONS,
+  type ContextBuilderOptions,
+} from "../application/context/contextBuilder.js";

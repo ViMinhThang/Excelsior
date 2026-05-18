@@ -114,7 +114,7 @@ const FileChangePane: FC<{
   </Box>
 );
 
-const FileChangePreviewView: FC<{
+export const FileChangePreviewView: FC<{
   command: string;
   preview: FileChangePreview;
 }> = ({ command, preview }) => {
