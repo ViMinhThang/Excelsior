@@ -4,7 +4,6 @@ import type { Unsubscribe } from "./bus.js";
 
 export interface RunHandle<TEvents extends { [K in keyof TEvents]: unknown }> {
   cancel(reason?: unknown): void;
-  readonly done: Promise<AnyRunEvent<TEvents>[]>;
   readonly completion: Promise<RunCompletion<TEvents>>;
 }
 
@@ -46,8 +45,6 @@ export class RunOrchestrator<TEvents extends { [K in keyof TEvents]: unknown }> 
     const allEvents = run.getSnapshot().filter(shouldRecordEvent);
     let recordFailed = false;
     let writeQueue: Promise<void> = Promise.resolve();
-    let shouldRejectDone = false;
-    let doneRejectionReason: unknown;
 
     const emit: RunExecutionContext<TEvents>["emit"] = (type, data, overrides) => {
       run.emit(type, data, overrides);
@@ -130,8 +127,6 @@ export class RunOrchestrator<TEvents extends { [K in keyof TEvents]: unknown }> 
       })
       .catch(async (error: unknown) => {
         if (isAbortError(error)) {
-          shouldRejectDone = true;
-          doneRejectionReason = error;
           return finish(cancelledCompletion(error));
         }
 
@@ -144,19 +139,10 @@ export class RunOrchestrator<TEvents extends { [K in keyof TEvents]: unknown }> 
         return finish({ status: "failed", events: allEvents, error });
       });
 
-    const done = completion.then((result) => {
-      if (shouldRejectDone) {
-        return Promise.reject(doneRejectionReason);
-      }
-      return result.events;
-    });
-    done.catch(() => {});
-
     return {
       cancel(reason?: unknown) {
         run.cancel(reason);
       },
-      done,
       completion,
     };
   }

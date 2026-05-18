@@ -90,7 +90,6 @@ export function useChatScreenState() {
     activePanelId: panel.activePanelId,
     isLoading,
     toggleMode: agent.toggleMode,
-    setCommandResult: command.setCommandResult,
     openSubAgent: subAgentNav.openSubAgent,
     nextSubAgent: subAgentNav.nextSubAgent,
     prevSubAgent: subAgentNav.prevSubAgent,

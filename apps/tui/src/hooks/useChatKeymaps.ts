@@ -1,5 +1,4 @@
 import type { CommandDefinition } from "@excelsior/core";
-import { formatAgentMode } from "@excelsior/core";
 import { completeCommandInput } from "../lib/commandSubmission.js";
 import { useKeymap } from "./useKeymap.js";
 
@@ -26,7 +25,6 @@ interface UseChatKeymapsOptions {
   activePanelId: string | null;
   isLoading: boolean;
   toggleMode: () => "plan" | "act" | undefined;
-  setCommandResult: (message: string | null) => void;
   openSubAgent: () => void;
   nextSubAgent: () => void;
   prevSubAgent: () => void;
@@ -55,7 +53,6 @@ export function useChatKeymaps({
   activePanelId,
   isLoading,
   toggleMode,
-  setCommandResult,
   openSubAgent,
   nextSubAgent,
   prevSubAgent,
@@ -159,16 +156,10 @@ export function useChatKeymaps({
         openPalette?.();
       },
       "shift+tab": () => {
-        const nextMode = toggleMode();
-        if (nextMode) {
-          setCommandResult(`Mode switched to ${formatAgentMode(nextMode)}.`);
-        }
+        toggleMode();
       },
       "ctrl+m": () => {
-        const nextMode = toggleMode();
-        if (nextMode) {
-          setCommandResult(`Mode switched to ${formatAgentMode(nextMode)}.`);
-        }
+        toggleMode();
       },
       "ctrl+o": () => {
         openSubAgent();

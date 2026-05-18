@@ -16,8 +16,7 @@ export class HostConfirmationController {
         return;
       }
 
-      this.pendingConfirmation = request;
-      this.notify();
+      this.setPendingConfirmation(request);
     });
   }
 
@@ -28,8 +27,7 @@ export class HostConfirmationController {
   respond(callId: string, approved: boolean): void {
     confirmBus.emit("response", { callId, approved });
     if (this.pendingConfirmation?.callId === callId) {
-      this.pendingConfirmation = null;
-      this.notify();
+      this.setPendingConfirmation(null);
     }
   }
 
@@ -42,5 +40,10 @@ export class HostConfirmationController {
 
   dispose(): void {
     this.unsubscribe();
+  }
+
+  private setPendingConfirmation(next: ConfirmRequest | null): void {
+    this.pendingConfirmation = next;
+    this.notify();
   }
 }

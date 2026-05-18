@@ -85,10 +85,11 @@ function SessionPickerInner({ context }: { context: SessionPickerPanelContext })
   );
 
   return (
-    <Box flexDirection="column" marginTop={1} paddingLeft={1}>
-      <Text color={theme.colors.highlightHeading} bold>
-        Sessions
-      </Text>
+    <Box flexDirection="column" marginTop={1} paddingX={1} borderStyle="single" borderColor={theme.colors.border}>
+      <Box flexDirection="row" gap={1}>
+        <Text color={theme.colors.highlightHeading} bold>Sessions</Text>
+        <Text color={theme.colors.muted} dimColor>{context.sessions.length} total</Text>
+      </Box>
       <Text color={theme.colors.muted} dimColor>
         {SESSION_PICKER_HINT}
       </Text>
@@ -98,13 +99,23 @@ function SessionPickerInner({ context }: { context: SessionPickerPanelContext })
         </Text>
       ) : (
         rows.map((row, index) => (
-          <Text
+          <Box
             key={`${context.sessions[index].id}:${index}`}
-            color={index === selectedIndex ? theme.colors.highlightSelected : theme.colors.muted}
-            bold={index === selectedIndex}
+            flexDirection="row"
+            backgroundColor={index === selectedIndex ? theme.colors.panel : undefined}
           >
-            {row}
-          </Text>
+            <Text color={index === selectedIndex ? theme.colors.highlightSelected : theme.colors.border}>
+              {index === selectedIndex ? ">" : " "}
+            </Text>
+            <Text color={theme.colors.muted}> </Text>
+            <Text
+              color={index === selectedIndex ? theme.colors.secondary : theme.colors.muted}
+              bold={index === selectedIndex}
+              wrap="truncate-end"
+            >
+              {row.replace(/^>\s?|^\s/, "")}
+            </Text>
+          </Box>
         ))
       )}
     </Box>

@@ -48,7 +48,9 @@ npm run dev
 ```text
 packages/
 |- core/           # serializable UI/backend contracts, domain models, shared view types
-`- agent-host/     # backend facade plus runtime, persistence, tools, commands
+|- projection/     # generic deterministic read-model projection primitives
+|- run-runtime/    # generic cancellable run lifecycle, events, subscriptions, orchestration
+`- agent-host/     # local backend facade, application controllers, runtime wiring, persistence, tools, commands
 
 apps/
 `- tui/            # @excelsior/tui Ink app, screens, hooks, components, panels
