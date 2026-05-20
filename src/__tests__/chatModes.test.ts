@@ -22,6 +22,7 @@ function makeKeymapContext(chatMode: ChatMode): ChatModeKeymapContext {
       show: false,
       filtered: [],
       selectedIndex: 0,
+      maxVisibleCount: 0,
       next: noop,
       prev: noop,
     },
@@ -46,30 +47,43 @@ function makeRenderContext(chatMode: ChatMode): ChatModeRenderContext {
   const noop = () => {};
   return {
     chatMode,
-    displayBlocks: [],
-    input: "",
-    setInput: noop,
-    handleSubmit: noop,
-    isLoading: false,
-    pending: null,
-    paletteOpen: false,
-    commandResult: null,
-    mode: "act",
-    activePanel: undefined,
-    featureContext: {
-      sessions: [],
-      currentSessionId: null,
-      switchSession: noop,
-      deleteSession: noop,
-      closePanel: noop,
+    input: {
+      value: "",
+      setValue: noop,
+      submit: noop,
     },
-    subAgents: [],
-    subAgentIndex: 0,
-    toolBlocks: [],
-    selectedSubAgentId: null,
-    selectedToolId: null,
-    selectedToolBlock: undefined,
-    expandedToolIds: new Set(),
+    runtime: {
+      isLoading: false,
+      pending: null,
+      paletteOpen: false,
+      commandResult: null,
+      agentMode: "act",
+    },
+    transcript: {
+      blocks: [],
+      selectedSubAgentId: null,
+      selectedToolId: null,
+      expandedToolIds: new Set(),
+    },
+    subAgents: {
+      blocks: [],
+      selectedIndex: 0,
+    },
+    tools: {
+      blocks: [],
+      selectedId: null,
+      selectedBlock: undefined,
+    },
+    panel: {
+      active: undefined,
+      context: {
+        sessions: [],
+        currentSessionId: null,
+        switchSession: noop,
+        deleteSession: noop,
+        closePanel: noop,
+      },
+    },
   };
 }
 

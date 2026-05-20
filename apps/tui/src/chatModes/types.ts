@@ -23,6 +23,7 @@ export interface CommandSuggestionState {
   show: boolean;
   filtered: CommandDefinition[];
   selectedIndex: number;
+  maxVisibleCount: number;
   next: () => void;
   prev: () => void;
 }
@@ -49,24 +50,37 @@ export interface ChatModeHintContext {
 
 export interface ChatModeRenderContext {
   chatMode: ChatMode;
-  displayBlocks: ProjectedBlock[];
-  input: string;
-  setInput: (value: string) => void;
-  handleSubmit: () => void;
-  isLoading: boolean;
-  pending: unknown;
-  paletteOpen: boolean;
-  commandResult: string | null;
-  mode: AgentMode;
-  activePanel: TuiPanelDefinition | undefined;
-  featureContext: TuiPanelContext;
-  subAgents: SubAgentBlock[];
-  subAgentIndex: number;
-  toolBlocks: ToolBlock[];
-  selectedSubAgentId: string | null;
-  selectedToolId: string | null;
-  selectedToolBlock: ToolBlock | undefined;
-  expandedToolIds: ReadonlySet<string>;
+  input: {
+    value: string;
+    setValue: (value: string) => void;
+    submit: () => void;
+  };
+  runtime: {
+    isLoading: boolean;
+    pending: unknown;
+    paletteOpen: boolean;
+    commandResult: string | null;
+    agentMode: AgentMode;
+  };
+  transcript: {
+    blocks: ProjectedBlock[];
+    selectedSubAgentId: string | null;
+    selectedToolId: string | null;
+    expandedToolIds: ReadonlySet<string>;
+  };
+  subAgents: {
+    blocks: SubAgentBlock[];
+    selectedIndex: number;
+  };
+  tools: {
+    blocks: ToolBlock[];
+    selectedId: string | null;
+    selectedBlock: ToolBlock | undefined;
+  };
+  panel: {
+    active: TuiPanelDefinition | undefined;
+    context: TuiPanelContext;
+  };
 }
 
 export interface ChatModeKeymapContext {

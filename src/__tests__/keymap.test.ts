@@ -25,6 +25,7 @@ function makeKeymapContext(
       show: false,
       filtered: [],
       selectedIndex: 0,
+      maxVisibleCount: 0,
       next: noop,
       prev: noop,
     },
@@ -142,6 +143,7 @@ describe("chat mode keymap registry", () => {
         show: true,
         filtered: [{ name: "settings", description: "Open settings" }],
         selectedIndex: 0,
+        maxVisibleCount: 1,
         next: () => {},
         prev: () => {
           suggestionPrevCount += 1;
