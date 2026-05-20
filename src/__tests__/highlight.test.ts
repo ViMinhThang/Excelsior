@@ -36,6 +36,8 @@ describe("syntax highlighting logic", () => {
     // Confirm it contains the core code content
     expect(output).toContain("const");
     expect(output).toContain("123");
+    // Confirm ANSI color escape codes are generated
+    expect(hasAnsi(output as string)).toBe(true);
   });
 
   it("successfully executes across distinct language types", () => {
@@ -45,13 +47,18 @@ describe("syntax highlighting logic", () => {
     expect(typeof pythonNode.children).toBe("string");
     expect(typeof jsonNode.children).toBe("string");
     expect(pythonNode.children).toContain("def");
+    
+    // Confirm ANSI color escape codes are generated for multiple distinct languages
+    expect(hasAnsi(pythonNode.children as string)).toBe(true);
+    expect(hasAnsi(jsonNode.children as string)).toBe(true);
   });
 
   it("gracefully falls back on execution fail or empty parameters", () => {
     const emptyNode = getTextProps(highlightCode("plain text only", undefined));
     expect(emptyNode).toBeDefined();
     // Should either highlight via auto-discovery or safely print raw text
-    expect(emptyNode.children).toContain("plain text only");
+    const rawText = (emptyNode.children as string).replace(/\u001b\[[0-9;]*m/g, "");
+    expect(rawText).toContain("plain text only");
   });
 
   it("renders inline filename mentions as normal text", () => {

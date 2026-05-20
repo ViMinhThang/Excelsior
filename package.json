@@ -10,8 +10,10 @@
   "scripts": {
     "dev": "tsx --conditions=development apps/tui/src/index.ts",
     "dev:tui": "tsx --conditions=development apps/tui/src/index.ts",
+    "dev:desktop": "npm run --workspace=apps/desktop dev",
     "start": "node dist/apps/tui/src/index.js",
     "build": "tsc && node scripts/sync-package-dist.mjs",
+    "build:desktop": "npm run --workspace=apps/desktop build",
     "check": "npm run typecheck && npm run typecheck:test && npm run check:unused && npm run check:test-unused && npm test && npm run build",
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json",

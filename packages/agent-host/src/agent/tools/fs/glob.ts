@@ -1,9 +1,78 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { glob } from "node:fs/promises";
+import fs from "node:fs/promises";
+import path from "node:path";
+import type { Dirent } from "node:fs";
 import type { ToolContext } from "../../../lib/tool/context.js";
 import { authorizeToolAction } from "../../../lib/tool/policy.js";
 import { getWorkspaceRoot, validateWorkspacePattern } from "../../../lib/tool/workspace.js";
+
+// Converts a glob pattern to a highly accurate RegExp
+function globToRegex(pattern: string): RegExp {
+  const normalized = pattern.replace(/\\/g, "/");
+  const parts = normalized.split("/");
+  const regexParts = parts.map((part) => {
+    if (part === "**") {
+      return ".*";
+    }
+    return part
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, "[^/]*")
+      .replace(/\?/g, "[^/]");
+  });
+  
+  let regexStr = regexParts.join("/");
+  // Optimize matching for recursive and leading wildcards
+  regexStr = regexStr.replace(/\/\.\*$/, "(?:/.*)?");
+  regexStr = regexStr.replace(/^\.\*\//, "(?:.*/)?");
+  regexStr = regexStr.replace(/\/\.\*\//g, "/(?:.*/)?");
+  
+  return new RegExp(`^${regexStr}$`);
+}
+
+// Recursively walks the directory structure matching patterns
+async function* globWalk(pattern: string, options: { cwd: string }, currentPath = ""): AsyncGenerator<string> {
+  const regex = globToRegex(pattern);
+  const fullDir = currentPath ? path.join(options.cwd, currentPath) : options.cwd;
+  
+  let entries: Dirent[] = [];
+  try {
+    entries = await fs.readdir(fullDir, { withFileTypes: true });
+  } catch (err) {
+    return;
+  }
+  
+  for (const entry of entries) {
+    // Blazing-fast optimization: skip heavy folders to prevent locking/infinite recursion
+    if (
+      entry.name === "node_modules" ||
+      entry.name === ".git" ||
+      entry.name === "dist" ||
+      entry.name === ".next" ||
+      entry.name === ".venv"
+    ) {
+      continue;
+    }
+
+    const entryRelative = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+    
+    if (entry.isDirectory()) {
+      if (regex.test(entryRelative)) {
+        yield entryRelative;
+      }
+      yield* globWalk(pattern, options, entryRelative);
+    } else if (entry.isFile()) {
+      if (regex.test(entryRelative)) {
+        yield entryRelative;
+      }
+    }
+  }
+}
+
+// Custom glob wrapper acting as an async iterable
+async function* glob(pattern: string, options: { cwd: string }) {
+  yield* globWalk(pattern, options);
+}
 
 export const globSchema = z.object({
   pattern: z.string().describe("The glob pattern (e.g., 'src/**/*.ts' or '**/package.json')"),

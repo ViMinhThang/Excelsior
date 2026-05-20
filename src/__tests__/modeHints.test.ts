@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getChatModeHint } from "../../apps/tui/src/lib/modeHints.js";
+import { chatModeRegistry } from "../../apps/tui/src/chatModes/index.js";
 
 describe("chat mode hints", () => {
   it("shows Ctrl+O only when sub-agent blocks exist", () => {
@@ -77,5 +78,18 @@ describe("chat mode hints", () => {
       subAgentCount: 1,
       toolCount: 0,
     })).toBe("Esc back to list | Ctrl+O close");
+  });
+
+  it("delegates mode-specific hints through the chat mode registry", () => {
+    const input = {
+      chatMode: "tool-detail" as const,
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      toolCount: 1,
+    };
+
+    expect(getChatModeHint(input)).toBe(chatModeRegistry["tool-detail"].getHint(input));
   });
 });

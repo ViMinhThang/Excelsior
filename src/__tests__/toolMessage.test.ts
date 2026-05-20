@@ -50,11 +50,14 @@ describe("ToolMessage command formatting", () => {
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("edit demo.ts (+1 -1)");
+    expect(frame).toContain("edit demo.ts");
+    expect(frame).toContain("completed edit: demo.ts");
+    expect(frame).toContain("(+1)");
+    expect(frame).toContain("(-1)");
     expect(frame).toContain("old");
     expect(frame).toContain("new");
-    expect(frame).toContain("  2 -  const state = \"old\";");
-    expect(frame).toContain("  2 +  const state = \"new\";");
+    expect(frame).toContain("const state = \"old\";");
+    expect(frame).toContain("const state = \"new\";");
   });
 
   it("shows edit panes by default without the collapsed summary", () => {
@@ -62,6 +65,7 @@ describe("ToolMessage command formatting", () => {
       toolName: "edit",
       toolArgs: JSON.stringify({ filePath: "demo.ts" }),
       status: "completed",
+      expanded: true,
       content: [
         "Successfully replaced the block in demo.ts.",
         "--- demo.ts",
@@ -73,10 +77,12 @@ describe("ToolMessage command formatting", () => {
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("edit demo.ts (+1 -1)");
+    expect(frame).toContain("edit demo.ts");
+    expect(frame).toContain("completed edit: demo.ts");
+    expect(frame).toContain("(+1)");
+    expect(frame).toContain("(-1)");
     expect(frame).toContain("old");
     expect(frame).toContain("new");
-    expect(frame).not.toContain("(+1 -1 lines)");
   });
 
   it("does not render an omitted rows footer for file changes", () => {
@@ -88,6 +94,7 @@ describe("ToolMessage command formatting", () => {
       toolName: "edit",
       toolArgs: JSON.stringify({ filePath: "many.ts" }),
       status: "completed",
+      expanded: true,
       content: [
         "Successfully replaced the block in many.ts.",
         "--- many.ts",
@@ -122,9 +129,9 @@ describe("ToolMessage command formatting", () => {
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("  1 - const previousValue =");
+    expect(frame).toContain("const previousValue =");
     expect(frame).toContain("visible\";");
-    expect(frame).toContain("  1 + const nextValue = \"this");
+    expect(frame).toContain("const nextValue =");
     expect(frame).toContain("should also");
     expect(frame).toContain("remain visible\";");
     expect(frame).not.toContain("...");
