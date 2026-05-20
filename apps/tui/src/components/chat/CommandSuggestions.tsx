@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import type { CommandDefinition } from "@excelsior/core";
 import { theme } from "../../theme.js";
 
-interface CommandSuggestionsProps {
+export interface CommandSuggestionsProps {
   commands: CommandDefinition[];
   selectedIndex: number;
   maxVisibleCount: number;

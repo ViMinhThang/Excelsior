@@ -1,10 +1,18 @@
-import { appendFile, mkdir, readFile, unlink, readdir, writeFile } from "fs/promises";
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  unlink,
+  readdir,
+  writeFile,
+} from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
 import { AnyAgentEvent } from "../runtime/events.js";
 import { TURN_COMPLETE } from "../runtime/eventNames.js";
 
-let sessionsDir = process.env.EXCELSIOR_SESSIONS_DIR ?? join(process.cwd(), "data", "sessions");
+let sessionsDir =
+  process.env.EXCELSIOR_SESSIONS_DIR ?? join(process.cwd(), "data", "sessions");
 const appendQueues = new Map<string, Promise<void>>();
 
 export function setSessionsDirForTests(dir: string): void {
@@ -12,7 +20,9 @@ export function setSessionsDirForTests(dir: string): void {
 }
 
 export function resetSessionsDirForTests(): void {
-  sessionsDir = process.env.EXCELSIOR_SESSIONS_DIR ?? join(process.cwd(), "data", "sessions");
+  sessionsDir =
+    process.env.EXCELSIOR_SESSIONS_DIR ??
+    join(process.cwd(), "data", "sessions");
 }
 
 async function ensureDir(): Promise<void> {
@@ -25,7 +35,10 @@ function filePath(sessionId: string): string {
   return join(sessionsDir, `${sessionId}.jsonl`);
 }
 
-export async function appendEvent(sessionId: string, event: AnyAgentEvent): Promise<void> {
+export async function appendEvent(
+  sessionId: string,
+  event: AnyAgentEvent,
+): Promise<void> {
   const previous = appendQueues.get(sessionId) ?? Promise.resolve();
   const next = previous
     .catch(() => {})
@@ -45,7 +58,9 @@ export async function appendEvent(sessionId: string, event: AnyAgentEvent): Prom
   }
 }
 
-export async function loadRawSessionEvents(sessionId: string): Promise<AnyAgentEvent[]> {
+export async function loadRawSessionEvents(
+  sessionId: string,
+): Promise<AnyAgentEvent[]> {
   const path = filePath(sessionId);
   try {
     const raw = await readFile(path, "utf-8");
@@ -58,7 +73,9 @@ export async function loadRawSessionEvents(sessionId: string): Promise<AnyAgentE
   }
 }
 
-export async function loadSessionEvents(sessionId: string): Promise<AnyAgentEvent[]> {
+export async function loadSessionEvents(
+  sessionId: string,
+): Promise<AnyAgentEvent[]> {
   return (await loadUntilLastCheckpoint(sessionId)).events;
 }
 
@@ -98,7 +115,10 @@ function sortEventsForReplay(events: AnyAgentEvent[]): AnyAgentEvent[] {
     .map(({ event }) => event);
 }
 
-function belongsToCompletedRun(event: AnyAgentEvent, completedRunIds: Set<string>): boolean {
+function belongsToCompletedRun(
+  event: AnyAgentEvent,
+  completedRunIds: Set<string>,
+): boolean {
   if (event.type === TURN_COMPLETE) {
     return completedRunIds.has((event.data as { runId: string }).runId);
   }
@@ -130,7 +150,9 @@ async function waitForSessionQueue(sessionId: string): Promise<void> {
   await appendQueues.get(sessionId)?.catch(() => {});
 }
 
-function findLastCompletedTurn(events: AnyAgentEvent[]): LastCompletedTurn | null {
+function findLastCompletedTurn(
+  events: AnyAgentEvent[],
+): LastCompletedTurn | null {
   const checkpoint = events
     .map((event, index) => ({ event, index }))
     .filter(({ event }) => event.type === TURN_COMPLETE)
@@ -148,7 +170,9 @@ function findLastCompletedTurn(events: AnyAgentEvent[]): LastCompletedTurn | nul
   };
 }
 
-export async function loadUntilLastCheckpoint(sessionId: string): Promise<CheckpointResult> {
+export async function loadUntilLastCheckpoint(
+  sessionId: string,
+): Promise<CheckpointResult> {
   const all = await loadRawSessionEvents(sessionId);
   const checkpoints = all
     .map((event, index) => ({ event, index }))
@@ -156,13 +180,19 @@ export async function loadUntilLastCheckpoint(sessionId: string): Promise<Checkp
 
   const lastCheckpointIndex = checkpoints.at(-1)?.index ?? -1;
   if (lastCheckpointIndex < 0) {
-    return { events: sortEventsForReplay(all), lastCheckpointIndex: -1, hasIncompleteRun: false };
+    return {
+      events: sortEventsForReplay(all),
+      lastCheckpointIndex: -1,
+      hasIncompleteRun: false,
+    };
   }
 
   const completedRunIds = new Set(
     checkpoints.map(({ event }) => (event.data as { runId: string }).runId),
   );
-  const completedEvents = all.filter((event) => belongsToCompletedRun(event, completedRunIds));
+  const completedEvents = all.filter((event) =>
+    belongsToCompletedRun(event, completedRunIds),
+  );
 
   return {
     events: sortEventsForReplay(completedEvents),
@@ -199,7 +229,9 @@ export async function dropLastCompletedTurn(
     };
   }
 
-  const remaining = events.filter((event) => !belongsToRun(event, latest.runId));
+  const remaining = events.filter(
+    (event) => !belongsToRun(event, latest.runId),
+  );
   await ensureDir();
   await writeFile(
     filePath(sessionId),
@@ -223,7 +255,9 @@ export async function deleteSessionEvents(sessionId: string): Promise<void> {
 }
 
 export async function deleteAllSessionsEvents(): Promise<void> {
-  await Promise.all([...appendQueues.values()].map((queue) => queue.catch(() => {})));
+  await Promise.all(
+    [...appendQueues.values()].map((queue) => queue.catch(() => {})),
+  );
   if (!existsSync(sessionsDir)) return;
   const files = await readdir(sessionsDir);
   await Promise.all(

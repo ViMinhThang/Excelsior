@@ -13,6 +13,10 @@ interface UseChatKeymapsOptions extends ChatModeKeymapContext {
   approve: () => void;
   approveAll: () => void;
   deny: () => void;
+  scrollUp?: () => void;
+  scrollDown?: () => void;
+  nextHunk?: () => void;
+  prevHunk?: () => void;
 }
 
 export function shouldEnableModalKeymap(isPaletteOpen: boolean): boolean {
@@ -36,6 +40,10 @@ export function useChatKeymaps(options: UseChatKeymapsOptions) {
     deny,
     cancel,
     isPaletteOpen,
+    scrollUp,
+    scrollDown,
+    nextHunk,
+    prevHunk,
   } = options;
   const modalKeymapsEnabled = shouldEnableModalKeymap(isPaletteOpen);
 
@@ -48,6 +56,10 @@ export function useChatKeymaps(options: UseChatKeymapsOptions) {
         deny();
         cancel();
       },
+      up: () => scrollUp?.(),
+      down: () => scrollDown?.(),
+      tab: () => nextHunk?.(),
+      "shift+tab": () => prevHunk?.(),
     },
     { enabled: !!pending && modalKeymapsEnabled, priority: 100 },
   );

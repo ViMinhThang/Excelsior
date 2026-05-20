@@ -7,9 +7,12 @@ import { theme } from "../../theme.js";
 import Panel from "../shared/Panel.js";
 import { FileChangePreviewView } from "./ToolMessage.js";
 
-interface PendingActionPanelProps {
+export interface PendingActionPanelProps {
   pending: ConfirmRequest;
   display: ToolDisplay;
+  scrollOffset?: number;
+  activeHunkIndex?: number;
+  hunkCount?: number;
 }
 
 function pendingPreviewToolName(toolName: string): "edit" | "write" | undefined {
@@ -18,7 +21,13 @@ function pendingPreviewToolName(toolName: string): "edit" | "write" | undefined 
   return undefined;
 }
 
-const PendingActionPanel: FC<PendingActionPanelProps> = ({ pending, display }) => {
+const PendingActionPanel: FC<PendingActionPanelProps> = ({
+  pending,
+  display,
+  scrollOffset,
+  activeHunkIndex,
+  hunkCount,
+}) => {
   const previewToolName = pendingPreviewToolName(pending.toolName);
   const changeDisplay = previewToolName && pending.diff
     ? createToolDisplay({
@@ -48,6 +57,10 @@ const PendingActionPanel: FC<PendingActionPanelProps> = ({ pending, display }) =
             <FileChangePreviewView
               command={`${previewToolName} ${pending.filePath ?? display.summary}`}
               preview={changeDisplay.fileChangePreview}
+              scrollOffset={scrollOffset}
+              activeHunkIndex={activeHunkIndex}
+              hunkCount={hunkCount}
+              pending={true}
             />
           ) : null}
           <Box flexDirection="row" gap={2} marginTop={1}>

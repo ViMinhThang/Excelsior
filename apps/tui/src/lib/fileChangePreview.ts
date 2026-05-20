@@ -77,6 +77,7 @@ export function parseFileChangePreview({
   const oldBuffer: string[] = [];
   const newBuffer: string[] = [];
   const lineState = { oldLine: 1, newLine: 1 };
+  const hunkIndices: number[] = [];
   let added = 0;
   let removed = 0;
   let sawHunk = false;
@@ -84,6 +85,7 @@ export function parseFileChangePreview({
   for (const line of lines.slice(diffStart + 2)) {
     if (line.startsWith("@@")) {
       flushChangedRows(oldBuffer, newBuffer, oldRows, newRows, lineState);
+      hunkIndices.push(oldRows.length);
       const starts = parseHunkStarts(line);
       if (starts) {
         lineState.oldLine = starts.oldLine;
@@ -136,5 +138,6 @@ export function parseFileChangePreview({
     added,
     removed,
     omittedRows: 0,
+    hunkIndices,
   };
 }

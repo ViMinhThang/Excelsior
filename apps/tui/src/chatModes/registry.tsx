@@ -164,55 +164,55 @@ function renderConversation(
     showCommandResult?: boolean;
   } = {},
 ) {
-  const ActiveFeaturePanel = ctx.activePanel?.component;
+  const ActiveFeaturePanel = ctx.panel.active?.component;
 
   return (
     <>
       <Box flexDirection="column">
         <ChatHistory
-          blocks={ctx.displayBlocks}
-          selectedToolId={ctx.selectedToolId}
-          selectedSubAgentId={ctx.selectedSubAgentId}
-          expandedToolIds={ctx.expandedToolIds}
+          blocks={ctx.transcript.blocks}
+          selectedToolId={ctx.transcript.selectedToolId}
+          selectedSubAgentId={ctx.transcript.selectedSubAgentId}
+          expandedToolIds={ctx.transcript.expandedToolIds}
           disableBlockHiding={options.disableBlockHiding}
         />
       </Box>
 
       {options.showSubAgentPicker ? (
         <SubAgentPickerPanel
-          subAgents={ctx.subAgents}
-          selectedIndex={ctx.subAgentIndex}
+          subAgents={ctx.subAgents.blocks}
+          selectedIndex={ctx.subAgents.selectedIndex}
         />
       ) : null}
 
-      {ctx.isLoading && (
+      {ctx.runtime.isLoading && (
         <Box marginTop={1}>
           <ThinkingIndicator />
         </Box>
       )}
 
       {ActiveFeaturePanel ? (
-        <ActiveFeaturePanel context={ctx.featureContext} />
+        <ActiveFeaturePanel context={ctx.panel.context} />
       ) : (
         <>
           <ChatInput
-            value={ctx.input}
-            onChange={ctx.setInput}
-            onSubmit={ctx.handleSubmit}
+            value={ctx.input.value}
+            onChange={ctx.input.setValue}
+            onSubmit={ctx.input.submit}
             placeholder="Type your coding task here..."
-            isLoading={ctx.isLoading}
-            focus={ctx.chatMode === "input" && !ctx.pending && !ctx.paletteOpen}
+            isLoading={ctx.runtime.isLoading}
+            focus={ctx.chatMode === "input" && !ctx.runtime.pending && !ctx.runtime.paletteOpen}
           />
           <Box paddingLeft={1}>
             <Text color={theme.colors.highlightEmphasis} bold>(Shift + Tab)</Text>
-            <Text color={theme.colors.muted} dimColor> {formatAgentMode(ctx.mode)}</Text>
+            <Text color={theme.colors.muted} dimColor> {formatAgentMode(ctx.runtime.agentMode)}</Text>
           </Box>
         </>
       )}
 
-      {!ActiveFeaturePanel && options.showCommandResult && ctx.commandResult && (
+      {!ActiveFeaturePanel && options.showCommandResult && ctx.runtime.commandResult && (
         <Box marginTop={1} paddingLeft={1} flexDirection="column">
-          <Text color={theme.colors.secondary}>{ctx.commandResult}</Text>
+          <Text color={theme.colors.secondary}>{ctx.runtime.commandResult}</Text>
         </Box>
       )}
     </>
@@ -240,7 +240,7 @@ const subAgentPickerMode: ChatModeDefinition = {
 
 const subAgentDetailMode: ChatModeDefinition = {
   render: (ctx) => {
-    const selectedSubAgent = ctx.subAgents[ctx.subAgentIndex];
+    const selectedSubAgent = ctx.subAgents.blocks[ctx.subAgents.selectedIndex];
     if (!selectedSubAgent) {
       return (
         <Box marginTop={1} paddingLeft={1}>
@@ -283,23 +283,23 @@ const toolFocusMode: ChatModeDefinition = {
 
 const toolDetailMode: ChatModeDefinition = {
   render: (ctx) => {
-    if (!ctx.selectedToolBlock) return renderConversation(ctx);
+    if (!ctx.tools.selectedBlock) return renderConversation(ctx);
 
     return (
       <Box flexDirection="row" gap={1}>
         <Box flexDirection="column" flexGrow={1}>
           <ChatHistory
-            blocks={ctx.displayBlocks}
-            selectedToolId={ctx.selectedToolId}
-            selectedSubAgentId={ctx.selectedSubAgentId}
-            expandedToolIds={ctx.expandedToolIds}
+            blocks={ctx.transcript.blocks}
+            selectedToolId={ctx.transcript.selectedToolId}
+            selectedSubAgentId={ctx.transcript.selectedSubAgentId}
+            expandedToolIds={ctx.transcript.expandedToolIds}
             disableBlockHiding
           />
         </Box>
         <Box>
           <Text color={theme.colors.border}>{theme.glyphs.output}</Text>
         </Box>
-        <ToolDetailPanel block={ctx.selectedToolBlock} />
+        <ToolDetailPanel block={ctx.tools.selectedBlock} />
       </Box>
     );
   },
@@ -319,8 +319,12 @@ export const chatModeRegistry: Record<ChatMode, ChatModeDefinition> = {
   "tool-detail": toolDetailMode,
 };
 
-export function ChatModeView(ctx: ChatModeRenderContext) {
-  return <>{chatModeRegistry[ctx.chatMode].render(ctx)}</>;
+export function ChatModeView({
+  context,
+}: {
+  context: ChatModeRenderContext;
+}) {
+  return <>{chatModeRegistry[context.chatMode].render(context)}</>;
 }
 
 export function getChatModeHint(ctx: ChatModeHintContext): string {

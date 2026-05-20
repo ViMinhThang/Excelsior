@@ -54,19 +54,32 @@ const SubAgentRow: FC<SubAgentRowProps> = ({ agent, role, isSelected }) => {
     return () => clearInterval(timer);
   }, [isRunning]);
 
-  const topPrefix = isRunning ? spinnerFrames[frame] : "│";
-  const bottomPrefix = isRunning ? "↳" : "└";
+  const connectorColor = isSelected
+    ? theme.colors.highlightSelected
+    : isRunning
+      ? theme.colors.activity
+      : theme.colors.border;
+
+  const statusGlyph = isRunning
+    ? spinnerFrames[frame]
+    : agent.status === "error"
+  const statusCol = agent.status === "running"
+    ? theme.colors.activity
+    : agent.status === "error"
+      ? theme.colors.error
+      : theme.colors.success;
 
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={1}>
-      <Box flexDirection="row">
-        <Text color={theme.colors.muted}>{topPrefix} </Text>
-        <Text bold={isSelected} color={isSelected ? theme.colors.highlightSelected : theme.colors.muted}>
+      <Box flexDirection="row" gap={1}>
+        <Text color={connectorColor}>╠══ </Text>
+        <Text color={statusCol}>[{statusGlyph}]</Text>
+        <Text bold={isSelected} color={isSelected ? theme.colors.highlightSelected : theme.colors.text}>
           {cleanRole}
         </Text>
       </Box>
-      <Box flexDirection="row" paddingLeft={1}>
-        <Text color={theme.colors.muted} dimColor>{bottomPrefix} </Text>
+      <Box flexDirection="row" gap={1}>
+        <Text color={theme.colors.border}>║   ╚══ </Text>
         <Text color={theme.colors.muted} dimColor>
           {activityStatusLine}
         </Text>
