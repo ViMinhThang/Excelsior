@@ -20,3 +20,7 @@ export {
   getDefaultAgentHost,
   resetDefaultAgentHost,
 } from "./host/defaultHost.js";
+export {
+  createWorkspace,
+  loadWorkspaces,
+} from "./lib/persistence/workspaceStore.js";

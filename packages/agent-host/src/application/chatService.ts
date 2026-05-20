@@ -41,10 +41,10 @@ export class ChatService {
       fileCheckpoint?: FileCheckpoint;
     },
   ) {
-    const aiMessages: AgentMessage[] = [
-      ...(options?.history?.current ?? []),
-      { role: "user", content },
-    ];
+    const aiMessages = buildContextMessages(
+      options?.history?.current ?? [],
+      content,
+    );
 
     const startRunSession =
       this.dependencies.createRunSession ?? createRunSession;

@@ -34,6 +34,7 @@ export interface FileChangePreview {
   added: number;
   removed: number;
   omittedRows: number;
+  hunkIndices?: number[];
 }
 
 export interface FileChangeRow {
