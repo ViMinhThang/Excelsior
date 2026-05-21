@@ -11,3 +11,4 @@ data/sessions/*.jsonl
 .codex
 skills
 AGENTS.md
+.agent

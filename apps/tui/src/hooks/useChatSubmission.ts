@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { MutableRefObject } from "react";
 import type { CommandResult } from "@excelsior/core";
+import { getSubmittedCommand } from "../lib/commandSubmission.js";
 
 interface UseChatSubmissionOptions {
   isLoading: boolean;
@@ -12,6 +13,7 @@ interface UseChatSubmissionOptions {
   setCommandResult: (message: string | null) => void;
   openPanel: (panelId: string) => void;
   navigate: (screen: "settings") => void;
+  getSubmittedInput?: () => string | null;
 }
 
 export function useChatSubmission({
@@ -24,14 +26,16 @@ export function useChatSubmission({
   setCommandResult,
   openPanel,
   navigate,
+  getSubmittedInput,
 }: UseChatSubmissionOptions) {
   return useCallback(() => {
     if (isLoading) return;
-    const trimmed = inputRef.current.trim();
+    const trimmed = (getSubmittedInput?.() ?? inputRef.current).trim();
     if (!trimmed) return;
 
-    if (trimmed.startsWith("/")) {
-      executeCommand(trimmed).then((result) => {
+    const command = getSubmittedCommand(trimmed);
+    if (command) {
+      executeCommand(command).then((result) => {
         if (!result.handled) return;
         if (result.clearInput) setInput("");
         if (result.message) setCommandResult(result.message);
@@ -40,6 +44,8 @@ export function useChatSubmission({
       });
       return;
     }
+
+    if (trimmed.startsWith("/")) return;
 
     resetInput();
     send(trimmed);
@@ -53,5 +59,6 @@ export function useChatSubmission({
     setCommandResult,
     openPanel,
     navigate,
+    getSubmittedInput,
   ]);
 }
