@@ -1,85 +1,144 @@
 # Excelsior
 
-A terminal-based AI coding assistant powered by DeepSeek, built with [Ink](https://github.com/vadimdemedes/ink).
+Excelsior là trợ lý lập trình AI chạy trong terminal, dùng DeepSeek và giao diện TUI bằng Ink. Dự án được tổ chức theo dạng npm workspaces với các package dùng chung, app TUI và app desktop.
 
-## Features
+## Yêu cầu
 
-- **Interactive chat** - converse with an AI coding assistant directly in your terminal
-- **Tool use** - read, write, list, search files, and run shell commands with confirmation for write-like actions
-- **PR review** - review pull requests from slash commands with specialist sub-agents
-- **Chat persistence** - SQLite stores session metadata and JSONL stores runtime events
-- **Settings screen** - configure API keys without leaving the TUI
+- Node.js và npm
+- Git
+- Ripgrep (`rg`) nếu muốn công cụ tìm kiếm file hoạt động nhanh và đúng như thiết kế
 
-## Quick Start
+## Cài đặt dự án
 
-```bash
+Clone repository rồi cài dependencies:
+
+```powershell
+git clone <repository-url>
+cd Excelsior
 npm install
-export DEEPSEEK_API_KEY="your-key-here"
-export GITHUB_TOKEN="your-github-token" # optional, for PR review
+```
+
+Nếu bạn đã có source code sẵn, chỉ cần mở thư mục dự án và chạy:
+
+```powershell
+npm install
+```
+
+## Cấu hình
+
+Excelsior cần DeepSeek API key để chạy trợ lý AI.
+
+Trên PowerShell:
+
+```powershell
+$env:DEEPSEEK_API_KEY="your-deepseek-api-key"
+```
+
+Token GitHub là tùy chọn, chỉ cần khi dùng tính năng review pull request:
+
+```powershell
+$env:GITHUB_TOKEN="your-github-token"
+```
+
+Bạn cũng có thể mở màn hình Settings trong app bằng `Ctrl+S` hoặc lệnh `/settings` để lưu key trực tiếp trong ứng dụng.
+
+Các biến môi trường hữu ích:
+
+| Biến | Bắt buộc | Mục đích |
+| --- | --- | --- |
+| `DEEPSEEK_API_KEY` | Có | API key để gọi DeepSeek |
+| `GITHUB_TOKEN` | Không | Dùng cho tính năng review PR |
+| `EXCELSIOR_DB_PATH` | Không | Đổi vị trí SQLite database |
+| `EXCELSIOR_SESSIONS_DIR` | Không | Đổi thư mục lưu session JSONL |
+| `EXCELSIOR_RIPGREP_PATH` | Không | Chỉ định đường dẫn `rg` tùy chỉnh |
+
+## Chạy ứng dụng
+
+Chạy TUI trong terminal:
+
+```powershell
 npm run dev
 ```
 
-## Commands
+Hoặc dùng script tương đương:
 
-| Command | Description |
-|---------|-------------|
-| `/help` | List all available commands |
-| `/clear` | Clear chat messages from the screen |
-| `/reset` | Delete all conversation history |
-| `/revert` | Revert the latest turn's `write`/`edit` file changes |
-| `/settings` | Open the Settings screen |
-| `/review <number>` | Fetch a PR diff and run a multi-agent review |
-| `/review-post <number> <body>` | Post a comment to a PR |
-| `/session` | Open the selectable session list |
+```powershell
+npm run dev:tui
+```
 
-## Keyboard Shortcuts
+Chạy app desktop:
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+S` | Open Settings |
-| `Ctrl+C` | Exit |
-| `Ctrl+O` | Toggle sub-agent detail view |
-| `Esc` | Cancel running agent / Go back |
-| `Up` / `Down` | Navigate message history or suggestions |
-| `Tab` | Complete command suggestion or switch Settings fields |
+```powershell
+npm run dev:desktop
+```
 
-## Architecture
+Sau khi build, có thể chạy bản TUI đã biên dịch:
+
+```powershell
+npm run build
+npm start
+```
+
+## Lệnh phát triển
+
+| Lệnh | Công dụng |
+| --- | --- |
+| `npm run dev` | Chạy app TUI ở chế độ development |
+| `npm run dev:desktop` | Chạy app desktop ở chế độ development |
+| `npm test` | Chạy toàn bộ test bằng Vitest |
+| `npm run test:watch` | Chạy test ở chế độ watch |
+| `npm run typecheck` | Kiểm tra TypeScript |
+| `npm run build` | Build toàn bộ dự án |
+| `npm run check` | Chạy typecheck, kiểm tra unused, test và build |
+
+## Lệnh trong Excelsior
+
+| Lệnh | Mô tả |
+| --- | --- |
+| `/help` | Xem danh sách lệnh |
+| `/clear` | Xóa nội dung chat đang hiển thị |
+| `/reset` | Xóa lịch sử hội thoại |
+| `/revert` | Hoàn tác thay đổi file của lượt gần nhất |
+| `/settings` | Mở màn hình Settings |
+| `/review <number>` | Lấy diff của PR và chạy review bằng nhiều agent |
+| `/review-post <number> <body>` | Đăng comment vào PR |
+| `/session` | Mở danh sách session |
+
+## Phím tắt
+
+| Phím | Hành động |
+| --- | --- |
+| `Ctrl+S` | Mở Settings |
+| `Ctrl+C` | Thoát ứng dụng |
+| `Ctrl+O` | Bật/tắt chi tiết sub-agent |
+| `Esc` | Hủy agent đang chạy hoặc quay lại |
+| `Up` / `Down` | Di chuyển trong lịch sử tin nhắn hoặc gợi ý |
+| `Tab` | Hoàn thành gợi ý lệnh hoặc chuyển field trong Settings |
+
+## Cấu trúc thư mục
 
 ```text
 packages/
-|- core/           # serializable UI/backend contracts, domain models, shared view types
-|- projection/     # generic deterministic read-model projection primitives
-|- run-runtime/    # generic cancellable run lifecycle, events, subscriptions, orchestration
-`- agent-host/     # local backend facade, application controllers, runtime wiring, persistence, tools, commands
+|- core/           # contract dùng chung, domain model, view type
+|- projection/     # projection/read-model deterministic
+|- run-runtime/    # vòng đời run, event, subscription, orchestration
+`- agent-host/     # backend cục bộ, controller, persistence, tools, commands
 
 apps/
-`- tui/            # @excelsior/tui Ink app, screens, hooks, components, panels
+|- tui/            # app terminal bằng Ink
+`- desktop/        # app desktop bằng Electron/Vite
 
 src/
-`- __tests__/      # integration and package-boundary tests
+`- __tests__/      # test tích hợp và test boundary giữa các package
 ```
 
-See [`docs/architecture.md`](docs/architecture.md) and [`docs/runtime-state.md`](docs/runtime-state.md) for current runtime boundaries, or open
-[`docs/wiki/index.html`](docs/wiki/index.html) for the full HTML architecture wiki.
+Tài liệu kiến trúc nằm trong `docs/architecture.md`, `docs/runtime-state.md` và wiki HTML tại `docs/wiki/index.html`.
 
-Slash command behavior lives behind `@excelsior/agent-host`; UI-specific panels live in `@excelsior/tui`.
+## Xử lý lỗi thường gặp
 
-## Development
-
-```bash
-npm test
-npm run test:watch
-npx tsc --noEmit
-npm run build
-```
-
-## Configuration
-
-Excelsior needs a DeepSeek API key. You can provide it with `DEEPSEEK_API_KEY` or save it in-app via `Ctrl+S` / `/settings`.
-
-For PR review features, configure `GITHUB_TOKEN` with repo access.
-
-See [`.env.example`](.env.example) for available environment variables.
+- Thiếu `DEEPSEEK_API_KEY`: cấu hình biến môi trường hoặc vào `Ctrl+S` / `/settings`.
+- Lỗi GitHub PR review: cấu hình `GITHUB_TOKEN` có quyền truy cập repository.
+- Lỗi dependency: xóa `node_modules`, sau đó chạy lại `npm install`.
 
 ## License
 
