@@ -6,6 +6,7 @@ import {
 } from "../../apps/tui/src/hooks/useChatKeymaps.js";
 import {
   getChatModeKeymaps,
+  getCommandInputWithSelection,
   type ChatMode,
   type ChatModeKeymapContext,
 } from "../../apps/tui/src/chatModes/index.js";
@@ -158,5 +159,45 @@ describe("chat mode keymap registry", () => {
 
     expect(suggestionPrevCount).toBe(1);
     expect(historyUpCount).toBe(0);
+  });
+
+  it("fills the selected command suggestion on enter", () => {
+    let input = "/";
+    const map = getChatModeKeymaps(makeKeymapContext("input", {
+      suggestion: {
+        show: true,
+        filtered: [
+          { name: "help", description: "List commands" },
+          { name: "settings", description: "Open settings" },
+        ],
+        selectedIndex: 1,
+        maxVisibleCount: 2,
+        next: () => {},
+        prev: () => {},
+      },
+      setInput: (value) => {
+        input = value;
+      },
+    }))[0]!.map;
+
+    map.return();
+
+    expect(input).toBe("/settings");
+  });
+
+  it("resolves the selected command for one-enter execution", () => {
+    expect(getCommandInputWithSelection(makeKeymapContext("input", {
+      suggestion: {
+        show: true,
+        filtered: [
+          { name: "help", description: "List commands" },
+          { name: "settings", description: "Open settings" },
+        ],
+        selectedIndex: 1,
+        maxVisibleCount: 2,
+        next: () => {},
+        prev: () => {},
+      },
+    }))).toBe("/settings");
   });
 });

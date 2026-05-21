@@ -11,11 +11,49 @@ import {
 } from "@excelsior/agent-host";
 import type { AgentClientState, SendOptions, AgentMode, AppSettings } from "@excelsior/core";
 
+type WorkspaceTreeNode = {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children?: WorkspaceTreeNode[];
+};
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let mainWindow: BrowserWindow | null = null;
 let agentHost: LocalAgentHost | null = null;
 let stateChangeUnsubscribe: (() => void) | null = null;
+let currentWorkspaceRoot: string | null = null;
+
+const IGNORED_TREE_NAMES = new Set([".git", "node_modules", "dist", "build", ".next", ".turbo", "coverage"]);
+const MAX_TREE_DEPTH = 4;
+const MAX_TREE_ENTRIES_PER_DIR = 80;
+
+function buildWorkspaceTree(rootPath: string, dirPath = rootPath, depth = 0): WorkspaceTreeNode[] {
+  if (depth > MAX_TREE_DEPTH) return [];
+
+  const entries = fs
+    .readdirSync(dirPath, { withFileTypes: true })
+    .filter((entry) => !IGNORED_TREE_NAMES.has(entry.name) && !entry.name.startsWith("."))
+    .sort((a, b) => {
+      if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    })
+    .slice(0, MAX_TREE_ENTRIES_PER_DIR);
+
+  return entries.map((entry) => {
+    const absolutePath = path.join(dirPath, entry.name);
+    const relativePath = path.relative(rootPath, absolutePath).replace(/\\/g, "/");
+    const isDirectory = entry.isDirectory();
+
+    return {
+      name: entry.name,
+      path: relativePath,
+      type: isDirectory ? "directory" : "file",
+      ...(isDirectory ? { children: buildWorkspaceTree(rootPath, absolutePath, depth + 1) } : {}),
+    };
+  });
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -24,9 +62,10 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: false,
     },
     titleBarStyle: "hidden", // Sleek custom titlebar support
     titleBarOverlay: {
@@ -105,6 +144,7 @@ ipcMain.handle("host:initialize-workspace", async (_event, rootPath: string) => 
 
   // 2. Instantiate LocalAgentHost with our chosen workspace id
   console.log(`🔌 Initializing Excelsior LocalAgentHost for workspace: ${ws.name} (${rootPath})`);
+  currentWorkspaceRoot = rootPath;
   const appInstance = new AgentApplication(ws.id);
   agentHost = new LocalAgentHost(appInstance);
 
@@ -146,3 +186,7 @@ ipcMain.on("host:respond-to-confirmation", (_event, callId: string, approved: bo
 ipcMain.on("host:approve-all-confirmations", () => ensureHost().approveAllConfirmations());
 ipcMain.on("host:clear-messages", () => ensureHost().clearMessages());
 ipcMain.handle("host:revert-last-turn", () => ensureHost().revertLastTurn());
+ipcMain.handle("workspace:get-tree", () => {
+  if (!currentWorkspaceRoot) return [];
+  return buildWorkspaceTree(currentWorkspaceRoot);
+});

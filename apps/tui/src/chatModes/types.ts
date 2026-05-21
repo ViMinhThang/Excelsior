@@ -54,6 +54,7 @@ export interface ChatModeRenderContext {
     value: string;
     setValue: (value: string) => void;
     submit: () => void;
+    shouldSubmit?: (value: string) => boolean;
   };
   runtime: {
     isLoading: boolean;

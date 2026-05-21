@@ -2,7 +2,8 @@ import type { CommandDefinition } from "@excelsior/core";
 
 export function getSubmittedCommand(input: string): string | null {
   const trimmed = input.trim();
-  return trimmed.startsWith("/") ? trimmed : null;
+  if (!trimmed.startsWith("/") || trimmed === "/") return null;
+  return trimmed;
 }
 
 export function completeCommandInput(commands: CommandDefinition[], selectedIndex: number): string | null {
