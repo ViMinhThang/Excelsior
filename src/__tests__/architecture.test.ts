@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
+    if (entry === "node_modules" || entry === "dist") return [];
     const path = join(dir, entry);
     const stat = statSync(path);
     if (stat.isDirectory()) return sourceFiles(path);
