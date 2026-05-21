@@ -5,7 +5,10 @@
   "type": "module",
   "main": "dist/main.js",
   "scripts": {
+    "rebuild:native": "node scripts/rebuild-native.js",
+    "predev": "node scripts/rebuild-native.js",
     "dev": "node scripts/dev.js",
+    "prestart": "node scripts/rebuild-native.js",
     "build": "vite build && vite build --config vite.main.config.ts",
     "start": "electron ."
   },
