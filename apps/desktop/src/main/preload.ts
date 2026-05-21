@@ -13,7 +13,7 @@ import type {
 const excelsiorApi = {
   // Subscriptions to state changes
   onStateChanged: (callback: (state: AgentClientState) => void) => {
-    const subscription = (_event: any, state: AgentClientState) => callback(state);
+    const subscription = (_event: unknown, state: AgentClientState) => callback(state);
     ipcRenderer.on("host:state-changed", subscription);
     return () => {
       ipcRenderer.removeListener("host:state-changed", subscription);
