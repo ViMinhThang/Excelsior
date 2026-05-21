@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { completeCommandInput, getSubmittedCommand } from "../../apps/tui/src/lib/commandSubmission.js";
+import {
+  completeCommandInput,
+  getSubmittedCommand,
+} from "../../apps/tui/src/lib/commandSubmission.js";
 import type { CommandDefinition } from "@excelsior/core";
 
 describe("command submission", () => {
   const commands = [
-    { name: "review", description: "", execute: () => {} },
-    { name: "review-post", description: "", execute: () => {} },
+    { name: "review", description: "" },
+    { name: "review-post", description: "" },
   ] satisfies CommandDefinition[];
 
   it("submits the exact slash command including arguments", () => {
@@ -19,6 +22,11 @@ describe("command submission", () => {
 
   it("does not treat normal chat as a command", () => {
     expect(getSubmittedCommand("review 42")).toBeNull();
+  });
+
+  it("does not submit a bare slash while opening command suggestions", () => {
+    expect(getSubmittedCommand("/")).toBeNull();
+    expect(getSubmittedCommand("  /  ")).toBeNull();
   });
 
   it("completes the selected autocomplete command explicitly", () => {

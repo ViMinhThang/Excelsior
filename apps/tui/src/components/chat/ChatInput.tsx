@@ -12,6 +12,7 @@ interface ChatInputProps {
   isLoading?: boolean;
   focus?: boolean;
   mask?: string;
+  shouldSubmit?: (value: string) => boolean;
 }
 
 const ChatInput: FC<ChatInputProps> = ({
@@ -21,6 +22,7 @@ const ChatInput: FC<ChatInputProps> = ({
   placeholder = "Type your message...",
   focus = true,
   mask,
+  shouldSubmit,
 }) => {
   return (
     <Panel 
@@ -38,6 +40,7 @@ const ChatInput: FC<ChatInputProps> = ({
           placeholder={placeholder}
           focus={focus}
           mask={mask}
+          shouldSubmit={shouldSubmit}
         />
       </Box>
     </Panel>

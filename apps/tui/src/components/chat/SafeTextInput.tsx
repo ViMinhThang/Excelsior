@@ -13,6 +13,7 @@ interface SafeTextInputProps {
   mask?: string;
   showCursor?: boolean;
   maxDisplayWidth?: number;
+  shouldSubmit?: (value: string) => boolean;
 }
 
 export function shouldIgnoreTextInputKey(input: string, key: TuiKey): boolean {
@@ -94,6 +95,7 @@ const SafeTextInput: FC<SafeTextInputProps> = ({
   mask,
   showCursor = true,
   maxDisplayWidth = 96,
+  shouldSubmit,
 }) => {
   const [state, setState] = useState({
     cursorOffset: (originalValue || "").length,
@@ -151,6 +153,7 @@ const SafeTextInput: FC<SafeTextInputProps> = ({
     if (shouldIgnoreTextInputKey(input, key)) return;
 
     if (key.return) {
+      if (shouldSubmit && !shouldSubmit(originalValue)) return;
       onSubmit?.(originalValue);
       return;
     }

@@ -89,6 +89,15 @@ export function shouldEnableInputModeKeymap(options: {
   );
 }
 
+export function getCommandInputWithSelection(
+  ctx: ChatModeKeymapContext,
+): string | null {
+  if (!hasCommandSuggestions(ctx)) return null;
+  const selected = ctx.suggestion.filtered[ctx.suggestion.selectedIndex];
+  if (!selected) return null;
+  return `/${selected.name}`;
+}
+
 function hasCommandSuggestions(ctx: ChatModeKeymapContext): boolean {
   return (
     !ctx.activePanelId &&
@@ -137,6 +146,10 @@ function inputKeymaps(ctx: ChatModeKeymapContext): ChatModeKeymapSpec[] {
             ctx.suggestion.selectedIndex,
           );
           if (completed) ctx.setInput(completed);
+        },
+        return: () => {
+          const selectedCommand = getCommandInputWithSelection(ctx);
+          if (selectedCommand) ctx.setInput(selectedCommand);
         },
       },
     },
@@ -199,6 +212,7 @@ function renderConversation(
             value={ctx.input.value}
             onChange={ctx.input.setValue}
             onSubmit={ctx.input.submit}
+            shouldSubmit={ctx.input.shouldSubmit}
             placeholder="Type your coding task here..."
             isLoading={ctx.runtime.isLoading}
             focus={ctx.chatMode === "input" && !ctx.runtime.pending && !ctx.runtime.paletteOpen}

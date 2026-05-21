@@ -8,8 +8,8 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "tsx --conditions=development apps/tui/src/index.ts",
-    "dev:tui": "tsx --conditions=development apps/tui/src/index.ts",
+    "dev": "tsx --env-file=.env --conditions=development apps/tui/src/index.ts",
+    "dev:tui": "tsx --env-file=.env --conditions=development apps/tui/src/index.ts",
     "dev:desktop": "npm run --workspace=apps/desktop dev",
     "start": "node dist/apps/tui/src/index.js",
     "build": "tsc && node scripts/sync-package-dist.mjs",

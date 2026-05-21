@@ -9,6 +9,13 @@ import type {
   Session,
 } from "@excelsior/core";
 
+export type WorkspaceTreeNode = {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children?: WorkspaceTreeNode[];
+};
+
 // Define the API exposed to the renderer process
 const excelsiorApi = {
   // Subscriptions to state changes
@@ -42,7 +49,8 @@ const excelsiorApi = {
   
   // Custom workspace dialog API
   selectWorkspaceFolder: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-workspace-folder"),
-  initializeWorkspace: (path: string): Promise<void> => ipcRenderer.invoke("host:initialize-workspace", path),
+  initializeWorkspace: (path: string): Promise<AgentClientState> => ipcRenderer.invoke("host:initialize-workspace", path),
+  getWorkspaceTree: (): Promise<WorkspaceTreeNode[]> => ipcRenderer.invoke("workspace:get-tree"),
 };
 
 contextBridge.exposeInMainWorld("api", excelsiorApi);

@@ -10,6 +10,10 @@ describe("SafeTextInput", () => {
     expect(shouldIgnoreTextInputKey("o", { ctrl: true })).toBe(true);
   });
 
+  it("allows return through the text input layer", () => {
+    expect(shouldIgnoreTextInputKey("", { return: true })).toBe(false);
+  });
+
   it("keeps normal printable input editable", () => {
     expect(shouldIgnoreTextInputKey("o", { ctrl: false, meta: false })).toBe(false);
   });

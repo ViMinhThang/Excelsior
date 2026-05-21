@@ -18,6 +18,7 @@ import {
   type SubAgentBlock,
   type ToolBlock,
   getChatModeSelection,
+  getCommandInputWithSelection,
 } from "../chatModes/index.js";
 import { useAgentHostClient } from "./useAgentHostClient.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";
@@ -52,6 +53,7 @@ export interface BuildModeViewContextInput {
   inputValue: string;
   setInput: (value: string) => void;
   handleSubmit: () => void;
+  shouldSubmit?: (value: string) => boolean;
   isLoading: boolean;
   pending: unknown;
   paletteOpen: boolean;
@@ -73,6 +75,7 @@ export function buildModeViewContext({
   inputValue,
   setInput,
   handleSubmit,
+  shouldSubmit,
   isLoading,
   pending,
   paletteOpen,
@@ -97,6 +100,7 @@ export function buildModeViewContext({
       value: inputValue,
       setValue: setInput,
       submit: handleSubmit,
+      shouldSubmit,
     },
     runtime: {
       isLoading,
@@ -253,7 +257,36 @@ export function useChatScreenModel(): ChatScreenModel {
     setCommandResult: command.setCommandResult,
     openPanel: panel.openPanel,
     navigate,
+    getSubmittedInput: () => getCommandInputWithSelection({
+      pending: confirmation.pending,
+      activePanelId: panel.activePanelId,
+      isPaletteOpen: palette.isOpen,
+      isLoading,
+      chatMode: subAgentNav.chatMode,
+      setChatMode: subAgentNav.setChatMode,
+      suggestion,
+      setInput: inputHistory.setInput,
+      cancel: agent.cancel,
+      toggleMode: agent.toggleMode,
+      openSubAgent: subAgentNav.openSubAgent,
+      nextSubAgent: subAgentNav.nextSubAgent,
+      prevSubAgent: subAgentNav.prevSubAgent,
+      openToolFocus: () => {
+        if (toolNav.toolBlocks.length > 0) subAgentNav.setChatMode("tool-focus");
+      },
+      openToolDetail: () => {
+        if (toolNav.selectedToolId) subAgentNav.setChatMode("tool-detail");
+      },
+      nextTool: toolNav.nextTool,
+      prevTool: toolNav.prevTool,
+      toggleSelectedTool: toolNav.toggleSelectedTool,
+      navigateUp: inputHistory.navigateUp,
+      navigateDown: inputHistory.navigateDown,
+      openPalette: palette.toggle,
+    }),
   });
+
+  const shouldSubmitInput = () => true;
 
   useChatKeymaps({
     pending: confirmation.pending,
@@ -303,6 +336,7 @@ export function useChatScreenModel(): ChatScreenModel {
       inputValue: inputHistory.input,
       setInput: inputHistory.setInput,
       handleSubmit,
+      shouldSubmit: shouldSubmitInput,
       isLoading,
       pending: confirmation.pending,
       paletteOpen: palette.isOpen,
