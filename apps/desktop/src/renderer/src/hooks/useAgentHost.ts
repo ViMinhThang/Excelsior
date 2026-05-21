@@ -9,6 +9,7 @@ import type {
   Session,
 } from "@excelsior/core";
 import type { ExcelsiorApi } from "../../../main/preload";
+import type { WorkspaceTreeNode } from "../../../main/preload";
 
 // Extend global window type
 declare global {
@@ -22,7 +23,9 @@ export function useAgentHost() {
   const [state, setState] = useState<AgentClientState | null>(null);
   const [commands, setCommands] = useState<CommandDefinition[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [workspaceTree, setWorkspaceTree] = useState<WorkspaceTreeNode[]>([]);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
   // Sync state changes from main process
   useEffect(() => {
@@ -32,6 +35,7 @@ export function useAgentHost() {
     window.api.getState().then(setState);
     window.api.getCommands().then(setCommands);
     window.api.getSettings().then(setSettings);
+    window.api.getWorkspaceTree().then(setWorkspaceTree);
 
     // Subscribe to updates
     const unsubscribe = window.api.onStateChanged((newState) => {
@@ -46,15 +50,22 @@ export function useAgentHost() {
   // Workspace actions
   const selectWorkspace = useCallback(async () => {
     setIsInitializing(true);
+    setWorkspaceError(null);
     try {
+      if (!window.api?.selectWorkspaceFolder) {
+        throw new Error("Desktop bridge is unavailable. Please run the Electron desktop app, not the browser preview.");
+      }
+
       const folderPath = await window.api.selectWorkspaceFolder();
       if (folderPath) {
         setWorkspacePath(folderPath);
         const initialState = await window.api.initializeWorkspace(folderPath);
         setState(initialState);
+        setWorkspaceTree(await window.api.getWorkspaceTree());
       }
     } catch (err) {
       console.error("Workspace selection failed:", err);
+      setWorkspaceError(err instanceof Error ? err.message : "Workspace selection failed.");
     } finally {
       setIsInitializing(false);
     }
@@ -143,7 +154,9 @@ export function useAgentHost() {
     state,
     commands,
     settings,
+    workspaceTree,
     isInitializing,
+    workspaceError,
     selectWorkspace,
     send,
     cancel,

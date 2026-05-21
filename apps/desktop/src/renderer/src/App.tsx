@@ -15,13 +15,14 @@ import {
   Check,
   AlertTriangle,
   Send,
-  HelpCircle,
   FolderClosed,
   ChevronDown,
   ChevronRight,
-  Code
+  Code,
+  File,
+  Folder
 } from "lucide-react";
-import type { ProjectedBlock, ToolCallInfo } from "@excelsior/core";
+import type { WorkspaceTreeNode } from "../../../main/preload";
 
 export default function App() {
   const {
@@ -29,7 +30,9 @@ export default function App() {
     state,
     commands,
     settings,
+    workspaceTree,
     isInitializing,
+    workspaceError,
     selectWorkspace,
     send,
     cancel,
@@ -52,6 +55,7 @@ export default function App() {
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [githubTokenInput, setGithubTokenInput] = useState("");
   const [openToolCalls, setOpenToolCalls] = useState<Record<string, boolean>>({});
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -89,21 +93,50 @@ export default function App() {
     setOpenToolCalls(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const toggleFolder = (path: string) => {
+    setOpenFolders(prev => ({ ...prev, [path]: !(prev[path] ?? true) }));
+  };
+
+  const renderTreeNode = (node: WorkspaceTreeNode, depth = 0): React.ReactNode => {
+    const isDirectory = node.type === "directory";
+    const isOpen = openFolders[node.path] ?? false;
+
+    return (
+      <div key={node.path}>
+        <button
+          onClick={() => isDirectory && toggleFolder(node.path)}
+          className="group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] text-slate-400 hover:bg-[#111827] hover:text-slate-100 transition-colors"
+          style={{ paddingLeft: `${8 + depth * 12}px` }}
+          title={node.path}
+        >
+          {isDirectory ? (
+            isOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+          ) : (
+            <span className="h-3.5 w-3.5 shrink-0" />
+          )}
+          {isDirectory ? <Folder className="h-3.5 w-3.5 shrink-0 text-emerald-400/80" /> : <File className="h-3.5 w-3.5 shrink-0 text-slate-500" />}
+          <span className="truncate font-medium">{node.name}</span>
+        </button>
+        {isDirectory && isOpen && node.children?.map((child) => renderTreeNode(child, depth + 1))}
+      </div>
+    );
+  };
+
   // 1. Workspace selection screen if no workspace path is loaded
   if (!workspacePath) {
     return (
-      <div className="flex flex-col h-screen w-screen bg-[#070A13] justify-between relative overflow-hidden select-none">
+      <div className="flex h-screen w-screen bg-[#070A13] items-center justify-center relative overflow-hidden select-none">
         {/* Animated ambient backgrounds (No purple!) */}
         <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-950/20 blur-[120px] pointer-events-none" />
         <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] rounded-full bg-slate-900/40 blur-[100px] pointer-events-none" />
 
         {/* Custom Draggable Titlebar */}
-        <div className="titlebar select-none">
+        <div className="titlebar absolute top-0 left-0 right-0 select-none">
           <span>EXCELSIOR // DESKTOP BUILD v1.0.0</span>
         </div>
 
         {/* Central Content */}
-        <div className="flex flex-col items-center justify-center flex-grow p-8 text-center max-w-xl mx-auto z-10">
+        <div className="flex flex-col items-center justify-center p-8 text-center max-w-xl z-10">
           <div className="w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-8 shadow-[0_0_50px_-12px_rgba(16,185,129,0.2)] animate-pulse">
             <Cpu className="w-10 h-10 text-emerald-400" />
           </div>
@@ -118,7 +151,7 @@ export default function App() {
           <button
             onClick={selectWorkspace}
             disabled={isInitializing}
-            className="flex items-center gap-3 px-8 py-4 bg-emerald-500 text-emerald-950 font-bold rounded-xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 active:scale-95 transition-all duration-150 disabled:opacity-50"
+            className="flex min-w-[320px] items-center justify-center gap-3 border-2 border-emerald-300/25 px-10 py-5 bg-emerald-500 text-emerald-950 font-bold rounded-2xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 active:scale-95 transition-all duration-150 disabled:opacity-50"
           >
             {isInitializing ? (
               <div className="w-5 h-5 border-2 border-emerald-950 border-t-transparent rounded-full animate-spin" />
@@ -127,9 +160,14 @@ export default function App() {
             )}
             Open Workspace Folder
           </button>
+          {workspaceError && (
+            <p className="mt-4 max-w-md rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-medium leading-relaxed text-red-300">
+              {workspaceError}
+            </p>
+          )}
         </div>
 
-        <div className="py-6 text-center text-xs font-semibold tracking-wider text-slate-600 z-10 border-t border-slate-900/50">
+        <div className="absolute bottom-0 left-0 right-0 py-6 text-center text-xs font-semibold tracking-wider text-slate-600 z-10 border-t border-slate-900/50">
           POWERED BY DEEPSEEK CODER • GEOMETRIC GRID ARCHITECTURE
         </div>
       </div>
@@ -139,7 +177,7 @@ export default function App() {
   return (
     <div className="flex flex-col h-screen w-screen bg-[#070A13] text-slate-100 overflow-hidden relative">
       {/* Draggable Titlebar */}
-      <div className="titlebar select-none justify-between pr-32">
+      <div className="titlebar select-none justify-between" style={{ paddingLeft: "16px", paddingRight: "144px", display: "flex", alignItems: "center", height: "40px" }}>
         <div className="flex items-center gap-2">
           <Cpu className="w-3.5 h-3.5 text-emerald-400" />
           <span>EXCELSIOR // {state?.workspace?.name.toUpperCase() || "WORKSPACE"}</span>
@@ -151,91 +189,43 @@ export default function App() {
 
       <div className="flex flex-row flex-grow overflow-hidden">
         {/* ================= LEFT SIDEBAR ================= */}
-        <div className="w-64 border-r border-[#1F2937] bg-[#0B0F19] flex flex-col justify-between shrink-0 select-none">
-          <div className="flex flex-col flex-grow overflow-hidden p-3 gap-4">
-            
-            {/* Mode Switcher */}
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[9px] font-bold text-slate-500 tracking-widest pl-1 uppercase">Operational Mode</span>
-              <div className="grid grid-cols-2 bg-[#070A13] p-0.5 rounded-lg border border-[#1F2937]">
-                <button
-                  onClick={() => setMode("plan")}
-                  className={`py-1.5 text-xs font-bold rounded-md transition-all ${
-                    state?.mode === "plan"
-                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  Plan
-                </button>
-                <button
-                  onClick={() => setMode("act")}
-                  className={`py-1.5 text-xs font-bold rounded-md transition-all ${
-                    state?.mode === "act"
-                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                >
-                  Act
-                </button>
-              </div>
-            </div>
+        <div className="w-72 border-r border-[#1F2937] bg-[#0B0F19] flex flex-col justify-between shrink-0 select-none">
+          <div className="flex flex-col flex-grow overflow-hidden gap-6" style={{ padding: "16px" }}>
 
-            {/* Sessions Header */}
-            <div className="flex flex-col flex-grow overflow-hidden gap-1.5">
-              <div className="flex items-center justify-between pl-1">
-                <span className="text-[9px] font-bold text-slate-500 tracking-widest uppercase">Chat Threads</span>
-                <button
-                  onClick={() => createSession()}
-                  className="p-1 hover:bg-[#1F2937] text-slate-400 hover:text-white rounded-md transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
+            <div className="flex flex-col flex-grow overflow-hidden gap-3">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] font-bold text-slate-500 tracking-widest uppercase">Explorer</span>
               </div>
-
-              {/* Sessions List */}
-              <div className="flex-grow overflow-y-auto space-y-1 pr-1">
-                {state?.sessions?.map((session) => (
-                  <div
-                    key={session.id}
-                    onClick={() => switchSession(session.id)}
-                    className={`group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all border ${
-                      state?.currentSessionId === session.id
-                        ? "bg-[#111827] border-slate-800 text-emerald-400"
-                        : "border-transparent text-slate-400 hover:bg-[#111827]/50 hover:text-slate-200"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <MessageSquare className="w-3.5 h-3.5 shrink-0" />
-                      <span className="text-xs truncate font-medium">{session.title}</span>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteSession(session.id);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-[#1F2937] text-slate-500 hover:text-red-400 rounded transition-all"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+              <div className="flex items-center gap-2 rounded-xl border border-[#1F2937] bg-[#070A13] px-3 py-2 text-xs font-semibold text-slate-300">
+                <FolderOpen className="h-4 w-4 shrink-0 text-emerald-400" />
+                <span className="truncate">{state?.workspace?.name || "Workspace"}</span>
+              </div>
+              <div className="flex-grow overflow-y-auto pr-1">
+                {workspaceTree.length > 0 ? (
+                  workspaceTree.map((node) => renderTreeNode(node))
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[#1F2937] px-3 py-6 text-center text-xs text-slate-500">
+                    No files found in this workspace.
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
 
           {/* Sidebar Footer */}
-          <div className="p-3 border-t border-[#1F2937] flex flex-col gap-2 bg-[#080D17]">
+          <div className="border-t border-[#1F2937] flex flex-col gap-2 bg-[#080D17]" style={{ padding: "16px" }}>
             <button
               onClick={() => setShowSettings(true)}
-              className="flex items-center gap-2 w-full p-2 hover:bg-[#1F2937] text-slate-400 hover:text-white rounded-lg transition-colors text-xs font-semibold"
+              className="flex items-center gap-3 w-full hover:bg-[#1F2937] text-slate-400 hover:text-white rounded-xl transition-colors text-xs font-semibold"
+              style={{ paddingLeft: "12px", paddingRight: "12px", paddingTop: "10px", paddingBottom: "10px" }}
             >
               <Settings className="w-4 h-4" />
               API Settings
             </button>
             <button
               onClick={selectWorkspace}
-              className="flex items-center gap-2 w-full p-2 hover:bg-[#1F2937] text-slate-400 hover:text-white rounded-lg transition-colors text-xs font-semibold"
+              className="flex items-center gap-3 w-full hover:bg-[#1F2937] text-slate-400 hover:text-white rounded-xl transition-colors text-xs font-semibold"
+              style={{ paddingLeft: "12px", paddingRight: "12px", paddingTop: "10px", paddingBottom: "10px" }}
             >
               <FolderClosed className="w-4 h-4" />
               Switch Workspace
@@ -245,9 +235,9 @@ export default function App() {
 
         {/* ================= MAIN CHAT AREA ================= */}
         <div className="flex flex-col flex-grow overflow-hidden bg-[#070A13]">
-          
+
           {/* Header toolbar */}
-          <div className="h-12 border-b border-[#1F2937] px-4 flex items-center justify-between shrink-0 select-none">
+          <div className="h-16 border-b border-[#1F2937] flex items-center justify-between shrink-0 select-none" style={{ paddingLeft: "24px", paddingRight: "24px" }}>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-xs font-semibold text-slate-400">Agent Connected</span>
@@ -256,7 +246,7 @@ export default function App() {
             <div className="flex items-center gap-2">
               <button
                 onClick={revertLastTurn}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#111827] border border-[#1F2937] text-slate-400 hover:text-white rounded-lg transition-all text-xs font-semibold"
+                className="flex items-center gap-2 px-3.5 py-2 bg-[#111827] border border-[#1F2937] text-slate-400 hover:text-white rounded-xl transition-all text-xs font-semibold"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 Revert Last Turn
@@ -264,7 +254,7 @@ export default function App() {
               {state?.isLoading && (
                 <button
                   onClick={cancel}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded-lg transition-all text-xs font-semibold"
+                  className="flex items-center gap-2 px-3.5 py-2 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded-xl transition-all text-xs font-semibold"
                 >
                   <X className="w-3.5 h-3.5" />
                   Cancel
@@ -274,19 +264,21 @@ export default function App() {
           </div>
 
           {/* Message Stream */}
-          <div className="flex-grow overflow-y-auto p-4 space-y-6">
+          <div className={`flex-grow overflow-y-auto px-8 py-8 space-y-6 ${state?.displayBlocks?.length === 0 ? "flex flex-col justify-center items-center" : ""}`}>
             {state?.displayBlocks?.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center max-w-sm mx-auto select-none opacity-50 p-6">
-                <Sparkles className="w-8 h-8 text-emerald-400 mb-4 animate-bounce" />
-                <h3 className="text-sm font-semibold text-white mb-1">New Conversation Session</h3>
-                <p className="text-xs text-slate-400">
+              <div className="flex flex-col items-center justify-center text-center max-w-md mx-auto select-none opacity-70 px-8">
+                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 shadow-[0_0_40px_-20px_rgba(16,185,129,0.65)]">
+                  <Sparkles className="w-8 h-8 text-emerald-400 animate-bounce" />
+                </div>
+                <h3 className="text-base font-bold text-white mb-2">New Conversation Session</h3>
+                <p className="text-sm leading-6 text-slate-400">
                   Ask the assistant to write features, search your files, or explain system architectures.
                 </p>
               </div>
             ) : (
               state?.displayBlocks?.map((block) => (
                 <div key={block.id} className="fade-in animate-duration-300">
-                  
+
                   {/* User Prompt */}
                   {block.type === "user" && (
                     <div className="flex flex-row justify-end pl-12">
@@ -336,17 +328,17 @@ export default function App() {
                             </div>
                             {openToolCalls[block.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                           </div>
-                          
+
                           {openToolCalls[block.id] && (
-                            <div className="p-3 border-t border-[#1F2937] space-y-3 font-mono text-[11px] leading-relaxed">
+                            <div className="p-4 border-t border-[#1F2937] space-y-3 font-mono text-[11px] leading-relaxed">
                               <div>
                                 <div className="text-slate-500 font-bold mb-1">ARGUMENTS:</div>
-                                <pre className="p-2 select-text">{block.toolArgs}</pre>
+                                <pre className="p-3.5 select-text">{block.toolArgs}</pre>
                               </div>
                               {block.content && (
                                 <div>
                                   <div className="text-slate-500 font-bold mb-1">OUTPUT:</div>
-                                  <pre className="p-2 select-text max-h-60 overflow-y-auto">{block.content}</pre>
+                                  <pre className="p-3.5 select-text max-h-60 overflow-y-auto">{block.content}</pre>
                                 </div>
                               )}
                             </div>
@@ -368,9 +360,8 @@ export default function App() {
                         </div>
                         <div className="border border-[#1F2937] bg-[#0B0F19] rounded-lg p-3 space-y-2">
                           <div className="flex items-center gap-2 text-xs">
-                            <span className={`w-1.5 h-1.5 rounded-full ${
-                              block.state.status === "running" ? "bg-amber-400 animate-pulse" : "bg-emerald-400"
-                            }`} />
+                            <span className={`w-1.5 h-1.5 rounded-full ${block.state.status === "running" ? "bg-amber-400 animate-pulse" : "bg-emerald-400"
+                              }`} />
                             <span className="text-slate-400 italic">{block.state.latestLine || "Working..."}</span>
                           </div>
                           {block.state.fullOutput && (
@@ -399,7 +390,7 @@ export default function App() {
                   <p className="text-xs text-slate-300 leading-relaxed mt-0.5">
                     The agent is attempting to run <span className="font-mono text-amber-300 font-semibold">{state.pendingConfirmation.toolName}</span>:
                     <span className="block font-mono text-[10px] bg-slate-950 p-2 rounded border border-slate-900 mt-2 select-text overflow-x-auto">
-                      {state.pendingConfirmation.description}
+                      {state.pendingConfirmation.args}
                     </span>
                   </p>
                 </div>
@@ -420,22 +411,22 @@ export default function App() {
               </div>
             </div>
           )}
-
-          {/* Bottom input section */}
-          <div className="p-4 border-t border-[#1F2937] bg-[#0B0F19] shrink-0 select-none">
-            <div className="flex flex-col gap-2">
+          <div className="border-t border-[#1F2937] bg-[#0B0F19] shrink-0 select-none px-8 pt-5 pb-6">
+            <div className="flex flex-col gap-3.5">
               <div className="flex flex-row items-center gap-2 relative">
                 <textarea
                   value={inputVal}
                   onChange={(e) => setInputVal(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Type a message or /command... (Shift+Enter for new line)"
-                  className="flex-grow bg-[#070A13] border border-[#1F2937] focus:border-slate-700 outline-none rounded-xl p-3 resize-none h-12 text-sm text-slate-200 placeholder-slate-500 transition-colors select-text pr-12"
+                  className="flex-grow bg-[#070A13] border border-[#1F2937] focus:border-slate-700 outline-none rounded-2xl resize-none h-14 text-sm leading-5 text-slate-200 placeholder-slate-500 transition-colors select-text"
+                  style={{ padding: "14px 72px 12px 24px" }}
                 />
                 <button
                   onClick={handleSend}
                   disabled={!inputVal.trim() || state?.isLoading}
-                  className="absolute right-2 top-2 p-2 bg-emerald-500 text-emerald-950 hover:bg-emerald-400 disabled:opacity-30 disabled:hover:bg-emerald-500 disabled:hover:text-emerald-950 active:scale-95 transition-all rounded-lg"
+                  className="absolute right-5 top-4 p-2.5 bg-emerald-500 text-emerald-950 hover:bg-emerald-400 disabled:opacity-30 disabled:hover:bg-emerald-500 disabled:hover:text-emerald-950 active:scale-95 transition-all rounded-xl"
+                  title="Send message"
                 >
                   <Send className="w-4 h-4" />
                 </button>
@@ -462,12 +453,13 @@ export default function App() {
               <button
                 onClick={() => setShowSettings(false)}
                 className="p-1 hover:bg-[#1F2937] text-slate-400 hover:text-white rounded-lg transition-colors"
+                title="Close settings"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            
-            <div className="p-5 space-y-4 text-sm">
+
+            <div className="p-6 space-y-4 text-sm">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">DeepSeek API Key</label>
                 <input
@@ -475,7 +467,7 @@ export default function App() {
                   value={apiKeyInput}
                   onChange={(e) => setApiKeyInput(e.target.value)}
                   placeholder="sk-..."
-                  className="w-full bg-[#070A13] border border-[#1F2937] focus:border-slate-700 outline-none rounded-lg p-2.5 text-xs text-slate-200 select-text"
+                  className="w-full bg-[#070A13] border border-[#1F2937] focus:border-slate-700 outline-none rounded-lg px-3.5 py-2.5 text-xs text-slate-200 select-text"
                 />
               </div>
 
@@ -486,7 +478,7 @@ export default function App() {
                   value={githubTokenInput}
                   onChange={(e) => setGithubTokenInput(e.target.value)}
                   placeholder="ghp_..."
-                  className="w-full bg-[#070A13] border border-[#1F2937] focus:border-slate-700 outline-none rounded-lg p-2.5 text-xs text-slate-200 select-text"
+                  className="w-full bg-[#070A13] border border-[#1F2937] focus:border-slate-700 outline-none rounded-lg px-3.5 py-2.5 text-xs text-slate-200 select-text"
                 />
               </div>
 

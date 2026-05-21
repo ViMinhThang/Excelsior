@@ -13,16 +13,14 @@ export default defineConfig({
         preload: path.resolve(__dirname, "src/main/preload.ts"),
       },
       output: {
-        format: "esm",
-        entryFileNames: "[name].js",
+        format: "cjs",
+        entryFileNames: "[name].cjs",
         chunkFileNames: "[name].js",
         assetFileNames: "[name].[ext]"
       },
       external: [
         "electron",
         "better-sqlite3",
-        "@excelsior/agent-host",
-        "@excelsior/core",
         ...builtinModules,
         ...builtinModules.map((m) => `node:${m}`),
       ],
