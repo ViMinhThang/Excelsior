@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { AppSettings } from "@excelsior/core";
 import { ChatPanel } from "./components/ChatPanel.tsx";
 import { SettingsDialog } from "./components/SettingsDialog.tsx";
@@ -38,7 +38,6 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [openToolCalls, setOpenToolCalls] = useState<Record<string, boolean>>({});
   const [theme, setTheme] = useState<DesktopTheme>(getStoredTheme);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -47,10 +46,6 @@ export default function App() {
       delete document.documentElement.dataset.theme;
     };
   }, [theme]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [state?.displayBlocks, state?.isLoading]);
 
   const handleSend = () => {
     const trimmed = inputValue.trim();
@@ -89,12 +84,9 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-brand-bg text-brand-text-strong">
-      <div className="titlebar select-none justify-between">
-        <span className="truncate font-semibold">
+      <div className="titlebar select-none">
+        <span className="titlebar-title truncate font-semibold">
           Excelsior / {state?.workspace?.name ?? "Workspace"}
-        </span>
-        <span className="max-w-[52vw] truncate text-[11px] text-brand-text-muted">
-          {workspacePath}
         </span>
       </div>
 
@@ -119,7 +111,6 @@ export default function App() {
 
         <ChatPanel
           inputValue={inputValue}
-          messagesEndRef={messagesEndRef}
           openToolCalls={openToolCalls}
           state={state}
           onCancel={cancel}
