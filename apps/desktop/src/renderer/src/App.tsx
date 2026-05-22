@@ -1,34 +1,23 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { AppSettings } from "@excelsior/core";
+import { ChatPanel } from "./components/ChatPanel.tsx";
+import { SettingsDialog } from "./components/SettingsDialog.tsx";
+import { WorkspaceGate } from "./components/WorkspaceGate.tsx";
+import { WorkspaceSidebar } from "./components/WorkspaceSidebar.tsx";
+import type { DesktopTheme } from "./components/types.ts";
 import { useAgentHost } from "./hooks/useAgentHost.ts";
-import {
-  FolderOpen,
-  MessageSquare,
-  Plus,
-  Trash2,
-  Settings,
-  X,
-  Play,
-  RotateCcw,
-  Sparkles,
-  Terminal,
-  Cpu,
-  Check,
-  AlertTriangle,
-  Send,
-  FolderClosed,
-  ChevronDown,
-  ChevronRight,
-  Code,
-  File,
-  Folder
-} from "lucide-react";
-import type { WorkspaceTreeNode } from "../../../main/preload";
+
+function getStoredTheme(): DesktopTheme {
+  const storedTheme = localStorage.getItem("excelsior-theme");
+
+  if (storedTheme === "catppuccin-latte") return "catppuccin-latte";
+  return "catppuccin-mocha";
+}
 
 export default function App() {
   const {
     workspacePath,
     state,
-    commands,
     settings,
     workspaceTree,
     isInitializing,
@@ -37,478 +26,114 @@ export default function App() {
     send,
     cancel,
     executeCommand,
-    createSession,
-    switchSession,
-    deleteSession,
-    renameSession,
-    toggleMode,
     setMode,
     saveSettings,
     respondToConfirmation,
-    approveAllConfirmations,
-    clearMessages,
-    revertLastTurn,
   } = useAgentHost();
 
-  const [inputVal, setInputVal] = useState("");
+  const [inputValue, setInputValue] = useState("");
   const [showSettings, setShowSettings] = useState(false);
-  const [apiKeyInput, setApiKeyInput] = useState("");
-  const [githubTokenInput, setGithubTokenInput] = useState("");
   const [openToolCalls, setOpenToolCalls] = useState<Record<string, boolean>>({});
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
-
+  const [theme, setTheme] = useState<DesktopTheme>(getStoredTheme);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+
+    return () => {
+      delete document.documentElement.dataset.theme;
+    };
+  }, [theme]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state?.displayBlocks, state?.isLoading]);
 
-  // Load settings into form inputs when settings are fetched
-  useEffect(() => {
-    if (settings) {
-      setApiKeyInput(settings.deepseekApiKey || "");
-      setGithubTokenInput(settings.githubToken || "");
-    }
-  }, [settings, showSettings]);
-
   const handleSend = () => {
-    if (!inputVal.trim()) return;
-    if (inputVal.startsWith("/")) {
-      executeCommand(inputVal);
+    const trimmed = inputValue.trim();
+    if (!trimmed) return;
+
+    if (trimmed.startsWith("/")) {
+      void executeCommand(trimmed);
     } else {
-      send(inputVal);
+      send(trimmed);
     }
-    setInputVal("");
+
+    setInputValue("");
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+  const handleSaveSettings = (nextSettings: Partial<AppSettings>, nextTheme: DesktopTheme) => {
+    saveSettings(nextSettings);
+    localStorage.setItem("excelsior-theme", nextTheme);
+    setTheme(nextTheme);
+    setShowSettings(false);
   };
 
-  const toggleToolCall = (id: string) => {
-    setOpenToolCalls(prev => ({ ...prev, [id]: !prev[id] }));
+  const handleThemeChange = (nextTheme: DesktopTheme) => {
+    localStorage.setItem("excelsior-theme", nextTheme);
+    setTheme(nextTheme);
   };
 
-  const toggleFolder = (path: string) => {
-    setOpenFolders(prev => ({ ...prev, [path]: !(prev[path] ?? true) }));
-  };
-
-  const renderTreeNode = (node: WorkspaceTreeNode, depth = 0): React.ReactNode => {
-    const isDirectory = node.type === "directory";
-    const isOpen = openFolders[node.path] ?? false;
-
-    return (
-      <div key={node.path}>
-        <button
-          onClick={() => isDirectory && toggleFolder(node.path)}
-          className="group flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] text-slate-400 hover:bg-[#111827] hover:text-slate-100 transition-colors"
-          style={{ paddingLeft: `${8 + depth * 12}px` }}
-          title={node.path}
-        >
-          {isDirectory ? (
-            isOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-500" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-          ) : (
-            <span className="h-3.5 w-3.5 shrink-0" />
-          )}
-          {isDirectory ? <Folder className="h-3.5 w-3.5 shrink-0 text-emerald-400/80" /> : <File className="h-3.5 w-3.5 shrink-0 text-slate-500" />}
-          <span className="truncate font-medium">{node.name}</span>
-        </button>
-        {isDirectory && isOpen && node.children?.map((child) => renderTreeNode(child, depth + 1))}
-      </div>
-    );
-  };
-
-  // 1. Workspace selection screen if no workspace path is loaded
   if (!workspacePath) {
     return (
-      <div className="flex h-screen w-screen bg-[#070A13] items-center justify-center relative overflow-hidden select-none">
-        {/* Animated ambient backgrounds (No purple!) */}
-        <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-emerald-950/20 blur-[120px] pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[-5%] w-[40%] h-[40%] rounded-full bg-slate-900/40 blur-[100px] pointer-events-none" />
-
-        {/* Custom Draggable Titlebar */}
-        <div className="titlebar absolute top-0 left-0 right-0 select-none">
-          <span>EXCELSIOR // DESKTOP BUILD v1.0.0</span>
-        </div>
-
-        {/* Central Content */}
-        <div className="flex flex-col items-center justify-center p-8 text-center max-w-xl z-10">
-          <div className="w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-8 shadow-[0_0_50px_-12px_rgba(16,185,129,0.2)] animate-pulse">
-            <Cpu className="w-10 h-10 text-emerald-400" />
-          </div>
-
-          <h1 className="text-4xl font-extrabold tracking-tight text-white mb-3">
-            EXCELSIOR <span className="text-emerald-400">DESKTOP</span>
-          </h1>
-          <p className="text-slate-400 text-sm leading-relaxed mb-10">
-            A premium, high-performance desktop assistant workspace powered by DeepSeek. Work securely on your local projects, manage automated multi-agent refactoring, and run tests seamlessly.
-          </p>
-
-          <button
-            onClick={selectWorkspace}
-            disabled={isInitializing}
-            className="flex min-w-[320px] items-center justify-center gap-3 border-2 border-emerald-300/25 px-10 py-5 bg-emerald-500 text-emerald-950 font-bold rounded-2xl shadow-lg shadow-emerald-500/20 hover:bg-emerald-400 active:scale-95 transition-all duration-150 disabled:opacity-50"
-          >
-            {isInitializing ? (
-              <div className="w-5 h-5 border-2 border-emerald-950 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <FolderOpen className="w-5 h-5" />
-            )}
-            Open Workspace Folder
-          </button>
-          {workspaceError && (
-            <p className="mt-4 max-w-md rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-medium leading-relaxed text-red-300">
-              {workspaceError}
-            </p>
-          )}
-        </div>
-
-        <div className="absolute bottom-0 left-0 right-0 py-6 text-center text-xs font-semibold tracking-wider text-slate-600 z-10 border-t border-slate-900/50">
-          POWERED BY DEEPSEEK CODER • GEOMETRIC GRID ARCHITECTURE
-        </div>
-      </div>
+      <WorkspaceGate
+        error={workspaceError}
+        isInitializing={isInitializing}
+        onSelectWorkspace={selectWorkspace}
+      />
     );
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#070A13] text-slate-100 overflow-hidden relative">
-      {/* Draggable Titlebar */}
-      <div className="titlebar select-none justify-between" style={{ paddingLeft: "16px", paddingRight: "144px", display: "flex", alignItems: "center", height: "40px" }}>
-        <div className="flex items-center gap-2">
-          <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-          <span>EXCELSIOR // {state?.workspace?.name.toUpperCase() || "WORKSPACE"}</span>
-        </div>
-        <div className="text-[10px] text-slate-500 font-mono">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-brand-bg text-brand-text-strong">
+      <div className="titlebar select-none justify-between">
+        <span className="truncate font-semibold">
+          Excelsior / {state?.workspace?.name ?? "Workspace"}
+        </span>
+        <span className="max-w-[52vw] truncate text-[11px] text-brand-text-muted">
           {workspacePath}
-        </div>
+        </span>
       </div>
 
-      <div className="flex flex-row flex-grow overflow-hidden">
-        {/* ================= LEFT SIDEBAR ================= */}
-        <div className="w-72 border-r border-[#1F2937] bg-[#0B0F19] flex flex-col justify-between shrink-0 select-none">
-          <div className="flex flex-col flex-grow overflow-hidden gap-6" style={{ padding: "16px" }}>
+      <div className="flex min-h-0 flex-1 overflow-hidden bg-brand-bg">
+        <WorkspaceSidebar
+          openFolders={openFolders}
+          workspaceName={state?.workspace?.name ?? "Workspace"}
+          workspaceTree={workspaceTree}
+          onOpenSettings={() => setShowSettings(true)}
+          onSelectWorkspace={selectWorkspace}
+          onToggleFolder={(path) =>
+            setOpenFolders((current) => ({ ...current, [path]: !(current[path] ?? false) }))
+          }
+        />
 
-            <div className="flex flex-col flex-grow overflow-hidden gap-3">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-bold text-slate-500 tracking-widest uppercase">Explorer</span>
-              </div>
-              <div className="flex items-center gap-2 rounded-xl border border-[#1F2937] bg-[#070A13] px-3 py-2 text-xs font-semibold text-slate-300">
-                <FolderOpen className="h-4 w-4 shrink-0 text-emerald-400" />
-                <span className="truncate">{state?.workspace?.name || "Workspace"}</span>
-              </div>
-              <div className="flex-grow overflow-y-auto pr-1">
-                {workspaceTree.length > 0 ? (
-                  workspaceTree.map((node) => renderTreeNode(node))
-                ) : (
-                  <div className="rounded-xl border border-dashed border-[#1F2937] px-3 py-6 text-center text-xs text-slate-500">
-                    No files found in this workspace.
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar Footer */}
-          <div className="border-t border-[#1F2937] flex flex-col gap-2 bg-[#080D17]" style={{ padding: "16px" }}>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="flex items-center gap-3 w-full hover:bg-[#1F2937] text-slate-400 hover:text-white rounded-xl transition-colors text-xs font-semibold"
-              style={{ paddingLeft: "12px", paddingRight: "12px", paddingTop: "10px", paddingBottom: "10px" }}
-            >
-              <Settings className="w-4 h-4" />
-              API Settings
-            </button>
-            <button
-              onClick={selectWorkspace}
-              className="flex items-center gap-3 w-full hover:bg-[#1F2937] text-slate-400 hover:text-white rounded-xl transition-colors text-xs font-semibold"
-              style={{ paddingLeft: "12px", paddingRight: "12px", paddingTop: "10px", paddingBottom: "10px" }}
-            >
-              <FolderClosed className="w-4 h-4" />
-              Switch Workspace
-            </button>
-          </div>
-        </div>
-
-        {/* ================= MAIN CHAT AREA ================= */}
-        <div className="flex flex-col flex-grow overflow-hidden bg-[#070A13]">
-
-          {/* Header toolbar */}
-          <div className="h-16 border-b border-[#1F2937] flex items-center justify-between shrink-0 select-none" style={{ paddingLeft: "24px", paddingRight: "24px" }}>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-semibold text-slate-400">Agent Connected</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={revertLastTurn}
-                className="flex items-center gap-2 px-3.5 py-2 bg-[#111827] border border-[#1F2937] text-slate-400 hover:text-white rounded-xl transition-all text-xs font-semibold"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Revert Last Turn
-              </button>
-              {state?.isLoading && (
-                <button
-                  onClick={cancel}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded-xl transition-all text-xs font-semibold"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Cancel
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Message Stream */}
-          <div className={`flex-grow overflow-y-auto px-8 py-8 space-y-6 ${state?.displayBlocks?.length === 0 ? "flex flex-col justify-center items-center" : ""}`}>
-            {state?.displayBlocks?.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-center max-w-md mx-auto select-none opacity-70 px-8">
-                <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10 shadow-[0_0_40px_-20px_rgba(16,185,129,0.65)]">
-                  <Sparkles className="w-8 h-8 text-emerald-400 animate-bounce" />
-                </div>
-                <h3 className="text-base font-bold text-white mb-2">New Conversation Session</h3>
-                <p className="text-sm leading-6 text-slate-400">
-                  Ask the assistant to write features, search your files, or explain system architectures.
-                </p>
-              </div>
-            ) : (
-              state?.displayBlocks?.map((block) => (
-                <div key={block.id} className="fade-in animate-duration-300">
-
-                  {/* User Prompt */}
-                  {block.type === "user" && (
-                    <div className="flex flex-row justify-end pl-12">
-                      <div className="bg-[#111827] border border-[#1F2937] rounded-xl px-4 py-3 max-w-2xl text-slate-200 text-sm shadow-sm select-text">
-                        <div className="text-[10px] font-bold text-slate-500 mb-1 tracking-wider">USER</div>
-                        {block.content}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Assistant response */}
-                  {block.type === "assistant" && (
-                    <div className="flex flex-row gap-4 pr-12">
-                      <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 shrink-0 flex items-center justify-center text-emerald-400">
-                        <Cpu className="w-4 h-4" />
-                      </div>
-                      <div className="space-y-1.5 flex-grow select-text">
-                        <div className="text-[10px] font-bold text-slate-500 tracking-wider">ASSISTANT</div>
-                        {/* Beautiful custom formatted text render (basic markdown support) */}
-                        <div className="text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
-                          {block.content}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Tool Call Log */}
-                  {block.type === "tool-call" && (
-                    <div className="flex flex-row gap-4 pr-12">
-                      <div className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 shrink-0 flex items-center justify-center text-slate-400">
-                        <Code className="w-4 h-4" />
-                      </div>
-                      <div className="space-y-1.5 flex-grow">
-                        <div className="text-[10px] font-bold text-slate-500 tracking-wider">
-                          TOOL OPERATION • {block.status.toUpperCase()}
-                        </div>
-                        <div className="border border-[#1F2937] bg-[#0B0F19] rounded-lg overflow-hidden">
-                          <div
-                            onClick={() => toggleToolCall(block.id)}
-                            className="flex items-center justify-between p-2.5 bg-[#111827] cursor-pointer hover:bg-[#1F2937]/30 transition-colors"
-                          >
-                            <div className="flex items-center gap-2">
-                              <Terminal className="w-3.5 h-3.5 text-emerald-400" />
-                              <span className="text-xs font-mono font-bold text-slate-300">
-                                {block.toolName}
-                              </span>
-                            </div>
-                            {openToolCalls[block.id] ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                          </div>
-
-                          {openToolCalls[block.id] && (
-                            <div className="p-4 border-t border-[#1F2937] space-y-3 font-mono text-[11px] leading-relaxed">
-                              <div>
-                                <div className="text-slate-500 font-bold mb-1">ARGUMENTS:</div>
-                                <pre className="p-3.5 select-text">{block.toolArgs}</pre>
-                              </div>
-                              {block.content && (
-                                <div>
-                                  <div className="text-slate-500 font-bold mb-1">OUTPUT:</div>
-                                  <pre className="p-3.5 select-text max-h-60 overflow-y-auto">{block.content}</pre>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Subagent feed */}
-                  {block.type === "sub-agent" && (
-                    <div className="flex flex-row gap-4 pr-12">
-                      <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 shrink-0 flex items-center justify-center text-amber-400">
-                        <Cpu className="w-4 h-4" />
-                      </div>
-                      <div className="space-y-1.5 flex-grow">
-                        <div className="text-[10px] font-bold text-slate-500 tracking-wider">
-                          SUB-AGENT • {block.role.toUpperCase()} ({block.state.status.toUpperCase()})
-                        </div>
-                        <div className="border border-[#1F2937] bg-[#0B0F19] rounded-lg p-3 space-y-2">
-                          <div className="flex items-center gap-2 text-xs">
-                            <span className={`w-1.5 h-1.5 rounded-full ${block.state.status === "running" ? "bg-amber-400 animate-pulse" : "bg-emerald-400"
-                              }`} />
-                            <span className="text-slate-400 italic">{block.state.latestLine || "Working..."}</span>
-                          </div>
-                          {block.state.fullOutput && (
-                            <pre className="p-2 text-[10px] max-h-40 overflow-y-auto select-text">
-                              {block.state.fullOutput}
-                            </pre>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* ================= PENDING CONFIRMATION BAR ================= */}
-          {state?.pendingConfirmation && (
-            <div className="mx-4 mb-4 border border-amber-500/30 bg-amber-950/20 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 animate-pulse select-none">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">Manual Approval Required</h4>
-                  <p className="text-xs text-slate-300 leading-relaxed mt-0.5">
-                    The agent is attempting to run <span className="font-mono text-amber-300 font-semibold">{state.pendingConfirmation.toolName}</span>:
-                    <span className="block font-mono text-[10px] bg-slate-950 p-2 rounded border border-slate-900 mt-2 select-text overflow-x-auto">
-                      {state.pendingConfirmation.args}
-                    </span>
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={() => respondToConfirmation(state.pendingConfirmation!.callId, false)}
-                  className="px-4 py-2 border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 active:scale-95 transition-all text-xs font-bold rounded-lg"
-                >
-                  Deny
-                </button>
-                <button
-                  onClick={() => respondToConfirmation(state.pendingConfirmation!.callId, true)}
-                  className="px-4 py-2 border border-emerald-500/20 bg-emerald-500 text-emerald-950 hover:bg-emerald-400 active:scale-95 transition-all text-xs font-bold rounded-lg"
-                >
-                  Approve
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="border-t border-[#1F2937] bg-[#0B0F19] shrink-0 select-none px-8 pt-5 pb-6">
-            <div className="flex flex-col gap-3.5">
-              <div className="flex flex-row items-center gap-2 relative">
-                <textarea
-                  value={inputVal}
-                  onChange={(e) => setInputVal(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type a message or /command... (Shift+Enter for new line)"
-                  className="flex-grow bg-[#070A13] border border-[#1F2937] focus:border-slate-700 outline-none rounded-2xl resize-none h-14 text-sm leading-5 text-slate-200 placeholder-slate-500 transition-colors select-text"
-                  style={{ padding: "14px 72px 12px 24px" }}
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!inputVal.trim() || state?.isLoading}
-                  className="absolute right-5 top-4 p-2.5 bg-emerald-500 text-emerald-950 hover:bg-emerald-400 disabled:opacity-30 disabled:hover:bg-emerald-500 disabled:hover:text-emerald-950 active:scale-95 transition-all rounded-xl"
-                  title="Send message"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="flex items-center justify-between px-1 text-[10px] text-slate-500">
-                <span>Enter to Send • Shift+Enter for new line</span>
-                <span className="font-mono">Ctrl+S for Settings</span>
-              </div>
-            </div>
-          </div>
-
-        </div>
+        <ChatPanel
+          inputValue={inputValue}
+          messagesEndRef={messagesEndRef}
+          openToolCalls={openToolCalls}
+          state={state}
+          onCancel={cancel}
+          onInputChange={setInputValue}
+          onModeChange={(mode) => {
+            void setMode(mode);
+          }}
+          onSend={handleSend}
+          onToggleToolCall={(id) =>
+            setOpenToolCalls((current) => ({ ...current, [id]: !current[id] }))
+          }
+          onRespondToConfirmation={respondToConfirmation}
+        />
       </div>
 
-      {/* ================= SETTINGS DIALOG OVERLAY ================= */}
       {showSettings && (
-        <div className="absolute inset-0 bg-[#070A13]/80 backdrop-blur-sm z-50 flex items-center justify-center p-6 select-none animate-fade-in">
-          <div className="w-full max-w-md border border-[#1F2937] bg-[#0B0F19] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
-            <div className="px-5 py-4 border-b border-[#1F2937] flex items-center justify-between bg-[#111827]">
-              <div className="flex items-center gap-2">
-                <Settings className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-bold text-white">Excelsior API Settings</h3>
-              </div>
-              <button
-                onClick={() => setShowSettings(false)}
-                className="p-1 hover:bg-[#1F2937] text-slate-400 hover:text-white rounded-lg transition-colors"
-                title="Close settings"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 text-sm">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">DeepSeek API Key</label>
-                <input
-                  type="password"
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                  placeholder="sk-..."
-                  className="w-full bg-[#070A13] border border-[#1F2937] focus:border-slate-700 outline-none rounded-lg px-3.5 py-2.5 text-xs text-slate-200 select-text"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">GitHub Token (Optional)</label>
-                <input
-                  type="password"
-                  value={githubTokenInput}
-                  onChange={(e) => setGithubTokenInput(e.target.value)}
-                  placeholder="ghp_..."
-                  className="w-full bg-[#070A13] border border-[#1F2937] focus:border-slate-700 outline-none rounded-lg px-3.5 py-2.5 text-xs text-slate-200 select-text"
-                />
-              </div>
-
-              <div className="p-3 bg-slate-950/40 border border-slate-900 text-[11px] text-slate-400 rounded-lg leading-relaxed">
-                Api keys are encrypted and saved locally inside your machine's app data directories. Excelsior never uploads your keys.
-              </div>
-            </div>
-
-            <div className="px-5 py-4 border-t border-[#1F2937] flex items-center justify-end gap-2 bg-[#111827]">
-              <button
-                onClick={() => setShowSettings(false)}
-                className="px-4 py-2 hover:bg-[#1F2937] text-slate-400 hover:text-white rounded-lg text-xs font-semibold transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  saveSettings({
-                    deepseekApiKey: apiKeyInput,
-                    githubToken: githubTokenInput,
-                  });
-                  setShowSettings(false);
-                }}
-                className="px-4 py-2 bg-emerald-500 text-emerald-950 hover:bg-emerald-400 rounded-lg text-xs font-bold transition-colors"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
+        <SettingsDialog
+          settings={settings}
+          theme={theme}
+          onClose={() => setShowSettings(false)}
+          onSave={handleSaveSettings}
+          onThemeChange={handleThemeChange}
+        />
       )}
     </div>
   );
