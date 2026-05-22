@@ -3,11 +3,12 @@ import {
   Bot,
   Check,
   FolderClosed,
-  MessageSquare,
   MessageSquarePlus,
   Pencil,
+  Search,
   Settings,
   Trash2,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import type { Session } from "@excelsior/core";
@@ -77,12 +78,12 @@ function groupSessions(sessions: Session[]): Array<{ key: SessionGroupKey; items
 type SessionRowProps = {
   isActive: boolean;
   session: Session;
-  onDelete: (sessionId: string) => void;
+  onRequestDelete: (session: Session) => void;
   onRename: (sessionId: string, title: string) => void;
   onSwitch: (sessionId: string) => void;
 };
 
-function SessionRow({ isActive, session, onDelete, onRename, onSwitch }: SessionRowProps) {
+function SessionRow({ isActive, session, onRequestDelete, onRename, onSwitch }: SessionRowProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(() => sessionTitle(session));
   const inputRef = useRef<HTMLInputElement>(null);
@@ -123,21 +124,10 @@ function SessionRow({ isActive, session, onDelete, onRename, onSwitch }: Session
     }
   };
 
-  const handleDelete = () => {
-    const confirmed = window.confirm(`Delete "${sessionTitle(session)}"?`);
-    if (confirmed) onDelete(session.id);
-  };
-
   return (
     <div
-      className={`group relative flex h-9 items-center gap-2 rounded-md px-2 text-[12px] ${
-        isActive
-          ? "bg-brand-panel text-brand-text-strong"
-          : "text-brand-text-muted hover:bg-brand-panel/60 hover:text-brand-text-strong"
-      }`}
+      className={`sidebar-session-row group ${isActive ? "sidebar-session-row-active" : ""}`}
     >
-      <MessageSquare className="h-3.5 w-3.5 shrink-0" />
-
       {isEditing ? (
         <input
           ref={inputRef}
@@ -145,14 +135,14 @@ function SessionRow({ isActive, session, onDelete, onRename, onSwitch }: Session
           onChange={(event) => setDraftTitle(event.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={commitRename}
-          className="min-w-0 flex-1 rounded-sm border border-brand-border bg-brand-bg px-1.5 py-0.5 text-[12px] text-brand-text-strong outline-none"
+          className="sidebar-session-input"
         />
       ) : (
         <button
           type="button"
           onClick={() => onSwitch(session.id)}
           onDoubleClick={() => setIsEditing(true)}
-          className="min-w-0 flex-1 truncate text-left"
+          className="sidebar-session-select"
           title={sessionTitle(session)}
         >
           {sessionTitle(session)}
@@ -160,9 +150,7 @@ function SessionRow({ isActive, session, onDelete, onRename, onSwitch }: Session
       )}
 
       <div
-        className={`flex shrink-0 items-center gap-0.5 ${
-          isEditing ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-        }`}
+        className={`sidebar-session-tools ${isEditing ? "sidebar-session-tools-visible" : ""}`}
       >
         {isEditing ? (
           <>
@@ -170,7 +158,7 @@ function SessionRow({ isActive, session, onDelete, onRename, onSwitch }: Session
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={commitRename}
-              className="flex h-6 w-6 items-center justify-center rounded-sm text-brand-text-muted hover:bg-brand-bg hover:text-brand-text-strong"
+              className="sidebar-session-tool"
               title="Save"
             >
               <Check className="h-3.5 w-3.5" />
@@ -179,7 +167,7 @@ function SessionRow({ isActive, session, onDelete, onRename, onSwitch }: Session
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={cancelRename}
-              className="flex h-6 w-6 items-center justify-center rounded-sm text-brand-text-muted hover:bg-brand-bg hover:text-brand-text-strong"
+              className="sidebar-session-tool"
               title="Cancel"
             >
               <X className="h-3.5 w-3.5" />
@@ -190,15 +178,15 @@ function SessionRow({ isActive, session, onDelete, onRename, onSwitch }: Session
             <button
               type="button"
               onClick={() => setIsEditing(true)}
-              className="flex h-6 w-6 items-center justify-center rounded-sm text-brand-text-muted hover:bg-brand-bg hover:text-brand-text-strong"
+              className="sidebar-session-tool"
               title="Rename"
             >
               <Pencil className="h-3.5 w-3.5" />
             </button>
             <button
               type="button"
-              onClick={handleDelete}
-              className="flex h-6 w-6 items-center justify-center rounded-sm text-brand-text-muted hover:bg-brand-bg hover:text-red-300"
+              onClick={() => onRequestDelete(session)}
+              className="sidebar-session-tool sidebar-session-tool-danger"
               title="Delete"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -206,6 +194,77 @@ function SessionRow({ isActive, session, onDelete, onRename, onSwitch }: Session
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function DeleteSessionDialog({
+  session,
+  onCancel,
+  onConfirm,
+}: {
+  session: Session;
+  onCancel: () => void;
+  onConfirm: (sessionId: string) => void;
+}) {
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    cancelButtonRef.current?.focus();
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onCancel]);
+
+  return (
+    <div className="confirm-overlay" onMouseDown={onCancel}>
+      <section
+        aria-labelledby="delete-session-title"
+        aria-modal="true"
+        className="confirm-dialog"
+        role="dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="confirm-dialog-body">
+          <div className="confirm-dialog-icon" aria-hidden="true">
+            <TriangleAlert className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h2 id="delete-session-title" className="confirm-dialog-title">
+              Delete chat?
+            </h2>
+            <p className="confirm-dialog-copy">
+              <span className="confirm-dialog-name">{sessionTitle(session)}</span> will be removed
+              from this workspace.
+            </p>
+          </div>
+        </div>
+
+        <div className="confirm-dialog-actions">
+          <button
+            ref={cancelButtonRef}
+            type="button"
+            onClick={onCancel}
+            className="confirm-action confirm-action-secondary"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => onConfirm(session.id)}
+            className="confirm-action confirm-action-danger"
+          >
+            Delete
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -221,41 +280,117 @@ export function WorkspaceSidebar({
   onSelectWorkspace,
   onSwitchSession,
 }: WorkspaceSidebarProps) {
-  const groups = useMemo(() => groupSessions(sessions), [sessions]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sessionPendingDelete, setSessionPendingDelete] = useState<Session | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const visibleSessions = useMemo(() => {
+    if (!normalizedSearch) return sessions;
+
+    return sessions.filter((session) =>
+      sessionTitle(session).toLocaleLowerCase().includes(normalizedSearch)
+    );
+  }, [normalizedSearch, sessions]);
+  const groups = useMemo(() => groupSessions(visibleSessions), [visibleSessions]);
+
+  useEffect(() => {
+    if (isSearching) {
+      searchInputRef.current?.focus();
+    }
+  }, [isSearching]);
+
+  const confirmDeleteSession = (sessionId: string) => {
+    onDeleteSession(sessionId);
+    setSessionPendingDelete(null);
+  };
+
+  const closeSearch = () => {
+    setIsSearching(false);
+    setSearchQuery("");
+  };
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col overflow-hidden border-r border-brand-border bg-brand-surface select-none">
-      <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
-        <div className="flex h-9 items-center gap-2 bg-brand-bg px-3">
-          <Bot className="h-4.5 w-4.5 shrink-0 text-brand-accent" />
-          <span className="truncate text-sm font-medium text-brand-text-strong">
+    <aside className="workspace-sidebar flex w-80 shrink-0 flex-col overflow-hidden border-r border-brand-border bg-brand-surface select-none">
+      <div className="workspace-sidebar-body">
+        <div className="workspace-sidebar-brand">
+          <Bot className="h-5 w-5 shrink-0 text-brand-accent" />
+          <span className="truncate text-base font-semibold text-brand-text-strong">
             {workspaceName}
           </span>
         </div>
 
-        <button
-          type="button"
-          onClick={onCreateSession}
-          className="flex h-9 items-center justify-center gap-2 rounded-md border border-brand-border bg-brand-bg text-xs font-medium text-brand-text-strong hover:bg-brand-panel"
-        >
-          <MessageSquarePlus className="h-4 w-4" />
-          New chat
-        </button>
+        <nav className="workspace-sidebar-actions" aria-label="Workspace actions">
+          <button type="button" onClick={onCreateSession} className="sidebar-nav-action">
+            <MessageSquarePlus className="h-4.5 w-4.5 shrink-0" />
+            New chat
+          </button>
+          <button
+            type="button"
+            aria-expanded={isSearching}
+            onClick={() => {
+              if (isSearching) {
+                closeSearch();
+              } else {
+                setIsSearching(true);
+              }
+            }}
+            className="sidebar-nav-action"
+          >
+            <Search className="h-4.5 w-4.5 shrink-0" />
+            Search chats
+          </button>
+          <button type="button" onClick={onSelectWorkspace} className="sidebar-nav-action">
+            <FolderClosed className="h-4.5 w-4.5 shrink-0" />
+            Switch workspace
+          </button>
+        </nav>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        {isSearching && (
+          <label className="sidebar-search-field">
+            <Search className="h-4 w-4 shrink-0 text-brand-text-muted" />
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  closeSearch();
+                }
+              }}
+              className="sidebar-search-input"
+              placeholder="Search chats"
+            />
+            <button
+              type="button"
+              onClick={closeSearch}
+              className="sidebar-search-close"
+              aria-label="Close search"
+              title="Close search"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </label>
+        )}
+
+        <div className="workspace-sidebar-history">
+          <div className="sidebar-section-title">
+            {normalizedSearch ? "Search results" : "Recent"}
+          </div>
           {groups.length > 0 ? (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3">
               {groups.map((group) => (
                 <div key={group.key} className="flex flex-col gap-1">
-                  <div className="px-2 text-[10px] font-semibold tracking-wider text-brand-text-muted uppercase">
-                    {GROUP_LABEL[group.key]}
-                  </div>
+                  {group.key !== "today" && !normalizedSearch && (
+                    <div className="sidebar-group-title">{GROUP_LABEL[group.key]}</div>
+                  )}
                   {group.items.map((session) => (
                     <SessionRow
                       key={session.id}
                       isActive={session.id === currentSessionId}
                       session={session}
-                      onDelete={onDeleteSession}
+                      onRequestDelete={setSessionPendingDelete}
                       onRename={onRenameSession}
                       onSwitch={onSwitchSession}
                     />
@@ -264,31 +399,27 @@ export function WorkspaceSidebar({
               ))}
             </div>
           ) : (
-            <div className="rounded-lg border border-dashed border-brand-border px-3 py-5 text-center text-xs text-brand-text-muted">
-              No chats yet. Start a new conversation.
+            <div className="sidebar-history-empty">
+              {normalizedSearch ? "No matching chats." : "No chats yet."}
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex gap-3 border-t border-brand-border bg-brand-sidebar-footer p-4">
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          className="flex h-10 flex-1 items-center justify-center gap-2 rounded-md px-3 text-xs font-medium text-brand-text-muted hover:bg-brand-panel hover:text-brand-text-strong"
-        >
+      <div className="workspace-sidebar-footer">
+        <button type="button" onClick={onOpenSettings} className="sidebar-nav-action">
           <Settings className="h-4 w-4" />
           Settings
         </button>
-        <button
-          type="button"
-          onClick={onSelectWorkspace}
-          className="flex h-10 flex-1 items-center justify-center gap-2 rounded-md px-3 text-xs font-medium text-brand-text-muted hover:bg-brand-panel hover:text-brand-text-strong"
-        >
-          <FolderClosed className="h-4 w-4" />
-          Switch
-        </button>
       </div>
+
+      {sessionPendingDelete && (
+        <DeleteSessionDialog
+          session={sessionPendingDelete}
+          onCancel={() => setSessionPendingDelete(null)}
+          onConfirm={confirmDeleteSession}
+        />
+      )}
     </aside>
   );
 }

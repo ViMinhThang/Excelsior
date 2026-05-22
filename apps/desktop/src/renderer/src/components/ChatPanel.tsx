@@ -1,11 +1,15 @@
-import type { KeyboardEvent, RefObject } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { AgentClientState, AgentMode, ConfirmRequest, ProjectedBlock } from "@excelsior/core";
 import {
   AlertTriangle,
+  ArrowDown,
+  Bug,
   ChevronDown,
   ChevronRight,
   Code,
   Cpu,
+  FileSearch,
+  GitPullRequest,
   Send,
   Square,
   Terminal,
@@ -13,7 +17,6 @@ import {
 
 type ChatPanelProps = {
   inputValue: string;
-  messagesEndRef: RefObject<HTMLDivElement | null>;
   openToolCalls: Record<string, boolean>;
   state: AgentClientState | null;
   onCancel: () => void;
@@ -34,6 +37,39 @@ type PendingConfirmationProps = {
   confirmation: ConfirmRequest;
   onRespond: (callId: string, approved: boolean) => void;
 };
+
+const BOTTOM_THRESHOLD_PX = 80;
+
+const STARTER_PROMPTS = [
+  {
+    icon: FileSearch,
+    title: "Trace a feature",
+    prompt: "Trace how chat submissions flow through this workspace.",
+  },
+  {
+    icon: GitPullRequest,
+    title: "Review changes",
+    prompt: "Review the current changes and call out risks.",
+  },
+  {
+    icon: Bug,
+    title: "Fix a test",
+    prompt: "Find the failing test and fix the bug behind it.",
+  },
+] as const;
+
+function getSessionTitle(state: AgentClientState | null): string {
+  const session = state?.sessions.find((item) => item.id === state.currentSessionId);
+  if (!session) return "New chat";
+  if (session.title?.trim()) return session.title.trim();
+
+  const firstInput = session.metadata?.userInput;
+  if (typeof firstInput === "string" && firstInput.trim()) {
+    return firstInput.replace(/\s+/g, " ").slice(0, 64);
+  }
+
+  return "New chat";
+}
 
 function StatusDot({ isLoading }: { isLoading: boolean }) {
   return (
@@ -79,8 +115,8 @@ function PlanToggle({
 
 function UserBubble({ block }: { block: Extract<ProjectedBlock, { type: "user" }> }) {
   return (
-    <div className="flex justify-end pl-14">
-      <div className="max-w-3xl rounded-lg border border-brand-border bg-brand-user-bubble px-5 py-4 text-sm leading-6 text-brand-text-strong shadow-sm select-text">
+    <div className="flex justify-end">
+      <div className="user-message-bubble">
         {block.content}
       </div>
     </div>
@@ -93,7 +129,7 @@ function AssistantBubble({ block }: { block: Extract<ProjectedBlock, { type: "as
       <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-border bg-brand-surface text-brand-accent">
         <Cpu className="h-4 w-4" />
       </div>
-      <div className="max-w-[82ch] whitespace-pre-wrap text-sm leading-6 text-brand-text-light select-text">
+      <div className="max-w-[82ch] whitespace-pre-wrap break-words text-sm leading-6 text-brand-text-light select-text">
         {block.content}
       </div>
     </div>
@@ -215,6 +251,94 @@ function PendingConfirmation({ confirmation, onRespond }: PendingConfirmationPro
   );
 }
 
+function ScrollToBottomButton({
+  hasUnreadMessages,
+  isStreaming,
+  onClick,
+}: {
+  hasUnreadMessages: boolean;
+  isStreaming: boolean;
+  onClick: () => void;
+}) {
+  const badgeLabel = isStreaming ? "Streaming" : hasUnreadMessages ? "New" : null;
+
+  return (
+    <div className="relative">
+      {badgeLabel && (
+        <span className="pointer-events-none absolute -right-3 -top-3 rounded-md border border-brand-border bg-brand-surface px-1.5 py-0.5 text-[10px] font-semibold text-brand-text-light shadow-lg">
+          {badgeLabel}
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-border bg-brand-composer text-brand-text-light shadow-xl backdrop-blur hover:border-brand-accent hover:text-brand-text-strong"
+        title="Scroll to bottom"
+        aria-label="Scroll to bottom"
+      >
+        <ArrowDown className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+function ChatHeader({
+  mode,
+  title,
+}: {
+  mode: AgentMode;
+  title: string;
+}) {
+  return (
+    <header className="chat-header flex h-16 w-full shrink-0 items-center justify-between gap-4 border-b border-brand-border">
+      <h1 className="min-w-0 truncate text-sm font-semibold text-brand-text-strong">{title}</h1>
+
+      <div className="shrink-0 rounded-md border border-brand-border bg-brand-surface px-2.5 py-1 text-[11px] font-medium text-brand-text-light">
+        {mode === "plan" ? "Plan" : "Act"}
+      </div>
+    </header>
+  );
+}
+
+function EmptyChat({
+  workspaceName,
+  onPickPrompt,
+}: {
+  workspaceName: string;
+  onPickPrompt: (prompt: string) => void;
+}) {
+  return (
+    <div className="w-full pb-8">
+      <div className="flex items-center gap-5">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-brand-border bg-brand-surface text-brand-accent shadow-lg">
+          <Cpu className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-brand-text-strong">{workspaceName}</p>
+          <p className="mt-1 text-sm text-brand-text-light">What should we work on?</p>
+        </div>
+      </div>
+
+      <div className="mt-8 grid gap-4 md:grid-cols-3">
+        {STARTER_PROMPTS.map(({ icon: Icon, prompt, title }) => (
+          <button
+            key={title}
+            type="button"
+            onClick={() => onPickPrompt(prompt)}
+            className="group flex min-h-36 flex-col items-start rounded-lg border border-brand-border bg-brand-surface p-5 text-left hover:border-brand-accent hover:bg-brand-panel"
+          >
+            <Icon className="h-5 w-5 text-brand-accent" />
+            <span className="mt-auto pt-7 text-sm font-semibold text-brand-text-strong">
+              {title}
+            </span>
+            <span className="mt-2 text-xs leading-5 text-brand-text-light">{prompt}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function FloatingComposer({
   inputValue,
   isLoading,
@@ -240,13 +364,13 @@ function FloatingComposer({
   };
 
   return (
-    <div className="w-full rounded-lg border border-brand-border bg-brand-composer p-2.5 shadow-2xl backdrop-blur">
+    <div className="w-full rounded-lg border border-brand-border bg-brand-composer p-2.5 shadow-2xl backdrop-blur focus-within:border-brand-accent">
       <textarea
         value={inputValue}
         onChange={(event) => onInputChange(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Ask or type /command"
-        className="h-12 w-full resize-none border-0 bg-transparent px-2 py-1.5 text-xs leading-5 text-brand-text-strong outline-none placeholder:text-brand-text-muted select-text"
+        className="h-16 w-full resize-none border-0 bg-transparent px-2 py-1.5 text-sm leading-6 text-brand-text-strong outline-none placeholder:text-brand-text-muted select-text"
       />
       <div className="mt-1 flex items-center justify-between gap-3">
         <PlanToggle mode={mode} onModeChange={onModeChange} />
@@ -257,6 +381,7 @@ function FloatingComposer({
               onClick={onCancel}
               className="flex h-8 w-8 items-center justify-center rounded-md border border-red-400/30 bg-red-500/10 text-red-200"
               title="Cancel"
+              aria-label="Cancel"
             >
               <Square className="h-3.5 w-3.5" />
             </button>
@@ -267,6 +392,7 @@ function FloatingComposer({
             disabled={!inputValue.trim() || isLoading}
             className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-accent text-brand-accent-contrast disabled:opacity-40"
             title="Send"
+            aria-label="Send"
           >
             <Send className="h-3.5 w-3.5" />
           </button>
@@ -278,7 +404,6 @@ function FloatingComposer({
 
 export function ChatPanel({
   inputValue,
-  messagesEndRef,
   openToolCalls,
   state,
   onCancel,
@@ -291,17 +416,85 @@ export function ChatPanel({
   const blocks = state?.displayBlocks ?? [];
   const isLoading = state?.isLoading ?? false;
   const hasPendingConfirmation = Boolean(state?.pendingConfirmation);
+  const mode = state?.mode ?? "plan";
+  const currentSessionId = state?.currentSessionId ?? null;
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+
+  const setBottomState = (nextIsAtBottom: boolean) => {
+    isAtBottomRef.current = nextIsAtBottom;
+    setIsAtBottom(nextIsAtBottom);
+
+    if (nextIsAtBottom) {
+      setHasUnreadMessages(false);
+    }
+  };
+
+  const scrollToBottom = (behavior: ScrollBehavior) => {
+    const transcript = transcriptRef.current;
+    if (!transcript) return;
+
+    transcript.scrollTo({ top: transcript.scrollHeight, behavior });
+
+    if (behavior === "auto") {
+      setBottomState(true);
+      return;
+    }
+
+    setHasUnreadMessages(false);
+  };
+
+  const handleTranscriptScroll = () => {
+    const transcript = transcriptRef.current;
+    if (!transcript) return;
+
+    const distanceFromBottom =
+      transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight;
+    setBottomState(distanceFromBottom <= BOTTOM_THRESHOLD_PX);
+  };
+
+  useEffect(() => {
+    isAtBottomRef.current = true;
+    setIsAtBottom(true);
+    setHasUnreadMessages(false);
+
+    requestAnimationFrame(() => {
+      scrollToBottom("auto");
+    });
+  }, [currentSessionId]);
+
+  useEffect(() => {
+    if (isAtBottomRef.current) {
+      requestAnimationFrame(() => {
+        scrollToBottom("auto");
+      });
+      return;
+    }
+
+    if (blocks.length > 0 || isLoading || hasPendingConfirmation) {
+      setHasUnreadMessages(true);
+    }
+  }, [blocks, isLoading, hasPendingConfirmation]);
+
+  const showScrollToBottom = !isAtBottom && blocks.length > 0;
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-brand-bg">
+      <ChatHeader mode={mode} title={getSessionTitle(state)} />
+
       <section className="relative min-h-0 flex-1 overflow-hidden">
         <div
+          ref={transcriptRef}
+          onScroll={handleTranscriptScroll}
           className={`h-full overflow-y-auto px-8 pt-8 ${
             hasPendingConfirmation ? "pb-64" : "pb-36"
           }`}
         >
           {blocks.length > 0 && (
-            <div className="mx-auto flex max-w-5xl flex-col gap-8">
+            <div className="chat-content-rail flex flex-col gap-8">
               {blocks.map((block) => (
                 <MessageBlock
                   key={block.id}
@@ -315,12 +508,35 @@ export function ChatPanel({
             </div>
           )}
           {blocks.length === 0 && isLoading && (
-            <div className="mx-auto flex max-w-5xl flex-col gap-8">
+            <div className="chat-content-rail flex flex-col gap-8">
               <ThinkingRow />
               <div ref={messagesEndRef} />
             </div>
           )}
         </div>
+
+        {blocks.length === 0 && !isLoading && (
+          <div className="chat-empty-layer pointer-events-auto absolute bottom-36 top-0 flex items-center">
+            <EmptyChat
+              workspaceName={state?.workspace.name ?? "Workspace"}
+              onPickPrompt={onInputChange}
+            />
+          </div>
+        )}
+
+        {showScrollToBottom && (
+          <div
+            className={`pointer-events-auto absolute left-1/2 z-10 -translate-x-1/2 ${
+              hasPendingConfirmation ? "bottom-80" : "bottom-40"
+            }`}
+          >
+            <ScrollToBottomButton
+              hasUnreadMessages={hasUnreadMessages}
+              isStreaming={isLoading}
+              onClick={() => scrollToBottom("smooth")}
+            />
+          </div>
+        )}
 
         {state?.pendingConfirmation && (
           <div className="chat-floating-layer pointer-events-auto absolute bottom-32">
@@ -335,7 +551,7 @@ export function ChatPanel({
           <FloatingComposer
             inputValue={inputValue}
             isLoading={isLoading}
-            mode={state?.mode ?? "plan"}
+            mode={mode}
             onCancel={onCancel}
             onInputChange={onInputChange}
             onModeChange={onModeChange}
