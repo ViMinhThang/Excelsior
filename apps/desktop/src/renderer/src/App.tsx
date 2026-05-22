@@ -19,13 +19,16 @@ export default function App() {
     workspacePath,
     state,
     settings,
-    workspaceTree,
     isInitializing,
     workspaceError,
     selectWorkspace,
     send,
     cancel,
     executeCommand,
+    createSession,
+    switchSession,
+    deleteSession,
+    renameSession,
     setMode,
     saveSettings,
     respondToConfirmation,
@@ -34,7 +37,6 @@ export default function App() {
   const [inputValue, setInputValue] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [openToolCalls, setOpenToolCalls] = useState<Record<string, boolean>>({});
-  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
   const [theme, setTheme] = useState<DesktopTheme>(getStoredTheme);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -98,14 +100,21 @@ export default function App() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden bg-brand-bg">
         <WorkspaceSidebar
-          openFolders={openFolders}
+          currentSessionId={state?.currentSessionId ?? null}
+          sessions={state?.sessions ?? []}
           workspaceName={state?.workspace?.name ?? "Workspace"}
-          workspaceTree={workspaceTree}
+          onCreateSession={() => {
+            void createSession();
+          }}
+          onDeleteSession={(sessionId) => {
+            void deleteSession(sessionId);
+          }}
           onOpenSettings={() => setShowSettings(true)}
+          onRenameSession={renameSession}
           onSelectWorkspace={selectWorkspace}
-          onToggleFolder={(path) =>
-            setOpenFolders((current) => ({ ...current, [path]: !(current[path] ?? false) }))
-          }
+          onSwitchSession={(sessionId) => {
+            void switchSession(sessionId);
+          }}
         />
 
         <ChatPanel
