@@ -9,7 +9,7 @@ import {
   createWorkspace,
   loadWorkspaces,
 } from "@excelsior/agent-host";
-import type { AgentClientState, SendOptions, AgentMode, AppSettings } from "@excelsior/core";
+import type { SendOptions, AgentMode, AppSettings } from "@excelsior/core";
 
 type WorkspaceTreeNode = {
   name: string;
