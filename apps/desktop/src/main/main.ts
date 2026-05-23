@@ -69,11 +69,11 @@ function createWindow() {
     },
     titleBarStyle: "hidden", // Sleek custom titlebar support
     titleBarOverlay: {
-      color: "#0B0F19",
-      symbolColor: "#94A3B8",
+      color: "#1e2227",
+      symbolColor: "#5c6370",
       height: 32
     },
-    backgroundColor: "#0B0F19",
+    backgroundColor: "#282c34",
   });
 
   // In development, load the Vite dev server URL
@@ -108,6 +108,34 @@ app.on("window-all-closed", () => {
       agentHost.dispose();
     }
     app.quit();
+  }
+});
+
+ipcMain.on("theme:changed", (_event, theme: string) => {
+  if (!mainWindow) return;
+
+  let color = "#1e2227"; // Default One Dark Pro bg
+  let symbolColor = "#5c6370"; // Default One Dark Pro text
+
+  if (theme === "tokyo-night") {
+    color = "#13131a";
+    symbolColor = "#565f89";
+  } else if (theme === "gruvbox") {
+    color = "#ebdbb2";
+    symbolColor = "#928374";
+  } else if (theme === "tokyo-night-light") {
+    color = "#c8c9d1";
+    symbolColor = "#9699a3";
+  }
+
+  try {
+    mainWindow.setTitleBarOverlay({
+      color,
+      symbolColor,
+      height: 32
+    });
+  } catch (err) {
+    console.error("Failed to set title bar overlay:", err);
   }
 });
 

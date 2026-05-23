@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import {
-  Bot,
   Check,
+  Compass,
+  FilePlus,
   FolderClosed,
-  MessageSquarePlus,
   Pencil,
   Search,
   Settings,
@@ -126,7 +126,9 @@ function SessionRow({ isActive, session, onRequestDelete, onRename, onSwitch }: 
 
   return (
     <div
-      className={`sidebar-session-row group ${isActive ? "sidebar-session-row-active" : ""}`}
+      className={`sidebar-session-row transition-snappy-colors ${
+        isActive ? "sidebar-session-row-active bg-brand-panel text-brand-text-strong" : ""
+      }`}
     >
       {isEditing ? (
         <input
@@ -135,7 +137,7 @@ function SessionRow({ isActive, session, onRequestDelete, onRename, onSwitch }: 
           onChange={(event) => setDraftTitle(event.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={commitRename}
-          className="sidebar-session-input"
+          className="sidebar-session-input rounded-8"
         />
       ) : (
         <button
@@ -150,7 +152,9 @@ function SessionRow({ isActive, session, onRequestDelete, onRename, onSwitch }: 
       )}
 
       <div
-        className={`sidebar-session-tools ${isEditing ? "sidebar-session-tools-visible" : ""}`}
+        className={`sidebar-session-tools ${
+          isEditing ? "sidebar-session-tools-visible" : "opacity-0 group-hover:opacity-100"
+        }`}
       >
         {isEditing ? (
           <>
@@ -158,19 +162,19 @@ function SessionRow({ isActive, session, onRequestDelete, onRename, onSwitch }: 
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={commitRename}
-              className="sidebar-session-tool"
+              className="sidebar-session-tool scale-snappy transition-snappy-colors"
               title="Save"
             >
-              <Check className="h-3.5 w-3.5" />
+              <Check className="h-3.5 w-3.5 text-emerald-400" />
             </button>
             <button
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={cancelRename}
-              className="sidebar-session-tool"
+              className="sidebar-session-tool scale-snappy transition-snappy-colors"
               title="Cancel"
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="h-3.5 w-3.5 text-brand-text-muted" />
             </button>
           </>
         ) : (
@@ -178,7 +182,7 @@ function SessionRow({ isActive, session, onRequestDelete, onRename, onSwitch }: 
             <button
               type="button"
               onClick={() => setIsEditing(true)}
-              className="sidebar-session-tool"
+              className="sidebar-session-tool scale-snappy transition-snappy-colors"
               title="Rename"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -186,7 +190,7 @@ function SessionRow({ isActive, session, onRequestDelete, onRename, onSwitch }: 
             <button
               type="button"
               onClick={() => onRequestDelete(session)}
-              className="sidebar-session-tool sidebar-session-tool-danger"
+              className="sidebar-session-tool sidebar-session-tool-danger scale-snappy transition-snappy-colors"
               title="Delete"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -228,12 +232,12 @@ function DeleteSessionDialog({
       <section
         aria-labelledby="delete-session-title"
         aria-modal="true"
-        className="confirm-dialog"
+        className="confirm-dialog animate-fade-in-snappy"
         role="dialog"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="confirm-dialog-body">
-          <div className="confirm-dialog-icon" aria-hidden="true">
+          <div className="confirm-dialog-icon rounded-8" aria-hidden="true">
             <TriangleAlert className="h-5 w-5" />
           </div>
           <div className="min-w-0">
@@ -252,14 +256,14 @@ function DeleteSessionDialog({
             ref={cancelButtonRef}
             type="button"
             onClick={onCancel}
-            className="confirm-action confirm-action-secondary"
+            className="confirm-action confirm-action-secondary scale-snappy transition-snappy-colors"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={() => onConfirm(session.id)}
-            className="confirm-action confirm-action-danger"
+            className="confirm-action confirm-action-danger scale-snappy transition-snappy-colors"
           >
             Delete
           </button>
@@ -311,18 +315,18 @@ export function WorkspaceSidebar({
   };
 
   return (
-    <aside className="workspace-sidebar flex w-80 shrink-0 flex-col overflow-hidden border-r border-brand-border bg-brand-surface select-none">
+    <aside className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-brand-border bg-brand-surface select-none">
       <div className="workspace-sidebar-body">
         <div className="workspace-sidebar-brand">
-          <Bot className="h-5 w-5 shrink-0 text-brand-accent" />
-          <span className="truncate text-base font-semibold text-brand-text-strong">
+          <Compass className="h-5 w-5 shrink-0 text-brand-accent" />
+          <span className="truncate text-sm font-semibold text-brand-text-strong">
             {workspaceName}
           </span>
         </div>
 
         <nav className="workspace-sidebar-actions" aria-label="Workspace actions">
-          <button type="button" onClick={onCreateSession} className="sidebar-nav-action">
-            <MessageSquarePlus className="h-4.5 w-4.5 shrink-0" />
+          <button type="button" onClick={onCreateSession} className="sidebar-nav-action scale-snappy transition-snappy-colors">
+            <FilePlus className="h-4 w-4 shrink-0" />
             New chat
           </button>
           <button
@@ -335,19 +339,19 @@ export function WorkspaceSidebar({
                 setIsSearching(true);
               }
             }}
-            className="sidebar-nav-action"
+            className="sidebar-nav-action scale-snappy transition-snappy-colors"
           >
-            <Search className="h-4.5 w-4.5 shrink-0" />
+            <Search className="h-4 w-4 shrink-0" />
             Search chats
           </button>
-          <button type="button" onClick={onSelectWorkspace} className="sidebar-nav-action">
-            <FolderClosed className="h-4.5 w-4.5 shrink-0" />
+          <button type="button" onClick={onSelectWorkspace} className="sidebar-nav-action scale-snappy transition-snappy-colors">
+            <FolderClosed className="h-4 w-4 shrink-0" />
             Switch workspace
           </button>
         </nav>
 
         {isSearching && (
-          <label className="sidebar-search-field">
+          <label className="sidebar-search-field animate-fade-in-snappy">
             <Search className="h-4 w-4 shrink-0 text-brand-text-muted" />
             <input
               ref={searchInputRef}
@@ -365,7 +369,7 @@ export function WorkspaceSidebar({
             <button
               type="button"
               onClick={closeSearch}
-              className="sidebar-search-close"
+              className="sidebar-search-close scale-snappy transition-snappy-colors"
               aria-label="Close search"
               title="Close search"
             >
@@ -407,7 +411,7 @@ export function WorkspaceSidebar({
       </div>
 
       <div className="workspace-sidebar-footer">
-        <button type="button" onClick={onOpenSettings} className="sidebar-nav-action">
+        <button type="button" onClick={onOpenSettings} className="sidebar-nav-action scale-snappy transition-snappy-colors">
           <Settings className="h-4 w-4" />
           Settings
         </button>
