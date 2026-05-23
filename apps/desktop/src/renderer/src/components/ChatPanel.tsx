@@ -7,13 +7,14 @@ import {
   ChevronDown,
   ChevronRight,
   Code,
-  Cpu,
+  Compass,
   FileSearch,
   GitPullRequest,
   Send,
   Square,
   Terminal,
 } from "lucide-react";
+import { MarkdownMessage } from "./MarkdownMessage.tsx";
 
 type ChatPanelProps = {
   inputValue: string;
@@ -74,7 +75,7 @@ function getSessionTitle(state: AgentClientState | null): string {
 function StatusDot({ isLoading }: { isLoading: boolean }) {
   return (
     <span
-      className={`h-2 w-2 rounded-full ${isLoading ? "bg-brand-accent" : "bg-emerald-400"}`}
+      className={`h-2 w-2 rounded-full ${isLoading ? "bg-brand-accent animate-glow-pulse" : "bg-emerald-400"}`}
       aria-hidden="true"
     />
   );
@@ -94,18 +95,18 @@ function PlanToggle({
       type="button"
       aria-pressed={isPlanMode}
       onClick={() => onModeChange(isPlanMode ? "act" : "plan")}
-      className="flex h-7 items-center gap-2 rounded-full px-1.5 text-[11px] font-medium text-brand-text-muted hover:text-brand-text-strong"
+      className="flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[10px] font-semibold text-brand-text-muted hover:text-brand-text-strong scale-snappy transition-snappy-colors"
       title={isPlanMode ? "Disable plan mode" : "Enable plan mode"}
     >
       <span
-        className={`flex h-4 w-7 items-center rounded-full p-0.5 ${
-          isPlanMode ? "bg-brand-accent" : "bg-brand-panel"
-        }`}
+        className={`relative flex h-4.5 w-8 items-center rounded-full transition-colors duration-300 ${isPlanMode ? "bg-brand-accent" : "bg-brand-panel"
+          }`}
       >
         <span
-          className={`h-3 w-3 rounded-full bg-brand-accent-contrast ${
-            isPlanMode ? "translate-x-3" : "translate-x-0 bg-brand-text-muted"
-          }`}
+          className={`absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full transition-snappy shadow-sm ${isPlanMode
+            ? "translate-x-3.5 bg-brand-accent-contrast"
+            : "translate-x-0 bg-brand-text-muted"
+            }`}
         />
       </span>
       Plan
@@ -115,8 +116,8 @@ function PlanToggle({
 
 function UserBubble({ block }: { block: Extract<ProjectedBlock, { type: "user" }> }) {
   return (
-    <div className="flex justify-end">
-      <div className="user-message-bubble">
+    <div className="flex justify-end animate-fade-in-snappy">
+      <div className="user-message-bubble rounded-12">
         {block.content}
       </div>
     </div>
@@ -125,12 +126,12 @@ function UserBubble({ block }: { block: Extract<ProjectedBlock, { type: "user" }
 
 function AssistantBubble({ block }: { block: Extract<ProjectedBlock, { type: "assistant" }> }) {
   return (
-    <div className="flex gap-3 pr-14">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-border bg-brand-surface text-brand-accent">
-        <Cpu className="h-4 w-4" />
+    <div className="flex gap-3 pr-14 animate-fade-in-snappy">
+      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-surface text-brand-accent shadow-sm">
+        <Compass className="h-4 w-4" />
       </div>
-      <div className="max-w-[82ch] whitespace-pre-wrap break-words text-sm leading-6 text-brand-text-light select-text">
-        {block.content}
+      <div className="flex-1 min-w-0 max-w-[82ch] select-text">
+        <MarkdownMessage block={block} />
       </div>
     </div>
   );
@@ -143,23 +144,23 @@ function ToolBubble({ block, isOpen, onToggle }: {
 }) {
   return (
     <div className="flex gap-3 pr-14">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-border bg-brand-surface text-brand-text-muted">
+      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-surface text-brand-text-muted">
         <Code className="h-4 w-4" />
       </div>
 
-      <div className="min-w-0 flex-1 overflow-hidden rounded-lg border border-brand-border bg-brand-surface">
+      <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-brand-border bg-brand-surface">
         <button
           type="button"
           onClick={() => onToggle(block.id)}
-          className="flex h-12 w-full items-center justify-between gap-3 px-4 text-left text-xs text-brand-text-light hover:bg-brand-panel"
+          className="flex h-11 w-full items-center justify-between gap-3 px-4 text-left text-xs text-brand-text-light hover:bg-brand-panel transition-snappy-colors"
         >
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 items-center gap-2.5">
             <Terminal className="h-4 w-4 shrink-0 text-brand-accent" />
-            <span className="truncate font-mono">{block.toolName}</span>
+            <span className="truncate font-mono text-[12px]">{block.toolName}</span>
           </span>
           <span className="flex shrink-0 items-center gap-2 text-brand-text-muted">
             {block.status}
-            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </span>
         </button>
 
@@ -177,14 +178,14 @@ function ToolBubble({ block, isOpen, onToggle }: {
 function SubAgentBubble({ block }: { block: Extract<ProjectedBlock, { type: "sub-agent" }> }) {
   return (
     <div className="flex gap-3 pr-14">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-border bg-brand-surface text-brand-text-muted">
-        <Cpu className="h-4 w-4" />
+      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-surface text-brand-text-muted">
+        <Compass className="h-4 w-4" />
       </div>
 
-      <div className="min-w-0 flex-1 rounded-lg border border-brand-border bg-brand-surface p-4">
+      <div className="min-w-0 flex-1 rounded-xl border border-brand-border bg-brand-surface p-4">
         <div className="mb-2 flex items-center gap-2 text-xs text-brand-text-muted">
           <StatusDot isLoading={block.state.status === "running"} />
-          <span className="truncate">{block.role}</span>
+          <span className="truncate font-medium">{block.role}</span>
           <span>{block.state.status}</span>
         </div>
         <p className="text-sm leading-6 text-brand-text-light">
@@ -209,13 +210,17 @@ function MessageBlock({ block, isToolOpen, onToggleToolCall }: MessageBlockProps
 
 function ThinkingRow() {
   return (
-    <div className="flex gap-3 pr-14">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-border bg-brand-surface text-brand-accent">
-        <Cpu className="h-4 w-4" />
+    <div className="flex gap-3 pr-14 animate-fade-in-snappy">
+      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-surface text-brand-accent shadow-sm">
+        <Compass className="h-4 w-4" />
       </div>
-      <div className="flex h-10 items-center gap-2 rounded-lg border border-brand-border bg-brand-surface px-3 text-xs text-brand-text-muted">
-        <span className="h-2 w-2 rounded-full bg-brand-accent" />
-        Thinking
+      <div className="flex h-10 items-center gap-3 rounded-xl border border-brand-border/60 bg-brand-surface/80 px-4 text-xs text-brand-text-muted shadow-sm select-none">
+        <div className="flex gap-1.5 items-center h-full pt-1">
+          <span className="thinking-dot h-2.5 w-2.5 rounded-full bg-brand-accent" />
+          <span className="thinking-dot h-2.5 w-2.5 rounded-full bg-brand-accent" />
+          <span className="thinking-dot h-2.5 w-2.5 rounded-full bg-brand-accent" />
+        </div>
+        <span className="font-medium tracking-wide">Thinking...</span>
       </div>
     </div>
   );
@@ -223,26 +228,26 @@ function ThinkingRow() {
 
 function PendingConfirmation({ confirmation, onRespond }: PendingConfirmationProps) {
   return (
-    <div className="flex w-full items-start justify-between gap-5 rounded-lg border border-amber-400/30 bg-brand-surface/95 p-5 shadow-xl backdrop-blur">
+    <div className="flex w-full items-start justify-between gap-5 rounded-xl border border-brand-accent/20 bg-brand-surface/95 p-5 shadow-xl backdrop-blur animate-fade-in-snappy">
       <div className="flex min-w-0 gap-3">
-        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-brand-accent" />
         <div className="min-w-0">
-          <p className="text-sm font-medium text-brand-text-strong">{confirmation.toolName}</p>
-          <pre className="mt-2 max-h-32 select-text">{confirmation.args}</pre>
+          <p className="text-sm font-semibold text-brand-text-strong">{confirmation.toolName}</p>
+          <pre className="mt-2 max-h-32 select-text text-brand-text-light">{confirmation.args}</pre>
         </div>
       </div>
       <div className="flex shrink-0 gap-2">
         <button
           type="button"
           onClick={() => onRespond(confirmation.callId, false)}
-          className="h-9 rounded-md border border-brand-border px-4 text-xs font-medium text-brand-text-muted hover:bg-brand-panel hover:text-brand-text-strong"
+          className="h-9 rounded-xl border border-brand-border px-4 text-xs font-medium text-brand-text-muted hover:bg-brand-panel hover:text-brand-text-strong scale-snappy transition-snappy-colors"
         >
           Deny
         </button>
         <button
           type="button"
           onClick={() => onRespond(confirmation.callId, true)}
-          className="h-9 rounded-md bg-brand-accent px-4 text-xs font-semibold text-brand-accent-contrast"
+          className="h-9 rounded-xl bg-brand-accent px-4 text-xs font-semibold text-brand-accent-contrast hover:bg-brand-accent-hover scale-snappy transition-snappy-colors"
         >
           Approve
         </button>
@@ -272,31 +277,13 @@ function ScrollToBottomButton({
       <button
         type="button"
         onClick={onClick}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-border bg-brand-composer text-brand-text-light shadow-xl backdrop-blur hover:border-brand-accent hover:text-brand-text-strong"
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-border bg-brand-composer text-brand-text-light shadow-xl backdrop-blur hover:border-brand-accent hover:text-brand-text-strong transition-snappy-colors"
         title="Scroll to bottom"
         aria-label="Scroll to bottom"
       >
         <ArrowDown className="h-4 w-4" />
       </button>
     </div>
-  );
-}
-
-function ChatHeader({
-  mode,
-  title,
-}: {
-  mode: AgentMode;
-  title: string;
-}) {
-  return (
-    <header className="chat-header flex h-16 w-full shrink-0 items-center justify-between gap-4 border-b border-brand-border">
-      <h1 className="min-w-0 truncate text-sm font-semibold text-brand-text-strong">{title}</h1>
-
-      <div className="shrink-0 rounded-md border border-brand-border bg-brand-surface px-2.5 py-1 text-[11px] font-medium text-brand-text-light">
-        {mode === "plan" ? "Plan" : "Act"}
-      </div>
-    </header>
   );
 }
 
@@ -308,30 +295,36 @@ function EmptyChat({
   onPickPrompt: (prompt: string) => void;
 }) {
   return (
-    <div className="w-full pb-8">
-      <div className="flex items-center gap-5">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-brand-border bg-brand-surface text-brand-accent shadow-lg">
-          <Cpu className="h-5 w-5" />
+    <div className="w-full pb-8 animate-fade-in-snappy">
+      <div className="flex items-center gap-6 mb-5">
+        <div className="starter-header-icon">
+          <Compass className="h-6 w-6" />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-brand-text-strong">{workspaceName}</p>
-          <p className="mt-1 text-sm text-brand-text-light">What should we work on?</p>
+          <p className="font-display text-2xl font-bold tracking-tight text-brand-text-strong">
+            {workspaceName}
+          </p>
+          <p className="mt-1 text-sm font-medium text-brand-text-light">What should we work on?</p>
         </div>
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
+      <div className="mt-12 grid gap-8 md:grid-cols-3">
         {STARTER_PROMPTS.map(({ icon: Icon, prompt, title }) => (
           <button
             key={title}
             type="button"
             onClick={() => onPickPrompt(prompt)}
-            className="group flex min-h-36 flex-col items-start rounded-lg border border-brand-border bg-brand-surface p-5 text-left hover:border-brand-accent hover:bg-brand-panel"
+            className="starter-prompt-card"
           >
-            <Icon className="h-5 w-5 text-brand-accent" />
-            <span className="mt-auto pt-7 text-sm font-semibold text-brand-text-strong">
+            <div className="starter-prompt-icon-wrapper">
+              <Icon className="h-5 w-5" />
+            </div>
+            <span className="starter-prompt-title">
               {title}
             </span>
-            <span className="mt-2 text-xs leading-5 text-brand-text-light">{prompt}</span>
+            <span className="starter-prompt-description">
+              {prompt}
+            </span>
           </button>
         ))}
       </div>
@@ -363,38 +356,56 @@ function FloatingComposer({
     }
   };
 
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    textarea.style.height = "auto";
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, 24), 120);
+    textarea.style.height = `${newHeight}px`;
+
+    if (textarea.scrollHeight > 120) {
+      textarea.style.overflowY = "auto";
+    } else {
+      textarea.style.overflowY = "hidden";
+    }
+  }, [inputValue]);
+
   return (
-    <div className="w-full rounded-lg border border-brand-border bg-brand-composer p-2.5 shadow-2xl backdrop-blur focus-within:border-brand-accent">
+    <div className="w-full max-w-[calc(100%-8px)] mx-auto rounded-14 composer-panel select-none">
       <textarea
+        ref={textareaRef}
         value={inputValue}
         onChange={(event) => onInputChange(event.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Ask or type /command"
-        className="h-16 w-full resize-none border-0 bg-transparent px-2 py-1.5 text-sm leading-6 text-brand-text-strong outline-none placeholder:text-brand-text-muted select-text"
+        placeholder="Ask or type /command..."
+        className="w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-6 text-brand-text-strong outline-none placeholder:text-brand-text-muted placeholder:truncate select-text transition-[height] duration-150 ease-out"
       />
-      <div className="mt-1 flex items-center justify-between gap-3">
+      <div className="mt-2 pt-2 px-1 flex items-center justify-between gap-3 border-t border-brand-border/10">
         <PlanToggle mode={mode} onModeChange={onModeChange} />
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1.5">
           {isLoading && (
             <button
               type="button"
               onClick={onCancel}
-              className="flex h-8 w-8 items-center justify-center rounded-md border border-red-400/30 bg-red-500/10 text-red-200"
+              className="flex h-9 min-w-9 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 text-red-400 hover:bg-red-500/20 hover:border-red-500/40 scale-snappy transition-snappy-colors"
               title="Cancel"
               aria-label="Cancel"
             >
-              <Square className="h-3.5 w-3.5" />
+              <Square className="h-3.5 w-3.5 fill-red-400" />
             </button>
           )}
           <button
             type="button"
             onClick={onSend}
             disabled={!inputValue.trim() || isLoading}
-            className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-accent text-brand-accent-contrast disabled:opacity-40"
+            className="flex h-9 min-w-9 items-center justify-center rounded-xl bg-brand-accent px-3.5 text-brand-accent-contrast hover:bg-brand-accent-hover disabled:opacity-40 disabled:pointer-events-none shadow-sm scale-snappy transition-snappy-colors"
             title="Send"
             aria-label="Send"
           >
-            <Send className="h-3.5 w-3.5" />
+            <Send className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -483,18 +494,15 @@ export function ChatPanel({
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-brand-bg">
-      <ChatHeader mode={mode} title={getSessionTitle(state)} />
-
       <section className="relative min-h-0 flex-1 overflow-hidden">
         <div
           ref={transcriptRef}
           onScroll={handleTranscriptScroll}
-          className={`h-full overflow-y-auto px-8 pt-8 ${
-            hasPendingConfirmation ? "pb-64" : "pb-36"
-          }`}
+          className={`h-full overflow-y-auto px-8 pt-6 ${hasPendingConfirmation ? "pb-80" : "pb-56"
+            }`}
         >
           {blocks.length > 0 && (
-            <div className="chat-content-rail flex flex-col gap-8">
+            <div className="chat-content-rail flex flex-col gap-7">
               {blocks.map((block) => (
                 <MessageBlock
                   key={block.id}
@@ -508,32 +516,30 @@ export function ChatPanel({
             </div>
           )}
           {blocks.length === 0 && isLoading && (
-            <div className="chat-content-rail flex flex-col gap-8">
+            <div className="chat-content-rail flex flex-col gap-7">
               <ThinkingRow />
               <div ref={messagesEndRef} />
             </div>
           )}
+          {blocks.length === 0 && !isLoading && (
+            <div className="chat-content-rail flex flex-col justify-center min-h-[calc(100%-20px)] py-6">
+              <EmptyChat
+                workspaceName={state?.workspace.name ?? "Workspace"}
+                onPickPrompt={onInputChange}
+              />
+            </div>
+          )}
         </div>
-
-        {blocks.length === 0 && !isLoading && (
-          <div className="chat-empty-layer pointer-events-auto absolute bottom-36 top-0 flex items-center">
-            <EmptyChat
-              workspaceName={state?.workspace.name ?? "Workspace"}
-              onPickPrompt={onInputChange}
-            />
-          </div>
-        )}
 
         {showScrollToBottom && (
           <div
-            className={`pointer-events-auto absolute left-1/2 z-10 -translate-x-1/2 ${
-              hasPendingConfirmation ? "bottom-80" : "bottom-40"
-            }`}
+            className={`pointer-events-auto absolute left-1/2 z-10 -translate-x-1/2 ${hasPendingConfirmation ? "bottom-80" : "bottom-40"
+              }`}
           >
             <ScrollToBottomButton
               hasUnreadMessages={hasUnreadMessages}
               isStreaming={isLoading}
-              onClick={() => scrollToBottom("smooth")}
+              onClick={() => scrollToBottom("auto")}
             />
           </div>
         )}

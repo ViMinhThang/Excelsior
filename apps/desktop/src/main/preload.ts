@@ -51,6 +51,7 @@ const excelsiorApi = {
   selectWorkspaceFolder: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-workspace-folder"),
   initializeWorkspace: (path: string): Promise<AgentClientState> => ipcRenderer.invoke("host:initialize-workspace", path),
   getWorkspaceTree: (): Promise<WorkspaceTreeNode[]> => ipcRenderer.invoke("workspace:get-tree"),
+  changeTheme: (theme: string) => ipcRenderer.send("theme:changed", theme),
 };
 
 contextBridge.exposeInMainWorld("api", excelsiorApi);

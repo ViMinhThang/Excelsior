@@ -8,10 +8,17 @@ import type { DesktopTheme } from "./components/types.ts";
 import { useAgentHost } from "./hooks/useAgentHost.ts";
 
 function getStoredTheme(): DesktopTheme {
-  const storedTheme = localStorage.getItem("excelsior-theme");
+  const storedTheme = localStorage.getItem("excelsior-theme") as DesktopTheme;
 
-  if (storedTheme === "catppuccin-latte") return "catppuccin-latte";
-  return "catppuccin-mocha";
+  if (
+    storedTheme === "one-dark-pro" ||
+    storedTheme === "tokyo-night" ||
+    storedTheme === "gruvbox" ||
+    storedTheme === "tokyo-night-light"
+  ) {
+    return storedTheme;
+  }
+  return "one-dark-pro";
 }
 
 export default function App() {
@@ -41,6 +48,10 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
+
+    if (window.api && typeof window.api.changeTheme === "function") {
+      window.api.changeTheme(theme);
+    }
 
     return () => {
       delete document.documentElement.dataset.theme;
@@ -85,7 +96,7 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-brand-bg text-brand-text-strong">
       <div className="titlebar select-none">
-        <span className="titlebar-title truncate font-semibold">
+        <span className="titlebar-title truncate">
           Excelsior / {state?.workspace?.name ?? "Workspace"}
         </span>
       </div>
