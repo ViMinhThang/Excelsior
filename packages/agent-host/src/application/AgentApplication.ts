@@ -1,10 +1,8 @@
 import type {
-  AgentMessage,
   AgentMode,
   CommandResult,
   Session,
 } from "@excelsior/core";
-import { ChatService } from "./chatService.js";
 import { SessionManager } from "../sessionManager.js";
 import { createSubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
 import type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
@@ -14,7 +12,7 @@ import { ProjectionService } from "./projection/ProjectionService.js";
 import { RevertController } from "./revert/RevertController.js";
 import { SessionController } from "./sessions/SessionController.js";
 import { AgentStateStore } from "./state/AgentStateStore.js";
-import { TurnController } from "./turns/TurnController.js";
+import { TurnLifecycle } from "./turns/TurnLifecycle.js";
 import {
   defaultRunRecorder,
   type RunRecorder,
@@ -23,7 +21,6 @@ import type {
   AgentApplicationOptions,
   AgentSessionService,
   ChatSessionState,
-  ChatTurnService,
   SendOptions,
 } from "./types.js";
 
@@ -31,7 +28,7 @@ export class AgentApplication {
   private readonly state: AgentStateStore;
   private readonly projection: ProjectionService;
   private readonly sessions: SessionController;
-  private readonly turns: TurnController;
+  private readonly turns: TurnLifecycle;
   private readonly revert: RevertController;
   private readonly subAgentEvents: SubAgentEventSink;
   private readonly fileCheckpoint: FileCheckpoint;
@@ -41,7 +38,6 @@ export class AgentApplication {
   private disposed = false;
 
   constructor(workspaceId?: string, options?: AgentApplicationOptions) {
-    const service = options?.chatService ?? new ChatService();
     this.recorder = options?.recorder ?? defaultRunRecorder;
     const sessionManager =
       options?.sessionManager ?? new SessionManager(workspaceId);
@@ -55,9 +51,15 @@ export class AgentApplication {
     );
 
     let sessions!: SessionController;
-    this.turns = new TurnController(service, this.state, (events) =>
-      sessions.appendFinalEvents(events),
-    );
+    this.turns = new TurnLifecycle({
+      state: this.state,
+      projection: this.projection,
+      recorder: this.recorder,
+      subAgentEvents: this.subAgentEvents,
+      fileCheckpoint: this.fileCheckpoint,
+      appendFinalEvents: (events) => sessions.appendFinalEvents(events),
+      dependencies: options?.turnLifecycle,
+    });
     sessions = new SessionController(
       sessionManager,
       this.recorder,
@@ -95,17 +97,11 @@ export class AgentApplication {
     // set the session name as the user's first prompt of the session
     const displayContent = options?.displayContent ?? trimmed;
     const sessionId = this.sessions.ensureSession(trimmed, displayContent);
-    // take the current history to build the context for LLM
-    const history = this.buildAIHistory();
 
-    this.turns.startTurn(trimmed, {
-      history,
+    this.turns.startUserTurn({
+      content: trimmed,
       sessionId,
-      workspaceId: this.sessions.workspaceId,
       workspaceRoot: this.sessions.workspaceRoot,
-      subAgentEvents: this.subAgentEvents,
-      fileCheckpoint: this.fileCheckpoint,
-      recorder: this.recorder,
       displayContent: options?.displayContent,
       silent: options?.silent,
       mode: this.state.mode,
@@ -174,10 +170,6 @@ export class AgentApplication {
     this.state.dispose();
   }
 
-  private buildAIHistory(): AgentMessage[] {
-    return this.projection.project(this.state.getProjectionInput()).aiHistory;
-  }
-
   private scheduleStateNotify(): void {
     if (this.notifyTimer !== null) return;
     this.notifyTimer = setTimeout(() => {
@@ -191,5 +183,4 @@ export type {
   AgentApplicationOptions,
   AgentSessionService,
   ChatSessionState,
-  ChatTurnService,
 };

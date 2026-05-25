@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { ProjectionService } from "@excelsior/agent-host/testing/application";
+import { ProjectionPolicy } from "@excelsior/agent-host/testing/application";
 import type { AnyAgentEvent } from "@excelsior/agent-host/testing/runtime";
 import { makeChildRun, makeEvent } from "./projection/helpers.js";
 
-describe("ProjectionService policy", () => {
+describe("ProjectionPolicy", () => {
   it("lets live events win over persisted duplicates", () => {
-    const service = new ProjectionService();
+    const policy = new ProjectionPolicy();
     const persisted = makeEvent({
       id: "evt_same",
       type: "text-delta",
@@ -17,7 +17,7 @@ describe("ProjectionService policy", () => {
       data: { delta: "live" },
     });
 
-    const result = service.project({
+    const result = policy.project({
       liveEvents: [live],
       persistedEvents: [persisted],
       childRuns: new Map(),
@@ -29,8 +29,8 @@ describe("ProjectionService policy", () => {
   });
 
   it("does not include child run events in restored parent AI history", () => {
-    const service = new ProjectionService();
-    const result = service.project({
+    const policy = new ProjectionPolicy();
+    const result = policy.project({
       liveEvents: [],
       persistedEvents: [
         makeEvent({
@@ -53,7 +53,7 @@ describe("ProjectionService policy", () => {
   });
 
   it("rebuilds restored sub-agent rows from persisted child events", () => {
-    const service = new ProjectionService();
+    const policy = new ProjectionPolicy();
     const parentRunId = "run_parent";
     const childRunId = "run_child";
     const events: AnyAgentEvent[] = [
@@ -104,7 +104,7 @@ describe("ProjectionService policy", () => {
       }),
     ];
 
-    const { displayBlocks: blocks } = service.project({
+    const { displayBlocks: blocks } = policy.project({
       liveEvents: [],
       persistedEvents: events,
       childRuns: new Map(),
@@ -120,7 +120,7 @@ describe("ProjectionService policy", () => {
   });
 
   it("prefers a live child run snapshot over persisted child events", () => {
-    const service = new ProjectionService();
+    const policy = new ProjectionPolicy();
     const parentRunId = "run_parent";
     const childRunId = "run_child";
     const parentEvents: AnyAgentEvent[] = [
@@ -154,7 +154,7 @@ describe("ProjectionService policy", () => {
       data: { delta: "live child" },
     });
 
-    const { displayBlocks: blocks } = service.project({
+    const { displayBlocks: blocks } = policy.project({
       liveEvents: [],
       persistedEvents: [...parentEvents, persistedChild],
       childRuns: new Map([[childRunId, makeChildRun([liveChild])]]),

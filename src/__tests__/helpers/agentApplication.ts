@@ -1,11 +1,12 @@
 import { vi } from "vitest";
 import type {
   AgentSessionService,
-  ChatTurnService,
+  TurnLifecycleDependencies,
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
   type AgentEventDataMap,
+  type RunSessionConfig,
 } from "@excelsior/agent-host/testing/runtime";
 import type { Session } from "@excelsior/agent-host/testing/session";
 import type { RunHandle } from "@excelsior/run-runtime";
@@ -75,19 +76,20 @@ export function createPendingRunHandle(
   };
 }
 
-export function createFakeChatService(
-  onRun?: (run: AgentRun) => void,
-): ChatTurnService & { submitUserTurn: ReturnType<typeof vi.fn> } {
-  const submitUserTurn = vi.fn((_content, options) => {
-    const run = new AgentRun(options.sessionId);
-    onRun?.(run);
+export function createFakeTurnLifecycle(
+  onRun?: (run: AgentRun, config: RunSessionConfig) => void,
+): TurnLifecycleDependencies & { createRunSession: ReturnType<typeof vi.fn> } {
+  const createRunSession = vi.fn((config: RunSessionConfig) => {
+    const sessionId = config.sessionId ?? "ses_test";
+    const run = new AgentRun(sessionId);
+    onRun?.(run, config);
     return {
       run,
       childRuns: new Map(),
       handle: createPendingRunHandle(),
-      sessionId: options.sessionId,
+      sessionId,
     };
   });
 
-  return { submitUserTurn };
+  return { createRunSession };
 }
