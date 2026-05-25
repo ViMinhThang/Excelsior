@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  createFakeChatService,
   createFakeSessionManager,
   createPendingRunHandle,
+  createFakeTurnLifecycle,
 } from "./helpers/agentApplication.js";
 
 describe("test helper fixtures", () => {
@@ -24,18 +24,14 @@ describe("test helper fixtures", () => {
     expect(manager.listSessions()).toEqual([]);
   });
 
-  it("creates fake chat service turns with pending run handles", () => {
-    const service = createFakeChatService();
-    const result = service.submitUserTurn("hello", {
-      history: { current: [] },
+  it("creates fake turn lifecycle run sessions with pending run handles", () => {
+    const lifecycle = createFakeTurnLifecycle();
+    const result = lifecycle.createRunSession({
+      messages: [{ role: "user", content: "hello" }],
+      createAgent: () => ({
+        stream: async () => ({ fullStream: [] }),
+      }),
       sessionId: "ses_test",
-      workspaceId: "ws_test",
-      workspaceRoot: "/tmp/workspace",
-      subAgentEvents: {
-        emit: () => {},
-        on: () => () => {},
-      },
-      mode: "plan",
     });
 
     expect(result.run.sessionId).toBe("ses_test");

@@ -1,9 +1,7 @@
 import { createContext, useContext, useMemo } from "react";
 import type { ReactNode } from "react";
-import {
-  getDefaultAgentHost,
-  type AgentHost,
-} from "@excelsior/agent-host";
+import type { AgentHost } from "@excelsior/client";
+import { getDefaultAgentHost } from "@excelsior/agent-host";
 
 const AgentHostContext = createContext<AgentHost | null>(null);
 

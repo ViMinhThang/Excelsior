@@ -7,7 +7,23 @@ import type {
   CommandResult,
   SendOptions,
   Session,
-} from "@excelsior/core";
+} from "@excelsior/client";
+import {
+  approveAllHostConfirmations,
+  cancelHostTurn,
+  clearHostMessages,
+  createHostSession,
+  deleteHostSession,
+  executeHostCommand,
+  renameHostSession,
+  respondToHostConfirmation,
+  revertLastHostTurn,
+  saveHostSettings,
+  sendHostMessage,
+  setHostMode,
+  switchHostSession,
+  toggleHostMode,
+} from "@excelsior/client";
 import type { ExcelsiorApi } from "../../../main/preload";
 import type { WorkspaceTreeNode } from "../../../main/preload";
 
@@ -85,14 +101,12 @@ export function useAgentHost() {
         const store = storeRef.current;
         return store ? store.subscribe(cb) : () => {};
       },
-      // storeRef is stable per workspacePath, re-subscribe on path change
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      // Re-subscribe when the workspace effect replaces storeRef.
       [workspacePath],
     ),
     useCallback(() => storeRef.current?.getSnapshot() ?? null, [workspacePath]),
   );
 
-  // Workspace actions
   const selectWorkspace = useCallback(async () => {
     setIsInitializing(true);
     setWorkspaceError(null);
@@ -107,13 +121,6 @@ export function useAgentHost() {
       if (folderPath) {
         setWorkspacePath(folderPath);
         await window.api.initializeWorkspace(folderPath);
-        // The IPC store subscription will push further state changes.
-        // For the initial state after workspace init, we set it directly
-        // since the subscribe may not fire synchronously.
-        const store = storeRef.current;
-        if (store) {
-          // store.init() is already called in the effect above
-        }
         setWorkspaceTree(await window.api.getWorkspaceTree());
       }
     } catch (err) {
@@ -126,98 +133,82 @@ export function useAgentHost() {
     }
   }, []);
 
-  // Send turn
   const send = useCallback((content: string, options?: SendOptions) => {
-    void window.api.dispatch({ type: "send", content, options });
+    void sendHostMessage(window.api, content, options);
   }, []);
 
-  // Cancel turn
   const cancel = useCallback(() => {
-    void window.api.dispatch({ type: "cancel" });
+    void cancelHostTurn(window.api);
   }, []);
 
-  // Command executor
   const executeCommand = useCallback(
-    async (input: string): Promise<CommandResult> => {
-      const result = await window.api.dispatch({ type: "execute-command", input });
-      return result.type === "command-result" ? result.result : { handled: false };
-    },
+    (input: string): Promise<CommandResult> =>
+      executeHostCommand(window.api, input),
     [],
   );
 
-  // Session actions — no manual getState() after mutation,
-  // the IPC push subscription updates the store.
   const createSession = useCallback(
     async (title?: string): Promise<Session> => {
-      const result = await window.api.dispatch({ type: "create-session", title });
-      if (result.type !== "session") {
+      const session = await createHostSession(window.api, title);
+      if (!session) {
         throw new Error("Host did not return a session.");
       }
-      return result.session;
+      return session;
     },
     [],
   );
 
   const switchSession = useCallback(async (sessionId: string): Promise<void> => {
-    await window.api.dispatch({ type: "switch-session", sessionId });
-    // State is updated via host:state-changed subscription
+    await switchHostSession(window.api, sessionId);
   }, []);
 
   const deleteSession = useCallback(async (sessionId: string): Promise<void> => {
-    await window.api.dispatch({ type: "delete-session", sessionId });
-    // State is updated via host:state-changed subscription
+    await deleteHostSession(window.api, sessionId);
   }, []);
 
   const renameSession = useCallback(
     (sessionId: string, title: string) => {
-      void window.api.dispatch({ type: "rename-session", sessionId, title });
+      void renameHostSession(window.api, sessionId, title);
     },
     [],
   );
 
-  // Mode settings
   const toggleMode = useCallback(async () => {
-    const result = await window.api.dispatch({ type: "toggle-mode" });
-    // State is updated via host:state-changed subscription
-    return result.type === "mode" ? result.mode : undefined;
+    return toggleHostMode(window.api);
   }, []);
 
   const setMode = useCallback(async (mode: AgentMode) => {
-    await window.api.dispatch({ type: "set-mode", mode });
-    // State is updated via host:state-changed subscription
+    await setHostMode(window.api, mode);
   }, []);
 
-  // Settings
   const saveSettings = useCallback(
     (newSettings: Partial<AppSettings>) => {
-      void window.api.dispatch({ type: "save-settings", settings: newSettings })
+      void saveHostSettings(window.api, newSettings)
         .then(() => window.api.getCatalog())
         .then((catalog) => setSettings(catalog.settings));
     },
     [],
   );
 
-  // Confirmations
   const respondToConfirmation = useCallback(
     (callId: string, approved: boolean) => {
-      void window.api.dispatch({ type: "respond-to-confirmation", callId, approved });
+      void respondToHostConfirmation(window.api, callId, approved);
     },
     [],
   );
 
   const approveAllConfirmations = useCallback(() => {
-    void window.api.dispatch({ type: "approve-all-confirmations" });
+    void approveAllHostConfirmations(window.api);
   }, []);
 
   const clearMessages = useCallback(() => {
-    void window.api.dispatch({ type: "clear-messages" });
+    void clearHostMessages(window.api);
   }, []);
 
-  const revertLastTurn = useCallback(async (): Promise<CommandResult> => {
-    const result = await window.api.dispatch({ type: "revert-last-turn" });
-    return result.type === "command-result" ? result.result : { handled: false };
-    // State is updated via host:state-changed subscription
-  }, []);
+  const revertLastTurn = useCallback(
+    (): Promise<CommandResult> => revertLastHostTurn(window.api),
+    [],
+  );
 
   return {
     workspacePath,

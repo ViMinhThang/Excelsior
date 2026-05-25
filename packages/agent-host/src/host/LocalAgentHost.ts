@@ -1,9 +1,13 @@
 import type {
   AgentClientState,
+  AgentHost,
+  AgentHostCatalog,
+  AgentHostDispatchResult,
+  AgentHostIntent,
   AgentMode,
   CommandResult,
   Session,
-} from "@excelsior/core";
+} from "@excelsior/client";
 import { AgentApplication } from "../application/AgentApplication.js";
 import { CommandHostAdapter } from "../application/commands/CommandHostAdapter.js";
 import {
@@ -11,12 +15,6 @@ import {
   executeAgentCommand,
 } from "../commands.js";
 import { defaultRunRecorder } from "../lib/persistence/runRecorder.js";
-import type {
-  AgentHost,
-  AgentHostCatalog,
-  AgentHostDispatchResult,
-  AgentHostIntent,
-} from "./AgentHost.js";
 import { createAgentClientState } from "./clientState.js";
 import { HostConfirmationController } from "./confirmationController.js";
 import { HostSettingsService } from "./settingsService.js";

@@ -127,4 +127,35 @@ describe("package architecture boundaries", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it("keeps @excelsior/client independent from host and app implementations", () => {
+    const forbiddenImportPatterns = [
+      "@excelsior/agent-host",
+      "react",
+      "ink",
+      "electron",
+      "better-sqlite3",
+      "@ai-sdk/",
+      "ai",
+      "@octokit/rest",
+      "apps/",
+      "../agent-host",
+    ];
+    const importPattern = /(?:import|export)\s+(?:[^"']+\s+from\s+)?["']([^"']+)["']/g;
+
+    const offenders = sourceFiles("packages/client")
+      .map((file) => ({
+        file,
+        text: readFileSync(file, "utf-8"),
+      }))
+      .filter(({ text }) => {
+        const imports = [...text.matchAll(importPattern)].map((match) => match[1]);
+        return imports.some((source) =>
+          forbiddenImportPatterns.some((pattern) => source.includes(pattern)),
+        );
+      })
+      .map(({ file }) => file);
+
+    expect(offenders).toEqual([]);
+  });
 });

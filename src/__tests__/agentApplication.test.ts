@@ -5,13 +5,13 @@ import { tmpdir } from "os";
 import {
   AgentApplication,
   type AgentSessionService,
-  type ChatTurnService,
+  type TurnLifecycleDependencies,
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
   type AgentEventDataMap,
   type AnyAgentEvent,
-  type SubAgentEventSink,
+  type RunSessionConfig,
 } from "@excelsior/agent-host/testing/runtime";
 import {
   JsonlRunRecorder,
@@ -21,9 +21,9 @@ import {
 import type { FileCheckpoint } from "@excelsior/agent-host/testing/tools";
 import type { RunCompletion, RunHandle } from "@excelsior/run-runtime";
 import {
-  createFakeChatService,
   createFakeSessionManager,
   createPendingRunHandle,
+  createFakeTurnLifecycle,
 } from "./helpers/agentApplication.js";
 
 function completionForEvents(events: Promise<AnyAgentEvent[]>) {
@@ -50,6 +50,12 @@ function createDeferredRunHandle(cancel = vi.fn()): {
   };
 }
 
+function createTurnLifecycle(
+  createRunSession: (config: RunSessionConfig) => ReturnType<NonNullable<TurnLifecycleDependencies["createRunSession"]>>,
+): TurnLifecycleDependencies & { createRunSession: ReturnType<typeof vi.fn> } {
+  return { createRunSession: vi.fn(createRunSession) };
+}
+
 async function persistCompletedRun(sessionId: string, run: AgentRun): Promise<void> {
   const recorder = new JsonlRunRecorder();
   for (const event of run.getSnapshot()) {
@@ -74,8 +80,8 @@ function createWorkspaceSessionManager(workspaceRoot: string): AgentSessionServi
   };
 }
 
-function createCheckpointingChatService(): {
-  chatService: ChatTurnService;
+function createCheckpointingTurnLifecycle(): {
+  turnLifecycle: TurnLifecycleDependencies;
   getRun(): AgentRun;
   getFileCheckpoint(): FileCheckpoint;
   resolveCompletion(completion: RunCompletion<AgentEventDataMap>): void;
@@ -84,16 +90,16 @@ function createCheckpointingChatService(): {
   let fileCheckpoint: FileCheckpoint | null = null;
   let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
 
-  const chatService: ChatTurnService = {
-    submitUserTurn: vi.fn((_content, options) => {
-      run = new AgentRun(options.sessionId);
-      fileCheckpoint = options.fileCheckpoint ?? null;
-      fileCheckpoint?.beginTurn(options.sessionId, run.id);
-      const completion = new Promise<RunCompletion<AgentEventDataMap>>((resolve) => {
+  const createRunSession = vi.fn((config: RunSessionConfig) => {
+    const sessionId = config.sessionId ?? "ses_test";
+    run = new AgentRun(sessionId);
+    fileCheckpoint = config.fileCheckpoint ?? null;
+    fileCheckpoint?.beginTurn(sessionId, run.id);
+    const completion = new Promise<RunCompletion<AgentEventDataMap>>((resolve) => {
         resolveCompletion = resolve;
       }).then((result) => {
         if (result.status === "completed" || result.status === "failed") {
-          fileCheckpoint?.completeTurn(options.sessionId, run!.id);
+          fileCheckpoint?.completeTurn(sessionId, run!.id);
         } else {
           fileCheckpoint?.discardActiveTurn(run!.id);
         }
@@ -106,13 +112,12 @@ function createCheckpointingChatService(): {
           completion,
           cancel: vi.fn(),
         },
-        sessionId: options.sessionId,
+        sessionId,
       };
-    }),
-  };
+  });
 
   return {
-    chatService,
+    turnLifecycle: { createRunSession },
     getRun: () => {
       if (!run) throw new Error("Run not started");
       return run;
@@ -130,7 +135,7 @@ describe("AgentApplication session ownership", () => {
     const sessionManager = createFakeSessionManager();
     const manager = new AgentApplication(undefined, {
       sessionManager,
-      chatService: createFakeChatService(),
+      turnLifecycle: createFakeTurnLifecycle(),
     });
 
     const created = manager.createSession("First");
@@ -152,26 +157,29 @@ describe("AgentApplication session ownership", () => {
 
   it("creates an untitled session when send is called without a title", () => {
     const sessionManager = createFakeSessionManager();
-    const chatService: ChatTurnService = {
-      submitUserTurn: vi.fn((_content, options) => ({
-        run: new AgentRun(options.sessionId),
+    const turnLifecycle: TurnLifecycleDependencies & { createRunSession: ReturnType<typeof vi.fn> } = {
+      createRunSession: vi.fn((config: RunSessionConfig) => ({
+        run: new AgentRun(config.sessionId),
         childRuns: new Map(),
         handle: createPendingRunHandle(),
-        sessionId: options.sessionId,
+        sessionId: config.sessionId ?? "ses_test",
       })),
     };
     const manager = new AgentApplication(undefined, {
       sessionManager,
-      chatService,
+      turnLifecycle,
     });
 
     manager.send("  review the project architecture  ");
 
     expect(manager.getSnapshot().sessions[0].title).toBe("review the project architecture");
-    expect(chatService.submitUserTurn).toHaveBeenCalledWith(
-      "review the project architecture",
+    expect(turnLifecycle.createRunSession).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: "ses_1" }),
     );
+    expect(turnLifecycle.createRunSession.mock.calls[0][0].messages.at(-1)).toEqual({
+      role: "user",
+      content: "review the project architecture",
+    });
 
     manager.dispose();
   });
@@ -183,24 +191,22 @@ describe("AgentApplication session ownership", () => {
       resolveEvents = () => resolve(run.getSnapshot());
     });
     const sessionManager = createFakeSessionManager();
-    const chatService: ChatTurnService = {
-      submitUserTurn: vi.fn((_content, options) => {
-        run = new AgentRun(options.sessionId);
+    const turnLifecycle = createTurnLifecycle((config) => {
+        const sessionId = config.sessionId ?? "ses_test";
+        run = new AgentRun(sessionId);
         return {
           run,
           childRuns: new Map(),
           handle: { completion: completionForEvents(events), cancel: vi.fn() },
-          sessionId: options.sessionId,
+          sessionId,
         };
-      }),
-    };
+      });
     const manager = new AgentApplication(undefined, {
       sessionManager,
-      chatService,
+      turnLifecycle,
     });
 
     manager.send("hello");
-    run.emit("user-input", { content: "hello" });
     expect(manager.getSnapshot().isLoading).toBe(true);
 
     resolveEvents();
@@ -217,22 +223,21 @@ describe("AgentApplication session ownership", () => {
     let run!: AgentRun;
     let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
     const sessionManager = createFakeSessionManager();
-    const chatService: ChatTurnService = {
-      submitUserTurn: vi.fn((_content, options) => {
-        run = new AgentRun(options.sessionId);
+    const turnLifecycle = createTurnLifecycle((config) => {
+        const sessionId = config.sessionId ?? "ses_test";
+        run = new AgentRun(sessionId);
         const deferred = createDeferredRunHandle();
         resolveCompletion = deferred.resolveCompletion;
         return {
           run,
           childRuns: new Map(),
           handle: deferred.handle,
-          sessionId: options.sessionId,
+          sessionId,
         };
-      }),
-    };
+      });
     const manager = new AgentApplication(undefined, {
       sessionManager,
-      chatService,
+      turnLifecycle,
     });
 
     manager.send("hello");
@@ -247,6 +252,7 @@ describe("AgentApplication session ownership", () => {
     const snapshot = manager.getSnapshot();
     expect(snapshot.isLoading).toBe(false);
     expect(snapshot.displayBlocks).toEqual([
+      expect.objectContaining({ type: "user", content: "hello" }),
       expect.objectContaining({ type: "assistant", content: "Error: model exploded" }),
     ]);
   });
@@ -255,27 +261,24 @@ describe("AgentApplication session ownership", () => {
     let run!: AgentRun;
     let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
     const sessionManager = createFakeSessionManager();
-    const chatService: ChatTurnService = {
-      submitUserTurn: vi.fn((_content, options) => {
-        run = new AgentRun(options.sessionId);
+    const turnLifecycle = createTurnLifecycle((config) => {
+        const sessionId = config.sessionId ?? "ses_test";
+        run = new AgentRun(sessionId);
         const deferred = createDeferredRunHandle();
         resolveCompletion = deferred.resolveCompletion;
         return {
           run,
           childRuns: new Map(),
           handle: deferred.handle,
-          sessionId: options.sessionId,
+          sessionId,
         };
-      }),
-    };
+      });
     const manager = new AgentApplication(undefined, {
       sessionManager,
-      chatService,
+      turnLifecycle,
     });
 
     manager.send("hello");
-    run.emit("user-input", { content: "partial" });
-    run.flushNotify();
     expect(manager.getSnapshot().displayBlocks).toHaveLength(1);
 
     resolveCompletion({ status: "cancelled", events: [...run.getSnapshot()] });
@@ -289,17 +292,15 @@ describe("AgentApplication session ownership", () => {
   it("clears loading state when the active run is cancelled", () => {
     const cancel = vi.fn();
     const sessionManager = createFakeSessionManager();
-    const chatService: ChatTurnService = {
-      submitUserTurn: vi.fn((_content, options) => ({
-        run: new AgentRun(options.sessionId),
+    const turnLifecycle = createTurnLifecycle((config) => ({
+        run: new AgentRun(config.sessionId),
         childRuns: new Map(),
         handle: createPendingRunHandle(cancel),
-        sessionId: options.sessionId,
-      })),
-    };
+        sessionId: config.sessionId ?? "ses_test",
+      }));
     const manager = new AgentApplication(undefined, {
       sessionManager,
-      chatService,
+      turnLifecycle,
     });
 
     manager.send("hello");
@@ -315,26 +316,24 @@ describe("AgentApplication session ownership", () => {
     let run!: AgentRun;
     let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
     const sessionManager = createFakeSessionManager();
-    const chatService: ChatTurnService = {
-      submitUserTurn: vi.fn((_content, options) => {
-        run = new AgentRun(options.sessionId);
+    const turnLifecycle = createTurnLifecycle((config) => {
+        const sessionId = config.sessionId ?? "ses_test";
+        run = new AgentRun(sessionId);
         const deferred = createDeferredRunHandle();
         resolveCompletion = deferred.resolveCompletion;
         return {
           run,
           childRuns: new Map(),
           handle: deferred.handle,
-          sessionId: options.sessionId,
+          sessionId,
         };
-      }),
-    };
+      });
     const manager = new AgentApplication(undefined, {
       sessionManager,
-      chatService,
+      turnLifecycle,
     });
 
     manager.send("hello");
-    run.emit("user-input", { content: "old partial" });
     manager.cancel();
     resolveCompletion({ status: "completed", events: [...run.getSnapshot()] });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -346,9 +345,9 @@ describe("AgentApplication session ownership", () => {
     const runs: AgentRun[] = [];
     const completions: Array<(completion: RunCompletion<AgentEventDataMap>) => void> = [];
     const sessionManager = createFakeSessionManager();
-    const chatService: ChatTurnService = {
-      submitUserTurn: vi.fn((_content, options) => {
-        const run = new AgentRun(options.sessionId);
+    const turnLifecycle = createTurnLifecycle((config) => {
+        const sessionId = config.sessionId ?? "ses_test";
+        const run = new AgentRun(sessionId);
         const deferred = createDeferredRunHandle();
         runs.push(run);
         completions.push(deferred.resolveCompletion);
@@ -356,20 +355,17 @@ describe("AgentApplication session ownership", () => {
           run,
           childRuns: new Map(),
           handle: deferred.handle,
-          sessionId: options.sessionId,
+          sessionId,
         };
-      }),
-    };
+      });
     const manager = new AgentApplication(undefined, {
       sessionManager,
-      chatService,
+      turnLifecycle,
     });
 
     manager.send("first");
-    runs[0].emit("user-input", { content: "first" });
     manager.cancel();
     manager.send("second");
-    runs[1].emit("user-input", { content: "second" });
 
     completions[0]({ status: "completed", events: [...runs[0].getSnapshot()] });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -390,24 +386,22 @@ describe("AgentApplication session ownership", () => {
       resolveEvents = () => resolve(run.getSnapshot());
     });
     const sessionManager = createFakeSessionManager();
-    const chatService: ChatTurnService = {
-      submitUserTurn: vi.fn((_content, options) => {
-        run = new AgentRun(options.sessionId);
+    const turnLifecycle = createTurnLifecycle((config) => {
+        const sessionId = config.sessionId ?? "ses_test";
+        run = new AgentRun(sessionId);
         return {
           run,
           childRuns: new Map(),
           handle: { completion: completionForEvents(events), cancel: vi.fn() },
-          sessionId: options.sessionId,
+          sessionId,
         };
-      }),
-    };
+      });
     const manager = new AgentApplication(undefined, {
       sessionManager,
-      chatService,
+      turnLifecycle,
     });
 
     manager.send("hello");
-    run.emit("user-input", { content: "hello" });
     resolveEvents();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(manager.getSnapshot().displayBlocks).toHaveLength(1);
@@ -420,29 +414,26 @@ describe("AgentApplication session ownership", () => {
   });
 
   it("schedules a snapshot notification when sub-agent events arrive", async () => {
-    let subAgentEvents!: SubAgentEventSink;
     const sessionManager = createFakeSessionManager();
-    const chatService: ChatTurnService = {
-      submitUserTurn: vi.fn((_content, options) => {
-        subAgentEvents = options.subAgentEvents;
+    const turnLifecycle = createTurnLifecycle((config) => {
         return {
-          run: new AgentRun(options.sessionId),
+          run: new AgentRun(config.sessionId),
           childRuns: new Map(),
           handle: createPendingRunHandle(),
-          sessionId: options.sessionId,
+          sessionId: config.sessionId ?? "ses_test",
         };
-      }),
-    };
+      });
     const manager = new AgentApplication(undefined, {
       sessionManager,
-      chatService,
+      turnLifecycle,
     });
     const listener = vi.fn();
     manager.subscribe(listener);
 
     manager.send("hello");
     const callsAfterSend = listener.mock.calls.length;
-    subAgentEvents.emit("spawned", { toolCallId: "tc1", role: "Bug Hunter" });
+    const subAgentEvents = turnLifecycle.createRunSession.mock.calls[0][0].subAgentEvents;
+    subAgentEvents?.emit("spawned", { toolCallId: "tc1", role: "Bug Hunter" });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(listener.mock.calls.length).toBeGreaterThan(callsAfterSend);
@@ -467,10 +458,10 @@ describe("AgentApplication revert", () => {
   });
 
   it("refuses to revert while a run is active", async () => {
-    const controller = createCheckpointingChatService();
+    const controller = createCheckpointingTurnLifecycle();
     const manager = new AgentApplication(undefined, {
       sessionManager: createWorkspaceSessionManager(workspaceRoot),
-      chatService: controller.chatService,
+      turnLifecycle: controller.turnLifecycle,
     });
 
     manager.send("change file");
@@ -484,10 +475,10 @@ describe("AgentApplication revert", () => {
     const filePath = "demo.txt";
     const fullPath = join(workspaceRoot, filePath);
     await writeFile(fullPath, "original", "utf-8");
-    const controller = createCheckpointingChatService();
+    const controller = createCheckpointingTurnLifecycle();
     const manager = new AgentApplication(undefined, {
       sessionManager: createWorkspaceSessionManager(workspaceRoot),
-      chatService: controller.chatService,
+      turnLifecycle: controller.turnLifecycle,
     });
 
     manager.send("change file");
@@ -496,7 +487,6 @@ describe("AgentApplication revert", () => {
     await fileCheckpoint.captureBeforeWrite(filePath, fullPath);
     await writeFile(fullPath, "agent edit", "utf-8");
     fileCheckpoint.recordWrite(filePath, fullPath, "agent edit");
-    run.emit("user-input", { content: "change file" });
     await persistCompletedRun("ses_1", run);
     controller.resolveCompletion({ status: "completed", events: [...run.getSnapshot()] });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -513,10 +503,10 @@ describe("AgentApplication revert", () => {
     const filePath = "demo.txt";
     const fullPath = join(workspaceRoot, filePath);
     await writeFile(fullPath, "original", "utf-8");
-    const controller = createCheckpointingChatService();
+    const controller = createCheckpointingTurnLifecycle();
     const manager = new AgentApplication(undefined, {
       sessionManager: createWorkspaceSessionManager(workspaceRoot),
-      chatService: controller.chatService,
+      turnLifecycle: controller.turnLifecycle,
     });
 
     manager.send("change file");
@@ -525,7 +515,6 @@ describe("AgentApplication revert", () => {
     await fileCheckpoint.captureBeforeWrite(filePath, fullPath);
     await writeFile(fullPath, "agent edit", "utf-8");
     fileCheckpoint.recordWrite(filePath, fullPath, "agent edit");
-    run.emit("user-input", { content: "change file" });
     await persistCompletedRun("ses_1", run);
     controller.resolveCompletion({ status: "completed", events: [...run.getSnapshot()] });
     await new Promise((resolve) => setTimeout(resolve, 0));

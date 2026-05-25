@@ -1,12 +1,10 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   AgentClientState,
-} from "@excelsior/core";
-import type {
   AgentHostCatalog,
   AgentHostDispatchResult,
   AgentHostIntent,
-} from "@excelsior/agent-host";
+} from "@excelsior/client";
 
 export type WorkspaceTreeNode = {
   name: string;

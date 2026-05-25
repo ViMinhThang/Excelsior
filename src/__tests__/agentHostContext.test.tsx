@@ -2,7 +2,7 @@ import React from "react";
 import { Text } from "ink";
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
-import type { AgentHost } from "@excelsior/agent-host";
+import type { AgentHost } from "@excelsior/client";
 import { AgentHostProvider } from "../../apps/tui/src/context/AgentHostContext.js";
 import { useAgentHostClient } from "../../apps/tui/src/hooks/useAgentHostClient.js";
 

@@ -1,21 +1,14 @@
-import type { AgentMessage } from "@excelsior/core";
-import {
-  buildAIHistory,
-  computeDisplayBlocks,
-} from "../../lib/projection/projectionMerger.js";
-import type { ProjectedBlock } from "../../lib/projection/display.js";
 import type { ProjectionInputState } from "../types.js";
-
-export interface ProjectionResult {
-  displayBlocks: ProjectedBlock[];
-  aiHistory: AgentMessage[];
-}
+import {
+  ProjectionPolicy,
+  type ProjectionResult,
+} from "./ProjectionPolicy.js";
+export type { ProjectionResult } from "./ProjectionPolicy.js";
 
 export class ProjectionService {
+  constructor(private readonly policy = new ProjectionPolicy()) {}
+
   project(input: ProjectionInputState): ProjectionResult {
-    return {
-      displayBlocks: computeDisplayBlocks(input),
-      aiHistory: buildAIHistory(input),
-    };
+    return this.policy.project(input);
   }
 }

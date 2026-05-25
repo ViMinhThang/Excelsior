@@ -18,6 +18,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "src/renderer/src"),
+      "@excelsior/client": path.resolve(__dirname, "../../packages/client/src"),
       "@excelsior/core": path.resolve(__dirname, "../../packages/core/src"),
     },
   },

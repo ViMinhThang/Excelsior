@@ -1,19 +1,17 @@
 export type {
   AgentClientState,
+  AgentMode,
   AppSettings,
   CommandDefinition,
   CommandResult,
   ConfirmRequest,
   SendOptions,
   Session,
-} from "@excelsior/core";
-
-export type {
   AgentHost,
   AgentHostCatalog,
   AgentHostDispatchResult,
   AgentHostIntent,
-} from "./host/AgentHost.js";
+} from "@excelsior/client";
 export { AgentApplication } from "./application/AgentApplication.js";
 export type { AgentApplicationOptions } from "./application/AgentApplication.js";
 export {

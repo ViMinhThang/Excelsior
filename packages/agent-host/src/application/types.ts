@@ -1,20 +1,15 @@
 import type {
-  AgentMessage,
   AgentMode,
   Session,
   SendOptions,
   Workspace,
 } from "@excelsior/core";
-import type { RunHandle } from "@excelsior/run-runtime";
 import type { AgentRun } from "../lib/runtime/agentRun.js";
-import type {
-  AgentEventDataMap,
-  AnyAgentEvent,
-} from "../lib/runtime/events.js";
+import type { AnyAgentEvent } from "../lib/runtime/events.js";
 import type { ProjectedBlock } from "../lib/projection/display.js";
-import type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
 import type { FileCheckpoint } from "../lib/revert/fileCheckpoint.js";
 import type { RunRecorder } from "../lib/persistence/runRecorder.js";
+import type { TurnLifecycleDependencies } from "./turns/TurnLifecycle.js";
 
 export interface ChatSessionState {
   displayBlocks: ProjectedBlock[];
@@ -27,46 +22,13 @@ export interface ChatSessionState {
 }
 
 export interface AgentApplicationOptions {
-  chatService?: ChatTurnService;
   sessionManager?: AgentSessionService;
   recorder?: RunRecorder;
   fileCheckpoint?: FileCheckpoint;
+  turnLifecycle?: TurnLifecycleDependencies;
 }
 
 export type { SendOptions };
-
-export interface TurnStartOptions extends SendOptions {
-  history: AgentMessage[];
-  mode: AgentMode;
-  sessionId: string;
-  workspaceId: string;
-  workspaceRoot: string;
-  subAgentEvents: SubAgentEventSink;
-  fileCheckpoint?: FileCheckpoint;
-  recorder: RunRecorder;
-}
-
-export interface StartedRun {
-  run: AgentRun;
-  childRuns: Map<string, AgentRun>;
-  handle: RunHandle<AgentEventDataMap>;
-  sessionId: string;
-}
-
-export interface ChatTurnService {
-  submitUserTurn(content: string, options: {
-    history: { current: AgentMessage[] };
-    sessionId: string;
-    workspaceId: string;
-    workspaceRoot: string;
-    subAgentEvents: SubAgentEventSink;
-    fileCheckpoint?: FileCheckpoint;
-    displayContent?: string;
-    silent?: boolean;
-    mode: AgentMode;
-    recorder?: RunRecorder;
-  }): StartedRun;
-}
 
 export interface AgentSessionService {
   getCurrentSessionId(): string | null;

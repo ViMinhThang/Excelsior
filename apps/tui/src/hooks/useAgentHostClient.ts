@@ -6,7 +6,22 @@ import type {
   CommandResult,
   SendOptions,
   Session,
-} from "@excelsior/core";
+} from "@excelsior/client";
+import {
+  approveAllHostConfirmations,
+  cancelHostTurn,
+  clearHostMessages,
+  createHostSession,
+  deleteHostSession,
+  executeHostCommand,
+  getHostCommands,
+  renameHostSession,
+  respondToHostConfirmation,
+  sendHostMessage,
+  setHostMode,
+  switchHostSession,
+  toggleHostMode,
+} from "@excelsior/client";
 import { useAgentHost } from "../context/AgentHostContext.js";
 
 export interface UseAgentHostClientReturn {
@@ -40,54 +55,48 @@ export function useAgentHostClient(): UseAgentHostClientReturn {
     state,
     send: useCallback(
       (content: string, options?: SendOptions) => {
-        void host.dispatch({ type: "send", content, options });
+        void sendHostMessage(host, content, options);
       },
       [host],
     ),
     cancel: useCallback(() => {
-      void host.dispatch({ type: "cancel" });
+      void cancelHostTurn(host);
     }, [host]),
     clear: useCallback(() => {
-      void host.dispatch({ type: "clear-messages" });
+      void clearHostMessages(host);
     }, [host]),
-    executeCommand: useCallback(async (input: string) => {
-      const result = await host.dispatch({ type: "execute-command", input });
-      return result.type === "command-result" ? result.result : { handled: false };
-    }, [host]),
-    getCommands: useCallback(() => host.getCatalog().commands, [host]),
+    executeCommand: useCallback((input: string) => executeHostCommand(host, input), [host]),
+    getCommands: useCallback(() => getHostCommands(host), [host]),
     switchSession: useCallback((id: string) => {
-      void host.dispatch({ type: "switch-session", sessionId: id });
+      void switchHostSession(host, id);
     }, [host]),
-    createSession: useCallback(async (title?: string) => {
-      const result = await host.dispatch({ type: "create-session", title });
-      return result.type === "session" ? result.session : undefined;
-    }, [host]),
+    createSession: useCallback((title?: string) => createHostSession(host, title), [host]),
     deleteSession: useCallback((id: string) => {
-      void host.dispatch({ type: "delete-session", sessionId: id });
+      void deleteHostSession(host, id);
     }, [host]),
     renameSession: useCallback(
       (id: string, title: string) => {
-        void host.dispatch({ type: "rename-session", sessionId: id, title });
+        void renameHostSession(host, id, title);
       },
       [host],
     ),
     listSessions: useCallback(() => host.getState().sessions, [host]),
     getCurrentSessionId: useCallback(() => host.getState().currentSessionId, [host]),
     setMode: useCallback((mode: AgentMode) => {
-      void host.dispatch({ type: "set-mode", mode });
+      void setHostMode(host, mode);
     }, [host]),
     toggleMode: useCallback(() => {
-      void host.dispatch({ type: "toggle-mode" });
+      void toggleHostMode(host);
       return undefined;
     }, [host]),
     respondToConfirmation: useCallback(
       (callId: string, approved: boolean) => {
-        void host.dispatch({ type: "respond-to-confirmation", callId, approved });
+        void respondToHostConfirmation(host, callId, approved);
       },
       [host],
     ),
     approveAllConfirmations: useCallback(() => {
-      void host.dispatch({ type: "approve-all-confirmations" });
+      void approveAllHostConfirmations(host);
     }, [host]),
   };
 }
