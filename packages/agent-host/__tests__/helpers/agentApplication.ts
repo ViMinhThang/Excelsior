@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 import type {
-  AgentSessionService,
+  AgentSessionStorage,
+  SessionMetadataStore,
   TurnLifecycleDependencies,
 } from "@excelsior/agent-host/testing/application";
 import {
@@ -22,7 +23,9 @@ export function makeSession(id: string, title: string): Session {
   };
 }
 
-export function createFakeSessionManager(): AgentSessionService {
+export function createFakeSessionManager(
+  workspaceRoot = "/tmp/workspace",
+): SessionMetadataStore {
   const sessions: Session[] = [];
   let currentSessionId: string | null = null;
 
@@ -32,7 +35,7 @@ export function createFakeSessionManager(): AgentSessionService {
     getWorkspace: () => ({
       id: "ws_test",
       name: "Test workspace",
-      rootPath: "/tmp/workspace",
+      rootPath: workspaceRoot,
     }),
     ensureSession: (title?: string) => {
       if (!currentSessionId) {
@@ -59,11 +62,25 @@ export function createFakeSessionManager(): AgentSessionService {
       if (index !== -1) sessions.splice(index, 1);
       if (currentSessionId === id) currentSessionId = null;
     },
+    deleteAllSessions: async () => {
+      sessions.splice(0, sessions.length);
+      currentSessionId = null;
+    },
     renameSession: (id: string, title: string) => {
       const session = sessions.find((s) => s.id === id);
       if (session) session.title = title;
     },
     listSessions: () => [...sessions],
+  };
+}
+
+export function createFakeSessionStorage(
+  workspaceRoot = "/tmp/workspace",
+): AgentSessionStorage {
+  const sessions = createFakeSessionManager(workspaceRoot);
+  return {
+    ...sessions,
+    loadCurrentSessionEvents: async () => [],
   };
 }
 

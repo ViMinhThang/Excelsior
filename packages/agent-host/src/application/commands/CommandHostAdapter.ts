@@ -3,15 +3,8 @@ import type { AgentMode, CommandResult } from "@excelsior/core";
 import type { AgentCommandHost } from "../../commands/types.js";
 import type { AgentApplication } from "../AgentApplication.js";
 
-export interface CommandHostAdapterOptions {
-  deleteAllSessions(): void | Promise<void>;
-}
-
 export class CommandHostAdapter implements AgentCommandHost {
-  constructor(
-    private readonly application: AgentApplication,
-    private readonly options: CommandHostAdapterOptions,
-  ) {}
+  constructor(private readonly application: AgentApplication) {}
 
   send(content: string, options?: SendOptions): void {
     this.application.send(content, options);
@@ -22,7 +15,7 @@ export class CommandHostAdapter implements AgentCommandHost {
   }
 
   deleteAllSessions(): void | Promise<void> {
-    return this.options.deleteAllSessions();
+    return this.application.deleteAllSessions();
   }
 
   createSession(title?: string): Session {

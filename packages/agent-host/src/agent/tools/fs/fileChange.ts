@@ -89,10 +89,10 @@ export async function applyFileChange({
   }
 
   try {
-    await ctx?.revert?.fileCheckpoint.captureBeforeWrite(filePath, fullPath);
+    await ctx?.revert?.captureBeforeWrite(filePath, fullPath);
     await beforeWrite?.(fullPath);
     await fs.writeFile(fullPath, change.after, "utf-8");
-    ctx?.revert?.fileCheckpoint.recordWrite(filePath, fullPath, change.after);
+    ctx?.revert?.recordWrite(filePath, fullPath, change.after);
     return success(diffOutput);
   } catch (error: unknown) {
     return formatError(errorAction, error);

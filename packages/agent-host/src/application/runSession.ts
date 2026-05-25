@@ -1,6 +1,6 @@
 import { type RunHandle } from "@excelsior/run-runtime";
 import { AgentRun } from "../runtime/agentRun.js";
-import { AgentEventDataMap, AnyAgentEvent } from "../runtime/events.js";
+import { AgentEventDataMap } from "../runtime/events.js";
 import { createToolContext, ToolContext } from "../tooling/context.js";
 import type { AgentMode, AgentMessage } from "@excelsior/core";
 import { confirmBus } from "../runtime/confirmBus.js";
@@ -14,7 +14,7 @@ import {
   streamAgentResponse as defaultStreamAgentResponse,
   type StreamCapableAgent,
 } from "../runtime/agentStream.js";
-import type { FileCheckpoint } from "../revert/fileCheckpoint.js";
+import { TurnTransactionCoordinator } from "./turns/TurnTransaction.js";
 
 export type AgentResponseStreamer = typeof defaultStreamAgentResponse;
 
@@ -36,7 +36,7 @@ export interface RunSessionConfig {
   mode?: AgentMode;
   workspaceRoot?: string;
   streamAgentResponse?: AgentResponseStreamer;
-  fileCheckpoint?: FileCheckpoint;
+  turnTransactions?: TurnTransactionCoordinator;
 }
 
 export interface RunSessionResult {
@@ -52,9 +52,9 @@ export class RunSession {
   readonly sessionId: string;
   private readonly recorder: RunRecorder;
   private readonly subAgentEvents: SubAgentEventSink;
+  private readonly turnTransactions: TurnTransactionCoordinator;
   private readonly config: RunSessionConfig;
   private handle!: RunHandle<AgentEventDataMap>;
-  private checkpointPromise: Promise<void> | null = null;
 
   constructor(config: RunSessionConfig) {
     this.config = config;
@@ -62,19 +62,20 @@ export class RunSession {
     this.run = new AgentRun({ sessionId: this.sessionId, parentSignal: config.signal });
     this.recorder = config.recorder ?? defaultRunRecorder;
     this.subAgentEvents = config.subAgentEvents ?? createSubAgentEventSink();
+    this.turnTransactions =
+      config.turnTransactions ??
+      new TurnTransactionCoordinator({ recorder: this.recorder });
   }
 
   start(): RunSessionResult {
-    this.config.fileCheckpoint?.beginTurn(this.sessionId, this.run.id);
+    const revert = this.turnTransactions.beginTurn(this.sessionId, this.run.id);
 
     const ctx = createToolContext({
       abortSignal: this.run.abortSignal,
       confirmBus,
       mode: this.config.mode,
       workspaceRoot: this.config.workspaceRoot,
-      revert: this.config.fileCheckpoint
-        ? { fileCheckpoint: this.config.fileCheckpoint }
-        : undefined,
+      revert,
     });
     const runCtx: RunContext = {
       ctx,
@@ -112,15 +113,14 @@ export class RunSession {
     const completion = baseHandle.completion.then(
       async (result) => {
         if (result.status === "completed" || result.status === "failed") {
-          await this.recordTurnCompleteOnce();
-          this.config.fileCheckpoint?.completeTurn(this.sessionId, this.run.id);
+          await this.turnTransactions.completeTurn(this.sessionId, this.run);
         } else {
-          this.config.fileCheckpoint?.discardActiveTurn(this.run.id);
+          this.turnTransactions.discardTurn(this.run.id);
         }
         return result;
       },
       (error: unknown) => {
-        this.config.fileCheckpoint?.discardActiveTurn(this.run.id);
+        this.turnTransactions.discardTurn(this.run.id);
         throw error;
       },
     );
@@ -141,18 +141,6 @@ export class RunSession {
   cancel(): void {
     this.handle?.cancel();
   }
-
-  private recordTurnCompleteOnce(): Promise<void> {
-    this.checkpointPromise ??= this.recorder
-      .recordTurnComplete(this.sessionId, this.run.id, getNextSequence(this.run.getSnapshot()))
-      .catch((error: unknown) => {
-        this.run.emit(PERSISTENCE_ERROR, {
-          message: `Failed to persist turn checkpoint: ${formatError(error)}`,
-          failedEventType: "turn-complete",
-        });
-      });
-    return this.checkpointPromise;
-  }
 }
 
 export function createRunSession(config: RunSessionConfig): RunSessionResult {
@@ -161,8 +149,4 @@ export function createRunSession(config: RunSessionConfig): RunSessionResult {
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function getNextSequence(events: readonly AnyAgentEvent[]): number {
-  return events.reduce((max, event) => Math.max(max, event.sequence), -1) + 1;
 }

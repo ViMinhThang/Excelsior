@@ -1,4 +1,5 @@
 import type {
+  AgentClientState,
   AgentMode,
   AppSettings,
   CommandDefinition,
@@ -7,9 +8,8 @@ import type {
   Session,
 } from "@excelsior/core";
 import type {
-  AgentHostCatalogReader,
+  AgentHost,
   AgentHostDispatchResult,
-  AgentHostDispatcher,
 } from "./hostContract.js";
 
 const UNHANDLED_COMMAND: CommandResult = { handled: false };
@@ -32,104 +32,86 @@ export function modeResultOrUndefined(
   return result.type === "mode" ? result.mode : undefined;
 }
 
-export function getHostCommands(host: AgentHostCatalogReader): CommandDefinition[] {
-  return host.getCatalog().commands;
+
+export class AgentHostClient {
+  constructor(private readonly host: AgentHost) {}
+
+  getState(): AgentClientState {
+    return this.host.getState();
+  }
+
+  subscribe(listener: () => void): () => void {
+    return this.host.subscribe(listener);
+  }
+
+  getCommands(): CommandDefinition[] {
+    return this.host.getCatalog().commands;
+  }
+
+  getSettings(): AppSettings {
+    return this.host.getCatalog().settings;
+  }
+
+  async send(content: string, options?: SendOptions): Promise<void> {
+    await this.host.dispatch({ type: "send", content, options });
+  }
+
+  async cancel(): Promise<void> {
+    await this.host.dispatch({ type: "cancel" });
+  }
+
+  async clear(): Promise<void> {
+    await this.host.dispatch({ type: "clear-messages" });
+  }
+
+  async executeCommand(input: string): Promise<CommandResult> {
+    return commandResultOrDefault(
+      await this.host.dispatch({ type: "execute-command", input }),
+    );
+  }
+
+  async createSession(title?: string): Promise<Session | undefined> {
+    return sessionResultOrUndefined(
+      await this.host.dispatch({ type: "create-session", title }),
+    );
+  }
+
+  async switchSession(sessionId: string): Promise<void> {
+    await this.host.dispatch({ type: "switch-session", sessionId });
+  }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    await this.host.dispatch({ type: "delete-session", sessionId });
+  }
+
+  async renameSession(sessionId: string, title: string): Promise<void> {
+    await this.host.dispatch({ type: "rename-session", sessionId, title });
+  }
+
+  async setMode(mode: AgentMode): Promise<void> {
+    await this.host.dispatch({ type: "set-mode", mode });
+  }
+
+  async toggleMode(): Promise<AgentMode | undefined> {
+    return modeResultOrUndefined(await this.host.dispatch({ type: "toggle-mode" }));
+  }
+
+  async saveSettings(settings: Partial<AppSettings>): Promise<void> {
+    await this.host.dispatch({ type: "save-settings", settings });
+  }
+
+  async respondToConfirmation(callId: string, approved: boolean): Promise<void> {
+    await this.host.dispatch({ type: "respond-to-confirmation", callId, approved });
+  }
+
+  async approveAllConfirmations(): Promise<void> {
+    await this.host.dispatch({ type: "approve-all-confirmations" });
+  }
+
+  async revertLastTurn(): Promise<CommandResult> {
+    return commandResultOrDefault(
+      await this.host.dispatch({ type: "revert-last-turn" }),
+    );
+  }
 }
 
-export async function sendHostMessage(
-  host: AgentHostDispatcher,
-  content: string,
-  options?: SendOptions,
-): Promise<void> {
-  await host.dispatch({ type: "send", content, options });
-}
-
-export async function cancelHostTurn(host: AgentHostDispatcher): Promise<void> {
-  await host.dispatch({ type: "cancel" });
-}
-
-export async function clearHostMessages(host: AgentHostDispatcher): Promise<void> {
-  await host.dispatch({ type: "clear-messages" });
-}
-
-export async function executeHostCommand(
-  host: AgentHostDispatcher,
-  input: string,
-): Promise<CommandResult> {
-  return commandResultOrDefault(
-    await host.dispatch({ type: "execute-command", input }),
-  );
-}
-
-export async function createHostSession(
-  host: AgentHostDispatcher,
-  title?: string,
-): Promise<Session | undefined> {
-  return sessionResultOrUndefined(
-    await host.dispatch({ type: "create-session", title }),
-  );
-}
-
-export async function switchHostSession(
-  host: AgentHostDispatcher,
-  sessionId: string,
-): Promise<void> {
-  await host.dispatch({ type: "switch-session", sessionId });
-}
-
-export async function deleteHostSession(
-  host: AgentHostDispatcher,
-  sessionId: string,
-): Promise<void> {
-  await host.dispatch({ type: "delete-session", sessionId });
-}
-
-export async function renameHostSession(
-  host: AgentHostDispatcher,
-  sessionId: string,
-  title: string,
-): Promise<void> {
-  await host.dispatch({ type: "rename-session", sessionId, title });
-}
-
-export async function setHostMode(
-  host: AgentHostDispatcher,
-  mode: AgentMode,
-): Promise<void> {
-  await host.dispatch({ type: "set-mode", mode });
-}
-
-export async function toggleHostMode(
-  host: AgentHostDispatcher,
-): Promise<AgentMode | undefined> {
-  return modeResultOrUndefined(await host.dispatch({ type: "toggle-mode" }));
-}
-
-export async function saveHostSettings(
-  host: AgentHostDispatcher,
-  settings: Partial<AppSettings>,
-): Promise<void> {
-  await host.dispatch({ type: "save-settings", settings });
-}
-
-export async function respondToHostConfirmation(
-  host: AgentHostDispatcher,
-  callId: string,
-  approved: boolean,
-): Promise<void> {
-  await host.dispatch({ type: "respond-to-confirmation", callId, approved });
-}
-
-export async function approveAllHostConfirmations(
-  host: AgentHostDispatcher,
-): Promise<void> {
-  await host.dispatch({ type: "approve-all-confirmations" });
-}
-
-export async function revertLastHostTurn(
-  host: AgentHostDispatcher,
-): Promise<CommandResult> {
-  return commandResultOrDefault(
-    await host.dispatch({ type: "revert-last-turn" }),
-  );
-}

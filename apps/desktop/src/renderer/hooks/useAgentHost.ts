@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type {
   AgentClientState,
   AgentMode,
@@ -7,23 +7,9 @@ import type {
   CommandResult,
   SendOptions,
   Session,
+  AgentHost,
 } from "@excelsior/client";
-import {
-  approveAllHostConfirmations,
-  cancelHostTurn,
-  clearHostMessages,
-  createHostSession,
-  deleteHostSession,
-  executeHostCommand,
-  renameHostSession,
-  respondToHostConfirmation,
-  revertLastHostTurn,
-  saveHostSettings,
-  sendHostMessage,
-  setHostMode,
-  switchHostSession,
-  toggleHostMode,
-} from "@excelsior/client";
+import { AgentHostClient } from "@excelsior/client";
 import type { ExcelsiorApi } from "../../main/preload";
 import type { WorkspaceTreeNode } from "../../main/preload";
 
@@ -107,6 +93,33 @@ export function useAgentHost() {
     useCallback(() => storeRef.current?.getSnapshot() ?? null, [workspacePath]),
   );
 
+  const client = useMemo(() => {
+    const dummyState: AgentClientState = {
+      displayBlocks: [],
+      isLoading: false,
+      sessions: [],
+      currentSessionId: null,
+      workspace: { id: "", name: "", rootPath: "" },
+      mode: "plan",
+      pendingConfirmation: null,
+    };
+
+    const dummySettings: AppSettings = {
+      deepseekApiKey: "",
+      githubToken: "",
+    };
+
+    const hostAdapter: AgentHost = {
+      getState: () => storeRef.current?.getSnapshot() ?? dummyState,
+      subscribe: (cb) => storeRef.current?.subscribe(cb) ?? (() => {}),
+      getCatalog: () => ({ commands, settings: settings ?? dummySettings }),
+      dispatch: (intent) => window.api.dispatch(intent),
+      dispose: () => {},
+    };
+    return new AgentHostClient(hostAdapter);
+  }, [commands, settings]);
+
+
   const selectWorkspace = useCallback(async () => {
     setIsInitializing(true);
     setWorkspaceError(null);
@@ -134,80 +147,80 @@ export function useAgentHost() {
   }, []);
 
   const send = useCallback((content: string, options?: SendOptions) => {
-    void sendHostMessage(window.api, content, options);
-  }, []);
+    void client.send(content, options);
+  }, [client]);
 
   const cancel = useCallback(() => {
-    void cancelHostTurn(window.api);
-  }, []);
+    void client.cancel();
+  }, [client]);
 
   const executeCommand = useCallback(
     (input: string): Promise<CommandResult> =>
-      executeHostCommand(window.api, input),
-    [],
+      client.executeCommand(input),
+    [client],
   );
 
   const createSession = useCallback(
     async (title?: string): Promise<Session> => {
-      const session = await createHostSession(window.api, title);
+      const session = await client.createSession(title);
       if (!session) {
         throw new Error("Host did not return a session.");
       }
       return session;
     },
-    [],
+    [client],
   );
 
   const switchSession = useCallback(async (sessionId: string): Promise<void> => {
-    await switchHostSession(window.api, sessionId);
-  }, []);
+    await client.switchSession(sessionId);
+  }, [client]);
 
   const deleteSession = useCallback(async (sessionId: string): Promise<void> => {
-    await deleteHostSession(window.api, sessionId);
-  }, []);
+    await client.deleteSession(sessionId);
+  }, [client]);
 
   const renameSession = useCallback(
     (sessionId: string, title: string) => {
-      void renameHostSession(window.api, sessionId, title);
+      void client.renameSession(sessionId, title);
     },
-    [],
+    [client],
   );
 
   const toggleMode = useCallback(async () => {
-    return toggleHostMode(window.api);
-  }, []);
+    return client.toggleMode();
+  }, [client]);
 
   const setMode = useCallback(async (mode: AgentMode) => {
-    await setHostMode(window.api, mode);
-  }, []);
+    await client.setMode(mode);
+  }, [client]);
 
   const saveSettings = useCallback(
     (newSettings: Partial<AppSettings>) => {
-      void saveHostSettings(window.api, newSettings)
+      void client.saveSettings(newSettings)
         .then(() => window.api.getCatalog())
         .then((catalog) => setSettings(catalog.settings));
     },
-    [],
+    [client],
   );
 
   const respondToConfirmation = useCallback(
     (callId: string, approved: boolean) => {
-      void respondToHostConfirmation(window.api, callId, approved);
+      void client.respondToConfirmation(callId, approved);
     },
-    [],
+    [client],
   );
 
   const approveAllConfirmations = useCallback(() => {
-    void approveAllHostConfirmations(window.api);
-  }, []);
+    void client.approveAllConfirmations();
+  }, [client]);
 
   const clearMessages = useCallback(() => {
-    void clearHostMessages(window.api);
-  }, []);
+    void client.clear();
+  }, [client]);
 
   const revertLastTurn = useCallback(
-    (): Promise<CommandResult> => revertLastHostTurn(window.api),
-    [],
+    (): Promise<CommandResult> => client.revertLastTurn(),
+    [client],
   );
 
   return {
@@ -235,3 +248,4 @@ export function useAgentHost() {
     revertLastTurn,
   };
 }
+

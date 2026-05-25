@@ -5,13 +5,13 @@ import {
   type CreateRunSession,
   ProjectionPolicy,
   TurnLifecycle,
+  TurnTransactionCoordinator,
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
   type AgentEventDataMap,
   type RunRecorder,
 } from "@excelsior/agent-host/testing/runtime";
-import { FileCheckpoint } from "@excelsior/agent-host/testing/tools";
 
 function createDeferredRunHandle(cancel = vi.fn()): {
   handle: RunHandle<AgentEventDataMap>;
@@ -64,12 +64,13 @@ function createLifecycle(input: {
   state: AgentStateStore;
   createRunSession: CreateRunSession;
 }) {
+  const recorder = createRecorder();
   return new TurnLifecycle({
     state: input.state,
     projection: new ProjectionPolicy(),
-    recorder: createRecorder(),
+    recorder,
     subAgentEvents: { emit: () => {}, on: () => () => {} },
-    fileCheckpoint: new FileCheckpoint(),
+    turnTransactions: new TurnTransactionCoordinator({ recorder }),
     appendFinalEvents: vi.fn(),
     dependencies: { createRunSession: input.createRunSession },
   });
@@ -115,13 +116,14 @@ describe("TurnLifecycle", () => {
     const state = createState();
     const appendFinalEvents = vi.fn();
     const deferred = createDeferredRunHandle();
+    const recorder = createRecorder();
     resolveCompletion = deferred.resolveCompletion;
     const lifecycle = new TurnLifecycle({
       state,
       projection: new ProjectionPolicy(),
-      recorder: createRecorder(),
+      recorder,
       subAgentEvents: { emit: () => {}, on: () => () => {} },
-      fileCheckpoint: new FileCheckpoint(),
+      turnTransactions: new TurnTransactionCoordinator({ recorder }),
       appendFinalEvents,
       dependencies: {
         createRunSession: (config) => {
@@ -158,13 +160,14 @@ describe("TurnLifecycle", () => {
     const state = createState();
     const appendFinalEvents = vi.fn();
     const deferred = createDeferredRunHandle();
+    const recorder = createRecorder();
     resolveCompletion = deferred.resolveCompletion;
     const lifecycle = new TurnLifecycle({
       state,
       projection: new ProjectionPolicy(),
-      recorder: createRecorder(),
+      recorder,
       subAgentEvents: { emit: () => {}, on: () => () => {} },
-      fileCheckpoint: new FileCheckpoint(),
+      turnTransactions: new TurnTransactionCoordinator({ recorder }),
       appendFinalEvents,
       dependencies: {
         createRunSession: (config) => {

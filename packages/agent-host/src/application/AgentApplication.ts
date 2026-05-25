@@ -6,19 +6,23 @@ import type {
 import { SessionManager } from "../sessionManager.js";
 import { createSubAgentEventSink } from "../runtime/subAgentEventSink.js";
 import type { SubAgentEventSink } from "../runtime/subAgentEventSink.js";
-import { FileCheckpoint } from "../revert/fileCheckpoint.js";
 import { subscribeSubAgentNotifications } from "./turns/subAgentNotifications.js";
 import { ProjectionPolicy } from "./projection/ProjectionPolicy.js";
 import { RevertController, type RevertSessionCoordinator } from "./revert/RevertController.js";
+import {
+  SessionStorageCoordinator,
+  type AgentSessionStorage,
+} from "./sessions/SessionStorage.js";
 import { AgentStateStore } from "./state/AgentStateStore.js";
+import { TurnTransactionCoordinator } from "./turns/TurnTransaction.js";
 import { TurnLifecycle } from "./turns/TurnLifecycle.js";
 import {
   defaultRunRecorder,
   type RunRecorder,
 } from "../persistence/runRecorder.js";
+import { storageEngine } from "../persistence/storageEngine.js";
 import type {
   AgentApplicationOptions,
-  AgentSessionService,
   ChatSessionState,
   SendOptions,
 } from "./types.js";
@@ -26,11 +30,11 @@ import type {
 export class AgentApplication implements RevertSessionCoordinator {
   private readonly state: AgentStateStore;
   private readonly projection: ProjectionPolicy;
-  private readonly sessionManager: AgentSessionService;
+  private readonly sessions: AgentSessionStorage;
   private readonly turns: TurnLifecycle;
   private readonly revert: RevertController;
   private readonly subAgentEvents: SubAgentEventSink;
-  private readonly fileCheckpoint: FileCheckpoint;
+  private readonly turnTransactions: TurnTransactionCoordinator;
   private readonly recorder: RunRecorder;
   private subAgentUnsubs: Array<() => void> = [];
   private notifyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -38,14 +42,20 @@ export class AgentApplication implements RevertSessionCoordinator {
 
   constructor(workspaceId?: string, options?: AgentApplicationOptions) {
     this.recorder = options?.recorder ?? defaultRunRecorder;
-    this.sessionManager =
-      options?.sessionManager ?? new SessionManager(workspaceId);
+    this.sessions =
+      options?.sessionStorage ??
+      new SessionStorageCoordinator({
+        sessions: new SessionManager(workspaceId, storageEngine),
+        recorder: this.recorder,
+      });
 
     this.projection = new ProjectionPolicy();
-    this.fileCheckpoint = options?.fileCheckpoint ?? new FileCheckpoint();
+    this.turnTransactions =
+      options?.turnTransactions ??
+      new TurnTransactionCoordinator({ recorder: this.recorder });
     this.subAgentEvents = createSubAgentEventSink();
     this.state = new AgentStateStore(
-      { workspace: this.sessionManager.getWorkspace() },
+      { workspace: this.sessions.getWorkspace() },
       this.projection,
     );
 
@@ -54,15 +64,14 @@ export class AgentApplication implements RevertSessionCoordinator {
       projection: this.projection,
       recorder: this.recorder,
       subAgentEvents: this.subAgentEvents,
-      fileCheckpoint: this.fileCheckpoint,
+      turnTransactions: this.turnTransactions,
       appendFinalEvents: (events) => this.state.appendPersistedEvents(events),
       dependencies: options?.turnLifecycle,
     });
     this.revert = new RevertController(
       this.state,
       this,
-      this.recorder,
-      this.fileCheckpoint,
+      this.turnTransactions,
     );
 
     this.refreshSessions();
@@ -100,45 +109,50 @@ export class AgentApplication implements RevertSessionCoordinator {
   }
 
   ensureSession(title?: string, userInput?: string): string {
-    const sessionId = this.sessionManager.ensureSession(title, userInput);
+    const sessionId = this.sessions.ensureSession(title, userInput);
     this.refreshSessions();
     return sessionId;
   }
 
   async switchSession(sessionId: string): Promise<void> {
     this.turns.cancel();
-    this.sessionManager.switchSession(sessionId);
+    this.sessions.switchSession(sessionId);
     this.refreshSessions();
     this.state.setPersistedEvents([]);
     await this.reloadCurrentSessionEvents();
   }
 
   createSession(title?: string): Session {
-    const session = this.sessionManager.createSession(title);
+    const session = this.sessions.createSession(title);
     this.refreshSessions();
     return session;
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    await this.sessionManager.deleteSession(sessionId);
-    await this.recorder.deleteSessionEvents(sessionId);
+    await this.sessions.deleteSession(sessionId);
     this.refreshSessions();
     if (this.getCurrentSessionId() === null) {
       this.state.setPersistedEvents([]);
     }
   }
 
+  async deleteAllSessions(): Promise<void> {
+    await this.sessions.deleteAllSessions();
+    this.refreshSessions();
+    this.state.setPersistedEvents([]);
+  }
+
   renameSession(sessionId: string, title: string): void {
-    this.sessionManager.renameSession(sessionId, title);
+    this.sessions.renameSession(sessionId, title);
     this.refreshSessions();
   }
 
   listSessions(): Session[] {
-    return this.sessionManager.listSessions();
+    return this.sessions.listSessions();
   }
 
   getCurrentSessionId(): string | null {
-    return this.sessionManager.getCurrentSessionId();
+    return this.sessions.getCurrentSessionId();
   }
 
   get currentSessionId(): string | null {
@@ -146,7 +160,7 @@ export class AgentApplication implements RevertSessionCoordinator {
   }
 
   get workspaceRoot(): string {
-    return this.sessionManager.getWorkspace().rootPath;
+    return this.sessions.getWorkspace().rootPath;
   }
 
   setMode(mode: AgentMode): void {
@@ -167,10 +181,7 @@ export class AgentApplication implements RevertSessionCoordinator {
   }
 
   async reloadCurrentSessionEvents(): Promise<void> {
-    const sessionId = this.getCurrentSessionId();
-    this.state.setPersistedEvents(
-      sessionId ? await this.recorder.loadCompletedEvents(sessionId) : [],
-    );
+    this.state.setPersistedEvents(await this.sessions.loadCurrentSessionEvents());
   }
 
   revertLastTurn(): Promise<CommandResult> {
@@ -196,9 +207,9 @@ export class AgentApplication implements RevertSessionCoordinator {
 
   private refreshSessions(): void {
     this.state.setSessionState({
-      sessions: this.sessionManager.listSessions(),
-      currentSessionId: this.sessionManager.getCurrentSessionId(),
-      workspace: this.sessionManager.getWorkspace(),
+      sessions: this.sessions.listSessions(),
+      currentSessionId: this.sessions.getCurrentSessionId(),
+      workspace: this.sessions.getWorkspace(),
     });
   }
 

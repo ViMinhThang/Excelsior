@@ -228,7 +228,7 @@ describe("filesystem tool workspace bounds", () => {
     const result = await executeTool(createWriteTool({
       ...ctx(),
       mode: "act",
-      revert: { fileCheckpoint },
+      revert: fileCheckpoint,
     }), {
       filePath: "inside.txt",
       content: "agent edit\n",
@@ -251,7 +251,7 @@ describe("filesystem tool workspace bounds", () => {
     const result = await executeTool(createEditTool({
       ...ctx(),
       mode: "act",
-      revert: { fileCheckpoint },
+      revert: fileCheckpoint,
     }), {
       filePath: "inside.txt",
       oldText: "needle",
@@ -277,7 +277,7 @@ describe("filesystem tool workspace bounds", () => {
       ...ctx(),
       mode: "act",
       confirm: { getListenerCount: () => 1, request },
-      revert: { fileCheckpoint },
+      revert: fileCheckpoint,
     }), {
       filePath: "inside.txt",
       content: "agent edit\n",

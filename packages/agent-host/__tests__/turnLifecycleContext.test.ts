@@ -3,6 +3,7 @@ import {
   AgentStateStore,
   ProjectionPolicy,
   TurnLifecycle,
+  TurnTransactionCoordinator,
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
@@ -11,7 +12,6 @@ import {
   type RunRecorder,
   type RunSessionConfig,
 } from "@excelsior/agent-host/testing/runtime";
-import { FileCheckpoint } from "@excelsior/agent-host/testing/tools";
 
 function createState(): AgentStateStore {
   return new AgentStateStore(
@@ -54,7 +54,8 @@ describe("TurnLifecycle context assembly", () => {
       emit: vi.fn(),
       on: vi.fn(() => () => {}),
     };
-    const fileCheckpoint = new FileCheckpoint();
+    const recorder = createRecorder();
+    const turnTransactions = new TurnTransactionCoordinator({ recorder });
     const configs: RunSessionConfig[] = [];
     let run!: AgentRun;
     const createRunSession = vi.fn((config: RunSessionConfig) => {
@@ -73,9 +74,9 @@ describe("TurnLifecycle context assembly", () => {
     const lifecycle = new TurnLifecycle({
       state,
       projection: new ProjectionPolicy(),
-      recorder: createRecorder(),
+      recorder,
       subAgentEvents,
-      fileCheckpoint,
+      turnTransactions,
       appendFinalEvents: vi.fn(),
       dependencies: { createRunSession },
     });
@@ -98,7 +99,7 @@ describe("TurnLifecycle context assembly", () => {
     expect(config.mode).toBe("act");
     expect(config.workspaceRoot).toBe("C:/workspace");
     expect(config.subAgentEvents).toBe(subAgentEvents);
-    expect(config.fileCheckpoint).toBe(fileCheckpoint);
+    expect(config.turnTransactions).toBe(turnTransactions);
     expect(run.getSnapshot()).toEqual([
       expect.objectContaining({
         type: "user-input",
