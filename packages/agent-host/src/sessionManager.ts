@@ -2,7 +2,7 @@ import type { Session, Workspace } from "@excelsior/core";
 import {
   getOrCreateDefaultWorkspace,
   loadWorkspace,
-} from "./lib/persistence/workspaceStore.js";
+} from "./persistence/workspaceStore.js";
 import {
   defaultSessionMetadataStore,
   type SessionMetadataStore,

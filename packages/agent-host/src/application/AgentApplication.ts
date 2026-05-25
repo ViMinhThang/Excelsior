@@ -4,9 +4,9 @@ import type {
   Session,
 } from "@excelsior/core";
 import { SessionManager } from "../sessionManager.js";
-import { createSubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
-import type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
-import { FileCheckpoint } from "../lib/revert/fileCheckpoint.js";
+import { createSubAgentEventSink } from "../runtime/subAgentEventSink.js";
+import type { SubAgentEventSink } from "../runtime/subAgentEventSink.js";
+import { FileCheckpoint } from "../revert/fileCheckpoint.js";
 import { subscribeSubAgentNotifications } from "./turns/subAgentNotifications.js";
 import { ProjectionService } from "./projection/ProjectionService.js";
 import { RevertController } from "./revert/RevertController.js";
@@ -16,7 +16,7 @@ import { TurnLifecycle } from "./turns/TurnLifecycle.js";
 import {
   defaultRunRecorder,
   type RunRecorder,
-} from "../lib/persistence/runRecorder.js";
+} from "../persistence/runRecorder.js";
 import type {
   AgentApplicationOptions,
   AgentSessionService,

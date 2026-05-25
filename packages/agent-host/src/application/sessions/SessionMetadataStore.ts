@@ -1,11 +1,11 @@
 import Database from "better-sqlite3";
 import type { Session } from "@excelsior/core";
-import { getDb } from "../../lib/persistence/db.js";
-import * as QUERIES from "../../lib/persistence/queries.js";
+import { getDb } from "../../persistence/db.js";
+import * as QUERIES from "../../persistence/queries.js";
 import {
   rowToSession,
   type SessionDbRow,
-} from "../../lib/persistence/rowTypes.js";
+} from "../../persistence/rowTypes.js";
 
 interface ExistingSessionRow {
   started_at: string;

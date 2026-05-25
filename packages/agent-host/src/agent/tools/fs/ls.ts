@@ -1,9 +1,9 @@
 import { tool } from "ai";
 import { z } from "zod";
 import fs from "node:fs/promises";
-import type { ToolContext } from "../../../lib/tool/context.js";
-import { authorizeToolAction } from "../../../lib/tool/policy.js";
-import { resolveWorkspacePath } from "../../../lib/tool/workspace.js";
+import type { ToolContext } from "../../../tooling/context.js";
+import { authorizeToolAction } from "../../../tooling/policy.js";
+import { resolveWorkspacePath } from "../../../tooling/workspace.js";
 
 export const lsSchema = z.object({
   directoryPath: z.string().optional().describe("Path to the directory to list. Defaults to '.'"),

@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import type { ToolContext } from "../../../lib/tool/context.js";
+import type { ToolContext } from "../../../tooling/context.js";
 import {
   applyFileChange,
   ensureParentDirectory,

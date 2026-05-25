@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import fs from "node:fs/promises";
-import type { ToolContext } from "../../../lib/tool/context.js";
+import type { ToolContext } from "../../../tooling/context.js";
 import { applyFileChange, fileChangeUserError } from "./fileChange.js";
 
 export const editSchema = z.object({

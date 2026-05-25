@@ -1,4 +1,4 @@
-import { getSetting, setSetting } from "../lib/persistence/db.js";
+import { getSetting, setSetting } from "../persistence/db.js";
 import type { SettingsStore } from "./SettingsStore.js";
 
 /**

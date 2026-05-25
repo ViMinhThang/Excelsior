@@ -14,7 +14,7 @@ import {
   commandDefinitions,
   executeAgentCommand,
 } from "../commands.js";
-import { defaultRunRecorder } from "../lib/persistence/runRecorder.js";
+import { defaultRunRecorder } from "../persistence/runRecorder.js";
 import { createAgentClientState } from "./clientState.js";
 import { HostConfirmationController } from "./confirmationController.js";
 import { HostSettingsService } from "./settingsService.js";

@@ -1,6 +1,6 @@
 import type { CommandResult } from "@excelsior/core";
-import { postPRComment } from "../lib/github/ghComment.js";
-import { fetchPRDiff } from "../lib/github/github.js";
+import { postPRComment } from "../github/ghComment.js";
+import { fetchPRDiff } from "../github/github.js";
 import type { AgentCommand, AgentCommandHost, ReviewCommandServices } from "./types.js";
 
 export const defaultReviewCommandServices: ReviewCommandServices = {

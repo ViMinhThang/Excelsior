@@ -1,5 +1,5 @@
 import type { ConfirmRequest } from "@excelsior/core";
-import { confirmBus } from "../lib/runtime/confirmBus.js";
+import { confirmBus } from "../runtime/confirmBus.js";
 
 export class HostConfirmationController {
   private pendingConfirmation: ConfirmRequest | null = null;

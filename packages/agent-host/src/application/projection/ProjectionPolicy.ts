@@ -1,8 +1,8 @@
 import type { AgentMessage } from "@excelsior/core";
-import type { AnyAgentEvent } from "../../lib/runtime/events.js";
-import { projectEventsToAIMessages } from "../../lib/projection/aiHistoryProjection.js";
-import { projectEventsToDisplayBlocks } from "../../lib/projection/chatTranscriptProjection.js";
-import type { ProjectedBlock } from "../../lib/projection/display.js";
+import type { AnyAgentEvent } from "../../runtime/events.js";
+import { projectEventsToAIMessages } from "../../projection/aiHistoryProjection.js";
+import { projectEventsToDisplayBlocks } from "../../projection/chatTranscriptProjection.js";
+import type { ProjectedBlock } from "../../projection/display.js";
 import type { ProjectionInputState } from "../types.js";
 
 export interface ProjectionResult {

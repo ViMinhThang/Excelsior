@@ -3,9 +3,9 @@ import { z } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { Dirent } from "node:fs";
-import type { ToolContext } from "../../../lib/tool/context.js";
-import { authorizeToolAction } from "../../../lib/tool/policy.js";
-import { getWorkspaceRoot, validateWorkspacePattern } from "../../../lib/tool/workspace.js";
+import type { ToolContext } from "../../../tooling/context.js";
+import { authorizeToolAction } from "../../../tooling/policy.js";
+import { getWorkspaceRoot, validateWorkspacePattern } from "../../../tooling/workspace.js";
 
 // Converts a glob pattern to a highly accurate RegExp
 function globToRegex(pattern: string): RegExp {

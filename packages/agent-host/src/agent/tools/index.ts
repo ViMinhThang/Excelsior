@@ -5,7 +5,7 @@ import { createLsTool } from "./fs/ls.js";
 import { createViewTool } from "./fs/view.js";
 import { createGlobTool } from "./fs/glob.js";
 import { createRipgrepTool } from "./fs/ripgrep.js";
-import type { ToolContext } from "../../lib/tool/context.js";
+import type { ToolContext } from "../../tooling/context.js";
 
 export function createFileTools(ctx?: ToolContext) {
   return {

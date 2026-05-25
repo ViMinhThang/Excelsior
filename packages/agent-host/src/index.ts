@@ -26,4 +26,4 @@ export {
 export {
   createWorkspace,
   loadWorkspaces,
-} from "./lib/persistence/workspaceStore.js";
+} from "./persistence/workspaceStore.js";

@@ -4,11 +4,11 @@ import type {
   SendOptions,
   Workspace,
 } from "@excelsior/core";
-import type { AgentRun } from "../lib/runtime/agentRun.js";
-import type { AnyAgentEvent } from "../lib/runtime/events.js";
-import type { ProjectedBlock } from "../lib/projection/display.js";
-import type { FileCheckpoint } from "../lib/revert/fileCheckpoint.js";
-import type { RunRecorder } from "../lib/persistence/runRecorder.js";
+import type { AgentRun } from "../runtime/agentRun.js";
+import type { AnyAgentEvent } from "../runtime/events.js";
+import type { ProjectedBlock } from "../projection/display.js";
+import type { FileCheckpoint } from "../revert/fileCheckpoint.js";
+import type { RunRecorder } from "../persistence/runRecorder.js";
 import type { TurnLifecycleDependencies } from "./turns/TurnLifecycle.js";
 
 export interface ChatSessionState {

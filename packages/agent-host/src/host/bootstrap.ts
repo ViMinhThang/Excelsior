@@ -1,4 +1,4 @@
-import { initDb, logError } from "../lib/persistence/db.js";
+import { initDb, logError } from "../persistence/db.js";
 
 export function initializeAgentHostRuntime(): void {
   initDb();

@@ -1,0 +1,95 @@
+import { describe, expect, it } from "vitest";
+import { getChatModeHint } from "../src/lib/modeHints.js";
+import { chatModeRegistry } from "../src/chatModes/index.js";
+
+describe("chat mode hints", () => {
+  it("shows Ctrl+O only when sub-agent blocks exist", () => {
+    expect(getChatModeHint({
+      chatMode: "input",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      toolCount: 0,
+    })).not.toContain("Ctrl+O");
+    expect(getChatModeHint({
+      chatMode: "input",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      toolCount: 0,
+    })).toContain("Ctrl+K");
+
+    expect(getChatModeHint({
+      chatMode: "input",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 1,
+      toolCount: 0,
+    })).toContain("sub-agent");
+  });
+
+  it("shows tool focus hints when tool blocks exist", () => {
+    expect(getChatModeHint({
+      chatMode: "input",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      toolCount: 1,
+    })).toContain("Ctrl+T tools");
+
+    expect(getChatModeHint({
+      chatMode: "tool-focus",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      toolCount: 1,
+    })).toBe("Enter expand/collapse | d detail | Up/Down tools | Ctrl+T/Esc back");
+  });
+
+  it("uses panel and sub-agent mode hints", () => {
+    expect(getChatModeHint({
+      chatMode: "input",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: "session.picker",
+      subAgentCount: 0,
+      toolCount: 0,
+    })).toBe("Up/Down select | Enter open | Esc close");
+
+    expect(getChatModeHint({
+      chatMode: "subagent-picker",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 1,
+      toolCount: 0,
+    })).toBe("Enter view detail | ↑↓ navigate | Esc close");
+
+    expect(getChatModeHint({
+      chatMode: "subagent-detail",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 1,
+      toolCount: 0,
+    })).toBe("Esc back to list | Ctrl+O close");
+  });
+
+  it("delegates mode-specific hints through the chat mode registry", () => {
+    const input = {
+      chatMode: "tool-detail" as const,
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      toolCount: 1,
+    };
+
+    expect(getChatModeHint(input)).toBe(chatModeRegistry["tool-detail"].getHint(input));
+  });
+});
