@@ -1,13 +1,17 @@
 import type { CommandResult } from "@excelsior/core";
 import type { FileCheckpoint } from "../../revert/fileCheckpoint.js";
 import type { RunRecorder } from "../../persistence/runRecorder.js";
-import type { SessionController } from "../sessions/SessionController.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
+
+export interface RevertSessionCoordinator {
+  readonly currentSessionId: string | null;
+  reloadCurrentSessionEvents(): Promise<void>;
+}
 
 export class RevertController {
   constructor(
     private readonly state: AgentStateStore,
-    private readonly sessions: SessionController,
+    private readonly sessions: RevertSessionCoordinator,
     private readonly recorder: RunRecorder,
     private readonly fileCheckpoint: FileCheckpoint,
   ) {}

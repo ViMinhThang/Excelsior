@@ -4,13 +4,11 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   AgentStateStore,
-  ProjectionService,
+  ProjectionPolicy,
   RevertController,
-  SessionController,
 } from "@excelsior/agent-host/testing/application";
 import type { RunRecorder } from "@excelsior/agent-host/testing/runtime";
 import { FileCheckpoint } from "@excelsior/agent-host/testing/tools";
-import { createFakeSessionManager } from "./helpers/agentApplication.js";
 
 describe("RevertController", () => {
   let workspaceRoot: string;
@@ -32,16 +30,12 @@ describe("RevertController", () => {
           rootPath: workspaceRoot,
         },
       },
-      new ProjectionService(),
+      new ProjectionPolicy(),
     );
-    const sessionManager = createFakeSessionManager();
-    const sessions = new SessionController(
-      sessionManager,
-      recorder,
-      state,
-      () => {},
-    );
-    sessions.createSession("Test");
+    const sessions = {
+      currentSessionId: "ses_1",
+      reloadCurrentSessionEvents: vi.fn(async () => {}),
+    };
     const fileCheckpoint = new FileCheckpoint();
     const controller = new RevertController(
       state,
@@ -49,7 +43,7 @@ describe("RevertController", () => {
       recorder,
       fileCheckpoint,
     );
-    return { controller, fileCheckpoint, state };
+    return { controller, fileCheckpoint, state, sessions };
   }
 
   it("refuses while a run is active", async () => {

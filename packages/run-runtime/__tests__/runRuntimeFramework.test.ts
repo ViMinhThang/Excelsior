@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { EventfulRun, RunOrchestrator } from "@excelsior/run-runtime";
+import { EventfulRun } from "@excelsior/run-runtime";
 
 type TestEvents = {
   "run-start": Record<string, never>;
@@ -147,12 +147,11 @@ describe("@excelsior/run-runtime EventfulRun", () => {
   });
 });
 
-describe("@excelsior/run-runtime RunOrchestrator", () => {
+describe("@excelsior/run-runtime EventfulRun.start", () => {
   it("calls execute with run, signal, and emit, then resolves completion with emitted events", async () => {
     const run = new EventfulRun<TestEvents>();
-    const orchestrator = new RunOrchestrator<TestEvents>();
 
-    const handle = orchestrator.start(run, {
+    const handle = run.start({
       execute: async ({ run: activeRun, signal, emit }) => {
         expect(activeRun).toBe(run);
         expect(signal).toBe(run.abortSignal);
@@ -173,9 +172,8 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
 
   it("cancel aborts the run, reports cancelled completion, and removes the event listener", async () => {
     const run = new EventfulRun<TestEvents>();
-    const orchestrator = new RunOrchestrator<TestEvents>();
 
-    const handle = orchestrator.start(run, {
+    const handle = run.start({
       execute: async ({ signal }) => {
         if (signal.aborted) return;
         await new Promise<void>((resolve) => {
@@ -197,9 +195,8 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
   it("reports parent aborts as cancelled completion", async () => {
     const parent = new AbortController();
     const run = new EventfulRun<TestEvents>({ parentSignal: parent.signal });
-    const orchestrator = new RunOrchestrator<TestEvents>();
 
-    const handle = orchestrator.start(run, {
+    const handle = run.start({
       execute: async ({ signal }) => {
         if (signal.aborted) return;
         await new Promise<void>((resolve) => {
@@ -220,11 +217,10 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
 
   it("reports abort errors as cancelled completion", async () => {
     const run = new EventfulRun<TestEvents>();
-    const orchestrator = new RunOrchestrator<TestEvents>();
     const abortError = new Error("aborted by transport");
     abortError.name = "AbortError";
 
-    const handle = orchestrator.start(run, {
+    const handle = run.start({
       execute: async () => {
         throw abortError;
       },
@@ -239,10 +235,9 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
 
   it("records only events allowed by persist.filter", async () => {
     const run = new EventfulRun<TestEvents>();
-    const orchestrator = new RunOrchestrator<TestEvents>();
     const recorded: string[] = [];
 
-    const handle = orchestrator.start(run, {
+    const handle = run.start({
       persist: {
         filter: (event) => event.type !== "run-start",
         write: async (event) => {
@@ -264,11 +259,10 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
 
   it("fires persist.onError once for repeated recorder failures", async () => {
     const run = new EventfulRun<TestEvents>();
-    const orchestrator = new RunOrchestrator<TestEvents>();
     const onPersistError = vi.fn();
     const attempts: string[] = [];
 
-    const handle = orchestrator.start(run, {
+    const handle = run.start({
       persist: {
         write: async (event) => {
           if (event.type === "message") attempts.push(event.data.text);
@@ -295,11 +289,10 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
 
   it("waits for pending persistence writes and listener cleanup before resolving completion", async () => {
     const run = new EventfulRun<TestEvents>();
-    const orchestrator = new RunOrchestrator<TestEvents>();
     let releaseWrite: (() => void) | null = null;
     let completionResolved = false;
 
-    const handle = orchestrator.start(run, {
+    const handle = run.start({
       persist: {
         write: async () => {
           await new Promise<void>((resolve) => {
@@ -331,10 +324,9 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
 
   it("persists events FIFO without overlapping delayed writes", async () => {
     const run = new EventfulRun<TestEvents>();
-    const orchestrator = new RunOrchestrator<TestEvents>();
     const order: string[] = [];
 
-    const handle = orchestrator.start(run, {
+    const handle = run.start({
       persist: {
         write: async (event) => {
           if (event.type !== "message") return;
@@ -365,11 +357,10 @@ describe("@excelsior/run-runtime RunOrchestrator", () => {
 
   it("handles non-abort execute errors without knowing app error events", async () => {
     const run = new EventfulRun<TestEvents>();
-    const orchestrator = new RunOrchestrator<TestEvents>();
     const onError = vi.fn();
     const error = new Error("boom");
 
-    const handle = orchestrator.start(run, {
+    const handle = run.start({
       onError,
       execute: async ({ emit }) => {
         emit("message", { text: "before" });

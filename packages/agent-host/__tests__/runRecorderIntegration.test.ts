@@ -13,12 +13,8 @@ const streamTextDelta: AgentResponseStreamer = async ({ emit }) => {
   emit("text-delta", { delta: "hello" });
 };
 
-async function* streamParts(parts: readonly unknown[]): AsyncIterable<unknown> {
-  for (const part of parts) yield part;
-}
-
 const noopAgent: StreamCapableAgent = {
-  stream: async () => ({ fullStream: streamParts([]) }),
+  stream: async () => {},
 };
 
 function fakeRecorder() {
@@ -73,13 +69,13 @@ describe("run recorder integration", () => {
   it("streams through a minimal event sink without requiring AgentRun", async () => {
     const emitted: Array<{ type: string; data: unknown; relatedToolCallId?: string }> = [];
     const agent: StreamCapableAgent = {
-      stream: async () => ({
-        fullStream: streamParts([
-          { type: "text-delta", text: "hello" },
-          { type: "tool-call", toolCallId: "tc1", toolName: "view", input: { filePath: "README.md" } },
-          { type: "tool-result", toolCallId: "tc1", output: { type: "text", value: "ok" } },
-        ]),
-      }),
+      stream: async ({ emit }) => {
+        emit("run-start", {});
+        emit("text-delta", { delta: "hello" });
+        emit("tool-call-start", { toolCallId: "tc1", toolName: "view", toolArgs: JSON.stringify({ filePath: "README.md" }) }, { relatedToolCallId: "tc1" });
+        emit("tool-call-end", { toolCallId: "tc1", toolName: "view", toolArgs: JSON.stringify({ filePath: "README.md" }), result: "ok", status: "success" }, { relatedToolCallId: "tc1" });
+        emit("run-end", { cancelled: false });
+      },
     };
 
     await streamAgentResponse({

@@ -1,4 +1,4 @@
-import { RunOrchestrator, type RunHandle } from "@excelsior/run-runtime";
+import { type RunHandle } from "@excelsior/run-runtime";
 import { AgentRun } from "../runtime/agentRun.js";
 import { AgentEventDataMap, AnyAgentEvent } from "../runtime/events.js";
 import { createToolContext, ToolContext } from "../tooling/context.js";
@@ -46,87 +46,117 @@ export interface RunSessionResult {
   sessionId: string;
 }
 
-const orchestrator = new RunOrchestrator<AgentEventDataMap>();
+export class RunSession {
+  readonly run: AgentRun;
+  readonly childRuns = new Map<string, AgentRun>();
+  readonly sessionId: string;
+  private readonly recorder: RunRecorder;
+  private readonly subAgentEvents: SubAgentEventSink;
+  private readonly config: RunSessionConfig;
+  private handle!: RunHandle<AgentEventDataMap>;
+  private checkpointPromise: Promise<void> | null = null;
 
-export function createRunSession(config: RunSessionConfig): RunSessionResult {
-  const sessionId = config.sessionId ?? `ses_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-  const run = new AgentRun({ sessionId, parentSignal: config.signal });
-  const childRuns = new Map<string, AgentRun>();
-  const recorder = config.recorder ?? defaultRunRecorder;
-  const subAgentEvents = config.subAgentEvents ?? createSubAgentEventSink();
-  config.fileCheckpoint?.beginTurn(sessionId, run.id);
+  constructor(config: RunSessionConfig) {
+    this.config = config;
+    this.sessionId = config.sessionId ?? `ses_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    this.run = new AgentRun({ sessionId: this.sessionId, parentSignal: config.signal });
+    this.recorder = config.recorder ?? defaultRunRecorder;
+    this.subAgentEvents = config.subAgentEvents ?? createSubAgentEventSink();
+  }
 
-  const ctx = createToolContext({
-    abortSignal: run.abortSignal,
-    confirmBus,
-    mode: config.mode,
-    workspaceRoot: config.workspaceRoot,
-    revert: config.fileCheckpoint
-      ? { fileCheckpoint: config.fileCheckpoint }
-      : undefined,
-  });
-  const runCtx: RunContext = { ctx, run, childRuns, recorder, subAgentEvents };
+  start(): RunSessionResult {
+    this.config.fileCheckpoint?.beginTurn(this.sessionId, this.run.id);
 
-  const handle = orchestrator.start(run, {
-    execute: async ({ signal, emit }) => {
-      await (config.streamAgentResponse ?? defaultStreamAgentResponse)({
-        agent: config.createAgent(runCtx),
-        messages: config.messages,
-        signal,
-        emit,
-      });
-    },
-    persist: {
-      filter: (event) =>
-        event.type !== RUN_START && event.type !== PERSISTENCE_ERROR,
-      write: (event) => recorder.recordEvent(sessionId, event),
-      onError: (error, event) => {
-        run.emit(PERSISTENCE_ERROR, {
-          message: `Failed to persist run event: ${formatError(error)}`,
-          failedEventType: event.type,
+    const ctx = createToolContext({
+      abortSignal: this.run.abortSignal,
+      confirmBus,
+      mode: this.config.mode,
+      workspaceRoot: this.config.workspaceRoot,
+      revert: this.config.fileCheckpoint
+        ? { fileCheckpoint: this.config.fileCheckpoint }
+        : undefined,
+    });
+    const runCtx: RunContext = {
+      ctx,
+      run: this.run,
+      childRuns: this.childRuns,
+      recorder: this.recorder,
+      subAgentEvents: this.subAgentEvents,
+    };
+
+    const baseHandle = this.run.start({
+      execute: async ({ signal, emit }) => {
+        await (this.config.streamAgentResponse ?? defaultStreamAgentResponse)({
+          agent: this.config.createAgent(runCtx),
+          messages: this.config.messages,
+          signal,
+          emit,
         });
       },
-    },
-    onError: (error) => {
-      run.emit(ERROR, { message: formatError(error) });
-    },
-  });
+      persist: {
+        filter: (event) =>
+          event.type !== RUN_START && event.type !== PERSISTENCE_ERROR,
+        write: (event) => this.recorder.recordEvent(this.sessionId, event),
+        onError: (error, event) => {
+          this.run.emit(PERSISTENCE_ERROR, {
+            message: `Failed to persist run event: ${formatError(error)}`,
+            failedEventType: event.type,
+          });
+        },
+      },
+      onError: (error) => {
+        this.run.emit(ERROR, { message: formatError(error) });
+      },
+    });
 
-  let checkpointPromise: Promise<void> | null = null;
-  const recordTurnCompleteOnce = (): Promise<void> => {
-    checkpointPromise ??= recorder
-      .recordTurnComplete(sessionId, run.id, getNextSequence(run.getSnapshot()))
+    const completion = baseHandle.completion.then(
+      async (result) => {
+        if (result.status === "completed" || result.status === "failed") {
+          await this.recordTurnCompleteOnce();
+          this.config.fileCheckpoint?.completeTurn(this.sessionId, this.run.id);
+        } else {
+          this.config.fileCheckpoint?.discardActiveTurn(this.run.id);
+        }
+        return result;
+      },
+      (error: unknown) => {
+        this.config.fileCheckpoint?.discardActiveTurn(this.run.id);
+        throw error;
+      },
+    );
+
+    this.handle = {
+      ...baseHandle,
+      completion,
+    };
+
+    return {
+      run: this.run,
+      childRuns: this.childRuns,
+      handle: this.handle,
+      sessionId: this.sessionId,
+    };
+  }
+
+  cancel(): void {
+    this.handle?.cancel();
+  }
+
+  private recordTurnCompleteOnce(): Promise<void> {
+    this.checkpointPromise ??= this.recorder
+      .recordTurnComplete(this.sessionId, this.run.id, getNextSequence(this.run.getSnapshot()))
       .catch((error: unknown) => {
-        run.emit(PERSISTENCE_ERROR, {
+        this.run.emit(PERSISTENCE_ERROR, {
           message: `Failed to persist turn checkpoint: ${formatError(error)}`,
           failedEventType: "turn-complete",
         });
       });
-    return checkpointPromise;
-  };
+    return this.checkpointPromise;
+  }
+}
 
-  const completion = handle.completion.then(
-    async (result) => {
-      if (result.status === "completed" || result.status === "failed") {
-        await recordTurnCompleteOnce();
-        config.fileCheckpoint?.completeTurn(sessionId, run.id);
-      } else {
-        config.fileCheckpoint?.discardActiveTurn(run.id);
-      }
-      return result;
-    },
-    (error: unknown) => {
-      config.fileCheckpoint?.discardActiveTurn(run.id);
-      throw error;
-    },
-  );
-
-  const checkpointedHandle: RunHandle<AgentEventDataMap> = {
-    ...handle,
-    completion,
-  };
-
-  return { run, childRuns, handle: checkpointedHandle, sessionId };
+export function createRunSession(config: RunSessionConfig): RunSessionResult {
+  return new RunSession(config).start();
 }
 
 function formatError(error: unknown): string {

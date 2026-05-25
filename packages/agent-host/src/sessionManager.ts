@@ -1,12 +1,8 @@
 import type { Session, Workspace } from "@excelsior/core";
 import {
-  getOrCreateDefaultWorkspace,
-  loadWorkspace,
-} from "./persistence/workspaceStore.js";
-import {
-  defaultSessionMetadataStore,
-  type SessionMetadataStore,
-} from "./application/sessions/SessionMetadataStore.js";
+  storageEngine,
+  type StorageEngine,
+} from "./persistence/storageEngine.js";
 
 export class SessionManager {
   private _workspace: Workspace;
@@ -15,11 +11,11 @@ export class SessionManager {
 
   constructor(
     workspaceId?: string,
-    private readonly metadataStore: SessionMetadataStore = defaultSessionMetadataStore,
+    private readonly storage: StorageEngine = storageEngine,
   ) {
     const ws = workspaceId
-      ? loadWorkspace(workspaceId) ?? getOrCreateDefaultWorkspace()
-      : getOrCreateDefaultWorkspace();
+      ? this.storage.workspaces.load(workspaceId) ?? this.storage.workspaces.getOrCreateDefault()
+      : this.storage.workspaces.getOrCreateDefault();
     this._workspace = {
       id: ws.id,
       name: ws.name,
@@ -75,7 +71,7 @@ export class SessionManager {
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    await this.metadataStore.deleteSession(sessionId);
+    await this.storage.sessions.delete(sessionId);
     if (this._currentSessionId === sessionId) {
       this._currentSessionId = null;
     }
@@ -83,7 +79,7 @@ export class SessionManager {
   }
 
   renameSession(sessionId: string, title: string): void {
-    this.metadataStore.updateTitle(sessionId, title);
+    this.storage.sessions.updateTitle(sessionId, title);
     this._reloadSessions();
   }
 
@@ -102,7 +98,7 @@ export class SessionManager {
     const nextInput = userInput?.trim() || nextTitle;
     if (!session || !nextInput) return;
     if (session.metadata.userInput || (session.title && session.title !== "Untitled")) return;
-    this.metadataStore.persist({
+    this.storage.sessions.persist({
       ...session,
       updatedAt: new Date().toISOString(),
       metadata: { ...session.metadata, userInput: nextInput },
@@ -118,7 +114,7 @@ export class SessionManager {
   private _createAndPersist(title: string, userInput = ""): string {
     const now = new Date().toISOString();
     const id = this._makeSessionId();
-    this.metadataStore.persist({
+    this.storage.sessions.persist({
       id,
       startedAt: now,
       updatedAt: now,
@@ -130,6 +126,6 @@ export class SessionManager {
   }
 
   private _reloadSessions(): void {
-    this._sessions = this.metadataStore.loadByWorkspace(this._workspace.id);
+    this._sessions = this.storage.sessions.loadByWorkspace(this._workspace.id);
   }
 }

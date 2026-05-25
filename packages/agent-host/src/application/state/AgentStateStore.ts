@@ -1,7 +1,7 @@
 import type { AgentMode, Session, Workspace } from "@excelsior/core";
 import type { AgentRun } from "../../runtime/agentRun.js";
 import type { AnyAgentEvent } from "../../runtime/events.js";
-import type { ProjectionService } from "../projection/ProjectionService.js";
+import { ProjectionPolicy } from "../projection/ProjectionPolicy.js";
 import type { ChatSessionState, ProjectionInputState } from "../types.js";
 import {
   buildChatSessionSnapshot,
@@ -22,7 +22,7 @@ export class AgentStateStore {
 
   constructor(
     options: AgentStateStoreOptions,
-    private readonly projection: ProjectionService,
+    private readonly projection: ProjectionPolicy,
   ) {
     this.state = {
       sessions: [],

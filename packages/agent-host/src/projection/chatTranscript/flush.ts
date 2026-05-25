@@ -1,4 +1,4 @@
-import type { ProjectedBlock } from "../display.js";
+import type { ProjectedBlock } from "@excelsior/core";
 import { buildSubAgentBlock } from "../subAgentProjection.js";
 import type {
   ChatTranscriptProjectionContext,

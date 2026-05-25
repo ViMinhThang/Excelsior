@@ -48,15 +48,14 @@ cancellation so adapters can record final status events.
 Parent abort signals propagate into child runs and preserve the parent abort
 reason.
 
-## RunOrchestrator
+## Execution & Orchestration
 
-`RunOrchestrator.start(run, config)` executes caller-provided work and returns a
+`EventfulRun.start(config)` executes caller-provided work and returns a
 `RunHandle`:
 
 ```ts
 {
   cancel(reason?),
-  done,
   completion,
 }
 ```
@@ -68,9 +67,6 @@ reason.
   throws an abort-classified error.
 - `failed` when execution throws a non-abort error.
 
-`done` is kept for compatibility and resolves with recorded events. It preserves
-the previous abort-error behavior by rejecting when execution throws an
-abort-classified error.
 
 ## Persistence
 

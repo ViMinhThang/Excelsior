@@ -3,7 +3,7 @@ import type { RunCompletion, RunHandle } from "@excelsior/run-runtime";
 import {
   AgentStateStore,
   type CreateRunSession,
-  ProjectionService,
+  ProjectionPolicy,
   TurnLifecycle,
 } from "@excelsior/agent-host/testing/application";
 import {
@@ -56,7 +56,7 @@ function createState() {
         rootPath: "/tmp/workspace",
       },
     },
-    new ProjectionService(),
+    new ProjectionPolicy(),
   );
 }
 
@@ -66,7 +66,7 @@ function createLifecycle(input: {
 }) {
   return new TurnLifecycle({
     state: input.state,
-    projection: new ProjectionService(),
+    projection: new ProjectionPolicy(),
     recorder: createRecorder(),
     subAgentEvents: { emit: () => {}, on: () => () => {} },
     fileCheckpoint: new FileCheckpoint(),
@@ -118,7 +118,7 @@ describe("TurnLifecycle", () => {
     resolveCompletion = deferred.resolveCompletion;
     const lifecycle = new TurnLifecycle({
       state,
-      projection: new ProjectionService(),
+      projection: new ProjectionPolicy(),
       recorder: createRecorder(),
       subAgentEvents: { emit: () => {}, on: () => () => {} },
       fileCheckpoint: new FileCheckpoint(),
@@ -161,7 +161,7 @@ describe("TurnLifecycle", () => {
     resolveCompletion = deferred.resolveCompletion;
     const lifecycle = new TurnLifecycle({
       state,
-      projection: new ProjectionService(),
+      projection: new ProjectionPolicy(),
       recorder: createRecorder(),
       subAgentEvents: { emit: () => {}, on: () => () => {} },
       fileCheckpoint: new FileCheckpoint(),

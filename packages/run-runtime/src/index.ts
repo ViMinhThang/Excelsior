@@ -18,5 +18,5 @@ export type {
   RunExecutionContext,
   RunHandle,
   RunPersistenceConfig,
-} from "./runOrchestrator.js";
-export { RunOrchestrator } from "./runOrchestrator.js";
+} from "./eventfulRun.js";
+

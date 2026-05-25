@@ -24,6 +24,7 @@ export {
   resetDefaultAgentHost,
 } from "./host/defaultHost.js";
 export {
-  createWorkspace,
-  loadWorkspaces,
-} from "./persistence/workspaceStore.js";
+  createStorageEngine,
+  storageEngine,
+  type StorageEngine,
+} from "./persistence/storageEngine.js";

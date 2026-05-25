@@ -1,7 +1,6 @@
 import type { AgentMode, AgentMessage, SendOptions } from "@excelsior/core";
 import type { RunHandle } from "@excelsior/run-runtime";
-import { createAgent } from "../../agent/agent.js";
-import { createSpawnSubAgentTool } from "../../agent/spawn/spawnSubAgent.js";
+import { type AgentFactory, DefaultAgentFactory } from "../../agent/agentFactory.js";
 import type { RunRecorder } from "../../persistence/runRecorder.js";
 import type { FileCheckpoint } from "../../revert/fileCheckpoint.js";
 import type { AgentRun } from "../../runtime/agentRun.js";
@@ -11,7 +10,7 @@ import type {
 } from "../../runtime/events.js";
 import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { buildContextMessages } from "../context/contextBuilder.js";
-import type { ProjectionService } from "../projection/ProjectionService.js";
+import { ProjectionPolicy } from "../projection/ProjectionPolicy.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
 import {
   createRunSession,
@@ -26,11 +25,12 @@ export type CreateRunSession = (
 export interface TurnLifecycleDependencies {
   createRunSession?: CreateRunSession;
   extraTools?: Record<string, unknown>;
+  agentFactory?: AgentFactory;
 }
 
 export interface TurnLifecycleOptions {
   state: AgentStateStore;
-  projection: ProjectionService;
+  projection: ProjectionPolicy;
   recorder: RunRecorder;
   subAgentEvents: SubAgentEventSink;
   fileCheckpoint: FileCheckpoint;
@@ -47,12 +47,13 @@ export interface StartUserTurnOptions extends SendOptions {
 
 export class TurnLifecycle {
   private readonly state: AgentStateStore;
-  private readonly projection: ProjectionService;
+  private readonly projection: ProjectionPolicy;
   private readonly recorder: RunRecorder;
   private readonly subAgentEvents: SubAgentEventSink;
   private readonly fileCheckpoint: FileCheckpoint;
   private readonly appendFinalEvents: (events: readonly AnyAgentEvent[]) => void;
   private readonly dependencies: TurnLifecycleDependencies;
+  private readonly agentFactory: AgentFactory;
   private handle: RunHandle<AgentEventDataMap> | null = null;
   private unsubscribeLive: (() => void) | null = null;
 
@@ -64,6 +65,7 @@ export class TurnLifecycle {
     this.fileCheckpoint = options.fileCheckpoint;
     this.appendFinalEvents = options.appendFinalEvents;
     this.dependencies = options.dependencies ?? {};
+    this.agentFactory = this.dependencies.agentFactory ?? new DefaultAgentFactory();
   }
 
   get run(): AgentRun | null {
@@ -88,30 +90,18 @@ export class TurnLifecycle {
   private createTurnRun(
     options: StartUserTurnOptions,
   ): RunSessionResult {
-    const messages = buildContextMessages(
-      this.buildAIHistory(),
-      options.content,
-    );
+    const messages: AgentMessage[] = [
+      ...this.buildAIHistory(),
+      { role: "user", content: options.content },
+    ];
     const startRunSession =
       this.dependencies.createRunSession ?? createRunSession;
     const result = startRunSession({
       messages,
       createAgent: (runCtx) =>
-        createAgent(
-          undefined,
-          {
-            spawnSubAgent: createSpawnSubAgentTool(
-              runCtx.run,
-              runCtx.childRuns,
-              options.sessionId,
-              runCtx.ctx,
-              runCtx.recorder,
-              runCtx.subAgentEvents,
-            ),
-            ...this.dependencies.extraTools,
-          },
-          runCtx.ctx,
-        ),
+        this.agentFactory.create(runCtx, {
+          extraTools: this.dependencies.extraTools,
+        }),
       sessionId: options.sessionId,
       recorder: this.recorder,
       subAgentEvents: this.subAgentEvents,

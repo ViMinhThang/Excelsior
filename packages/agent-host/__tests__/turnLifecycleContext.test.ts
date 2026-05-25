@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   AgentStateStore,
-  ProjectionService,
+  ProjectionPolicy,
   TurnLifecycle,
 } from "@excelsior/agent-host/testing/application";
 import {
@@ -22,7 +22,7 @@ function createState(): AgentStateStore {
         rootPath: "C:/workspace",
       },
     },
-    new ProjectionService(),
+    new ProjectionPolicy(),
   );
 }
 
@@ -72,7 +72,7 @@ describe("TurnLifecycle context assembly", () => {
     });
     const lifecycle = new TurnLifecycle({
       state,
-      projection: new ProjectionService(),
+      projection: new ProjectionPolicy(),
       recorder: createRecorder(),
       subAgentEvents,
       fileCheckpoint,

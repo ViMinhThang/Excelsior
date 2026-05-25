@@ -7,7 +7,7 @@ import {
   createDb,
   resetDb,
 } from "@excelsior/agent-host/testing/persistence";
-import { createSessionMetadataStore } from "@excelsior/agent-host/testing/application";
+import { createStorageEngine } from "@excelsior/agent-host/testing/application";
 import Database from "better-sqlite3";
 
 let db: Database.Database;
@@ -78,7 +78,7 @@ describe("Database", () => {
 
   describe("session metadata", () => {
     it("preserves an existing title when later persistence omits title", () => {
-      const metadataStore = createSessionMetadataStore(db);
+      const metadataStore = createStorageEngine(db).sessions;
 
       metadataStore.persist({
         id: "ses_title_preserve",
