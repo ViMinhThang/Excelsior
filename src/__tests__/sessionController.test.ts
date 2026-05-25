@@ -3,9 +3,12 @@ import {
   AgentStateStore,
   ProjectionService,
   SessionController,
-  type SessionHistoryStore,
 } from "@excelsior/agent-host/testing/application";
-import { makeEvent, type AnyAgentEvent } from "@excelsior/agent-host/testing/runtime";
+import {
+  makeEvent,
+  type AnyAgentEvent,
+  type RunRecorder,
+} from "@excelsior/agent-host/testing/runtime";
 import { createFakeSessionManager } from "./helpers/agentApplication.js";
 
 function createController(events: AnyAgentEvent[] = []) {
@@ -20,22 +23,27 @@ function createController(events: AnyAgentEvent[] = []) {
     new ProjectionService(),
   );
   const cancelActiveTurn = vi.fn();
-  const historyStore: SessionHistoryStore = {
+  const recorder: RunRecorder = {
+    recordEvent: vi.fn(async () => {}),
+    recordTurnComplete: vi.fn(async () => {}),
     loadCompletedEvents: vi.fn(async () => events),
+    loadRawEvents: vi.fn(async () => []),
     getLastCompletedTurn: vi.fn(async () => null),
     dropLastCompletedTurn: vi.fn(async () => ({
       dropped: false,
       removedEvents: 0,
       reason: "no-completed-turn",
     })),
+    deleteSessionEvents: vi.fn(async () => {}),
+    deleteAllSessionEvents: vi.fn(async () => {}),
   };
   const controller = new SessionController(
     createFakeSessionManager(),
-    historyStore,
+    recorder,
     state,
     cancelActiveTurn,
   );
-  return { controller, state, cancelActiveTurn, historyStore };
+  return { controller, state, cancelActiveTurn, recorder };
 }
 
 describe("SessionController", () => {
@@ -53,13 +61,13 @@ describe("SessionController", () => {
 
   it("cancels active work and reloads persisted events when switching sessions", async () => {
     const event = makeEvent("run_1", "user-input", { content: "hi" }, 0) as AnyAgentEvent;
-    const { controller, state, cancelActiveTurn, historyStore } = createController([event]);
+    const { controller, state, cancelActiveTurn, recorder } = createController([event]);
     const session = controller.createSession("First");
 
     await controller.switchSession(session.id);
 
     expect(cancelActiveTurn).toHaveBeenCalled();
-    expect(historyStore.loadCompletedEvents).toHaveBeenCalledWith(session.id);
+    expect(recorder.loadCompletedEvents).toHaveBeenCalledWith(session.id);
     expect(state.persistedEvents).toEqual([event]);
   });
 });

@@ -9,16 +9,12 @@ import {
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
-  makeEvent,
-  TURN_COMPLETE,
   type AgentEventDataMap,
   type AnyAgentEvent,
   type SubAgentEventSink,
 } from "@excelsior/agent-host/testing/runtime";
 import {
-  appendEvent,
-  deleteAllSessionsEvents,
-  loadRawSessionEvents,
+  JsonlRunRecorder,
   resetSessionsDirForTests,
   setSessionsDirForTests,
 } from "@excelsior/agent-host/testing/persistence";
@@ -54,17 +50,15 @@ function createDeferredRunHandle(cancel = vi.fn()): {
   };
 }
 
-function getNextSequence(events: readonly AnyAgentEvent[]): number {
-  return events.reduce((max, event) => Math.max(max, event.sequence), -1) + 1;
-}
-
 async function persistCompletedRun(sessionId: string, run: AgentRun): Promise<void> {
+  const recorder = new JsonlRunRecorder();
   for (const event of run.getSnapshot()) {
-    await appendEvent(sessionId, event);
+    await recorder.recordEvent(sessionId, event);
   }
-  await appendEvent(
+  await recorder.recordTurnComplete(
     sessionId,
-    makeEvent(run.id, TURN_COMPLETE, { runId: run.id }, getNextSequence(run.getSnapshot())) as AnyAgentEvent,
+    run.id,
+    run.getSnapshot().reduce((max, event) => Math.max(max, event.sequence), -1) + 1,
   );
 }
 
@@ -466,7 +460,7 @@ describe("AgentApplication revert", () => {
   });
 
   afterEach(async () => {
-    await deleteAllSessionsEvents();
+    await new JsonlRunRecorder().deleteAllSessionEvents();
     resetSessionsDirForTests();
     await rm(sessionsDir, { recursive: true, force: true });
     await rm(workspaceRoot, { recursive: true, force: true });
@@ -511,7 +505,7 @@ describe("AgentApplication revert", () => {
 
     expect(result.message).toContain("Reverted latest turn");
     await expect(readFile(fullPath, "utf-8")).resolves.toBe("original");
-    await expect(loadRawSessionEvents("ses_1")).resolves.toEqual([]);
+    await expect(new JsonlRunRecorder().loadRawEvents("ses_1")).resolves.toEqual([]);
     expect(manager.getSnapshot().displayBlocks).toEqual([]);
   });
 
@@ -541,6 +535,6 @@ describe("AgentApplication revert", () => {
 
     expect(result.message).toContain("Cannot revert");
     await expect(readFile(fullPath, "utf-8")).resolves.toBe("user edit");
-    await expect(loadRawSessionEvents("ses_1")).resolves.toHaveLength(2);
+    await expect(new JsonlRunRecorder().loadRawEvents("ses_1")).resolves.toHaveLength(2);
   });
 });

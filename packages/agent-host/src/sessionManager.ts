@@ -1,21 +1,22 @@
 import type { Session, Workspace } from "@excelsior/core";
 import {
-  loadSessionsByWorkspace,
-  deleteSession as deleteSessionFromDB,
-  updateSessionTitle,
-  persistSession,
-} from "./lib/persistence/eventPersistence.js";
-import {
   getOrCreateDefaultWorkspace,
   loadWorkspace,
 } from "./lib/persistence/workspaceStore.js";
+import {
+  defaultSessionMetadataStore,
+  type SessionMetadataStore,
+} from "./application/sessions/SessionMetadataStore.js";
 
 export class SessionManager {
   private _workspace: Workspace;
   private _currentSessionId: string | null = null;
   private _sessions: Session[] = [];
 
-  constructor(workspaceId?: string) {
+  constructor(
+    workspaceId?: string,
+    private readonly metadataStore: SessionMetadataStore = defaultSessionMetadataStore,
+  ) {
     const ws = workspaceId
       ? loadWorkspace(workspaceId) ?? getOrCreateDefaultWorkspace()
       : getOrCreateDefaultWorkspace();
@@ -39,12 +40,15 @@ export class SessionManager {
     return this._workspace;
   }
 
-  ensureSession(title?: string): string {
+  ensureSession(title?: string, userInput?: string): string {
     if (this._currentSessionId) {
-      this._titleCurrentSessionFromFirstPrompt(title);
+      this._titleCurrentSessionFromFirstPrompt(title, userInput);
       return this._currentSessionId;
     }
-    const id = this._createAndPersist(this._normalizeTitle(title));
+    const id = this._createAndPersist(
+      this._normalizeTitle(title),
+      userInput?.trim() || title?.trim() || "",
+    );
     this._currentSessionId = id;
     this._reloadSessions();
     return id;
@@ -71,7 +75,7 @@ export class SessionManager {
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    await deleteSessionFromDB(sessionId);
+    await this.metadataStore.deleteSession(sessionId);
     if (this._currentSessionId === sessionId) {
       this._currentSessionId = null;
     }
@@ -79,7 +83,7 @@ export class SessionManager {
   }
 
   renameSession(sessionId: string, title: string): void {
-    updateSessionTitle(sessionId, title);
+    this.metadataStore.updateTitle(sessionId, title);
     this._reloadSessions();
   }
 
@@ -92,12 +96,18 @@ export class SessionManager {
     return trimmed.length > 50 ? trimmed.slice(0, 47) + "..." : trimmed;
   }
 
-  private _titleCurrentSessionFromFirstPrompt(title?: string): void {
+  private _titleCurrentSessionFromFirstPrompt(title?: string, userInput?: string): void {
     const session = this._sessions.find((s) => s.id === this._currentSessionId);
     const nextTitle = title?.trim();
-    if (!session || !nextTitle) return;
+    const nextInput = userInput?.trim() || nextTitle;
+    if (!session || !nextInput) return;
     if (session.metadata.userInput || (session.title && session.title !== "Untitled")) return;
-    updateSessionTitle(session.id, this._normalizeTitle(nextTitle));
+    this.metadataStore.persist({
+      ...session,
+      updatedAt: new Date().toISOString(),
+      metadata: { ...session.metadata, userInput: nextInput },
+      title: this._normalizeTitle(nextTitle),
+    });
     this._reloadSessions();
   }
 
@@ -105,14 +115,14 @@ export class SessionManager {
     return `ses_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   }
 
-  private _createAndPersist(title: string): string {
+  private _createAndPersist(title: string, userInput = ""): string {
     const now = new Date().toISOString();
     const id = this._makeSessionId();
-    persistSession({
+    this.metadataStore.persist({
       id,
       startedAt: now,
       updatedAt: now,
-      metadata: { userInput: "" },
+      metadata: { userInput },
       workspaceId: this._workspace.id,
       title,
     });
@@ -120,6 +130,6 @@ export class SessionManager {
   }
 
   private _reloadSessions(): void {
-    this._sessions = loadSessionsByWorkspace(this._workspace.id);
+    this._sessions = this.metadataStore.loadByWorkspace(this._workspace.id);
   }
 }

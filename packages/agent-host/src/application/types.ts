@@ -14,7 +14,7 @@ import type {
 import type { ProjectedBlock } from "../lib/projection/display.js";
 import type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
 import type { FileCheckpoint } from "../lib/revert/fileCheckpoint.js";
-import type { SessionHistoryStore } from "./history/SessionHistoryStore.js";
+import type { RunRecorder } from "../lib/persistence/runRecorder.js";
 
 export interface ChatSessionState {
   displayBlocks: ProjectedBlock[];
@@ -29,7 +29,7 @@ export interface ChatSessionState {
 export interface AgentApplicationOptions {
   chatService?: ChatTurnService;
   sessionManager?: AgentSessionService;
-  historyStore?: SessionHistoryStore;
+  recorder?: RunRecorder;
   fileCheckpoint?: FileCheckpoint;
 }
 
@@ -43,6 +43,7 @@ export interface TurnStartOptions extends SendOptions {
   workspaceRoot: string;
   subAgentEvents: SubAgentEventSink;
   fileCheckpoint?: FileCheckpoint;
+  recorder: RunRecorder;
 }
 
 export interface StartedRun {
@@ -63,6 +64,7 @@ export interface ChatTurnService {
     displayContent?: string;
     silent?: boolean;
     mode: AgentMode;
+    recorder?: RunRecorder;
   }): StartedRun;
 }
 
@@ -70,7 +72,7 @@ export interface AgentSessionService {
   getCurrentSessionId(): string | null;
   getWorkspaceId(): string;
   getWorkspace(): Workspace;
-  ensureSession(title?: string): string;
+  ensureSession(title?: string, userInput?: string): string;
   createSession(title?: string): Session;
   switchSession(sessionId: string): void;
   deleteSession(sessionId: string): Promise<void>;

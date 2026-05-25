@@ -24,11 +24,6 @@
       "development": "./src/testing/persistence.ts",
       "default": "./dist/testing/persistence.js"
     },
-    "./testing/projection": {
-      "types": "./src/testing/projection.ts",
-      "development": "./src/testing/projection.ts",
-      "default": "./dist/testing/projection.js"
-    },
     "./testing/runtime": {
       "types": "./src/testing/runtime.ts",
       "development": "./src/testing/runtime.ts",

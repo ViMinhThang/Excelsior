@@ -1,13 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
   AgentClientState,
-  AgentMode,
-  AppSettings,
-  CommandDefinition,
-  CommandResult,
-  SendOptions,
-  Session,
 } from "@excelsior/core";
+import type {
+  AgentHostCatalog,
+  AgentHostDispatchResult,
+  AgentHostIntent,
+} from "@excelsior/agent-host";
 
 export type WorkspaceTreeNode = {
   name: string;
@@ -29,23 +28,9 @@ const excelsiorApi = {
 
   // Actions
   getState: (): Promise<AgentClientState> => ipcRenderer.invoke("host:get-state"),
-  send: (content: string, options?: SendOptions) => ipcRenderer.send("host:send", content, options),
-  cancel: () => ipcRenderer.send("host:cancel"),
-  executeCommand: (input: string): Promise<CommandResult> => ipcRenderer.invoke("host:execute-command", input),
-  getCommands: (): Promise<CommandDefinition[]> => ipcRenderer.invoke("host:get-commands"),
-  createSession: (title?: string): Promise<Session> => ipcRenderer.invoke("host:create-session", title),
-  switchSession: (sessionId: string): Promise<void> => ipcRenderer.invoke("host:switch-session", sessionId),
-  deleteSession: (sessionId: string): Promise<void> => ipcRenderer.invoke("host:delete-session", sessionId),
-  renameSession: (sessionId: string, title: string) => ipcRenderer.send("host:rename-session", sessionId, title),
-  getMode: (): Promise<AgentMode> => ipcRenderer.invoke("host:get-mode"),
-  setMode: (mode: AgentMode) => ipcRenderer.send("host:set-mode", mode),
-  toggleMode: (): Promise<AgentMode> => ipcRenderer.invoke("host:toggle-mode"),
-  getSettings: (): Promise<AppSettings> => ipcRenderer.invoke("host:get-settings"),
-  saveSettings: (settings: Partial<AppSettings>) => ipcRenderer.send("host:save-settings", settings),
-  respondToConfirmation: (callId: string, approved: boolean) => ipcRenderer.send("host:respond-to-confirmation", callId, approved),
-  approveAllConfirmations: () => ipcRenderer.send("host:approve-all-confirmations"),
-  clearMessages: () => ipcRenderer.send("host:clear-messages"),
-  revertLastTurn: (): Promise<CommandResult> => ipcRenderer.invoke("host:revert-last-turn"),
+  getCatalog: (): Promise<AgentHostCatalog> => ipcRenderer.invoke("host:get-catalog"),
+  dispatch: (intent: AgentHostIntent): Promise<AgentHostDispatchResult> =>
+    ipcRenderer.invoke("host:dispatch", intent),
   
   // Custom workspace dialog API
   selectWorkspaceFolder: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-workspace-folder"),

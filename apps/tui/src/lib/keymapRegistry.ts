@@ -1,35 +1,37 @@
 export type KeyAction = () => void;
-export type KeyMap = Record<string, KeyAction>;
+export type KeyMap = Partial<Record<string, KeyAction>>;
 
-export interface RegisteredMap {
-  id: symbol;
+export interface KeymapEntry {
   priority: number;
   enabled: boolean;
-  timestamp: number;
   getMap: () => KeyMap;
 }
 
-export class KeymapRegistry {
-  private maps: RegisteredMap[] = [];
+const stack: KeymapEntry[] = [];
 
-  register(entry: RegisteredMap): () => void {
-    this.maps.push(entry);
-    return () => {
-      const index = this.maps.indexOf(entry);
-      if (index !== -1) this.maps.splice(index, 1);
-    };
-  }
-
-  findWinner(combo: string): RegisteredMap | undefined {
-    const sorted = [...this.maps].sort((a, b) => {
-      return b.priority - a.priority || b.timestamp - a.timestamp;
-    });
-    return sorted.find((reg) => reg.enabled && reg.getMap()[combo]);
-  }
-
-  dispose(): void {
-    this.maps = [];
-  }
+export function register(entry: KeymapEntry): () => void {
+  stack.push(entry);
+  return () => {
+    const index = stack.indexOf(entry);
+    if (index !== -1) stack.splice(index, 1);
+  };
 }
 
-export const keymapRegistry = new KeymapRegistry();
+/** Find the highest-priority enabled entry that handles `combo`. */
+export function getAction(
+  combo: string,
+): { entry: KeymapEntry; action: KeyAction } | undefined {
+  const sorted = [...stack].sort((a, b) => b.priority - a.priority);
+  for (const entry of sorted) {
+    if (entry.enabled) {
+      const action = entry.getMap()[combo];
+      if (action) return { entry, action };
+    }
+  }
+  return undefined;
+}
+
+/** For tests only — clears all registered entries. */
+export function resetStack(): void {
+  stack.length = 0;
+}

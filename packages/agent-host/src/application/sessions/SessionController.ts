@@ -1,13 +1,13 @@
 import type { Session } from "@excelsior/core";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
 import type { AgentSessionService } from "../types.js";
-import type { SessionHistoryStore } from "../history/SessionHistoryStore.js";
 import type { AnyAgentEvent } from "../../lib/runtime/events.js";
+import type { RunRecorder } from "../../lib/persistence/runRecorder.js";
 
 export class SessionController {
   constructor(
     private readonly sessionManager: AgentSessionService,
-    private readonly historyStore: SessionHistoryStore,
+    private readonly recorder: RunRecorder,
     private readonly state: AgentStateStore,
     private readonly cancelActiveTurn: () => void,
   ) {}
@@ -16,8 +16,8 @@ export class SessionController {
     this.refreshSessions();
   }
 
-  ensureSession(title?: string): string {
-    const sessionId = this.sessionManager.ensureSession(title);
+  ensureSession(title?: string, userInput?: string): string {
+    const sessionId = this.sessionManager.ensureSession(title, userInput);
     this.refreshSessions();
     return sessionId;
   }
@@ -38,6 +38,7 @@ export class SessionController {
 
   async deleteSession(sessionId: string): Promise<void> {
     await this.sessionManager.deleteSession(sessionId);
+    await this.recorder.deleteSessionEvents(sessionId);
     this.refreshSessions();
     if (this.currentSessionId === null) {
       this.state.setPersistedEvents([]);
@@ -72,7 +73,7 @@ export class SessionController {
   async reloadCurrentSessionEvents(): Promise<void> {
     const sessionId = this.currentSessionId;
     this.state.setPersistedEvents(
-      sessionId ? await this.historyStore.loadCompletedEvents(sessionId) : [],
+      sessionId ? await this.recorder.loadCompletedEvents(sessionId) : [],
     );
   }
 

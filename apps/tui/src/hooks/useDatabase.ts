@@ -5,19 +5,19 @@ export function useDatabase() {
   const host = useAgentHost();
 
   const getApiKey = useCallback(() => {
-    return host.getSettings().deepseekApiKey;
+    return host.getCatalog().settings.deepseekApiKey;
   }, [host]);
 
   const saveApiKey = useCallback((key: string) => {
-    host.saveSettings({ deepseekApiKey: key });
+    void host.dispatch({ type: "save-settings", settings: { deepseekApiKey: key } });
   }, [host]);
 
   const getGithubToken = useCallback(() => {
-    return host.getSettings().githubToken;
+    return host.getCatalog().settings.githubToken;
   }, [host]);
 
   const saveGithubToken = useCallback((token: string) => {
-    host.saveSettings({ githubToken: token });
+    void host.dispatch({ type: "save-settings", settings: { githubToken: token } });
   }, [host]);
 
   return { getApiKey, saveApiKey, getGithubToken, saveGithubToken };

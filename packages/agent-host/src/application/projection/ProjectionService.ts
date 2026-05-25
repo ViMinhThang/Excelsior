@@ -6,12 +6,16 @@ import {
 import type { ProjectedBlock } from "../../lib/projection/display.js";
 import type { ProjectionInputState } from "../types.js";
 
-export class ProjectionService {
-  buildDisplayBlocks(input: ProjectionInputState): ProjectedBlock[] {
-    return computeDisplayBlocks(input);
-  }
+export interface ProjectionResult {
+  displayBlocks: ProjectedBlock[];
+  aiHistory: AgentMessage[];
+}
 
-  buildAIHistory(input: ProjectionInputState): AgentMessage[] {
-    return buildAIHistory(input);
+export class ProjectionService {
+  project(input: ProjectionInputState): ProjectionResult {
+    return {
+      displayBlocks: computeDisplayBlocks(input),
+      aiHistory: buildAIHistory(input),
+    };
   }
 }

@@ -7,8 +7,8 @@ import {
   ProjectionService,
   RevertController,
   SessionController,
-  type SessionHistoryStore,
 } from "@excelsior/agent-host/testing/application";
+import type { RunRecorder } from "@excelsior/agent-host/testing/runtime";
 import { FileCheckpoint } from "@excelsior/agent-host/testing/tools";
 import { createFakeSessionManager } from "./helpers/agentApplication.js";
 
@@ -23,7 +23,7 @@ describe("RevertController", () => {
     await rm(workspaceRoot, { recursive: true, force: true });
   });
 
-  function createHarness(historyStore: SessionHistoryStore) {
+  function createHarness(recorder: RunRecorder) {
     const state = new AgentStateStore(
       {
         workspace: {
@@ -37,7 +37,7 @@ describe("RevertController", () => {
     const sessionManager = createFakeSessionManager();
     const sessions = new SessionController(
       sessionManager,
-      historyStore,
+      recorder,
       state,
       () => {},
     );
@@ -46,15 +46,15 @@ describe("RevertController", () => {
     const controller = new RevertController(
       state,
       sessions,
-      historyStore,
+      recorder,
       fileCheckpoint,
     );
     return { controller, fileCheckpoint, state };
   }
 
   it("refuses while a run is active", async () => {
-    const historyStore = createHistoryStore();
-    const { controller, state } = createHarness(historyStore);
+    const recorder = createRecorder();
+    const { controller, state } = createHarness(recorder);
     state.setLoading(true);
 
     await expect(controller.revertLastTurn()).resolves.toMatchObject({
@@ -65,8 +65,8 @@ describe("RevertController", () => {
   it("restores files and trims latest history", async () => {
     const fullPath = join(workspaceRoot, "demo.txt");
     await writeFile(fullPath, "original", "utf-8");
-    const historyStore = createHistoryStore("run_1");
-    const { controller, fileCheckpoint } = createHarness(historyStore);
+    const recorder = createRecorder("run_1");
+    const { controller, fileCheckpoint } = createHarness(recorder);
     fileCheckpoint.beginTurn("ses_1", "run_1");
     await fileCheckpoint.captureBeforeWrite("demo.txt", fullPath);
     await writeFile(fullPath, "agent edit", "utf-8");
@@ -76,15 +76,15 @@ describe("RevertController", () => {
     const result = await controller.revertLastTurn();
 
     expect(result.message).toContain("Reverted latest turn");
-    expect(historyStore.dropLastCompletedTurn).toHaveBeenCalledWith("ses_1", "run_1");
+    expect(recorder.dropLastCompletedTurn).toHaveBeenCalledWith("ses_1", "run_1");
     await expect(readFile(fullPath, "utf-8")).resolves.toBe("original");
   });
 
   it("leaves history untouched on file conflicts", async () => {
     const fullPath = join(workspaceRoot, "demo.txt");
     await writeFile(fullPath, "original", "utf-8");
-    const historyStore = createHistoryStore("run_1");
-    const { controller, fileCheckpoint } = createHarness(historyStore);
+    const recorder = createRecorder("run_1");
+    const { controller, fileCheckpoint } = createHarness(recorder);
     fileCheckpoint.beginTurn("ses_1", "run_1");
     await fileCheckpoint.captureBeforeWrite("demo.txt", fullPath);
     await writeFile(fullPath, "agent edit", "utf-8");
@@ -95,14 +95,17 @@ describe("RevertController", () => {
     const result = await controller.revertLastTurn();
 
     expect(result.message).toContain("Cannot revert");
-    expect(historyStore.dropLastCompletedTurn).not.toHaveBeenCalled();
+    expect(recorder.dropLastCompletedTurn).not.toHaveBeenCalled();
     await expect(readFile(fullPath, "utf-8")).resolves.toBe("user edit");
   });
 });
 
-function createHistoryStore(runId?: string): SessionHistoryStore {
+function createRecorder(runId?: string): RunRecorder {
   return {
+    recordEvent: async () => {},
+    recordTurnComplete: async () => {},
     loadCompletedEvents: async () => [],
+    loadRawEvents: async () => [],
     getLastCompletedTurn: async () =>
       runId ? { runId, checkpointIndex: 0, eventCount: 1 } : null,
     dropLastCompletedTurn: vi.fn(async () => ({
@@ -110,5 +113,7 @@ function createHistoryStore(runId?: string): SessionHistoryStore {
       runId,
       removedEvents: 1,
     })),
+    deleteSessionEvents: async () => {},
+    deleteAllSessionEvents: async () => {},
   };
 }

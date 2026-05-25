@@ -12,3 +12,4 @@ data/sessions/*.jsonl
 skills
 AGENTS.md
 .agent
+skills-lock.json

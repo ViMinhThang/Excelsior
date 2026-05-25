@@ -5,9 +5,10 @@ export { SessionController } from "../application/sessions/SessionController.js"
 export { RevertController } from "../application/revert/RevertController.js";
 export { ProjectionService } from "../application/projection/ProjectionService.js";
 export {
-  defaultSessionHistoryStore,
-  type SessionHistoryStore,
-} from "../application/history/SessionHistoryStore.js";
+  createSessionMetadataStore,
+  defaultSessionMetadataStore,
+  type SessionMetadataStore,
+} from "../application/sessions/SessionMetadataStore.js";
 export type {
   AgentSessionService,
   ChatSessionState,

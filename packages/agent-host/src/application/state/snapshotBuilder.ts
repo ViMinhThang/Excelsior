@@ -20,12 +20,14 @@ export function buildChatSessionSnapshot(
   input: AgentSnapshotInput,
   projection: ProjectionService,
 ): ChatSessionState {
+  const projected = projection.project({
+    liveEvents: input.liveEvents,
+    persistedEvents: input.persistedEvents,
+    childRuns: input.childRuns,
+  });
+
   return {
-    displayBlocks: projection.buildDisplayBlocks({
-      liveEvents: input.liveEvents,
-      persistedEvents: input.persistedEvents,
-      childRuns: input.childRuns,
-    }),
+    displayBlocks: projected.displayBlocks,
     isLoading: input.isLoading,
     sessions: input.sessions,
     activeRun: input.activeRun,

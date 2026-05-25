@@ -1,6 +1,11 @@
 import { useInput } from "ink";
 import { useEffect, useRef } from "react";
-import { keymapRegistry, RegisteredMap, KeyMap } from "../lib/keymapRegistry.js";
+import {
+  register,
+  getAction,
+  type KeyMap,
+  type KeymapEntry,
+} from "../lib/keymapRegistry.js";
 import { parseKeyCombo } from "../lib/parseKeyCombo.js";
 
 export function useKeymap(
@@ -12,39 +17,25 @@ export function useKeymap(
   const mapRef = useRef(map);
   mapRef.current = map;
 
-  const entryRef = useRef<RegisteredMap>({
-    id: Symbol("keymap"),
+  const entryRef = useRef<KeymapEntry>({
     priority,
     enabled,
-    timestamp: Date.now(),
     getMap: () => mapRef.current,
   });
 
+  // Keep mutable fields in sync with latest render
   entryRef.current.priority = priority;
   entryRef.current.enabled = enabled;
 
   useEffect(() => {
-    if (enabled) {
-      entryRef.current.timestamp = Date.now();
-    }
-  }, [enabled]);
-
-  useEffect(() => {
-    return keymapRegistry.register(entryRef.current);
+    return register(entryRef.current);
   }, []);
 
   useInput((input, key) => {
-    if (!entryRef.current.enabled) return;
-
     const combo = parseKeyCombo(input, key);
-    const currentMap = mapRef.current;
-
-    if (!currentMap[combo]) return;
-
-    const winner = keymapRegistry.findWinner(combo);
-
-    if (winner && winner.id === entryRef.current.id) {
-      currentMap[combo]();
+    const winner = getAction(combo);
+    if (winner && winner.entry === entryRef.current) {
+      winner.action();
     }
   });
 }

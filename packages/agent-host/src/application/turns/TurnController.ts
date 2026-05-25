@@ -32,6 +32,7 @@ export class TurnController {
       displayContent: options.displayContent,
       silent: options.silent,
       mode: options.mode,
+      recorder: options.recorder,
     });
 
     this.attachRun(result.run, result.childRuns, result.handle);

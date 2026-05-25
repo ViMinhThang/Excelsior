@@ -6,10 +6,6 @@ import type { RunRecorder } from "../lib/persistence/runRecorder.js";
 import type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
 import type { AgentMode, AgentMessage } from "@excelsior/core";
 import type { FileCheckpoint } from "../lib/revert/fileCheckpoint.js";
-import {
-  defaultSessionMetadataStore,
-  type SessionMetadataStore,
-} from "./sessions/SessionMetadataStore.js";
 
 export interface AIHistoryRef {
   current: AgentMessage[];
@@ -21,7 +17,6 @@ export interface ChatServiceDependencies {
 
 export class ChatService {
   constructor(
-    private readonly sessionMetadataStore: SessionMetadataStore = defaultSessionMetadataStore,
     private readonly dependencies: ChatServiceDependencies = {},
   ) {}
 
@@ -78,15 +73,6 @@ export class ChatService {
       run.emit("user-input", { content: options?.displayContent || content });
     }
 
-    const sessionId = options?.sessionId ?? run.id;
-    this.sessionMetadataStore.persist({
-      id: sessionId,
-      startedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      metadata: { userInput: options?.displayContent || content },
-      workspaceId: options?.workspaceId ?? "ws_default",
-    });
-
-    return { run, childRuns, handle, sessionId };
+    return { run, childRuns, handle, sessionId: options?.sessionId ?? run.id };
   }
 }

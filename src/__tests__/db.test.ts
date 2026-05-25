@@ -5,10 +5,9 @@ import { tmpdir } from "os";
 import { join } from "path";
 import {
   createDb,
-  loadSessionsByWorkspace,
-  persistSession,
   resetDb,
 } from "@excelsior/agent-host/testing/persistence";
+import { createSessionMetadataStore } from "@excelsior/agent-host/testing/application";
 import Database from "better-sqlite3";
 
 let db: Database.Database;
@@ -79,24 +78,27 @@ describe("Database", () => {
 
   describe("session metadata", () => {
     it("preserves an existing title when later persistence omits title", () => {
-      persistSession({
+      const metadataStore = createSessionMetadataStore(db);
+
+      metadataStore.persist({
         id: "ses_title_preserve",
         startedAt: "2026-05-14T00:00:00.000Z",
         updatedAt: "2026-05-14T00:00:00.000Z",
         metadata: { userInput: "first" },
         workspaceId: "ws_default",
         title: "first prompt",
-      }, db);
+      });
 
-      persistSession({
+      metadataStore.persist({
         id: "ses_title_preserve",
         startedAt: "2026-05-14T00:00:00.000Z",
         updatedAt: "2026-05-14T00:01:00.000Z",
         metadata: { userInput: "second" },
         workspaceId: "ws_default",
-      }, db);
+      });
 
-      const saved = loadSessionsByWorkspace("ws_default", db)
+      const saved = metadataStore
+        .loadByWorkspace("ws_default")
         .find((session) => session.id === "ses_title_preserve");
       expect(saved?.title).toBe("first prompt");
     });

@@ -39,12 +39,18 @@ describe("LocalAgentHost", () => {
   it("executes backend-owned commands through the host contract", async () => {
     const host = new LocalAgentHost();
 
-    const result = await host.executeCommand("/mode act");
+    const result = await host.dispatch({
+      type: "execute-command",
+      input: "/mode act",
+    });
 
     expect(result).toMatchObject({
+      type: "command-result",
+      result: {
       handled: true,
       message: "Mode switched to Act.",
       clearInput: true,
+      },
     });
     expect(host.getState().mode).toBe("act");
 
@@ -65,7 +71,11 @@ describe("LocalAgentHost", () => {
 
     expect(host.getState().pendingConfirmation?.callId).toBe("call_1");
 
-    host.respondToConfirmation("call_1", true);
+    void host.dispatch({
+      type: "respond-to-confirmation",
+      callId: "call_1",
+      approved: true,
+    });
 
     expect(host.getState().pendingConfirmation).toBeNull();
 
@@ -89,7 +99,11 @@ describe("LocalAgentHost", () => {
     expect(listener).toHaveBeenCalledTimes(1);
     expect(host.getState().pendingConfirmation?.callId).toBe("call_1");
 
-    host.respondToConfirmation("call_1", false);
+    void host.dispatch({
+      type: "respond-to-confirmation",
+      callId: "call_1",
+      approved: false,
+    });
 
     expect(listener).toHaveBeenCalledTimes(2);
     expect(host.getState().pendingConfirmation).toBeNull();

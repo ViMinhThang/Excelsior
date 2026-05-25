@@ -1,44 +1,62 @@
-import { memo, type FC, useState, useEffect } from "react";
+import { memo, type FC, useEffect, useState } from "react";
 import { Box, Text } from "ink";
-import type { ProjectedBlock } from "@excelsior/core";
+import type { ProjectedBlock, ProjectedSubAgent, ToolCallInfo } from "@excelsior/core";
 import { theme } from "../../theme.js";
+import {
+  cleanSubAgentRole,
+  formatToolCallSummary,
+  getSubAgentActivity,
+  getSubAgentDuration,
+} from "./subAgentDisplay.js";
 
 interface SubAgentPickerPanelProps {
   subAgents: (ProjectedBlock & { type: "sub-agent" })[];
   selectedIndex: number;
 }
 
-const statusGlyph: Record<string, string> = {
-  running: "🌀",
-  done: "✔",
-  error: "✖",
+const statusMark: Record<ProjectedSubAgent["status"], string> = {
+  running: "~",
+  done: "-",
+  error: "!",
 };
 
-const statusColor: Record<string, string> = {
+const statusColor: Record<ProjectedSubAgent["status"], string> = {
   running: theme.colors.activity,
   done: theme.colors.success,
   error: theme.colors.error,
 };
 
+function toolMark(toolCall: ToolCallInfo): string {
+  if (toolCall.status === "pending") return "~";
+  if (toolCall.status === "error") return "!";
+  return "-";
+}
+
+function toolColor(toolCall: ToolCallInfo): string {
+  if (toolCall.status === "pending") return theme.colors.activity;
+  if (toolCall.status === "error") return theme.colors.error;
+  return theme.colors.success;
+}
+
 const SubAgentPickerPanel: FC<SubAgentPickerPanelProps> = ({
   subAgents,
   selectedIndex,
 }) => {
-  const [frame, setFrame] = useState(0);
+  const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    const timer = setInterval(() => setFrame((f) => (f + 1) % 10), 120);
-    return () => clearInterval(timer);
-  }, []);
+    const hasRunningAgent = subAgents.some((block) => block.state.status === "running");
+    if (!hasRunningAgent) return;
 
-  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-  const currentSpinner = spinnerFrames[frame % spinnerFrames.length];
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [subAgents]);
 
   if (subAgents.length === 0) {
     return (
       <Box flexDirection="column" marginTop={1} paddingLeft={1}>
-        <Text color={theme.colors.highlightHeading} bold>Sub-agent Pipelines</Text>
-        <Text color={theme.colors.muted}>No active pipeline branches.</Text>
+        <Text color={theme.colors.highlightHeading} bold>Sub-agents</Text>
+        <Text color={theme.colors.muted}>No sub-agents yet.</Text>
       </Box>
     );
   }
@@ -46,123 +64,61 @@ const SubAgentPickerPanel: FC<SubAgentPickerPanelProps> = ({
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={1}>
       <Box flexDirection="row" gap={1}>
-        <Text color={theme.colors.highlightHeading} bold>╔══ Sub-agent Pipelines</Text>
-        <Text color={theme.colors.border}>══════════════════════════════</Text>
+        <Text color={theme.colors.highlightHeading} bold>Sub-agents</Text>
+        <Text color={theme.colors.muted} dimColor>
+          Up/Down select, Enter detail, Esc close
+        </Text>
       </Box>
-      <Text color={theme.colors.muted} dimColor>
-        ║  ↑↓ navigate · Enter view detail · Esc close
-      </Text>
 
       {subAgents.map((block, index) => {
         const agent = block.state;
         const isSelected = index === selectedIndex;
-        const isLastAgent = index === subAgents.length - 1;
-
-        const mainConnector = isLastAgent ? "╚══ " : "╠══ ";
-        const verticalLine = isLastAgent ? "    " : "║   ";
-
-        const connectorColor = isSelected
-          ? theme.colors.highlightSelected
-          : agent.status === "running"
-            ? theme.colors.activity
-            : theme.colors.border;
-
-        const customStatusGlyph = agent.status === "running"
-          ? currentSpinner
-          : statusGlyph[agent.status] || "○";
-
-        let durationStr = "";
-        if (agent.startTime && agent.endTime) {
-          durationStr = `${Math.round((agent.endTime - agent.startTime) / 1000)}s`;
-        } else if (agent.startTime) {
-          durationStr = `${Math.round((Date.now() - agent.startTime) / 1000)}s`;
-        }
-
-        const maxVisibleTools = 3;
-        const displayedTools = agent.toolCalls.slice(-maxVisibleTools);
+        const displayedTools = agent.toolCalls.slice(-2);
         const hiddenToolsCount = agent.toolCalls.length - displayedTools.length;
 
         return (
-          <Box key={block.id} flexDirection="column">
+          <Box key={block.id} flexDirection="column" marginTop={1}>
             <Box flexDirection="row" gap={1}>
-              <Text color={connectorColor}>{mainConnector}</Text>
               <Text color={isSelected ? theme.colors.highlightSelected : theme.colors.border}>
-                {isSelected ? "›" : " "}
+                {isSelected ? ">" : " "}
               </Text>
-              <Text color={statusColor[agent.status]}>
-                [{customStatusGlyph}]
-              </Text>
+              <Text color={statusColor[agent.status]}>{statusMark[agent.status]}</Text>
               <Text
                 color={isSelected ? theme.colors.highlightSelected : theme.colors.text}
                 bold={isSelected}
               >
-                {block.role}
+                {cleanSubAgentRole(block.role)}
               </Text>
               <Text color={theme.colors.muted} dimColor>
-                · {agent.status}
-                {durationStr ? ` (${durationStr})` : ""}
+                {agent.status} {getSubAgentDuration(agent, now)}
               </Text>
             </Box>
 
-            {agent.status === "running" && agent.latestLine && (
-              <Box flexDirection="row" gap={1}>
-                <Text color={theme.colors.border}>{verticalLine}</Text>
-                <Text color={theme.colors.border}>╠══ </Text>
-                <Text color={theme.colors.activity} italic dimColor>
-                  "{agent.latestLine.substring(0, 50).trim()}"
+            <Box paddingLeft={4}>
+              <Text color={theme.colors.muted} dimColor>
+                {getSubAgentActivity(agent)}
+              </Text>
+            </Box>
+
+            {displayedTools.map((toolCall) => (
+              <Box key={toolCall.toolCallId} flexDirection="row" gap={1} paddingLeft={4}>
+                <Text color={toolColor(toolCall)}>{toolMark(toolCall)}</Text>
+                <Text color={theme.colors.muted} dimColor>
+                  {formatToolCallSummary(toolCall)}
                 </Text>
               </Box>
-            )}
+            ))}
 
-            {displayedTools.map((tc, tcIndex) => {
-              const isLastTool = tcIndex === displayedTools.length - 1 && hiddenToolsCount === 0;
-              const toolConnector = isLastTool ? "╚══ " : "╠══ ";
-
-              const toolStatusCol = tc.status === "pending"
-                ? theme.colors.activity
-                : tc.status === "error"
-                  ? theme.colors.error
-                  : theme.colors.success;
-
-              const toolStatusChar = tc.status === "pending"
-                ? theme.glyphs.pending
-                : tc.status === "error"
-                  ? theme.glyphs.error
-                  : theme.glyphs.success;
-
-              return (
-                <Box key={tc.toolCallId} flexDirection="row" gap={1}>
-                  <Text color={theme.colors.border}>{verticalLine}</Text>
-                  <Text color={theme.colors.border}>{toolConnector}</Text>
-                  <Text color={toolStatusCol}>[{toolStatusChar}]</Text>
-                  <Text color={theme.colors.muted} dimColor>
-                    {tc.toolName}
-                  </Text>
-                  {tc.toolArgs && (
-                    <Text color={theme.colors.muted} dimColor italic>
-                      {String(tc.toolArgs).substring(0, 25).trim()}...
-                    </Text>
-                  )}
-                </Box>
-              );
-            })}
-
-            {hiddenToolsCount > 0 && (
-              <Box flexDirection="row" gap={1}>
-                <Text color={theme.colors.border}>{verticalLine}</Text>
-                <Text color={theme.colors.border}>╚══ </Text>
-                <Text color={theme.colors.muted} dimColor italic>
-                  ... (+{hiddenToolsCount} more toolcalls)
+            {hiddenToolsCount > 0 ? (
+              <Box paddingLeft={4}>
+                <Text color={theme.colors.muted} dimColor>
+                  {hiddenToolsCount} earlier {hiddenToolsCount === 1 ? "tool" : "tools"}
                 </Text>
               </Box>
-            )}
+            ) : null}
           </Box>
         );
       })}
-
-      <Box flexDirection="row" gap={1} marginTop={0}>
-        <Text color={theme.colors.border}>╚═══════════════════════════════════</Text>
-      </Box>
     </Box>
   );
 };

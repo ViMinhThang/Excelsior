@@ -1,14 +1,11 @@
 import { describe, expect, it } from "vitest";
-import {
-  buildAIHistory,
-  computeDisplayBlocks,
-  mergeEvents,
-} from "@excelsior/agent-host/testing/projection";
+import { ProjectionService } from "@excelsior/agent-host/testing/application";
 import type { AnyAgentEvent } from "@excelsior/agent-host/testing/runtime";
 import { makeChildRun, makeEvent } from "./projection/helpers.js";
 
-describe("projection merger", () => {
+describe("ProjectionService policy", () => {
   it("lets live events win over persisted duplicates", () => {
+    const service = new ProjectionService();
     const persisted = makeEvent({
       id: "evt_same",
       type: "text-delta",
@@ -20,17 +17,20 @@ describe("projection merger", () => {
       data: { delta: "live" },
     });
 
-    const events = mergeEvents({
+    const result = service.project({
       liveEvents: [live],
       persistedEvents: [persisted],
       childRuns: new Map(),
     });
 
-    expect(events).toEqual([live]);
+    expect(result.displayBlocks).toEqual([
+      expect.objectContaining({ type: "assistant", content: "live" }),
+    ]);
   });
 
   it("does not include child run events in restored parent AI history", () => {
-    const history = buildAIHistory({
+    const service = new ProjectionService();
+    const result = service.project({
       liveEvents: [],
       persistedEvents: [
         makeEvent({
@@ -49,10 +49,11 @@ describe("projection merger", () => {
       childRuns: new Map(),
     });
 
-    expect(history).toEqual([{ role: "user", content: "review" }]);
+    expect(result.aiHistory).toEqual([{ role: "user", content: "review" }]);
   });
 
   it("rebuilds restored sub-agent rows from persisted child events", () => {
+    const service = new ProjectionService();
     const parentRunId = "run_parent";
     const childRunId = "run_child";
     const events: AnyAgentEvent[] = [
@@ -103,7 +104,7 @@ describe("projection merger", () => {
       }),
     ];
 
-    const blocks = computeDisplayBlocks({
+    const { displayBlocks: blocks } = service.project({
       liveEvents: [],
       persistedEvents: events,
       childRuns: new Map(),
@@ -119,6 +120,7 @@ describe("projection merger", () => {
   });
 
   it("prefers a live child run snapshot over persisted child events", () => {
+    const service = new ProjectionService();
     const parentRunId = "run_parent";
     const childRunId = "run_child";
     const parentEvents: AnyAgentEvent[] = [
@@ -152,7 +154,7 @@ describe("projection merger", () => {
       data: { delta: "live child" },
     });
 
-    const blocks = computeDisplayBlocks({
+    const { displayBlocks: blocks } = service.project({
       liveEvents: [],
       persistedEvents: [...parentEvents, persistedChild],
       childRuns: new Map([[childRunId, makeChildRun([liveChild])]]),

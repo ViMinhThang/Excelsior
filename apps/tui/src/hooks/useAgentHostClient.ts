@@ -17,7 +17,7 @@ export interface UseAgentHostClientReturn {
   executeCommand: (input: string) => Promise<CommandResult>;
   getCommands: () => CommandDefinition[];
   switchSession: (sessionId: string) => void;
-  createSession: (title?: string) => Session | undefined;
+  createSession: (title?: string) => Promise<Session | undefined>;
   deleteSession: (sessionId: string) => void;
   renameSession: (sessionId: string, title: string) => void;
   listSessions: () => Session[];
@@ -39,37 +39,55 @@ export function useAgentHostClient(): UseAgentHostClientReturn {
   return {
     state,
     send: useCallback(
-      (content: string, options?: SendOptions) => host.send(content, options),
+      (content: string, options?: SendOptions) => {
+        void host.dispatch({ type: "send", content, options });
+      },
       [host],
     ),
-    cancel: useCallback(() => host.cancel(), [host]),
-    clear: useCallback(() => host.clearMessages(), [host]),
-    executeCommand: useCallback(
-      (input: string) => host.executeCommand(input),
-      [host],
-    ),
-    getCommands: useCallback(() => host.getCommands(), [host]),
-    switchSession: useCallback((id: string) => {
-      void host.switchSession(id);
+    cancel: useCallback(() => {
+      void host.dispatch({ type: "cancel" });
     }, [host]),
-    createSession: useCallback((title?: string) => host.createSession(title), [host]),
+    clear: useCallback(() => {
+      void host.dispatch({ type: "clear-messages" });
+    }, [host]),
+    executeCommand: useCallback(async (input: string) => {
+      const result = await host.dispatch({ type: "execute-command", input });
+      return result.type === "command-result" ? result.result : { handled: false };
+    }, [host]),
+    getCommands: useCallback(() => host.getCatalog().commands, [host]),
+    switchSession: useCallback((id: string) => {
+      void host.dispatch({ type: "switch-session", sessionId: id });
+    }, [host]),
+    createSession: useCallback(async (title?: string) => {
+      const result = await host.dispatch({ type: "create-session", title });
+      return result.type === "session" ? result.session : undefined;
+    }, [host]),
     deleteSession: useCallback((id: string) => {
-      void host.deleteSession(id);
+      void host.dispatch({ type: "delete-session", sessionId: id });
     }, [host]),
     renameSession: useCallback(
-      (id: string, title: string) => host.renameSession(id, title),
+      (id: string, title: string) => {
+        void host.dispatch({ type: "rename-session", sessionId: id, title });
+      },
       [host],
     ),
     listSessions: useCallback(() => host.getState().sessions, [host]),
     getCurrentSessionId: useCallback(() => host.getState().currentSessionId, [host]),
-    setMode: useCallback((mode: AgentMode) => host.setMode(mode), [host]),
-    toggleMode: useCallback(() => host.toggleMode(), [host]),
+    setMode: useCallback((mode: AgentMode) => {
+      void host.dispatch({ type: "set-mode", mode });
+    }, [host]),
+    toggleMode: useCallback(() => {
+      void host.dispatch({ type: "toggle-mode" });
+      return undefined;
+    }, [host]),
     respondToConfirmation: useCallback(
       (callId: string, approved: boolean) => {
-        host.respondToConfirmation(callId, approved);
+        void host.dispatch({ type: "respond-to-confirmation", callId, approved });
       },
       [host],
     ),
-    approveAllConfirmations: useCallback(() => host.approveAllConfirmations(), [host]),
+    approveAllConfirmations: useCallback(() => {
+      void host.dispatch({ type: "approve-all-confirmations" });
+    }, [host]),
   };
 }

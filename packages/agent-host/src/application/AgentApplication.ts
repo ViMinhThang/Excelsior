@@ -16,9 +16,9 @@ import { SessionController } from "./sessions/SessionController.js";
 import { AgentStateStore } from "./state/AgentStateStore.js";
 import { TurnController } from "./turns/TurnController.js";
 import {
-  defaultSessionHistoryStore,
-  type SessionHistoryStore,
-} from "./history/SessionHistoryStore.js";
+  defaultRunRecorder,
+  type RunRecorder,
+} from "../lib/persistence/runRecorder.js";
 import type {
   AgentApplicationOptions,
   AgentSessionService,
@@ -35,18 +35,18 @@ export class AgentApplication {
   private readonly revert: RevertController;
   private readonly subAgentEvents: SubAgentEventSink;
   private readonly fileCheckpoint: FileCheckpoint;
-  private readonly historyStore: SessionHistoryStore;
+  private readonly recorder: RunRecorder;
   private subAgentUnsubs: Array<() => void> = [];
   private notifyTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
 
   constructor(workspaceId?: string, options?: AgentApplicationOptions) {
     const service = options?.chatService ?? new ChatService();
+    this.recorder = options?.recorder ?? defaultRunRecorder;
     const sessionManager =
       options?.sessionManager ?? new SessionManager(workspaceId);
 
     this.projection = new ProjectionService();
-    this.historyStore = options?.historyStore ?? defaultSessionHistoryStore;
     this.fileCheckpoint = options?.fileCheckpoint ?? new FileCheckpoint();
     this.subAgentEvents = createSubAgentEventSink();
     this.state = new AgentStateStore(
@@ -60,7 +60,7 @@ export class AgentApplication {
     );
     sessions = new SessionController(
       sessionManager,
-      this.historyStore,
+      this.recorder,
       this.state,
       () => this.turns.cancel(),
     );
@@ -68,7 +68,7 @@ export class AgentApplication {
     this.revert = new RevertController(
       this.state,
       this.sessions,
-      this.historyStore,
+      this.recorder,
       this.fileCheckpoint,
     );
 
@@ -93,7 +93,8 @@ export class AgentApplication {
     if (!trimmed) return;
 
     // set the session name as the user's first prompt of the session
-    const sessionId = this.sessions.ensureSession(trimmed);
+    const displayContent = options?.displayContent ?? trimmed;
+    const sessionId = this.sessions.ensureSession(trimmed, displayContent);
     // take the current history to build the context for LLM
     const history = this.buildAIHistory();
 
@@ -104,6 +105,7 @@ export class AgentApplication {
       workspaceRoot: this.sessions.workspaceRoot,
       subAgentEvents: this.subAgentEvents,
       fileCheckpoint: this.fileCheckpoint,
+      recorder: this.recorder,
       displayContent: options?.displayContent,
       silent: options?.silent,
       mode: this.state.mode,
@@ -173,7 +175,7 @@ export class AgentApplication {
   }
 
   private buildAIHistory(): AgentMessage[] {
-    return this.projection.buildAIHistory(this.state.getProjectionInput());
+    return this.projection.project(this.state.getProjectionInput()).aiHistory;
   }
 
   private scheduleStateNotify(): void {
