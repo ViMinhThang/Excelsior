@@ -1,14 +1,14 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { createAgent as defaultCreateAgent } from "../agent.js";
-import { AgentRun } from "../../lib/runtime/agentRun.js";
-import { AnyAgentEvent } from "../../lib/runtime/events.js";
-import { streamAgentResponse as defaultStreamAgentResponse } from "../../lib/runtime/agentStream.js";
-import { projectSubAgentEvents } from "../../lib/projection/subAgentProjection.js";
-import type { RunRecorder } from "../../lib/persistence/runRecorder.js";
-import type { SubAgentEventSink } from "../../lib/runtime/subAgentEventSink.js";
-import { CHILD_RUN_ATTACHED } from "../../lib/runtime/eventNames.js";
-import type { ToolContext } from "../../lib/tool/context.js";
+import { AgentRun } from "../../runtime/agentRun.js";
+import { AnyAgentEvent } from "../../runtime/events.js";
+import { streamAgentResponse as defaultStreamAgentResponse } from "../../runtime/agentStream.js";
+import { projectSubAgentEvents } from "../../projection/subAgentProjection.js";
+import type { RunRecorder } from "../../persistence/runRecorder.js";
+import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
+import { CHILD_RUN_ATTACHED } from "../../runtime/eventNames.js";
+import type { ToolContext } from "../../tooling/context.js";
 
 export interface SpawnSubAgentToolDependencies {
   createAgent?: typeof defaultCreateAgent;

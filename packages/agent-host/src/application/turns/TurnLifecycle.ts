@@ -2,14 +2,14 @@ import type { AgentMode, AgentMessage, SendOptions } from "@excelsior/core";
 import type { RunHandle } from "@excelsior/run-runtime";
 import { createAgent } from "../../agent/agent.js";
 import { createSpawnSubAgentTool } from "../../agent/spawn/spawnSubAgent.js";
-import type { RunRecorder } from "../../lib/persistence/runRecorder.js";
-import type { FileCheckpoint } from "../../lib/revert/fileCheckpoint.js";
-import type { AgentRun } from "../../lib/runtime/agentRun.js";
+import type { RunRecorder } from "../../persistence/runRecorder.js";
+import type { FileCheckpoint } from "../../revert/fileCheckpoint.js";
+import type { AgentRun } from "../../runtime/agentRun.js";
 import type {
   AgentEventDataMap,
   AnyAgentEvent,
-} from "../../lib/runtime/events.js";
-import type { SubAgentEventSink } from "../../lib/runtime/subAgentEventSink.js";
+} from "../../runtime/events.js";
+import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { buildContextMessages } from "../context/contextBuilder.js";
 import type { ProjectionService } from "../projection/ProjectionService.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";

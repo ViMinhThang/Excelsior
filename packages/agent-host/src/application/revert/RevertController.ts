@@ -1,6 +1,6 @@
 import type { CommandResult } from "@excelsior/core";
-import type { FileCheckpoint } from "../../lib/revert/fileCheckpoint.js";
-import type { RunRecorder } from "../../lib/persistence/runRecorder.js";
+import type { FileCheckpoint } from "../../revert/fileCheckpoint.js";
+import type { RunRecorder } from "../../persistence/runRecorder.js";
 import type { SessionController } from "../sessions/SessionController.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
 

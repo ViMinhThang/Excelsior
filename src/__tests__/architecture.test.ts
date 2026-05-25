@@ -2,14 +2,25 @@ import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 
-function sourceFiles(dir: string): string[] {
+function sourceFiles(dir: string, includeTests = false): string[] {
   return readdirSync(dir).flatMap((entry) => {
-    if (entry === "node_modules" || entry === "dist") return [];
+    if (
+      entry === "node_modules" ||
+      entry === "dist" ||
+      (!includeTests && entry === "__tests__")
+    ) return [];
     const path = join(dir, entry);
     const stat = statSync(path);
-    if (stat.isDirectory()) return sourceFiles(path);
+    if (stat.isDirectory()) return sourceFiles(path, includeTests);
     return /\.(ts|tsx)$/.test(entry) ? [path] : [];
   });
+}
+
+function testFiles(): string[] {
+  return sourceFiles("src/__tests__", true)
+    .concat(sourceFiles("packages", true))
+    .concat(sourceFiles("apps", true))
+    .filter((file) => file.includes("__tests__"));
 }
 
 describe("package architecture boundaries", () => {
@@ -53,7 +64,7 @@ describe("package architecture boundaries", () => {
   });
 
   it("keeps tests on package exports instead of deep package source imports", () => {
-    const offenders = sourceFiles("src/__tests__")
+    const offenders = testFiles()
       .map((file) => ({
         file,
         text: readFileSync(file, "utf-8"),

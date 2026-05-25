@@ -1,6 +1,6 @@
 import type { AgentMode, Session, Workspace } from "@excelsior/core";
-import type { AgentRun } from "../../lib/runtime/agentRun.js";
-import type { AnyAgentEvent } from "../../lib/runtime/events.js";
+import type { AgentRun } from "../../runtime/agentRun.js";
+import type { AnyAgentEvent } from "../../runtime/events.js";
 import type { ProjectionService } from "../projection/ProjectionService.js";
 import type { ChatSessionState } from "../types.js";
 

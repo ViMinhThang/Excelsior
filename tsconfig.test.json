@@ -3,5 +3,11 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["src/__tests__", "packages/*/src", "apps/*/src"]
+  "include": [
+    "src/__tests__",
+    "packages/*/src",
+    "packages/*/__tests__",
+    "apps/*/src",
+    "apps/*/__tests__"
+  ]
 }

@@ -1,17 +1,17 @@
-export { AgentRun } from "../lib/runtime/agentRun.js";
-export type { AgentRunOptions } from "../lib/runtime/agentRun.js";
-export * from "../lib/runtime/events.js";
-export * from "../lib/runtime/eventNames.js";
-export { streamAgentResponse } from "../lib/runtime/agentStream.js";
+export { AgentRun } from "../runtime/agentRun.js";
+export type { AgentRunOptions } from "../runtime/agentRun.js";
+export * from "../runtime/events.js";
+export * from "../runtime/eventNames.js";
+export { streamAgentResponse } from "../runtime/agentStream.js";
 export type {
   AgentEventEmitter,
   StreamAgentResponseConfig,
   StreamCapableAgent,
-} from "../lib/runtime/agentStream.js";
-export * from "../lib/runtime/streamTypes.js";
-export { confirmBus } from "../lib/runtime/confirmBus.js";
-export { createSubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
-export type { SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
+} from "../runtime/agentStream.js";
+export * from "../runtime/streamTypes.js";
+export { confirmBus } from "../runtime/confirmBus.js";
+export { createSubAgentEventSink } from "../runtime/subAgentEventSink.js";
+export type { SubAgentEventSink } from "../runtime/subAgentEventSink.js";
 export { createRunSession } from "../application/runSession.js";
 export type {
   AgentResponseStreamer,
@@ -19,4 +19,4 @@ export type {
   RunSessionConfig,
   RunSessionResult,
 } from "../application/runSession.js";
-export type { RunRecorder } from "../lib/persistence/runRecorder.js";
+export type { RunRecorder } from "../persistence/runRecorder.js";

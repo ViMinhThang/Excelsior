@@ -1,9 +1,9 @@
 import { tool } from "ai";
 import { spawn } from "child_process";
-import type { ToolContext } from "../../../lib/tool/context.js";
-import { classifyCommandRisk } from "../../../lib/tool/commandRisk.js";
-import { authorizeToolAction } from "../../../lib/tool/policy.js";
-import { getWorkspaceRoot } from "../../../lib/tool/workspace.js";
+import type { ToolContext } from "../../../tooling/context.js";
+import { classifyCommandRisk } from "../../../tooling/commandRisk.js";
+import { authorizeToolAction } from "../../../tooling/policy.js";
+import { getWorkspaceRoot } from "../../../tooling/workspace.js";
 import { runCommandSchema } from "./types.js";
 
 const MAX_OUTPUT_LENGTH = 100_000;

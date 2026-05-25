@@ -119,20 +119,21 @@ npm start
 
 ```text
 packages/
-|- core/           # contract dùng chung, domain model, view type
-|- projection/     # projection/read-model deterministic
-|- run-runtime/    # vòng đời run, event, subscription, orchestration
-`- agent-host/     # backend cục bộ, controller, persistence, tools, commands
+|- core/           # shared domain and view contracts
+|- client/         # host client contract and client-side helpers
+|- projection/     # deterministic projection/read-model primitives
+|- run-runtime/    # run lifecycle, event, subscription, orchestration
+`- agent-host/     # local backend, persistence, tools, commands
 
 apps/
 |- tui/            # app terminal bằng Ink
 `- desktop/        # app desktop bằng Electron/Vite
 
 src/
-`- __tests__/      # test tích hợp và test boundary giữa các package
+`- __tests__/      # cross-repo architecture boundary tests
 ```
 
-Tài liệu kiến trúc nằm trong `docs/architecture.md`, `docs/runtime-state.md` và wiki HTML tại `docs/wiki/index.html`.
+Package and app unit tests live beside their owners under `packages/*/__tests__` and `apps/*/__tests__`.
 
 ## Xử lý lỗi thường gặp
 

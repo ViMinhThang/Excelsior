@@ -1,8 +1,8 @@
 import type { Session } from "@excelsior/core";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
 import type { AgentSessionService } from "../types.js";
-import type { AnyAgentEvent } from "../../lib/runtime/events.js";
-import type { RunRecorder } from "../../lib/persistence/runRecorder.js";
+import type { AnyAgentEvent } from "../../runtime/events.js";
+import type { RunRecorder } from "../../persistence/runRecorder.js";
 
 export class SessionController {
   constructor(

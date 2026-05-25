@@ -1,20 +1,20 @@
 import { RunOrchestrator, type RunHandle } from "@excelsior/run-runtime";
-import { AgentRun } from "../lib/runtime/agentRun.js";
-import { AgentEventDataMap, AnyAgentEvent } from "../lib/runtime/events.js";
-import { createToolContext, ToolContext } from "../lib/tool/context.js";
+import { AgentRun } from "../runtime/agentRun.js";
+import { AgentEventDataMap, AnyAgentEvent } from "../runtime/events.js";
+import { createToolContext, ToolContext } from "../tooling/context.js";
 import type { AgentMode, AgentMessage } from "@excelsior/core";
-import { confirmBus } from "../lib/runtime/confirmBus.js";
+import { confirmBus } from "../runtime/confirmBus.js";
 import {
   defaultRunRecorder,
   type RunRecorder,
-} from "../lib/persistence/runRecorder.js";
-import { createSubAgentEventSink, SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
-import { ERROR, PERSISTENCE_ERROR, RUN_START } from "../lib/runtime/eventNames.js";
+} from "../persistence/runRecorder.js";
+import { createSubAgentEventSink, SubAgentEventSink } from "../runtime/subAgentEventSink.js";
+import { ERROR, PERSISTENCE_ERROR, RUN_START } from "../runtime/eventNames.js";
 import {
   streamAgentResponse as defaultStreamAgentResponse,
   type StreamCapableAgent,
-} from "../lib/runtime/agentStream.js";
-import type { FileCheckpoint } from "../lib/revert/fileCheckpoint.js";
+} from "../runtime/agentStream.js";
+import type { FileCheckpoint } from "../revert/fileCheckpoint.js";
 
 export type AgentResponseStreamer = typeof defaultStreamAgentResponse;
 

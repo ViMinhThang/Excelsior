@@ -5,8 +5,8 @@ import {
 } from "@excelsior/core";
 import ChatHistory from "../components/chat/ChatHistory.js";
 import ChatInput from "../components/chat/ChatInput.js";
-import SubAgentDetail from "../components/review/SubAgentDetail.js";
-import SubAgentPickerPanel from "../components/review/SubAgentPickerPanel.js";
+import SubAgentDetail from "../features/review/components/SubAgentDetail.js";
+import SubAgentPickerPanel from "../features/review/components/SubAgentPickerPanel.js";
 import ThinkingIndicator from "../components/chat/ThinkingIndicator.js";
 import ToolDetailPanel from "../components/chat/ToolDetailPanel.js";
 import { completeCommandInput } from "../lib/commandSubmission.js";

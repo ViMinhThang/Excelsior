@@ -1,4 +1,4 @@
-import type { SubAgentEventSink } from "../../lib/runtime/subAgentEventSink.js";
+import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 
 export function subscribeSubAgentNotifications(
   subAgentEvents: SubAgentEventSink,

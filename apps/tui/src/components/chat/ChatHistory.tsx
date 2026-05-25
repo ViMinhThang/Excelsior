@@ -3,7 +3,7 @@ import { Box, Text } from "ink";
 import UserMessage from "./UserMessage.js";
 import AgentMessage from "./AgentMessage.js";
 import ToolMessage from "./ToolMessage.js";
-import SubAgentRow from "../review/SubAgentRow.js";
+import SubAgentRow from "../../features/review/components/SubAgentRow.js";
 import type { ProjectedBlock } from "@excelsior/core";
 import { theme } from "../../theme.js";
 

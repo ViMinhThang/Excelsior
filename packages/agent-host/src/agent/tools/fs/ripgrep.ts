@@ -2,9 +2,9 @@ import { tool } from "ai";
 import { z } from "zod";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { ToolContext } from "../../../lib/tool/context.js";
-import { authorizeToolAction } from "../../../lib/tool/policy.js";
-import { getWorkspaceRoot, validateWorkspacePattern } from "../../../lib/tool/workspace.js";
+import type { ToolContext } from "../../../tooling/context.js";
+import { authorizeToolAction } from "../../../tooling/policy.js";
+import { getWorkspaceRoot, validateWorkspacePattern } from "../../../tooling/workspace.js";
 
 const execFileAsync = promisify(execFile);
 
