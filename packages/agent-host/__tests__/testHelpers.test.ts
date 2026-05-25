@@ -5,8 +5,6 @@ import {
   createFakeTurnLifecycle,
 } from "./helpers/agentApplication.js";
 
-async function* emptyStream(): AsyncIterable<unknown> {}
-
 describe("test helper fixtures", () => {
   it("creates a fake session manager with workspace and CRUD behavior", async () => {
     const manager = createFakeSessionManager();
@@ -31,7 +29,7 @@ describe("test helper fixtures", () => {
     const result = lifecycle.createRunSession({
       messages: [{ role: "user", content: "hello" }],
       createAgent: () => ({
-        stream: async () => ({ fullStream: emptyStream() }),
+        stream: async () => {},
       }),
       sessionId: "ses_test",
     });

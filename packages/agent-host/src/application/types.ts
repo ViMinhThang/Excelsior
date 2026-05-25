@@ -3,10 +3,10 @@ import type {
   Session,
   SendOptions,
   Workspace,
+  ProjectedBlock,
 } from "@excelsior/core";
 import type { AgentRun } from "../runtime/agentRun.js";
 import type { AnyAgentEvent } from "../runtime/events.js";
-import type { ProjectedBlock } from "../projection/display.js";
 import type { FileCheckpoint } from "../revert/fileCheckpoint.js";
 import type { RunRecorder } from "../persistence/runRecorder.js";
 import type { TurnLifecycleDependencies } from "./turns/TurnLifecycle.js";

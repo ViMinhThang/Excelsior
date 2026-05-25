@@ -4,7 +4,7 @@ import {
   TOOL_CALL_END,
   TOOL_CALL_START,
 } from "../../runtime/eventNames.js";
-import type { SubAgentProjectionPart } from "../display.js";
+import type { SubAgentProjectionPart } from "@excelsior/core";
 import type {
   SubAgentProjectionEvent,
   SubAgentProjectionState,

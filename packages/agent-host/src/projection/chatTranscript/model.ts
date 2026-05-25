@@ -12,7 +12,7 @@ import {
   TURN_COMPLETE,
   USER_INPUT,
 } from "../../runtime/eventNames.js";
-import type { ProjectedBlock } from "../display.js";
+import type { ProjectedBlock } from "@excelsior/core";
 import { flushAll, finalizeChatTranscriptProjection } from "./flush.js";
 import {
   handleChildRunAttached,

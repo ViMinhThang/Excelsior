@@ -1,7 +1,7 @@
 import type { AgentMode, Session, Workspace } from "@excelsior/core";
 import type { AgentRun } from "../../runtime/agentRun.js";
 import type { AnyAgentEvent } from "../../runtime/events.js";
-import type { ProjectionService } from "../projection/ProjectionService.js";
+import { ProjectionPolicy } from "../projection/ProjectionPolicy.js";
 import type { ChatSessionState } from "../types.js";
 
 export interface AgentSnapshotInput {
@@ -18,7 +18,7 @@ export interface AgentSnapshotInput {
 
 export function buildChatSessionSnapshot(
   input: AgentSnapshotInput,
-  projection: ProjectionService,
+  projection: ProjectionPolicy,
 ): ChatSessionState {
   const projected = projection.project({
     liveEvents: input.liveEvents,

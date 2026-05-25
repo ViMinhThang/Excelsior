@@ -64,22 +64,28 @@ vi.mock("@excelsior/agent-host", () => {
     }
   }
 
+  const storageEngine = {
+    workspaces: {
+      loadAll: () => [...agentHostMock.workspaces],
+      create: (name: string, rootPath: string) => {
+        agentHostMock.createdWorkspaces.push({ name, rootPath });
+        const workspace = {
+          id: `ws_created_${agentHostMock.createdWorkspaces.length}`,
+          name,
+          rootPath,
+          createdAt: "",
+          updatedAt: "",
+        };
+        agentHostMock.workspaces.unshift(workspace);
+        return workspace;
+      },
+    },
+  };
+
   return {
     AgentApplication,
     LocalAgentHost,
-    loadWorkspaces: () => [...agentHostMock.workspaces],
-    createWorkspace: (name: string, rootPath: string) => {
-      agentHostMock.createdWorkspaces.push({ name, rootPath });
-      const workspace = {
-        id: `ws_created_${agentHostMock.createdWorkspaces.length}`,
-        name,
-        rootPath,
-        createdAt: "",
-        updatedAt: "",
-      };
-      agentHostMock.workspaces.unshift(workspace);
-      return workspace;
-    },
+    storageEngine,
   };
 });
 

@@ -19,7 +19,7 @@ import { createAgentClientState } from "./clientState.js";
 import { HostConfirmationController } from "./confirmationController.js";
 import { HostSettingsService } from "./settingsService.js";
 import type { SettingsStore } from "../ports/SettingsStore.js";
-import { defaultSessionMetadataStore } from "../application/sessions/SessionMetadataStore.js";
+import { storageEngine } from "../persistence/storageEngine.js";
 
 export class LocalAgentHost implements AgentHost {
   private readonly application: AgentApplication;
@@ -41,7 +41,7 @@ export class LocalAgentHost implements AgentHost {
     );
     this.commandHost = new CommandHostAdapter(this.application, {
       deleteAllSessions: async () => {
-        await defaultSessionMetadataStore.deleteAll();
+        await storageEngine.sessions.deleteAll();
         await defaultRunRecorder.deleteAllSessionEvents();
       },
     });
@@ -77,13 +77,50 @@ export class LocalAgentHost implements AgentHost {
   async dispatch(intent: AgentHostIntent): Promise<AgentHostDispatchResult> {
     switch (intent.type) {
       case "send":
+      case "cancel":
+      case "clear-messages":
+      case "revert-last-turn":
+        return this.handleTurnIntent(intent);
+      case "execute-command":
+        return commandResult(await executeAgentCommand(intent.input, this.commandHost));
+      case "create-session":
+      case "switch-session":
+      case "delete-session":
+      case "rename-session":
+      case "delete-all-sessions":
+        return this.handleSessionIntent(intent);
+      case "set-mode":
+      case "toggle-mode":
+      case "save-settings":
+        return this.handleSettingsIntent(intent);
+      case "respond-to-confirmation":
+      case "approve-all-confirmations":
+        return this.handleConfirmationIntent(intent);
+    }
+  }
+
+  private async handleTurnIntent(
+    intent: Extract<AgentHostIntent, { type: "send" | "cancel" | "clear-messages" | "revert-last-turn" }>
+  ): Promise<AgentHostDispatchResult> {
+    switch (intent.type) {
+      case "send":
         this.application.send(intent.content, intent.options);
         return none();
       case "cancel":
         this.application.cancel();
         return none();
-      case "execute-command":
-        return commandResult(await executeAgentCommand(intent.input, this.commandHost));
+      case "clear-messages":
+        this.application.clear();
+        return none();
+      case "revert-last-turn":
+        return commandResult(await this.application.revertLastTurn());
+    }
+  }
+
+  private async handleSessionIntent(
+    intent: Extract<AgentHostIntent, { type: "create-session" | "switch-session" | "delete-session" | "rename-session" | "delete-all-sessions" }>
+  ): Promise<AgentHostDispatchResult> {
+    switch (intent.type) {
       case "create-session":
         return sessionResult(this.application.createSession(intent.title));
       case "switch-session":
@@ -95,6 +132,16 @@ export class LocalAgentHost implements AgentHost {
       case "rename-session":
         this.application.renameSession(intent.sessionId, intent.title);
         return none();
+      case "delete-all-sessions":
+        await this.deleteAllSessions();
+        return none();
+    }
+  }
+
+  private handleSettingsIntent(
+    intent: Extract<AgentHostIntent, { type: "set-mode" | "toggle-mode" | "save-settings" }>
+  ): AgentHostDispatchResult {
+    switch (intent.type) {
       case "set-mode":
         this.application.setMode(intent.mode);
         return none();
@@ -103,20 +150,19 @@ export class LocalAgentHost implements AgentHost {
       case "save-settings":
         this.settings.saveSettings(intent.settings);
         return none();
+    }
+  }
+
+  private handleConfirmationIntent(
+    intent: Extract<AgentHostIntent, { type: "respond-to-confirmation" | "approve-all-confirmations" }>
+  ): AgentHostDispatchResult {
+    switch (intent.type) {
       case "respond-to-confirmation":
         this.confirmations.respond(intent.callId, intent.approved);
         return none();
       case "approve-all-confirmations":
         this.confirmations.approveAll();
         return none();
-      case "clear-messages":
-        this.application.clear();
-        return none();
-      case "delete-all-sessions":
-        await this.deleteAllSessions();
-        return none();
-      case "revert-last-turn":
-        return commandResult(await this.application.revertLastTurn());
     }
   }
 
@@ -135,7 +181,7 @@ export class LocalAgentHost implements AgentHost {
   }
 
   private async deleteAllSessions(): Promise<void> {
-    await defaultSessionMetadataStore.deleteAll();
+    await storageEngine.sessions.deleteAll();
     await defaultRunRecorder.deleteAllSessionEvents();
   }
 }

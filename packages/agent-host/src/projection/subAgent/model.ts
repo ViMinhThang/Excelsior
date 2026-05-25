@@ -1,6 +1,6 @@
 import { defineReadModel, projectEvents, type ReadModel } from "@excelsior/projection";
 import type { AnyAgentEvent } from "../../runtime/events.js";
-import type { ProjectedBlock, ProjectedSubAgent } from "../display.js";
+import type { ProjectedBlock, ProjectedSubAgent } from "@excelsior/core";
 import { reduceSubAgentEvent } from "./handlers.js";
 import {
   createSubAgentProjectionState,

@@ -25,11 +25,9 @@ const captured = {
   emitText: false,
 };
 
-async function* emptyStream(): AsyncIterable<unknown> {}
-
 function createSpawnDependencies() {
   const noopAgent: StreamCapableAgent = {
-    stream: async () => ({ fullStream: emptyStream() }),
+    stream: async () => {},
   };
   return {
     createAgent: vi.fn((_instructions, _extraTools, ctx) => {

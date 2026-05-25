@@ -3,10 +3,10 @@ import path from "path";
 import type { AgentClientState } from "@excelsior/client";
 import {
   AgentApplication,
-  createWorkspace,
-  loadWorkspaces,
+  storageEngine,
   LocalAgentHost,
 } from "@excelsior/agent-host";
+import type { Workspace } from "@excelsior/core";
 
 export type WorkspaceTreeNode = {
   name: string;
@@ -71,14 +71,14 @@ export class DesktopWorkspaceHost {
   initializeWorkspace(rootPath: string): AgentClientState {
     this.disposeHost();
 
-    const workspaces = loadWorkspaces();
-    let workspace = workspaces.find((item) =>
+    const workspaces = storageEngine.workspaces.loadAll();
+    let workspace: Workspace | undefined = workspaces.find((item: Workspace) =>
       path.resolve(item.rootPath) === path.resolve(rootPath)
     );
 
     if (!workspace) {
       const workspaceName = path.basename(rootPath) || "Excelsior Workspace";
-      workspace = createWorkspace(workspaceName, rootPath);
+      workspace = storageEngine.workspaces.create(workspaceName, rootPath);
     }
 
     this.currentWorkspaceRoot = rootPath;

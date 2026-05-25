@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AgentRun } from "@excelsior/agent-host/testing/runtime";
 import {
   AgentStateStore,
-  ProjectionService,
+  ProjectionPolicy,
 } from "@excelsior/agent-host/testing/application";
 
 function createStore() {
@@ -14,7 +14,7 @@ function createStore() {
         rootPath: "/tmp/workspace",
       },
     },
-    new ProjectionService(),
+    new ProjectionPolicy(),
   );
 }
 

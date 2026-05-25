@@ -1,15 +1,13 @@
 export { AgentApplication } from "../application/AgentApplication.js";
 export { AgentStateStore } from "../application/state/AgentStateStore.js";
 export { TurnLifecycle } from "../application/turns/TurnLifecycle.js";
-export { SessionController } from "../application/sessions/SessionController.js";
 export { RevertController } from "../application/revert/RevertController.js";
-export { ProjectionService } from "../application/projection/ProjectionService.js";
 export { ProjectionPolicy } from "../application/projection/ProjectionPolicy.js";
 export {
-  createSessionMetadataStore,
-  defaultSessionMetadataStore,
-  type SessionMetadataStore,
-} from "../application/sessions/SessionMetadataStore.js";
+  createStorageEngine,
+  storageEngine,
+  type StorageEngine,
+} from "../persistence/storageEngine.js";
 export type {
   AgentSessionService,
   ChatSessionState,

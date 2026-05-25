@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ProjectionService } from "@excelsior/agent-host/testing/application";
+import { ProjectionPolicy } from "@excelsior/agent-host/testing/application";
 import {
   PERSISTENCE_ERROR,
   type AnyAgentEvent,
@@ -7,7 +7,7 @@ import {
 import { makeEvent } from "./projection/helpers.js";
 
 function projectDisplay(events: readonly AnyAgentEvent[]) {
-  return new ProjectionService().project({
+  return new ProjectionPolicy().project({
     liveEvents: [],
     persistedEvents: [...events],
     childRuns: new Map(),

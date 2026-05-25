@@ -1,4 +1,4 @@
-import type { ProjectedSubAgent } from "../display.js";
+import type { ProjectedSubAgent } from "@excelsior/core";
 import type {
   SubAgentProjectionState,
   SubAgentProjectionStatus,

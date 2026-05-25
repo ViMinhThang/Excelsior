@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ProjectionService } from "@excelsior/agent-host/testing/application";
+import { ProjectionPolicy } from "@excelsior/agent-host/testing/application";
 import type { AnyAgentEvent } from "@excelsior/agent-host/testing/runtime";
 import { makeChildRun, makeEvent } from "./projection/helpers.js";
 
@@ -42,7 +42,7 @@ function projectSubAgent(
     );
   }
 
-  const blocks = new ProjectionService().project({
+  const blocks = new ProjectionPolicy().project({
     liveEvents: [],
     persistedEvents: parentEvents,
     childRuns: new Map([["run_child", makeChildRun(childEvents)]]),

@@ -1,4 +1,4 @@
-import type { ProjectedBlock } from "../display.js";
+import type { ProjectedBlock } from "@excelsior/core";
 import type { AnyAgentEvent } from "../../runtime/events.js";
 
 export interface PendingTool {

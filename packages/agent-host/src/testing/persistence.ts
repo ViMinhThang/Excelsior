@@ -1,5 +1,5 @@
 export { createDb, getDb, getSetting, logError, resetDb, setSetting } from "../persistence/db.js";
-export * from "../persistence/workspaceStore.js";
+export { createStorageEngine, storageEngine, type StorageEngine } from "../persistence/storageEngine.js";
 export {
   resetSessionsDirForTests,
   setSessionsDirForTests,
