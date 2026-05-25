@@ -9,7 +9,6 @@ import type {
   AnyAgentEvent,
 } from "../../runtime/events.js";
 import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
-import { buildContextMessages } from "../context/contextBuilder.js";
 import { ProjectionPolicy } from "../projection/ProjectionPolicy.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
 import {

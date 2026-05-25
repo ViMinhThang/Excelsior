@@ -5,18 +5,21 @@ import {
   shouldEnableModalKeymap,
 } from "../src/hooks/useChatKeymaps.js";
 import {
+  buildChatModeKeymapContext,
   getChatModeKeymaps,
   getCommandInputWithSelection,
+  type BuildChatModeKeymapContextInput,
   type ChatMode,
+  type InputModeKeymapContext,
   type ChatModeKeymapContext,
 } from "../src/chatModes/index.js";
 
 function makeKeymapContext(
   chatMode: ChatMode,
-  overrides: Partial<ChatModeKeymapContext> = {},
+  overrides: Partial<BuildChatModeKeymapContextInput> = {},
 ): ChatModeKeymapContext {
   const noop = () => {};
-  return {
+  return buildChatModeKeymapContext({
     chatMode,
     pending: null,
     activePanelId: null,
@@ -42,6 +45,35 @@ function makeKeymapContext(
     nextTool: noop,
     prevTool: noop,
     toggleSelectedTool: noop,
+    navigateUp: noop,
+    navigateDown: noop,
+    ...overrides,
+  } satisfies BuildChatModeKeymapContextInput);
+}
+
+function makeInputKeymapContext(
+  overrides: Partial<InputModeKeymapContext> = {},
+): InputModeKeymapContext {
+  const noop = () => {};
+  return {
+    chatMode: "input",
+    pending: null,
+    activePanelId: null,
+    isPaletteOpen: false,
+    isLoading: false,
+    suggestion: {
+      show: false,
+      filtered: [],
+      selectedIndex: 0,
+      maxVisibleCount: 0,
+      next: noop,
+      prev: noop,
+    },
+    setInput: noop,
+    cancel: noop,
+    toggleMode: () => undefined,
+    openSubAgent: noop,
+    openToolFocus: noop,
     navigateUp: noop,
     navigateDown: noop,
     ...overrides,
@@ -186,7 +218,7 @@ describe("chat mode keymap registry", () => {
   });
 
   it("resolves the selected command for one-enter execution", () => {
-    expect(getCommandInputWithSelection(makeKeymapContext("input", {
+    expect(getCommandInputWithSelection(makeInputKeymapContext({
       suggestion: {
         show: true,
         filtered: [
@@ -202,7 +234,7 @@ describe("chat mode keymap registry", () => {
   });
 
   it("keeps typed command arguments when suggestions are visible", () => {
-    expect(getCommandInputWithSelection(makeKeymapContext("input", {
+    expect(getCommandInputWithSelection(makeInputKeymapContext({
       suggestion: {
         show: true,
         filtered: [

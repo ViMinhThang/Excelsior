@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { ConfirmRequest } from "@excelsior/core";
-import { parseFileChangePreview } from "../lib/fileChangePreview.js";
+import {
+  getFileChangePreviewNavigation,
+  parsePendingFileChangePreview,
+} from "../lib/fileChangePreview.js";
 
 export function useToolConfirmation(
   pending: ConfirmRequest | null,
@@ -8,23 +11,11 @@ export function useToolConfirmation(
   approveAllConfirmations: () => void,
 ) {
   const preview = useMemo(() => {
-    if (!pending || !pending.diff) return null;
-    const toolName =
-      pending.toolName === "editFile" ? "edit"
-      : pending.toolName === "writeFile" ? "write"
-      : null;
-    if (!toolName) return null;
-    return parseFileChangePreview({
-      toolName,
-      filePath: pending.filePath || "",
-      content: `Pending changes\n${pending.diff}`,
-    });
+    if (!pending) return null;
+    return parsePendingFileChangePreview(pending) ?? null;
   }, [pending]);
 
-  const totalRows = preview?.oldRows?.length ?? 0;
-  const hunkIndices = preview?.hunkIndices ?? [];
-  const VIEWPORT_HEIGHT = 12;
-  const maxScroll = Math.max(0, totalRows - VIEWPORT_HEIGHT);
+  const navigation = getFileChangePreviewNavigation(preview);
 
   const [scrollOffset, setScrollOffset] = useState(0);
   const [activeHunkIndex, setActiveHunkIndex] = useState(0);
@@ -39,28 +30,28 @@ export function useToolConfirmation(
   }, []);
 
   const scrollDown = useCallback(() => {
-    setScrollOffset((prev) => Math.min(maxScroll, prev + 1));
-  }, [maxScroll]);
+    setScrollOffset((prev) => Math.min(navigation.maxScroll, prev + 1));
+  }, [navigation.maxScroll]);
 
   const nextHunk = useCallback(() => {
-    if (hunkIndices.length === 0) return;
+    if (navigation.hunkIndices.length === 0) return;
     setActiveHunkIndex((prevIndex) => {
-      const nextIndex = (prevIndex + 1) % hunkIndices.length;
-      const targetScroll = hunkIndices[nextIndex] ?? 0;
-      setScrollOffset(Math.min(maxScroll, targetScroll));
+      const nextIndex = (prevIndex + 1) % navigation.hunkIndices.length;
+      const targetScroll = navigation.hunkIndices[nextIndex] ?? 0;
+      setScrollOffset(Math.min(navigation.maxScroll, targetScroll));
       return nextIndex;
     });
-  }, [hunkIndices, maxScroll]);
+  }, [navigation.hunkIndices, navigation.maxScroll]);
 
   const prevHunk = useCallback(() => {
-    if (hunkIndices.length === 0) return;
+    if (navigation.hunkIndices.length === 0) return;
     setActiveHunkIndex((prevIndex) => {
-      const prev = (prevIndex - 1 + hunkIndices.length) % hunkIndices.length;
-      const targetScroll = hunkIndices[prev] ?? 0;
-      setScrollOffset(Math.min(maxScroll, targetScroll));
+      const prev = (prevIndex - 1 + navigation.hunkIndices.length) % navigation.hunkIndices.length;
+      const targetScroll = navigation.hunkIndices[prev] ?? 0;
+      setScrollOffset(Math.min(navigation.maxScroll, targetScroll));
       return prev;
     });
-  }, [hunkIndices, maxScroll]);
+  }, [navigation.hunkIndices, navigation.maxScroll]);
 
   const approve = useCallback(() => {
     if (pending) {
@@ -89,6 +80,6 @@ export function useToolConfirmation(
     nextHunk,
     prevHunk,
     activeHunkIndex,
-    hunkCount: hunkIndices.length,
+    hunkCount: navigation.hunkCount,
   };
 }
