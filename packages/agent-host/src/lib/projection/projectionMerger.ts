@@ -1,6 +1,6 @@
 // Invariant: All functions in this module are deterministic and side-effect free.
 //   They produce the same output for the same input.
-//   mergeEvents deduplicates by event id (live wins over persisted).
+//   live parent events win over persisted duplicates during active runs.
 
 import { AnyAgentEvent } from "../runtime/events.js";
 import { ProjectedBlock } from "./display.js";
@@ -106,10 +106,6 @@ function selectAIHistoryEvents(input: ProjectionInput): AnyAgentEvent[] {
   const events =
     input.liveEvents.length > 0 ? input.liveEvents : input.persistedEvents;
   return events.filter(isParentRunEvent);
-}
-
-export function mergeEvents(input: ProjectionInput): AnyAgentEvent[] {
-  return selectParentDisplayEvents(input);
 }
 
 export function computeDisplayBlocks(input: ProjectionInput): ProjectedBlock[] {

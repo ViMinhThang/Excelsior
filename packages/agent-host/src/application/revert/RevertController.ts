@@ -1,6 +1,6 @@
 import type { CommandResult } from "@excelsior/core";
 import type { FileCheckpoint } from "../../lib/revert/fileCheckpoint.js";
-import type { SessionHistoryStore } from "../history/SessionHistoryStore.js";
+import type { RunRecorder } from "../../lib/persistence/runRecorder.js";
 import type { SessionController } from "../sessions/SessionController.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
 
@@ -8,7 +8,7 @@ export class RevertController {
   constructor(
     private readonly state: AgentStateStore,
     private readonly sessions: SessionController,
-    private readonly historyStore: SessionHistoryStore,
+    private readonly recorder: RunRecorder,
     private readonly fileCheckpoint: FileCheckpoint,
   ) {}
 
@@ -25,7 +25,7 @@ export class RevertController {
       return result("No revertable file changes for the latest turn.");
     }
 
-    const latestTurn = await this.historyStore.getLastCompletedTurn(sessionId);
+    const latestTurn = await this.recorder.getLastCompletedTurn(sessionId);
     if (!latestTurn) {
       return result("No completed turn found in history to revert.");
     }
@@ -41,7 +41,7 @@ export class RevertController {
       ));
     }
 
-    const drop = await this.historyStore.dropLastCompletedTurn(
+    const drop = await this.recorder.dropLastCompletedTurn(
       sessionId,
       checkpoint.runId,
     );

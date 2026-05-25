@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentMessage, Session } from "@excelsior/core";
+import type { AgentMessage } from "@excelsior/core";
 import {
   ChatService,
   type ChatServiceDependencies,
@@ -49,16 +49,8 @@ describe("ChatService context assembly", () => {
     createRunSession.mockClear();
   });
 
-  it("passes compacted context to run sessions while preserving metadata and run options", () => {
-    const persistedSessions: Session[] = [];
-    const service = new ChatService(
-      {
-        persist: (session) => persistedSessions.push(session),
-      },
-      {
-        createRunSession,
-      },
-    );
+  it("passes compacted context and run options to run sessions", () => {
+    const service = new ChatService({ createRunSession });
     const subAgentEvents = {
       emit: vi.fn(),
       on: vi.fn(() => () => {}),
@@ -92,11 +84,6 @@ describe("ChatService context assembly", () => {
     expect(config.workspaceRoot).toBe("C:\\workspace");
     expect(config.subAgentEvents).toBe(subAgentEvents);
     expect(config.fileCheckpoint).toBe(fileCheckpoint);
-    expect(persistedSessions[0]).toMatchObject({
-      id: "ses_test",
-      workspaceId: "ws_test",
-      metadata: { userInput: "Displayed request" },
-    });
     expect(emittedUserInputs).toEqual([{ content: "Displayed request" }]);
   });
 });

@@ -9,7 +9,7 @@ import {
   createWorkspace,
   loadWorkspaces,
 } from "@excelsior/agent-host";
-import type { SendOptions, AgentMode, AppSettings } from "@excelsior/core";
+import type { AgentHostIntent } from "@excelsior/agent-host";
 
 type WorkspaceTreeNode = {
   name: string;
@@ -197,23 +197,10 @@ function ensureHost(): LocalAgentHost {
 }
 
 ipcMain.handle("host:get-state", () => ensureHost().getState());
-ipcMain.on("host:send", (_event, content: string, options?: SendOptions) => ensureHost().send(content, options));
-ipcMain.on("host:cancel", () => ensureHost().cancel());
-ipcMain.handle("host:execute-command", (_event, input: string) => ensureHost().executeCommand(input));
-ipcMain.handle("host:get-commands", () => ensureHost().getCommands());
-ipcMain.handle("host:create-session", (_event, title?: string) => ensureHost().createSession(title));
-ipcMain.handle("host:switch-session", (_event, sessionId: string) => ensureHost().switchSession(sessionId));
-ipcMain.handle("host:delete-session", (_event, sessionId: string) => ensureHost().deleteSession(sessionId));
-ipcMain.on("host:rename-session", (_event, sessionId: string, title: string) => ensureHost().renameSession(sessionId, title));
-ipcMain.handle("host:get-mode", () => ensureHost().getMode());
-ipcMain.on("host:set-mode", (_event, mode: AgentMode) => ensureHost().setMode(mode));
-ipcMain.handle("host:toggle-mode", () => ensureHost().toggleMode());
-ipcMain.handle("host:get-settings", () => ensureHost().getSettings());
-ipcMain.on("host:save-settings", (_event, settings: Partial<AppSettings>) => ensureHost().saveSettings(settings));
-ipcMain.on("host:respond-to-confirmation", (_event, callId: string, approved: boolean) => ensureHost().respondToConfirmation(callId, approved));
-ipcMain.on("host:approve-all-confirmations", () => ensureHost().approveAllConfirmations());
-ipcMain.on("host:clear-messages", () => ensureHost().clearMessages());
-ipcMain.handle("host:revert-last-turn", () => ensureHost().revertLastTurn());
+ipcMain.handle("host:get-catalog", () => ensureHost().getCatalog());
+ipcMain.handle("host:dispatch", (_event, intent: AgentHostIntent) =>
+  ensureHost().dispatch(intent),
+);
 ipcMain.handle("workspace:get-tree", () => {
   if (!currentWorkspaceRoot) return [];
   return buildWorkspaceTree(currentWorkspaceRoot);

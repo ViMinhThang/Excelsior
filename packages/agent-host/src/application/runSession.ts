@@ -4,7 +4,10 @@ import { AgentEventDataMap, AnyAgentEvent } from "../lib/runtime/events.js";
 import { createToolContext, ToolContext } from "../lib/tool/context.js";
 import type { AgentMode, AgentMessage } from "@excelsior/core";
 import { confirmBus } from "../lib/runtime/confirmBus.js";
-import { defaultRunRecorder, RunRecorder } from "../lib/persistence/runRecorder.js";
+import {
+  defaultRunRecorder,
+  type RunRecorder,
+} from "../lib/persistence/runRecorder.js";
 import { createSubAgentEventSink, SubAgentEventSink } from "../lib/runtime/subAgentEventSink.js";
 import { ERROR, PERSISTENCE_ERROR, RUN_START } from "../lib/runtime/eventNames.js";
 import {

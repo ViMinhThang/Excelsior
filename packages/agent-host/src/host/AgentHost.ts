@@ -9,38 +9,45 @@ import type {
   Session,
 } from "@excelsior/core";
 
+export interface AgentHostCatalog {
+  commands: CommandDefinition[];
+  settings: AppSettings;
+}
+
+export type AgentHostIntent =
+  | { type: "send"; content: string; options?: SendOptions }
+  | { type: "cancel" }
+  | { type: "execute-command"; input: string }
+  | { type: "create-session"; title?: string }
+  | { type: "switch-session"; sessionId: string }
+  | { type: "delete-session"; sessionId: string }
+  | { type: "rename-session"; sessionId: string; title: string }
+  | { type: "set-mode"; mode: AgentMode }
+  | { type: "toggle-mode" }
+  | { type: "save-settings"; settings: Partial<AppSettings> }
+  | { type: "respond-to-confirmation"; callId: string; approved: boolean }
+  | { type: "approve-all-confirmations" }
+  | { type: "clear-messages" }
+  | { type: "delete-all-sessions" }
+  | { type: "revert-last-turn" };
+
+export type AgentHostDispatchResult =
+  | { type: "none" }
+  | { type: "command-result"; result: CommandResult }
+  | { type: "session"; session: Session }
+  | { type: "mode"; mode: AgentMode };
+
 export interface AgentHost {
   getState(): AgentClientState;
   subscribe(listener: () => void): () => void;
-
-  send(content: string, options?: SendOptions): void;
-  cancel(): void;
-
-  executeCommand(input: string): Promise<CommandResult>;
-  getCommands(): CommandDefinition[];
-
-  createSession(title?: string): Session;
-  switchSession(sessionId: string): Promise<void>;
-  deleteSession(sessionId: string): Promise<void>;
-  renameSession(sessionId: string, title: string): void;
-
-  getMode(): AgentMode;
-  setMode(mode: AgentMode): void;
-  toggleMode(): AgentMode;
-
-  getSettings(): AppSettings;
-  saveSettings(settings: Partial<AppSettings>): void;
-
-  respondToConfirmation(callId: string, approved: boolean): void;
-  approveAllConfirmations(): void;
-  clearMessages(): void;
-  revertLastTurn(): Promise<CommandResult>;
-
+  getCatalog(): AgentHostCatalog;
+  dispatch(intent: AgentHostIntent): Promise<AgentHostDispatchResult>;
   dispose(): void;
 }
 
 export type {
   AgentClientState,
+  AgentMode,
   AppSettings,
   CommandDefinition,
   CommandResult,

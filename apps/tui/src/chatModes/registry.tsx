@@ -91,11 +91,19 @@ export function shouldEnableInputModeKeymap(options: {
 
 export function getCommandInputWithSelection(
   ctx: ChatModeKeymapContext,
+  inputValue = "",
 ): string | null {
   if (!hasCommandSuggestions(ctx)) return null;
+  if (hasCommandArguments(inputValue)) return inputValue;
   const selected = ctx.suggestion.filtered[ctx.suggestion.selectedIndex];
   if (!selected) return null;
   return `/${selected.name}`;
+}
+
+function hasCommandArguments(inputValue: string): boolean {
+  const commandText = inputValue.trimStart();
+  if (!commandText.startsWith("/")) return false;
+  return /\s+\S/.test(commandText.slice(1));
 }
 
 function hasCommandSuggestions(ctx: ChatModeKeymapContext): boolean {

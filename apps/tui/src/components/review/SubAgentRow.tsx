@@ -2,6 +2,11 @@ import { memo, useEffect, useState, type FC } from "react";
 import { Box, Text } from "ink";
 import type { ProjectedSubAgent } from "@excelsior/core";
 import { theme } from "../../theme.js";
+import {
+  cleanSubAgentRole,
+  getSubAgentActivity,
+  getSubAgentDuration,
+} from "./subAgentDisplay.js";
 
 interface SubAgentRowProps {
   agent: ProjectedSubAgent;
@@ -9,12 +14,16 @@ interface SubAgentRowProps {
   isSelected: boolean;
 }
 
-const formatDuration = (ms: number) => {
-  const secs = Math.max(0, ms / 1000);
-  if (secs < 60) return `${secs.toFixed(1)}s`;
-  const mins = Math.floor(secs / 60);
-  const remSecs = Math.floor(secs % 60);
-  return `${mins}m ${remSecs}s`;
+const statusMark: Record<ProjectedSubAgent["status"], string> = {
+  running: "~",
+  done: "-",
+  error: "!",
+};
+
+const statusColor: Record<ProjectedSubAgent["status"], string> = {
+  running: theme.colors.activity,
+  done: theme.colors.success,
+  error: theme.colors.error,
 };
 
 const SubAgentRow: FC<SubAgentRowProps> = ({ agent, role, isSelected }) => {
@@ -27,63 +36,31 @@ const SubAgentRow: FC<SubAgentRowProps> = ({ agent, role, isSelected }) => {
     return () => clearInterval(timer);
   }, [isRunning]);
 
-  const start = agent.startTime || now;
-  const end = agent.endTime || now;
-  const durationStr = formatDuration(end - start);
-
-  const cleanRole = (role || "SubAgent")
-    .replace(/\bTask\b/gi, "")
-    .replace(/\s+/g, " ")
-    .replace(/^[-–—\s]+|[-–—\s]+$/g, "")
-    .trim();
-
-  const latestToolCall = agent.toolCalls?.length
-    ? agent.toolCalls[agent.toolCalls.length - 1]
-    : null;
-
-  const activityStatusLine = isRunning && latestToolCall
-    ? `${latestToolCall.toolName} ${latestToolCall.toolArgs ? String(latestToolCall.toolArgs).substring(0, 40) : ""}`
-    : `${agent.toolCalls?.length || 0} toolcalls · ${durationStr}`;
-
-  const [frame, setFrame] = useState(0);
-  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-
-  useEffect(() => {
-    if (!isRunning) return;
-    const timer = setInterval(() => setFrame((f) => (f + 1) % spinnerFrames.length), 80);
-    return () => clearInterval(timer);
-  }, [isRunning]);
-
-  const connectorColor = isSelected
-    ? theme.colors.highlightSelected
-    : isRunning
-      ? theme.colors.activity
-      : theme.colors.border;
-
-  const statusGlyph = isRunning
-    ? spinnerFrames[frame]
-    : agent.status === "error"
-  const statusCol = agent.status === "running"
-    ? theme.colors.activity
-    : agent.status === "error"
-      ? theme.colors.error
-      : theme.colors.success;
+  const duration = getSubAgentDuration(agent, now);
+  const activity = getSubAgentActivity(agent);
+  const roleColor = isSelected ? theme.colors.highlightSelected : theme.colors.text;
 
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={1}>
       <Box flexDirection="row" gap={1}>
-        <Text color={connectorColor}>╠══ </Text>
-        <Text color={statusCol}>[{statusGlyph}]</Text>
-        <Text bold={isSelected} color={isSelected ? theme.colors.highlightSelected : theme.colors.text}>
-          {cleanRole}
+        <Text color={isSelected ? theme.colors.highlightSelected : theme.colors.border}>
+          {isSelected ? ">" : " "}
         </Text>
-      </Box>
-      <Box flexDirection="row" gap={1}>
-        <Text color={theme.colors.border}>║   ╚══ </Text>
+        <Text color={statusColor[agent.status]}>{statusMark[agent.status]}</Text>
+        <Text bold={isSelected} color={roleColor}>
+          {cleanSubAgentRole(role)}
+        </Text>
         <Text color={theme.colors.muted} dimColor>
-          {activityStatusLine}
+          {agent.status} {duration}
         </Text>
       </Box>
+      {activity ? (
+        <Box paddingLeft={4}>
+          <Text color={theme.colors.muted} dimColor>
+            {activity}
+          </Text>
+        </Box>
+      ) : null}
     </Box>
   );
 };

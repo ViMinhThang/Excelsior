@@ -283,7 +283,7 @@ export function useChatScreenModel(): ChatScreenModel {
       navigateUp: inputHistory.navigateUp,
       navigateDown: inputHistory.navigateDown,
       openPalette: palette.toggle,
-    }),
+    }, inputHistory.input),
   });
 
   const shouldSubmitInput = () => true;

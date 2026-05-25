@@ -24,28 +24,28 @@ function createMockHost(): AgentHost {
   return {
     getState: () => state,
     subscribe: () => () => {},
-    send: () => {},
-    cancel: () => {},
-    executeCommand: async () => ({ handled: true }),
-    getCommands: () => [{ name: "help", description: "List commands" }],
-    createSession: () => ({
-      id: "ses_1",
-      startedAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-      metadata: { userInput: "" },
+    getCatalog: () => ({
+      commands: [{ name: "help", description: "List commands" }],
+      settings: { deepseekApiKey: "", githubToken: "" },
     }),
-    switchSession: async () => {},
-    deleteSession: () => {},
-    renameSession: () => {},
-    getMode: () => "plan",
-    setMode: () => {},
-    toggleMode: () => "act",
-    getSettings: () => ({ deepseekApiKey: "", githubToken: "" }),
-    saveSettings: () => {},
-    respondToConfirmation: () => {},
-    approveAllConfirmations: () => {},
-    clearMessages: () => {},
-    revertLastTurn: async () => ({ handled: true }),
+    dispatch: async (intent) => {
+      if (intent.type === "execute-command") {
+        return { type: "command-result", result: { handled: true } };
+      }
+      if (intent.type === "create-session") {
+        return {
+          type: "session",
+          session: {
+            id: "ses_1",
+            startedAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            metadata: { userInput: "" },
+          },
+        };
+      }
+      if (intent.type === "toggle-mode") return { type: "mode", mode: "act" };
+      return { type: "none" };
+    },
     dispose: () => {},
   };
 }

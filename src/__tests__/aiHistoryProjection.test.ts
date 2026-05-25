@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
-import {
-  AI_HISTORY_MODEL,
-  createAIHistoryProjectionState,
-  finalizeAIHistoryProjection,
-  projectEventsToAIMessages,
-} from "@excelsior/agent-host/testing/projection";
+import { ProjectionService } from "@excelsior/agent-host/testing/application";
 import { PERSISTENCE_ERROR, type AnyAgentEvent } from "@excelsior/agent-host/testing/runtime";
 import { makeEvent } from "./projection/helpers.js";
+
+function projectHistory(events: readonly AnyAgentEvent[]) {
+  return new ProjectionService().project({
+    liveEvents: [],
+    persistedEvents: [...events],
+    childRuns: new Map(),
+  }).aiHistory;
+}
 
 describe("AI history projection", () => {
   it("converts user and assistant events to messages", () => {
@@ -15,28 +18,18 @@ describe("AI history projection", () => {
       makeEvent({ type: "text-delta", data: { delta: "Hello" } }),
       makeEvent({ type: "text-delta", data: { delta: " there" } }),
     ];
-    const history = projectEventsToAIMessages(events);
+    const history = projectHistory(events);
     expect(history).toHaveLength(2);
     expect(history[0]).toMatchObject({ role: "user", content: "hi" });
     expect(history[1]).toMatchObject({ role: "assistant", content: "Hello there" });
   });
 
-  it("flushes pending assistant text without mutating the message array state", () => {
-    const initial = createAIHistoryProjectionState();
-    const withUser = AI_HISTORY_MODEL.apply(initial, makeEvent({
-      type: "user-input",
-      data: { content: "hi" },
-    }));
-    const withPendingAssistant = AI_HISTORY_MODEL.apply(withUser, makeEvent({
-      type: "text-delta",
-      data: { delta: "Hello" },
-    }));
+  it("flushes pending assistant text into the projected history", () => {
+    const history = projectHistory([
+      makeEvent({ type: "user-input", data: { content: "hi" } }),
+      makeEvent({ type: "text-delta", data: { delta: "Hello" } }),
+    ]);
 
-    const history = finalizeAIHistoryProjection(withPendingAssistant);
-
-    expect(initial.messages).toEqual([]);
-    expect(withUser.messages).not.toBe(initial.messages);
-    expect(withPendingAssistant.messages).toEqual([{ role: "user", content: "hi" }]);
     expect(history).toEqual([
       { role: "user", content: "hi" },
       { role: "assistant", content: "Hello" },
@@ -51,7 +44,7 @@ describe("AI history projection", () => {
         data: { toolCallId: "tc1", result: "passed", status: "success", toolName: "runCommand", toolArgs: "{}" },
       }),
     ];
-    const history = projectEventsToAIMessages(events);
+    const history = projectHistory(events);
     expect(history).toHaveLength(2);
     expect(history[1].content).toContain("[Tool: runCommand");
     expect(history[1].content).toContain("[Completed]");
@@ -64,12 +57,12 @@ describe("AI history projection", () => {
         data: { toolCallId: "tc1", result: "[Error] failed", status: "error", toolName: "runCommand", toolArgs: "{}" },
       }),
     ];
-    const history = projectEventsToAIMessages(events);
+    const history = projectHistory(events);
     expect(history[0].content).toContain("[Error]");
   });
 
   it("ignores persistence errors in AI history", () => {
-    const history = projectEventsToAIMessages([
+    const history = projectHistory([
       makeEvent({
         type: PERSISTENCE_ERROR,
         data: {

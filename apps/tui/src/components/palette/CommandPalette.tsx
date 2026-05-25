@@ -1,11 +1,11 @@
-import { memo, type FC, useEffect, useState } from "react";
+import { memo, type Dispatch, type FC, type SetStateAction } from "react";
 import { Box, Text, useInput, useStdout } from "ink";
 import type { CommandDefinition } from "@excelsior/core";
 import { theme } from "../../theme.js";
 
 export interface CommandPaletteProps {
   search: string;
-  setSearch: (value: string) => void;
+  setSearch: Dispatch<SetStateAction<string>>;
   selectedIndex: number;
   filtered: CommandDefinition[];
   total: number;
@@ -51,7 +51,6 @@ const CommandPalette: FC<CommandPaletteProps> = ({
   const width = stdout?.columns || 80;
   const isSplit = width >= 80;
 
-  const [charBuffer, setCharBuffer] = useState(search);
   const totalCommands = total;
 
   useInput((input, key) => {
@@ -72,22 +71,18 @@ const CommandPalette: FC<CommandPaletteProps> = ({
       return;
     }
     if (key.backspace || key.delete) {
-      setCharBuffer((prev) => prev.slice(0, -1));
+      setSearch((prev) => prev.slice(0, -1));
       return;
     }
     if (key.tab && filtered.length > 0) {
       const cmd = filtered[selectedIndex];
-      if (cmd) setCharBuffer(cmd.name);
+      if (cmd) setSearch(cmd.name);
       return;
     }
     if (input && !key.ctrl && !key.meta) {
-      setCharBuffer((prev) => prev + input);
+      setSearch((prev) => prev + input);
     }
   });
-
-  useEffect(() => {
-    setSearch(charBuffer);
-  }, [charBuffer, setSearch]);
 
   const groups = groupCommands(filtered);
   let flatIndex = 0;
@@ -99,7 +94,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
         <Text color={theme.colors.highlightBrand} bold>Commands</Text>
         <Text color={theme.colors.muted}>{theme.glyphs.section}</Text>
         <Text color={theme.colors.highlightBrand}>{">"}</Text>
-        <Text color={theme.colors.text}>/{charBuffer}</Text>
+        <Text color={theme.colors.text}>/{search}</Text>
         <Text color={theme.colors.muted} dimColor>
           ({filtered.length}/{totalCommands})
         </Text>

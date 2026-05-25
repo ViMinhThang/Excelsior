@@ -200,4 +200,20 @@ describe("chat mode keymap registry", () => {
       },
     }))).toBe("/settings");
   });
+
+  it("keeps typed command arguments when suggestions are visible", () => {
+    expect(getCommandInputWithSelection(makeKeymapContext("input", {
+      suggestion: {
+        show: true,
+        filtered: [
+          { name: "review", description: "Review a pull request" },
+          { name: "review-post", description: "Post a review comment" },
+        ],
+        selectedIndex: 0,
+        maxVisibleCount: 2,
+        next: () => {},
+        prev: () => {},
+      },
+    }), "/review 20")).toBe("/review 20");
+  });
 });
