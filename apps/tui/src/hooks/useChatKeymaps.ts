@@ -9,7 +9,9 @@ import {
 } from "../chatModes/index.js";
 import { useKeymap } from "./useKeymap.js";
 
-interface UseChatKeymapsOptions extends ChatModeKeymapContext {
+type UseChatKeymapsOptions = ChatModeKeymapContext & {
+  pending: unknown;
+  cancel: () => void;
   approve: () => void;
   approveAll: () => void;
   deny: () => void;
@@ -17,7 +19,7 @@ interface UseChatKeymapsOptions extends ChatModeKeymapContext {
   scrollDown?: () => void;
   nextHunk?: () => void;
   prevHunk?: () => void;
-}
+};
 
 export function shouldEnableModalKeymap(isPaletteOpen: boolean): boolean {
   return shouldEnableModalModeKeymap(isPaletteOpen);

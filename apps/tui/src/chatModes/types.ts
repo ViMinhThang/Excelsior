@@ -33,10 +33,28 @@ export interface ChatModeSelection {
   selectedToolId: string | null;
 }
 
-export interface ChatModeSelectionContext {
+export interface ChatModeSelectionSource {
   subAgents: SubAgentBlock[];
   subAgentIndex: number;
   selectedToolId: string | null;
+}
+
+export interface ChatModeSelectionContextMap {
+  input: Record<string, never>;
+  "subagent-picker": {
+    subAgents: SubAgentBlock[];
+    subAgentIndex: number;
+  };
+  "subagent-detail": {
+    subAgents: SubAgentBlock[];
+    subAgentIndex: number;
+  };
+  "tool-focus": {
+    selectedToolId: string | null;
+  };
+  "tool-detail": {
+    selectedToolId: string | null;
+  };
 }
 
 export interface ChatModeHintContext {
@@ -48,8 +66,7 @@ export interface ChatModeHintContext {
   toolCount?: number;
 }
 
-export interface ChatModeRenderContext {
-  chatMode: ChatMode;
+export interface ConversationRenderContext {
   input: {
     value: string;
     setValue: (value: string) => void;
@@ -69,44 +86,116 @@ export interface ChatModeRenderContext {
     selectedToolId: string | null;
     expandedToolIds: ReadonlySet<string>;
   };
-  subAgents: {
-    blocks: SubAgentBlock[];
-    selectedIndex: number;
-  };
-  tools: {
-    blocks: ToolBlock[];
-    selectedId: string | null;
-    selectedBlock: ToolBlock | undefined;
-  };
   panel: {
     active: TuiPanelDefinition | undefined;
     context: TuiPanelContext;
   };
 }
 
-export interface ChatModeKeymapContext {
-  chatMode: ChatMode;
+export interface InputModeRenderContext extends ConversationRenderContext {
+  chatMode: "input";
+}
+
+export interface SubAgentPickerModeRenderContext extends ConversationRenderContext {
+  chatMode: "subagent-picker";
+  subAgents: {
+    blocks: SubAgentBlock[];
+    selectedIndex: number;
+  };
+}
+
+export interface SubAgentDetailModeRenderContext {
+  chatMode: "subagent-detail";
+  subAgents: {
+    blocks: SubAgentBlock[];
+    selectedIndex: number;
+  };
+}
+
+export interface ToolFocusModeRenderContext extends ConversationRenderContext {
+  chatMode: "tool-focus";
+  tools: {
+    blocks: ToolBlock[];
+    selectedId: string | null;
+    selectedBlock: ToolBlock | undefined;
+  };
+}
+
+export interface ToolDetailModeRenderContext extends ConversationRenderContext {
+  chatMode: "tool-detail";
+  tools: {
+    blocks: ToolBlock[];
+    selectedId: string | null;
+    selectedBlock: ToolBlock | undefined;
+  };
+}
+
+export interface ChatModeRenderContextMap {
+  input: InputModeRenderContext;
+  "subagent-picker": SubAgentPickerModeRenderContext;
+  "subagent-detail": SubAgentDetailModeRenderContext;
+  "tool-focus": ToolFocusModeRenderContext;
+  "tool-detail": ToolDetailModeRenderContext;
+}
+
+export type ChatModeRenderContext = ChatModeRenderContextMap[ChatMode];
+
+export interface InputModeKeymapContext {
+  chatMode: "input";
   pending: unknown;
   activePanelId: string | null;
   isPaletteOpen: boolean;
   isLoading: boolean;
   suggestion: CommandSuggestionState;
   setInput: (value: string) => void;
-  setChatMode: (mode: ChatMode) => void;
   cancel: () => void;
   toggleMode: () => "plan" | "act" | undefined;
   openSubAgent: () => void;
-  nextSubAgent: () => void;
-  prevSubAgent: () => void;
   openToolFocus: () => void;
-  openToolDetail: () => void;
-  nextTool: () => void;
-  prevTool: () => void;
-  toggleSelectedTool: () => void;
   navigateUp: () => void;
   navigateDown: () => void;
   openPalette?: () => void;
 }
+
+export interface SubAgentPickerModeKeymapContext {
+  chatMode: "subagent-picker";
+  isPaletteOpen: boolean;
+  setChatMode: (mode: ChatMode) => void;
+  nextSubAgent: () => void;
+  prevSubAgent: () => void;
+}
+
+export interface SubAgentDetailModeKeymapContext {
+  chatMode: "subagent-detail";
+  isPaletteOpen: boolean;
+  setChatMode: (mode: ChatMode) => void;
+}
+
+export interface ToolFocusModeKeymapContext {
+  chatMode: "tool-focus";
+  isPaletteOpen: boolean;
+  setChatMode: (mode: ChatMode) => void;
+  openToolDetail: () => void;
+  nextTool: () => void;
+  prevTool: () => void;
+  toggleSelectedTool: () => void;
+}
+
+export interface ToolDetailModeKeymapContext {
+  chatMode: "tool-detail";
+  isPaletteOpen: boolean;
+  setChatMode: (mode: ChatMode) => void;
+}
+
+export interface ChatModeKeymapContextMap {
+  input: InputModeKeymapContext;
+  "subagent-picker": SubAgentPickerModeKeymapContext;
+  "subagent-detail": SubAgentDetailModeKeymapContext;
+  "tool-focus": ToolFocusModeKeymapContext;
+  "tool-detail": ToolDetailModeKeymapContext;
+}
+
+export type ChatModeKeymapContext = ChatModeKeymapContextMap[ChatMode];
 
 export interface ChatModeKeymapSpec {
   map: KeyMap;
@@ -114,9 +203,13 @@ export interface ChatModeKeymapSpec {
   priority: number;
 }
 
-export interface ChatModeDefinition {
-  render(ctx: ChatModeRenderContext): ReactNode;
+export interface ChatModeDefinition<TMode extends ChatMode> {
+  render(ctx: ChatModeRenderContextMap[TMode]): ReactNode;
   getHint(ctx: ChatModeHintContext): string;
-  getSelection(ctx: ChatModeSelectionContext): ChatModeSelection;
-  getKeymaps(ctx: ChatModeKeymapContext): ChatModeKeymapSpec[];
+  getSelection(ctx: ChatModeSelectionContextMap[TMode]): ChatModeSelection;
+  getKeymaps(ctx: ChatModeKeymapContextMap[TMode]): ChatModeKeymapSpec[];
 }
+
+export type ChatModeRegistry = {
+  [TMode in ChatMode]: ChatModeDefinition<TMode>;
+};

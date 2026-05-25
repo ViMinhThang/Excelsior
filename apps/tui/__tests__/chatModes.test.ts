@@ -1,18 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildChatModeKeymapContext,
   chatModeIds,
+  ChatModeView,
   chatModeRegistry,
   getChatModeHint,
   getChatModeKeymaps,
   getChatModeSelection,
+  type BuildChatModeKeymapContextInput,
   type ChatMode,
   type ChatModeKeymapContext,
   type ChatModeRenderContext,
 } from "../src/chatModes/index.js";
+import { buildModeViewContext } from "../src/hooks/useChatScreenModel.js";
 
 function makeKeymapContext(chatMode: ChatMode): ChatModeKeymapContext {
   const noop = () => {};
-  return {
+  return buildChatModeKeymapContext({
     chatMode,
     pending: null,
     activePanelId: null,
@@ -40,10 +44,40 @@ function makeKeymapContext(chatMode: ChatMode): ChatModeKeymapContext {
     toggleSelectedTool: noop,
     navigateUp: noop,
     navigateDown: noop,
-  };
+  } satisfies BuildChatModeKeymapContextInput);
 }
 
 function makeRenderContext(chatMode: ChatMode): ChatModeRenderContext {
+  const noop = () => {};
+  return buildModeViewContext({
+    chatMode,
+    displayBlocks: [],
+    inputValue: "",
+    setInput: noop,
+    handleSubmit: noop,
+    isLoading: false,
+    pending: null,
+    paletteOpen: false,
+    commandResult: null,
+    agentMode: "act",
+    activePanel: undefined,
+    featureContext: {
+      sessions: [],
+      currentSessionId: null,
+      switchSession: noop,
+      deleteSession: noop,
+      closePanel: noop,
+    },
+    subAgents: [],
+    subAgentIndex: 0,
+    toolBlocks: [],
+    selectedSubAgentId: null,
+    selectedToolId: null,
+    expandedToolIds: new Set(),
+  });
+}
+
+function makeLegacyWideRenderContext(chatMode: ChatMode) {
   const noop = () => {};
   return {
     chatMode,
@@ -94,8 +128,7 @@ describe("chat mode registry", () => {
 
   it("provides render, hint, selection, and keymap behavior for every mode", () => {
     for (const chatMode of chatModeIds) {
-      const definition = chatModeRegistry[chatMode];
-      const rendered = definition.render(makeRenderContext(chatMode));
+      const rendered = ChatModeView({ context: makeRenderContext(chatMode) });
       const hint = getChatModeHint({
         chatMode,
         isLoading: false,
@@ -120,5 +153,14 @@ describe("chat mode registry", () => {
       expect(keymaps.length).toBeGreaterThan(0);
       expect(keymaps[0]?.map).toBeTruthy();
     }
+  });
+
+  it("rejects the old all-state render shape at the mode seam", () => {
+    const context = makeRenderContext("tool-detail");
+    const legacy = makeLegacyWideRenderContext("tool-detail");
+
+    expect("tools" in context).toBe(true);
+    expect("subAgents" in context).toBe(false);
+    expect("subAgents" in legacy).toBe(true);
   });
 });

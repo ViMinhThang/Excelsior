@@ -2,10 +2,13 @@ import type { FC } from "react";
 import { Box, Text } from "ink";
 import type { ConfirmRequest } from "@excelsior/core";
 import type { ToolDisplay } from "../../lib/toolDisplay.js";
-import { createToolDisplay } from "../../lib/toolDisplay.js";
+import {
+  getFileChangeToolName,
+  parsePendingFileChangePreview,
+} from "../../lib/fileChangePreview.js";
 import { theme } from "../../theme.js";
 import Panel from "../shared/Panel.js";
-import { FileChangePreviewView } from "./ToolMessage.js";
+import { FileChangePreviewView } from "../../features/fileChangePreview/FileChangePreviewView.js";
 
 export interface PendingActionPanelProps {
   pending: ConfirmRequest;
@@ -15,12 +18,6 @@ export interface PendingActionPanelProps {
   hunkCount?: number;
 }
 
-function pendingPreviewToolName(toolName: string): "edit" | "write" | undefined {
-  if (toolName === "editFile") return "edit";
-  if (toolName === "writeFile") return "write";
-  return undefined;
-}
-
 const PendingActionPanel: FC<PendingActionPanelProps> = ({
   pending,
   display,
@@ -28,15 +25,8 @@ const PendingActionPanel: FC<PendingActionPanelProps> = ({
   activeHunkIndex,
   hunkCount,
 }) => {
-  const previewToolName = pendingPreviewToolName(pending.toolName);
-  const changeDisplay = previewToolName && pending.diff
-    ? createToolDisplay({
-        toolName: previewToolName,
-        toolArgs: pending.args,
-        status: "completed",
-        content: `Pending changes\n${pending.diff}`,
-      })
-    : null;
+  const previewToolName = getFileChangeToolName(pending.toolName);
+  const fileChangePreview = parsePendingFileChangePreview(pending);
 
   return (
     <Panel
@@ -53,10 +43,10 @@ const PendingActionPanel: FC<PendingActionPanelProps> = ({
         </Box>
         <Box flexDirection="column" paddingLeft={theme.spacing.toolIndent} marginTop={1}>
           <Text color={theme.colors.secondary}>{display.detail || "waiting for approval"}</Text>
-          {changeDisplay?.fileChangePreview ? (
+          {fileChangePreview ? (
             <FileChangePreviewView
               command={`${previewToolName} ${pending.filePath ?? display.summary}`}
-              preview={changeDisplay.fileChangePreview}
+              preview={fileChangePreview}
               scrollOffset={scrollOffset}
               activeHunkIndex={activeHunkIndex}
               hunkCount={hunkCount}

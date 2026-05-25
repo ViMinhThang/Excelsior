@@ -158,14 +158,52 @@ describe("chat screen model builders", () => {
       expandedToolIds,
     });
 
+    expect(context.chatMode).toBe("tool-detail");
+    if (context.chatMode !== "tool-detail") throw new Error("expected tool detail context");
     expect(context.input.value).toBe("/review ");
     expect(context.runtime.commandResult).toBe("done");
     expect(context.transcript.blocks).toBe(displayBlocks);
     expect(context.transcript.selectedSubAgentId).toBe(selectedSubAgent.id);
     expect(context.transcript.expandedToolIds).toBe(expandedToolIds);
-    expect(context.subAgents.blocks).toEqual([selectedSubAgent]);
+    expect("subAgents" in context).toBe(false);
     expect(context.tools.blocks).toEqual([otherTool, selectedTool]);
     expect(context.tools.selectedId).toBe(selectedTool.id);
     expect(context.tools.selectedBlock).toBe(selectedTool);
+  });
+
+  it("builds sub-agent detail context with only owned mode state", () => {
+    const selectedSubAgent = subAgentBlock("sub_selected");
+    const context = buildModeViewContext({
+      chatMode: "subagent-detail",
+      displayBlocks: [selectedSubAgent],
+      inputValue: "",
+      setInput: noop,
+      handleSubmit: noop,
+      isLoading: false,
+      pending: null,
+      paletteOpen: false,
+      commandResult: null,
+      agentMode: "act",
+      activePanel: undefined,
+      featureContext: {
+        sessions: [],
+        currentSessionId: null,
+        switchSession: noop,
+        deleteSession: noop,
+        closePanel: noop,
+      },
+      subAgents: [selectedSubAgent],
+      subAgentIndex: 0,
+      toolBlocks: [],
+      selectedSubAgentId: selectedSubAgent.id,
+      selectedToolId: null,
+      expandedToolIds: new Set(),
+    });
+
+    expect(context.chatMode).toBe("subagent-detail");
+    if (context.chatMode !== "subagent-detail") throw new Error("expected sub-agent detail context");
+    expect(context.subAgents.blocks).toEqual([selectedSubAgent]);
+    expect("transcript" in context).toBe(false);
+    expect("tools" in context).toBe(false);
   });
 });
