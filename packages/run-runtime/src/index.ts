@@ -20,3 +20,4 @@ export type {
   RunPersistenceConfig,
 } from "./eventfulRun.js";
 
+export { generateId } from "./id.js";

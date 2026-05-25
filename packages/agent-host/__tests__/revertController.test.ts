@@ -6,9 +6,10 @@ import {
   AgentStateStore,
   ProjectionPolicy,
   RevertController,
+  TurnTransactionCoordinator,
+  type TurnTransactionRun,
 } from "@excelsior/agent-host/testing/application";
 import type { RunRecorder } from "@excelsior/agent-host/testing/runtime";
-import { FileCheckpoint } from "@excelsior/agent-host/testing/tools";
 
 describe("RevertController", () => {
   let workspaceRoot: string;
@@ -36,14 +37,13 @@ describe("RevertController", () => {
       currentSessionId: "ses_1",
       reloadCurrentSessionEvents: vi.fn(async () => {}),
     };
-    const fileCheckpoint = new FileCheckpoint();
+    const turnTransactions = new TurnTransactionCoordinator({ recorder });
     const controller = new RevertController(
       state,
       sessions,
-      recorder,
-      fileCheckpoint,
+      turnTransactions,
     );
-    return { controller, fileCheckpoint, state, sessions };
+    return { controller, state, sessions, turnTransactions };
   }
 
   it("refuses while a run is active", async () => {
@@ -60,12 +60,12 @@ describe("RevertController", () => {
     const fullPath = join(workspaceRoot, "demo.txt");
     await writeFile(fullPath, "original", "utf-8");
     const recorder = createRecorder("run_1");
-    const { controller, fileCheckpoint } = createHarness(recorder);
-    fileCheckpoint.beginTurn("ses_1", "run_1");
-    await fileCheckpoint.captureBeforeWrite("demo.txt", fullPath);
+    const { controller, turnTransactions } = createHarness(recorder);
+    const revert = turnTransactions.beginTurn("ses_1", "run_1");
+    await revert.captureBeforeWrite("demo.txt", fullPath);
     await writeFile(fullPath, "agent edit", "utf-8");
-    fileCheckpoint.recordWrite("demo.txt", fullPath, "agent edit");
-    fileCheckpoint.completeTurn("ses_1", "run_1");
+    revert.recordWrite("demo.txt", fullPath, "agent edit");
+    await turnTransactions.completeTurn("ses_1", fakeRun("run_1"));
 
     const result = await controller.revertLastTurn();
 
@@ -78,12 +78,12 @@ describe("RevertController", () => {
     const fullPath = join(workspaceRoot, "demo.txt");
     await writeFile(fullPath, "original", "utf-8");
     const recorder = createRecorder("run_1");
-    const { controller, fileCheckpoint } = createHarness(recorder);
-    fileCheckpoint.beginTurn("ses_1", "run_1");
-    await fileCheckpoint.captureBeforeWrite("demo.txt", fullPath);
+    const { controller, turnTransactions } = createHarness(recorder);
+    const revert = turnTransactions.beginTurn("ses_1", "run_1");
+    await revert.captureBeforeWrite("demo.txt", fullPath);
     await writeFile(fullPath, "agent edit", "utf-8");
-    fileCheckpoint.recordWrite("demo.txt", fullPath, "agent edit");
-    fileCheckpoint.completeTurn("ses_1", "run_1");
+    revert.recordWrite("demo.txt", fullPath, "agent edit");
+    await turnTransactions.completeTurn("ses_1", fakeRun("run_1"));
     await writeFile(fullPath, "user edit", "utf-8");
 
     const result = await controller.revertLastTurn();
@@ -93,6 +93,14 @@ describe("RevertController", () => {
     await expect(readFile(fullPath, "utf-8")).resolves.toBe("user edit");
   });
 });
+
+function fakeRun(runId: string): TurnTransactionRun {
+  return {
+    id: runId,
+    getSnapshot: () => [],
+    emit: vi.fn(),
+  };
+}
 
 function createRecorder(runId?: string): RunRecorder {
   return {

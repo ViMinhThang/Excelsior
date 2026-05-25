@@ -2,6 +2,7 @@ import { createChannelBus } from "./bus.js";
 import type { Bus, Unsubscribe } from "./bus.js";
 import { DisposableScope } from "./disposable.js";
 import { AnyRunEvent, makeRunEvent, RunEventOverrides } from "./events.js";
+import { generateId } from "./id.js";
 
 export type RunEventMap<TEvents extends { [K in keyof TEvents]: unknown }> = {
   event: AnyRunEvent<TEvents>;
@@ -80,9 +81,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
 
   constructor(options?: EventfulRunOptions<TEvents>) {
     const idPrefix = options?.idPrefix ?? "run";
-    this.id =
-      options?.createRunId?.() ??
-      `${idPrefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    this.id = options?.createRunId?.() ?? generateId(idPrefix);
     this.sessionId = options?.sessionId ?? this.id;
     this.parentEventId = options?.parentEventId;
     this.correlationId = options?.correlationId ?? this.id;

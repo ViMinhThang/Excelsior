@@ -14,16 +14,14 @@ import {
   commandDefinitions,
   executeAgentCommand,
 } from "../commands.js";
-import { defaultRunRecorder } from "../persistence/runRecorder.js";
 import { createAgentClientState } from "./clientState.js";
 import { HostConfirmationController } from "./confirmationController.js";
-import { HostSettingsService } from "./settingsService.js";
 import type { SettingsStore } from "../ports/SettingsStore.js";
-import { storageEngine } from "../persistence/storageEngine.js";
+import { DefaultSettingsStore } from "../ports/DefaultSettingsStore.js";
 
 export class LocalAgentHost implements AgentHost {
   private readonly application: AgentApplication;
-  private readonly settings: HostSettingsService;
+  private readonly settings: SettingsStore;
   private readonly confirmations: HostConfirmationController;
   private readonly commandHost: CommandHostAdapter;
   private readonly listeners = new Set<() => void>();
@@ -35,16 +33,11 @@ export class LocalAgentHost implements AgentHost {
     settingsStore?: SettingsStore,
   ) {
     this.application = application;
-    this.settings = new HostSettingsService(settingsStore);
+    this.settings = settingsStore ?? new DefaultSettingsStore();
     this.confirmations = new HostConfirmationController(() =>
       this.invalidateAndNotify(),
     );
-    this.commandHost = new CommandHostAdapter(this.application, {
-      deleteAllSessions: async () => {
-        await storageEngine.sessions.deleteAll();
-        await defaultRunRecorder.deleteAllSessionEvents();
-      },
-    });
+    this.commandHost = new CommandHostAdapter(this.application);
     this.unsubscribeApplication = this.application.subscribe(() =>
       this.invalidateAndNotify(),
     );
@@ -133,7 +126,7 @@ export class LocalAgentHost implements AgentHost {
         this.application.renameSession(intent.sessionId, intent.title);
         return none();
       case "delete-all-sessions":
-        await this.deleteAllSessions();
+        await this.application.deleteAllSessions();
         return none();
     }
   }
@@ -178,11 +171,6 @@ export class LocalAgentHost implements AgentHost {
     for (const listener of this.listeners) {
       listener();
     }
-  }
-
-  private async deleteAllSessions(): Promise<void> {
-    await storageEngine.sessions.deleteAll();
-    await defaultRunRecorder.deleteAllSessionEvents();
   }
 }
 

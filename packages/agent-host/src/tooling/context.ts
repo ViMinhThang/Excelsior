@@ -1,7 +1,6 @@
 import { randomUUID } from "crypto";
 import type { ConfirmBus, ConfirmRequest } from "../runtime/confirmTypes.js";
 import type { AgentMode } from "@excelsior/core";
-import type { FileCheckpoint } from "../revert/fileCheckpoint.js";
 
 export type ToolCapability =
   | "fs:read"
@@ -21,7 +20,8 @@ export interface ConfirmCapability {
 }
 
 export interface RevertCapability {
-  fileCheckpoint: FileCheckpoint;
+  captureBeforeWrite(filePath: string, fullPath: string): Promise<void>;
+  recordWrite(filePath: string, fullPath: string, expectedContent: string): void;
 }
 
 export interface ToolContext {

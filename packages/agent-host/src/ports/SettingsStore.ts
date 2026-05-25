@@ -1,3 +1,5 @@
+import type { AppSettings } from "@excelsior/core";
+
 /**
  * Port interface for application settings storage.
  *
@@ -5,6 +7,7 @@
  * `settings` table. Swap for tests.
  */
 export interface SettingsStore {
-  get(key: string): string | undefined;
-  set(key: string, value: string): void;
+  getSettings(): AppSettings;
+  saveSettings(settings: Partial<AppSettings>): void;
 }
+

@@ -2,7 +2,6 @@ import type { AgentMode, AgentMessage, SendOptions } from "@excelsior/core";
 import type { RunHandle } from "@excelsior/run-runtime";
 import { type AgentFactory, DefaultAgentFactory } from "../../agent/agentFactory.js";
 import type { RunRecorder } from "../../persistence/runRecorder.js";
-import type { FileCheckpoint } from "../../revert/fileCheckpoint.js";
 import type { AgentRun } from "../../runtime/agentRun.js";
 import type {
   AgentEventDataMap,
@@ -11,6 +10,7 @@ import type {
 import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { ProjectionPolicy } from "../projection/ProjectionPolicy.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
+import type { TurnTransactionCoordinator } from "./TurnTransaction.js";
 import {
   createRunSession,
   type RunSessionConfig,
@@ -32,7 +32,7 @@ export interface TurnLifecycleOptions {
   projection: ProjectionPolicy;
   recorder: RunRecorder;
   subAgentEvents: SubAgentEventSink;
-  fileCheckpoint: FileCheckpoint;
+  turnTransactions: TurnTransactionCoordinator;
   appendFinalEvents(events: readonly AnyAgentEvent[]): void;
   dependencies?: TurnLifecycleDependencies;
 }
@@ -49,7 +49,7 @@ export class TurnLifecycle {
   private readonly projection: ProjectionPolicy;
   private readonly recorder: RunRecorder;
   private readonly subAgentEvents: SubAgentEventSink;
-  private readonly fileCheckpoint: FileCheckpoint;
+  private readonly turnTransactions: TurnTransactionCoordinator;
   private readonly appendFinalEvents: (events: readonly AnyAgentEvent[]) => void;
   private readonly dependencies: TurnLifecycleDependencies;
   private readonly agentFactory: AgentFactory;
@@ -61,7 +61,7 @@ export class TurnLifecycle {
     this.projection = options.projection;
     this.recorder = options.recorder;
     this.subAgentEvents = options.subAgentEvents;
-    this.fileCheckpoint = options.fileCheckpoint;
+    this.turnTransactions = options.turnTransactions;
     this.appendFinalEvents = options.appendFinalEvents;
     this.dependencies = options.dependencies ?? {};
     this.agentFactory = this.dependencies.agentFactory ?? new DefaultAgentFactory();
@@ -106,7 +106,7 @@ export class TurnLifecycle {
       subAgentEvents: this.subAgentEvents,
       mode: options.mode,
       workspaceRoot: options.workspaceRoot,
-      fileCheckpoint: this.fileCheckpoint,
+      turnTransactions: this.turnTransactions,
     });
 
     return result;

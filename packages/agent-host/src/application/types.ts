@@ -7,9 +7,10 @@ import type {
 } from "@excelsior/core";
 import type { AgentRun } from "../runtime/agentRun.js";
 import type { AnyAgentEvent } from "../runtime/events.js";
-import type { FileCheckpoint } from "../revert/fileCheckpoint.js";
 import type { RunRecorder } from "../persistence/runRecorder.js";
+import type { AgentSessionStorage } from "./sessions/SessionStorage.js";
 import type { TurnLifecycleDependencies } from "./turns/TurnLifecycle.js";
+import type { TurnTransactionCoordinator } from "./turns/TurnTransaction.js";
 
 export interface ChatSessionState {
   displayBlocks: ProjectedBlock[];
@@ -22,25 +23,13 @@ export interface ChatSessionState {
 }
 
 export interface AgentApplicationOptions {
-  sessionManager?: AgentSessionService;
+  sessionStorage?: AgentSessionStorage;
   recorder?: RunRecorder;
-  fileCheckpoint?: FileCheckpoint;
+  turnTransactions?: TurnTransactionCoordinator;
   turnLifecycle?: TurnLifecycleDependencies;
 }
 
 export type { SendOptions };
-
-export interface AgentSessionService {
-  getCurrentSessionId(): string | null;
-  getWorkspaceId(): string;
-  getWorkspace(): Workspace;
-  ensureSession(title?: string, userInput?: string): string;
-  createSession(title?: string): Session;
-  switchSession(sessionId: string): void;
-  deleteSession(sessionId: string): Promise<void>;
-  renameSession(sessionId: string, title: string): void;
-  listSessions(): Session[];
-}
 
 export interface ProjectionInputState {
   liveEvents: readonly AnyAgentEvent[];

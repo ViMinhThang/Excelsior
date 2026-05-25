@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { resetDb } from "@excelsior/agent-host/testing/persistence";
+import { resetDb, storageEngine } from "@excelsior/agent-host/testing/persistence";
 import { SessionManager } from "@excelsior/agent-host/testing/session";
 
 describe("SessionManager titles", () => {
@@ -26,7 +26,7 @@ describe("SessionManager titles", () => {
   });
 
   it("retitles an empty current session from its first user prompt", () => {
-    const manager = new SessionManager();
+    const manager = new SessionManager(undefined, storageEngine);
     const created = manager.createSession();
 
     manager.ensureSession("first real prompt");

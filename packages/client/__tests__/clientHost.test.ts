@@ -1,14 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentHost, AgentHostDispatchResult } from "@excelsior/client";
-import {
-  commandResultOrDefault,
-  createHostSession,
-  executeHostCommand,
-  getHostCommands,
-  modeResultOrUndefined,
-  sessionResultOrUndefined,
-  toggleHostMode,
-} from "@excelsior/client";
+import { AgentHostClient } from "@excelsior/client";
 
 function createHost(result: AgentHostDispatchResult): AgentHost {
   return {
@@ -35,26 +27,22 @@ function createHost(result: AgentHostDispatchResult): AgentHost {
   };
 }
 
-describe("@excelsior/client host helpers", () => {
-  it("unwraps dispatch result variants", () => {
-    const session = {
-      id: "ses_1",
-      startedAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-      metadata: { userInput: "" },
-      workspaceId: "ws_test",
-    };
+describe("@excelsior/client AgentHostClient", () => {
+  it("wraps and normalizes host state queries, commands, and settings", () => {
+    const host = createHost({ type: "none" });
+    const client = new AgentHostClient(host);
 
-    expect(commandResultOrDefault({ type: "none" })).toEqual({ handled: false });
-    expect(commandResultOrDefault({
-      type: "command-result",
-      result: { handled: true, message: "ok" },
-    })).toEqual({ handled: true, message: "ok" });
-    expect(sessionResultOrUndefined({ type: "session", session })).toBe(session);
-    expect(modeResultOrUndefined({ type: "mode", mode: "act" })).toBe("act");
+    expect(client.getState().mode).toBe("plan");
+    expect(client.getCommands()).toEqual([
+      { name: "help", description: "List commands" },
+    ]);
+    expect(client.getSettings()).toEqual({
+      deepseekApiKey: "",
+      githubToken: "",
+    });
   });
 
-  it("normalizes host commands, sessions, and modes", async () => {
+  it("normalizes and routes dispatches for command, session, and mode execution", async () => {
     const session = {
       id: "ses_1",
       startedAt: "2026-01-01T00:00:00.000Z",
@@ -69,13 +57,15 @@ describe("@excelsior/client host helpers", () => {
     const sessionHost = createHost({ type: "session", session });
     const modeHost = createHost({ type: "mode", mode: "act" });
 
-    expect(getHostCommands(commandHost)).toEqual([
-      { name: "help", description: "List commands" },
-    ]);
-    await expect(executeHostCommand(commandHost, "/help")).resolves.toEqual({
+    const commandClient = new AgentHostClient(commandHost);
+    const sessionClient = new AgentHostClient(sessionHost);
+    const modeClient = new AgentHostClient(modeHost);
+
+    await expect(commandClient.executeCommand("/help")).resolves.toEqual({
       handled: true,
     });
-    await expect(createHostSession(sessionHost, "Draft")).resolves.toBe(session);
-    await expect(toggleHostMode(modeHost)).resolves.toBe("act");
+    await expect(sessionClient.createSession("Draft")).resolves.toBe(session);
+    await expect(modeClient.toggleMode()).resolves.toBe("act");
   });
 });
+

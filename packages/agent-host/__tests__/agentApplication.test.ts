@@ -4,8 +4,9 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   AgentApplication,
-  type AgentSessionService,
+  type AgentSessionStorage,
   type TurnLifecycleDependencies,
+  type TurnTransactionRun,
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
@@ -18,10 +19,10 @@ import {
   resetSessionsDirForTests,
   setSessionsDirForTests,
 } from "@excelsior/agent-host/testing/persistence";
-import type { FileCheckpoint } from "@excelsior/agent-host/testing/tools";
+import type { RevertCapability } from "@excelsior/agent-host/testing/tools";
 import type { RunCompletion, RunHandle } from "@excelsior/run-runtime";
 import {
-  createFakeSessionManager,
+  createFakeSessionStorage,
   createPendingRunHandle,
   createFakeTurnLifecycle,
 } from "./helpers/agentApplication.js";
@@ -50,58 +51,55 @@ function createDeferredRunHandle(cancel = vi.fn()): {
   };
 }
 
+async function waitForIdle(manager: AgentApplication): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    if (!manager.getSnapshot().isLoading) return;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error("Timed out waiting for agent application to become idle");
+}
+
 function createTurnLifecycle(
   createRunSession: (config: RunSessionConfig) => ReturnType<NonNullable<TurnLifecycleDependencies["createRunSession"]>>,
 ): TurnLifecycleDependencies & { createRunSession: ReturnType<typeof vi.fn> } {
   return { createRunSession: vi.fn(createRunSession) };
 }
 
-async function persistCompletedRun(sessionId: string, run: AgentRun): Promise<void> {
+async function persistRunEvents(sessionId: string, run: AgentRun): Promise<void> {
   const recorder = new JsonlRunRecorder();
   for (const event of run.getSnapshot()) {
     await recorder.recordEvent(sessionId, event);
   }
-  await recorder.recordTurnComplete(
-    sessionId,
-    run.id,
-    run.getSnapshot().reduce((max, event) => Math.max(max, event.sequence), -1) + 1,
-  );
 }
 
-function createWorkspaceSessionManager(workspaceRoot: string): AgentSessionService {
-  const sessionManager = createFakeSessionManager();
-  return {
-    ...sessionManager,
-    getWorkspace: () => ({
-      id: "ws_test",
-      name: "Test workspace",
-      rootPath: workspaceRoot,
-    }),
-  };
+function createWorkspaceSessionStorage(workspaceRoot: string): AgentSessionStorage {
+  return createFakeSessionStorage(workspaceRoot);
 }
 
 function createCheckpointingTurnLifecycle(): {
   turnLifecycle: TurnLifecycleDependencies;
   getRun(): AgentRun;
-  getFileCheckpoint(): FileCheckpoint;
+  getRevertCapability(): RevertCapability;
   resolveCompletion(completion: RunCompletion<AgentEventDataMap>): void;
 } {
   let run: AgentRun | null = null;
-  let fileCheckpoint: FileCheckpoint | null = null;
+  let revert: RevertCapability | null = null;
   let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
 
   const createRunSession = vi.fn((config: RunSessionConfig) => {
     const sessionId = config.sessionId ?? "ses_test";
     run = new AgentRun(sessionId);
-    fileCheckpoint = config.fileCheckpoint ?? null;
-    fileCheckpoint?.beginTurn(sessionId, run.id);
+    revert = config.turnTransactions?.beginTurn(sessionId, run.id) ?? null;
     const completion = new Promise<RunCompletion<AgentEventDataMap>>((resolve) => {
         resolveCompletion = resolve;
-      }).then((result) => {
+      }).then(async (result) => {
         if (result.status === "completed" || result.status === "failed") {
-          fileCheckpoint?.completeTurn(sessionId, run!.id);
+          await config.turnTransactions?.completeTurn(
+            sessionId,
+            run as TurnTransactionRun,
+          );
         } else {
-          fileCheckpoint?.discardActiveTurn(run!.id);
+          config.turnTransactions?.discardTurn(run!.id);
         }
         return result;
       });
@@ -122,19 +120,19 @@ function createCheckpointingTurnLifecycle(): {
       if (!run) throw new Error("Run not started");
       return run;
     },
-    getFileCheckpoint: () => {
-      if (!fileCheckpoint) throw new Error("File checkpoint not captured");
-      return fileCheckpoint;
+    getRevertCapability: () => {
+      if (!revert) throw new Error("Revert capability not captured");
+      return revert;
     },
     resolveCompletion: (completion) => resolveCompletion(completion),
   };
 }
 
 describe("AgentApplication session ownership", () => {
-  it("refreshes snapshot after session CRUD with a plain SessionManager service", async () => {
-    const sessionManager = createFakeSessionManager();
+  it("refreshes snapshot after session CRUD with a plain session storage", async () => {
+    const sessionStorage = createFakeSessionStorage();
     const manager = new AgentApplication(undefined, {
-      sessionManager,
+      sessionStorage,
       turnLifecycle: createFakeTurnLifecycle(),
     });
 
@@ -156,7 +154,7 @@ describe("AgentApplication session ownership", () => {
   });
 
   it("creates an untitled session when send is called without a title", () => {
-    const sessionManager = createFakeSessionManager();
+    const sessionStorage = createFakeSessionStorage();
     const turnLifecycle: TurnLifecycleDependencies & { createRunSession: ReturnType<typeof vi.fn> } = {
       createRunSession: vi.fn((config: RunSessionConfig) => ({
         run: new AgentRun(config.sessionId),
@@ -166,7 +164,7 @@ describe("AgentApplication session ownership", () => {
       })),
     };
     const manager = new AgentApplication(undefined, {
-      sessionManager,
+      sessionStorage,
       turnLifecycle,
     });
 
@@ -190,7 +188,7 @@ describe("AgentApplication session ownership", () => {
     const events = new Promise<AnyAgentEvent[]>((resolve) => {
       resolveEvents = () => resolve([...run.getSnapshot()]);
     });
-    const sessionManager = createFakeSessionManager();
+    const sessionStorage = createFakeSessionStorage();
     const turnLifecycle = createTurnLifecycle((config) => {
         const sessionId = config.sessionId ?? "ses_test";
         run = new AgentRun(sessionId);
@@ -202,7 +200,7 @@ describe("AgentApplication session ownership", () => {
         };
       });
     const manager = new AgentApplication(undefined, {
-      sessionManager,
+      sessionStorage,
       turnLifecycle,
     });
 
@@ -222,7 +220,7 @@ describe("AgentApplication session ownership", () => {
   it("keeps failed run final events visible before clearing loading state", async () => {
     let run!: AgentRun;
     let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
-    const sessionManager = createFakeSessionManager();
+    const sessionStorage = createFakeSessionStorage();
     const turnLifecycle = createTurnLifecycle((config) => {
         const sessionId = config.sessionId ?? "ses_test";
         run = new AgentRun(sessionId);
@@ -236,7 +234,7 @@ describe("AgentApplication session ownership", () => {
         };
       });
     const manager = new AgentApplication(undefined, {
-      sessionManager,
+      sessionStorage,
       turnLifecycle,
     });
 
@@ -260,7 +258,7 @@ describe("AgentApplication session ownership", () => {
   it("drops partial live events when the active run completes as cancelled", async () => {
     let run!: AgentRun;
     let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
-    const sessionManager = createFakeSessionManager();
+    const sessionStorage = createFakeSessionStorage();
     const turnLifecycle = createTurnLifecycle((config) => {
         const sessionId = config.sessionId ?? "ses_test";
         run = new AgentRun(sessionId);
@@ -274,7 +272,7 @@ describe("AgentApplication session ownership", () => {
         };
       });
     const manager = new AgentApplication(undefined, {
-      sessionManager,
+      sessionStorage,
       turnLifecycle,
     });
 
@@ -291,7 +289,7 @@ describe("AgentApplication session ownership", () => {
 
   it("clears loading state when the active run is cancelled", () => {
     const cancel = vi.fn();
-    const sessionManager = createFakeSessionManager();
+    const sessionStorage = createFakeSessionStorage();
     const turnLifecycle = createTurnLifecycle((config) => ({
         run: new AgentRun(config.sessionId),
         childRuns: new Map(),
@@ -299,7 +297,7 @@ describe("AgentApplication session ownership", () => {
         sessionId: config.sessionId ?? "ses_test",
       }));
     const manager = new AgentApplication(undefined, {
-      sessionManager,
+      sessionStorage,
       turnLifecycle,
     });
 
@@ -315,7 +313,7 @@ describe("AgentApplication session ownership", () => {
   it("ignores stale completions after cancellation", async () => {
     let run!: AgentRun;
     let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
-    const sessionManager = createFakeSessionManager();
+    const sessionStorage = createFakeSessionStorage();
     const turnLifecycle = createTurnLifecycle((config) => {
         const sessionId = config.sessionId ?? "ses_test";
         run = new AgentRun(sessionId);
@@ -329,7 +327,7 @@ describe("AgentApplication session ownership", () => {
         };
       });
     const manager = new AgentApplication(undefined, {
-      sessionManager,
+      sessionStorage,
       turnLifecycle,
     });
 
@@ -344,7 +342,7 @@ describe("AgentApplication session ownership", () => {
   it("ignores stale completions when a newer run is active", async () => {
     const runs: AgentRun[] = [];
     const completions: Array<(completion: RunCompletion<AgentEventDataMap>) => void> = [];
-    const sessionManager = createFakeSessionManager();
+    const sessionStorage = createFakeSessionStorage();
     const turnLifecycle = createTurnLifecycle((config) => {
         const sessionId = config.sessionId ?? "ses_test";
         const run = new AgentRun(sessionId);
@@ -359,7 +357,7 @@ describe("AgentApplication session ownership", () => {
         };
       });
     const manager = new AgentApplication(undefined, {
-      sessionManager,
+      sessionStorage,
       turnLifecycle,
     });
 
@@ -385,7 +383,7 @@ describe("AgentApplication session ownership", () => {
     const events = new Promise<AnyAgentEvent[]>((resolve) => {
       resolveEvents = () => resolve([...run.getSnapshot()]);
     });
-    const sessionManager = createFakeSessionManager();
+    const sessionStorage = createFakeSessionStorage();
     const turnLifecycle = createTurnLifecycle((config) => {
         const sessionId = config.sessionId ?? "ses_test";
         run = new AgentRun(sessionId);
@@ -397,7 +395,7 @@ describe("AgentApplication session ownership", () => {
         };
       });
     const manager = new AgentApplication(undefined, {
-      sessionManager,
+      sessionStorage,
       turnLifecycle,
     });
 
@@ -414,7 +412,7 @@ describe("AgentApplication session ownership", () => {
   });
 
   it("schedules a snapshot notification when sub-agent events arrive", async () => {
-    const sessionManager = createFakeSessionManager();
+    const sessionStorage = createFakeSessionStorage();
     const turnLifecycle = createTurnLifecycle((config) => {
         return {
           run: new AgentRun(config.sessionId),
@@ -424,7 +422,7 @@ describe("AgentApplication session ownership", () => {
         };
       });
     const manager = new AgentApplication(undefined, {
-      sessionManager,
+      sessionStorage,
       turnLifecycle,
     });
     const listener = vi.fn();
@@ -460,7 +458,7 @@ describe("AgentApplication revert", () => {
   it("refuses to revert while a run is active", async () => {
     const controller = createCheckpointingTurnLifecycle();
     const manager = new AgentApplication(undefined, {
-      sessionManager: createWorkspaceSessionManager(workspaceRoot),
+      sessionStorage: createWorkspaceSessionStorage(workspaceRoot),
       turnLifecycle: controller.turnLifecycle,
     });
 
@@ -477,19 +475,19 @@ describe("AgentApplication revert", () => {
     await writeFile(fullPath, "original", "utf-8");
     const controller = createCheckpointingTurnLifecycle();
     const manager = new AgentApplication(undefined, {
-      sessionManager: createWorkspaceSessionManager(workspaceRoot),
+      sessionStorage: createWorkspaceSessionStorage(workspaceRoot),
       turnLifecycle: controller.turnLifecycle,
     });
 
     manager.send("change file");
     const run = controller.getRun();
-    const fileCheckpoint = controller.getFileCheckpoint();
-    await fileCheckpoint.captureBeforeWrite(filePath, fullPath);
+    const revert = controller.getRevertCapability();
+    await revert.captureBeforeWrite(filePath, fullPath);
     await writeFile(fullPath, "agent edit", "utf-8");
-    fileCheckpoint.recordWrite(filePath, fullPath, "agent edit");
-    await persistCompletedRun("ses_1", run);
+    revert.recordWrite(filePath, fullPath, "agent edit");
+    await persistRunEvents("ses_1", run);
     controller.resolveCompletion({ status: "completed", events: [...run.getSnapshot()] });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForIdle(manager);
 
     const result = await manager.revertLastTurn();
 
@@ -505,19 +503,19 @@ describe("AgentApplication revert", () => {
     await writeFile(fullPath, "original", "utf-8");
     const controller = createCheckpointingTurnLifecycle();
     const manager = new AgentApplication(undefined, {
-      sessionManager: createWorkspaceSessionManager(workspaceRoot),
+      sessionStorage: createWorkspaceSessionStorage(workspaceRoot),
       turnLifecycle: controller.turnLifecycle,
     });
 
     manager.send("change file");
     const run = controller.getRun();
-    const fileCheckpoint = controller.getFileCheckpoint();
-    await fileCheckpoint.captureBeforeWrite(filePath, fullPath);
+    const revert = controller.getRevertCapability();
+    await revert.captureBeforeWrite(filePath, fullPath);
     await writeFile(fullPath, "agent edit", "utf-8");
-    fileCheckpoint.recordWrite(filePath, fullPath, "agent edit");
-    await persistCompletedRun("ses_1", run);
+    revert.recordWrite(filePath, fullPath, "agent edit");
+    await persistRunEvents("ses_1", run);
     controller.resolveCompletion({ status: "completed", events: [...run.getSnapshot()] });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await waitForIdle(manager);
     await writeFile(fullPath, "user edit", "utf-8");
 
     const result = await manager.revertLastTurn();
@@ -527,3 +525,4 @@ describe("AgentApplication revert", () => {
     await expect(new JsonlRunRecorder().loadRawEvents("ses_1")).resolves.toHaveLength(2);
   });
 });
+

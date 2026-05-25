@@ -1,8 +1,6 @@
+import { generateId } from "@excelsior/core";
 import type { Session, Workspace } from "@excelsior/core";
-import {
-  storageEngine,
-  type StorageEngine,
-} from "./persistence/storageEngine.js";
+import type { StorageEngine } from "./persistence/storageEngine.js";
 
 export class SessionManager {
   private _workspace: Workspace;
@@ -10,8 +8,8 @@ export class SessionManager {
   private _sessions: Session[] = [];
 
   constructor(
-    workspaceId?: string,
-    private readonly storage: StorageEngine = storageEngine,
+    workspaceId: string | undefined,
+    private readonly storage: StorageEngine,
   ) {
     const ws = workspaceId
       ? this.storage.workspaces.load(workspaceId) ?? this.storage.workspaces.getOrCreateDefault()
@@ -78,6 +76,12 @@ export class SessionManager {
     this._reloadSessions();
   }
 
+  async deleteAllSessions(): Promise<void> {
+    await this.storage.sessions.deleteAll();
+    this._currentSessionId = null;
+    this._reloadSessions();
+  }
+
   renameSession(sessionId: string, title: string): void {
     this.storage.sessions.updateTitle(sessionId, title);
     this._reloadSessions();
@@ -108,7 +112,7 @@ export class SessionManager {
   }
 
   private _makeSessionId(): string {
-    return `ses_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    return generateId("ses");
   }
 
   private _createAndPersist(title: string, userInput = ""): string {
