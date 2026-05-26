@@ -4,43 +4,17 @@ import UserMessage from "./UserMessage.js";
 import AgentMessage from "./AgentMessage.js";
 import ToolMessage from "./ToolMessage.js";
 import SubAgentRow from "../../features/review/components/SubAgentRow.js";
-import type { ProjectedBlock } from "@excelsior/core";
+import type { ProjectedBlock, SubAgentProjectionPart } from "@excelsior/core";
 import { theme } from "../../theme.js";
 
 interface ChatHistoryProps {
   blocks: ProjectedBlock[];
-  selectedToolId?: string | null;
-  selectedSubAgentId?: string | null;
-  expandedToolIds?: ReadonlySet<string>;
-  disableBlockHiding?: boolean;
-}
-
-const FOCUS_CONTEXT_BEFORE = 4;
-const FOCUS_CONTEXT_AFTER = 5;
-
-function focusBlocks(blocks: ProjectedBlock[], focusId: string | null) {
-  if (!focusId) return { visible: blocks, hiddenBefore: 0, hiddenAfter: 0 };
-
-  const focusIndex = blocks.findIndex((block) => block.id === focusId);
-  if (focusIndex === -1) {
-    return { visible: blocks, hiddenBefore: 0, hiddenAfter: 0 };
-  }
-
-  const start = Math.max(0, focusIndex - FOCUS_CONTEXT_BEFORE);
-  const end = Math.min(blocks.length, focusIndex + FOCUS_CONTEXT_AFTER + 1);
-
-  return {
-    visible: blocks.slice(start, end),
-    hiddenBefore: start,
-    hiddenAfter: blocks.length - end,
-  };
+  commandsExpanded?: boolean;
 }
 
 function renderBlock(
   block: ProjectedBlock,
-  selectedToolId: string | null,
-  selectedSubAgentId: string | null,
-  expandedToolIds: ReadonlySet<string>,
+  commandsExpanded: boolean,
 ): ReactNode {
   if (block.type === "user") {
     return <UserMessage key={block.id} content={block.content} timestamp={block.timestamp} />;
@@ -62,49 +36,72 @@ function renderBlock(
         toolArgs={block.toolArgs}
         status={block.status}
         content={block.content}
-        selected={block.id === selectedToolId}
-        expanded={expandedToolIds.has(block.id)}
+        expanded={commandsExpanded}
       />
     );
   }
   if (block.type === "sub-agent") {
+    const partTools = block.state.parts.filter(
+      (part): part is Extract<SubAgentProjectionPart, { type: "tool-call" }> =>
+        part.type === "tool-call",
+    );
+    const toolsCount = partTools.length > 0 ? partTools.length : block.state.toolCalls.length;
+
     return (
-      <SubAgentRow
-        key={block.id}
-        agent={block.state}
-        role={block.role}
-        isSelected={block.id === selectedSubAgentId}
-      />
+      <Box key={block.id} flexDirection="column">
+        <SubAgentRow
+          agent={block.state}
+          role={block.role}
+          isSelected={false}
+        />
+        {commandsExpanded ? (
+          renderSubAgentTools(block)
+        ) : (
+          <Box paddingLeft={4}>
+            <Text color={theme.colors.muted} dimColor>
+              └── {toolsCount} tool call{toolsCount !== 1 ? "s" : ""}
+            </Text>
+          </Box>
+        )}
+      </Box>
     );
   }
   return null;
 }
 
-const ChatHistory: FC<ChatHistoryProps> = ({
-  blocks,
-  selectedToolId = null,
-  selectedSubAgentId = null,
-  expandedToolIds = new Set(),
-  disableBlockHiding = false,
-}) => {
-  const focusId = disableBlockHiding ? null : (selectedToolId ?? selectedSubAgentId);
-  const { visible, hiddenBefore, hiddenAfter } = focusBlocks(blocks, focusId);
+function renderSubAgentTools(block: ProjectedBlock & { type: "sub-agent" }) {
+  const partTools = block.state.parts.filter(
+    (part): part is Extract<SubAgentProjectionPart, { type: "tool-call" }> =>
+      part.type === "tool-call",
+  );
+  const tools = partTools.length > 0 ? partTools : block.state.toolCalls;
+
+  if (tools.length === 0) return null;
 
   return (
+    <Box flexDirection="column" paddingLeft={2}>
+      {tools.map((tool) => (
+        <ToolMessage
+          key={tool.toolCallId}
+          toolName={tool.toolName}
+          toolArgs={tool.toolArgs}
+          status={tool.status || "completed"}
+          content=""
+          nested
+          expanded
+        />
+      ))}
+    </Box>
+  );
+}
+
+const ChatHistory: FC<ChatHistoryProps> = ({
+  blocks,
+  commandsExpanded = true,
+}) => {
+  return (
     <Box flexDirection="column">
-      {hiddenBefore > 0 ? (
-        <Text color={theme.colors.muted} dimColor>
-          ... {hiddenBefore} older {hiddenBefore === 1 ? "block" : "blocks"}
-        </Text>
-      ) : null}
-      {visible.map((block) =>
-        renderBlock(block, selectedToolId, selectedSubAgentId, expandedToolIds),
-      )}
-      {hiddenAfter > 0 ? (
-        <Text color={theme.colors.muted} dimColor>
-          ... {hiddenAfter} newer {hiddenAfter === 1 ? "block" : "blocks"}
-        </Text>
-      ) : null}
+      {blocks.map((block) => renderBlock(block, commandsExpanded))}
     </Box>
   );
 };

@@ -1,6 +1,14 @@
-import { randomUUID } from "crypto";
-import type { ConfirmBus, ConfirmRequest } from "../runtime/confirmTypes.js";
 import type { AgentMode } from "@excelsior/core";
+import type {
+  AskQuestionOption,
+  AskQuestionRequest,
+  AskQuestionResponse,
+  ConfirmRequest,
+  ConfirmResponse,
+} from "@excelsior/core";
+import type { ConfirmPromptBus } from "../runtime/confirmTypes.js";
+import type { QuestionPromptBus } from "../runtime/questionTypes.js";
+import { requestBlockingPrompt } from "../runtime/blockingPrompt.js";
 
 export type ToolCapability =
   | "fs:read"
@@ -19,6 +27,15 @@ export interface ConfirmCapability {
   ): Promise<boolean>;
 }
 
+export interface QuestionCapability {
+  getListenerCount(): number;
+  request(input: {
+    question: string;
+    options: AskQuestionOption[];
+    allowManual: boolean;
+  }): Promise<AskQuestionResponse>;
+}
+
 export interface RevertCapability {
   captureBeforeWrite(filePath: string, fullPath: string): Promise<void>;
   recordWrite(filePath: string, fullPath: string, expectedContent: string): void;
@@ -27,6 +44,7 @@ export interface RevertCapability {
 export interface ToolContext {
   capabilities: ReadonlySet<ToolCapability>;
   confirm?: ConfirmCapability;
+  question?: QuestionCapability;
   abortSignal?: AbortSignal;
   workspaceRoot?: string;
   mode?: AgentMode;
@@ -35,7 +53,8 @@ export interface ToolContext {
 
 export function createToolContext(options?: {
   abortSignal?: AbortSignal;
-  confirmBus?: ConfirmBus;
+  confirmBus?: ConfirmPromptBus;
+  questionBus?: QuestionPromptBus;
   workspaceRoot?: string;
   mode?: AgentMode;
   revert?: RevertCapability;
@@ -57,20 +76,34 @@ export function createToolContext(options?: {
     ctx.confirm = {
       getListenerCount: () => options.confirmBus!.getListenerCount("request"),
       request: (toolName: string, args: string, metadata = {}) =>
-        new Promise<boolean>((resolve) => {
-          const callId = randomUUID();
-          const unsub = options.confirmBus!.on("response", (resp) => {
-            if (resp.callId === callId) {
-              unsub();
-              resolve(resp.approved);
-            }
-          });
-          options.confirmBus!.emit("request", {
+        requestBlockingPrompt<ConfirmRequest, ConfirmResponse, boolean>({
+          bus: options.confirmBus!,
+          buildRequest: (callId) => ({
             callId,
             toolName,
             args,
             ...metadata,
-          });
+          }),
+          mapResponse: (response) => response.approved,
+        }),
+    };
+  }
+
+  if (options?.questionBus) {
+    ctx.question = {
+      getListenerCount: () => options.questionBus!.getListenerCount("request"),
+      request: (input) =>
+        requestBlockingPrompt<AskQuestionRequest, AskQuestionResponse>({
+          bus: options.questionBus!,
+          buildRequest: (callId) => ({ callId, ...input }),
+          mapResponse: (response) => response,
+          abortSignal: options.abortSignal,
+          buildCancelledResponse: (callId) => ({
+            callId,
+            answer: "",
+            isManual: true,
+            cancelled: true,
+          }),
         }),
     };
   }

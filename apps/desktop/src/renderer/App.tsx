@@ -39,6 +39,7 @@ export default function App() {
     setMode,
     saveSettings,
     respondToConfirmation,
+    respondToQuestion,
   } = useAgentHost();
 
   const [inputValue, setInputValue] = useState("");
@@ -131,9 +132,13 @@ export default function App() {
           }}
           onSend={handleSend}
           onToggleToolCall={(id) =>
-            setOpenToolCalls((current) => ({ ...current, [id]: !current[id] }))
+            setOpenToolCalls((current) => ({
+              ...current,
+              [id]: current[id] === undefined ? false : !current[id],
+            }))
           }
           onRespondToConfirmation={respondToConfirmation}
+          onRespondToQuestion={respondToQuestion}
         />
       </div>
 

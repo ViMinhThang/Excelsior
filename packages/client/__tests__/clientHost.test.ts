@@ -16,6 +16,7 @@ function createHost(result: AgentHostDispatchResult): AgentHost {
       },
       mode: "plan",
       pendingConfirmation: null,
+      pendingQuestion: null,
     }),
     subscribe: () => () => {},
     getCatalog: () => ({
@@ -67,5 +68,24 @@ describe("@excelsior/client AgentHostClient", () => {
     await expect(sessionClient.createSession("Draft")).resolves.toBe(session);
     await expect(modeClient.toggleMode()).resolves.toBe("act");
   });
-});
 
+  it("dispatches question responses through the host contract", async () => {
+    const host = createHost({ type: "none" });
+    const client = new AgentHostClient(host);
+
+    await client.respondToQuestion({
+      callId: "question_1",
+      answer: "Manual answer",
+      isManual: true,
+    });
+
+    expect(host.dispatch).toHaveBeenCalledWith({
+      type: "respond-to-question",
+      response: {
+        callId: "question_1",
+        answer: "Manual answer",
+        isManual: true,
+      },
+    });
+  });
+});

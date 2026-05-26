@@ -8,6 +8,7 @@ export {
   buildModeViewContext,
   buildPaletteModel,
   buildPendingActionModel,
+  buildPendingQuestionModel,
   buildSuggestionsModel,
   type BuildModeViewContextInput,
   type ChatScreenModel,

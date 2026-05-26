@@ -8,7 +8,6 @@ import ChatInput from "../components/chat/ChatInput.js";
 import SubAgentDetail from "../features/review/components/SubAgentDetail.js";
 import SubAgentPickerPanel from "../features/review/components/SubAgentPickerPanel.js";
 import ThinkingIndicator from "../components/chat/ThinkingIndicator.js";
-import ToolDetailPanel from "../components/chat/ToolDetailPanel.js";
 import { completeCommandInput } from "../lib/commandSubmission.js";
 import { theme } from "../theme.js";
 import type {
@@ -25,14 +24,15 @@ import type {
   InputModeKeymapContext,
   InputModeRenderContext,
   SubAgentPickerModeRenderContext,
-  ToolDetailModeRenderContext,
-  ToolFocusModeRenderContext,
 } from "./types.js";
 
 const sep = " | ";
 
 function globalHint(ctx: ChatModeHintContext): string | null {
   if (ctx.hasPending) {
+    if (ctx.pendingKind === "question") {
+      return `Enter answer${sep}type option number or custom answer${sep}Esc cancel`;
+    }
     return `y accept${sep}a accept all${sep}n deny${sep}\u2191\u2193 scroll diff${sep}Tab hunks${sep}Esc cancel`;
   }
   if (ctx.activePanelId) {
@@ -44,13 +44,25 @@ function globalHint(ctx: ChatModeHintContext): string | null {
 function inputHint(ctx: ChatModeHintContext): string {
   const override = globalHint(ctx);
   if (override) return override;
+  const commandHint = getCommandHint(ctx);
   if (ctx.isLoading) {
-    return "Esc cancel" + (ctx.subAgentCount > 0 ? `${sep}Ctrl+O sub-agent detail` : "");
+    return "Esc cancel" + (commandHint ? `${sep}${commandHint}` : "");
   }
   return `Enter send${sep}/ commands`
-    + (ctx.subAgentCount > 0 ? `${sep}Ctrl+O sub-agent detail` : "")
-    + ((ctx.toolCount ?? 0) > 0 ? `${sep}Ctrl+T tools` : "")
+    + (commandHint ? `${sep}${commandHint}` : "")
     + `${sep}Ctrl+K command palette`;
+}
+
+function getCommandHint(ctx: ChatModeHintContext): string {
+  if (ctx.commandCount > 0 || ctx.subAgentCount > 0) {
+    return ctx.commandsExpanded ? "Ctrl+O hide commands" : "Ctrl+O commands";
+  }
+  return "";
+}
+
+function getCommandToggleHint(ctx: ChatModeHintContext): string {
+  if (ctx.commandCount <= 0) return "";
+  return ctx.commandsExpanded ? "Ctrl+O hide commands" : "Ctrl+O commands";
 }
 
 function modeHint(ctx: ChatModeHintContext, hint: string): string {
@@ -60,7 +72,6 @@ function modeHint(ctx: ChatModeHintContext, hint: string): string {
 function emptySelection(): ChatModeSelection {
   return {
     selectedSubAgentId: null,
-    selectedToolId: null,
   };
 }
 
@@ -69,16 +80,6 @@ function subAgentSelection(
 ): ChatModeSelection {
   return {
     selectedSubAgentId: ctx.subAgents[ctx.subAgentIndex]?.id ?? null,
-    selectedToolId: null,
-  };
-}
-
-function toolSelection(
-  ctx: ChatModeSelectionContextMap["tool-focus"],
-): ChatModeSelection {
-  return {
-    selectedSubAgentId: null,
-    selectedToolId: ctx.selectedToolId,
   };
 }
 
@@ -112,13 +113,12 @@ export interface BuildChatModeKeymapContextInput {
   cancel: () => void;
   toggleMode: () => "plan" | "act" | undefined;
   openSubAgent: () => void;
+  subAgentCount: number;
+  commandCount: number;
+  commandsExpanded: boolean;
+  toggleCommandsExpanded: () => void;
   nextSubAgent: () => void;
   prevSubAgent: () => void;
-  openToolFocus: () => void;
-  openToolDetail: () => void;
-  nextTool: () => void;
-  prevTool: () => void;
-  toggleSelectedTool: () => void;
   navigateUp: () => void;
   navigateDown: () => void;
   openPalette?: () => void;
@@ -140,7 +140,10 @@ export function buildChatModeKeymapContext(
         cancel: input.cancel,
         toggleMode: input.toggleMode,
         openSubAgent: input.openSubAgent,
-        openToolFocus: input.openToolFocus,
+        subAgentCount: input.subAgentCount,
+        commandCount: input.commandCount,
+        commandsExpanded: input.commandsExpanded,
+        toggleCommandsExpanded: input.toggleCommandsExpanded,
         navigateUp: input.navigateUp,
         navigateDown: input.navigateDown,
         openPalette: input.openPalette,
@@ -152,28 +155,15 @@ export function buildChatModeKeymapContext(
         setChatMode: input.setChatMode,
         nextSubAgent: input.nextSubAgent,
         prevSubAgent: input.prevSubAgent,
+        commandsExpanded: input.commandsExpanded,
+        toggleCommandsExpanded: input.toggleCommandsExpanded,
       };
     case "subagent-detail":
       return {
         chatMode: "subagent-detail",
         isPaletteOpen: input.isPaletteOpen,
         setChatMode: input.setChatMode,
-      };
-    case "tool-focus":
-      return {
-        chatMode: "tool-focus",
-        isPaletteOpen: input.isPaletteOpen,
-        setChatMode: input.setChatMode,
-        openToolDetail: input.openToolDetail,
-        nextTool: input.nextTool,
-        prevTool: input.prevTool,
-        toggleSelectedTool: input.toggleSelectedTool,
-      };
-    case "tool-detail":
-      return {
-        chatMode: "tool-detail",
-        isPaletteOpen: input.isPaletteOpen,
-        setChatMode: input.setChatMode,
+        toggleCommandsExpanded: input.toggleCommandsExpanded,
       };
   }
 }
@@ -223,10 +213,7 @@ function inputKeymaps(ctx: InputModeKeymapContext): ChatModeKeymapSpec[] {
           ctx.toggleMode();
         },
         "ctrl+o": () => {
-          ctx.openSubAgent();
-        },
-        "ctrl+t": () => {
-          ctx.openToolFocus();
+          ctx.toggleCommandsExpanded();
         },
         up: () => {
           if (hasSuggestions) ctx.suggestion.prev();
@@ -268,15 +255,12 @@ function modalKeymap(
 
 type ConversationModeContext =
   | InputModeRenderContext
-  | SubAgentPickerModeRenderContext
-  | ToolFocusModeRenderContext
-  | ToolDetailModeRenderContext;
+  | SubAgentPickerModeRenderContext;
 
 function renderConversation(
   ctx: ConversationModeContext,
   options: {
     showSubAgentPicker?: boolean;
-    disableBlockHiding?: boolean;
     showCommandResult?: boolean;
   } = {},
 ) {
@@ -288,10 +272,7 @@ function renderConversation(
       <Box flexDirection="column">
         <ChatHistory
           blocks={ctx.transcript.blocks}
-          selectedToolId={ctx.transcript.selectedToolId}
-          selectedSubAgentId={ctx.transcript.selectedSubAgentId}
-          expandedToolIds={ctx.transcript.expandedToolIds}
-          disableBlockHiding={options.disableBlockHiding}
+          commandsExpanded={ctx.transcript.commandsExpanded}
         />
       </Box>
 
@@ -299,6 +280,7 @@ function renderConversation(
         <SubAgentPickerPanel
           subAgents={ctx.subAgents.blocks}
           selectedIndex={ctx.subAgents.selectedIndex}
+          showToolCalls={ctx.transcript.commandsExpanded}
         />
       ) : null}
 
@@ -346,12 +328,19 @@ const inputMode: ChatModeDefinition<"input"> = {
 
 const subAgentPickerMode: ChatModeDefinition<"subagent-picker"> = {
   render: (ctx) => renderConversation(ctx, { showSubAgentPicker: true }),
-  getHint: (ctx) => modeHint(ctx, `Enter view detail${sep}\u2191\u2193 navigate${sep}Esc close`),
+  getHint: (ctx) => {
+    const commandHint = getCommandToggleHint(ctx);
+    return modeHint(
+      ctx,
+      `Enter view detail${sep}\u2191\u2193 navigate${commandHint ? `${sep}${commandHint}` : ""}${sep}Esc close`,
+    );
+  },
   getSelection: subAgentSelection,
   getKeymaps: (ctx) => modalKeymap(ctx.isPaletteOpen, {
     up: () => ctx.prevSubAgent(),
     down: () => ctx.nextSubAgent(),
     return: () => ctx.setChatMode("subagent-detail"),
+    "ctrl+o": () => ctx.toggleCommandsExpanded(),
     escape: () => ctx.setChatMode("input"),
   }),
 };
@@ -374,58 +363,21 @@ const subAgentDetailMode: ChatModeDefinition<"subagent-detail"> = {
           selectedSubAgent.id,
           selectedSubAgent.role,
         )}
+        showToolCalls={ctx.commandsExpanded}
       />
     );
   },
-  getHint: (ctx) => modeHint(ctx, `Esc back to list${sep}Ctrl+O close`),
+  getHint: (ctx) => {
+    const commandHint = getCommandToggleHint(ctx);
+    return modeHint(
+      ctx,
+      `Esc back to list${commandHint ? `${sep}${commandHint}` : ""}`,
+    );
+  },
   getSelection: subAgentSelection,
   getKeymaps: (ctx) => modalKeymap(ctx.isPaletteOpen, {
     escape: () => ctx.setChatMode("subagent-picker"),
-    "ctrl+o": () => ctx.setChatMode("subagent-picker"),
-  }),
-};
-
-const toolFocusMode: ChatModeDefinition<"tool-focus"> = {
-  render: (ctx) => renderConversation(ctx, { disableBlockHiding: true }),
-  getHint: (ctx) => modeHint(ctx, `Enter expand/collapse${sep}d detail${sep}Up/Down tools${sep}Ctrl+T/Esc back`),
-  getSelection: toolSelection,
-  getKeymaps: (ctx) => modalKeymap(ctx.isPaletteOpen, {
-    up: () => ctx.prevTool(),
-    down: () => ctx.nextTool(),
-    return: () => ctx.toggleSelectedTool(),
-    d: () => ctx.openToolDetail(),
-    escape: () => ctx.setChatMode("input"),
-    "ctrl+t": () => ctx.setChatMode("input"),
-  }),
-};
-
-const toolDetailMode: ChatModeDefinition<"tool-detail"> = {
-  render: (ctx) => {
-    if (!ctx.tools.selectedBlock) return renderConversation(ctx);
-
-    return (
-      <Box flexDirection="row" gap={1}>
-        <Box flexDirection="column" flexGrow={1}>
-          <ChatHistory
-            blocks={ctx.transcript.blocks}
-            selectedToolId={ctx.transcript.selectedToolId}
-            selectedSubAgentId={ctx.transcript.selectedSubAgentId}
-            expandedToolIds={ctx.transcript.expandedToolIds}
-            disableBlockHiding
-          />
-        </Box>
-        <Box>
-          <Text color={theme.colors.border}>{theme.glyphs.output}</Text>
-        </Box>
-        <ToolDetailPanel block={ctx.tools.selectedBlock} />
-      </Box>
-    );
-  },
-  getHint: (ctx) => modeHint(ctx, `Esc back to tools${sep}Ctrl+T close`),
-  getSelection: toolSelection,
-  getKeymaps: (ctx) => modalKeymap(ctx.isPaletteOpen, {
-    escape: () => ctx.setChatMode("tool-focus"),
-    "ctrl+t": () => ctx.setChatMode("input"),
+    "ctrl+o": () => ctx.toggleCommandsExpanded(),
   }),
 };
 
@@ -433,8 +385,6 @@ export const chatModeRegistry: ChatModeRegistry = {
   input: inputMode,
   "subagent-picker": subAgentPickerMode,
   "subagent-detail": subAgentDetailMode,
-  "tool-focus": toolFocusMode,
-  "tool-detail": toolDetailMode,
 };
 
 export function ChatModeView({
@@ -449,10 +399,6 @@ export function ChatModeView({
       return <>{chatModeRegistry["subagent-picker"].render(context)}</>;
     case "subagent-detail":
       return <>{chatModeRegistry["subagent-detail"].render(context)}</>;
-    case "tool-focus":
-      return <>{chatModeRegistry["tool-focus"].render(context)}</>;
-    case "tool-detail":
-      return <>{chatModeRegistry["tool-detail"].render(context)}</>;
   }
 }
 
@@ -477,14 +423,6 @@ export function getChatModeSelection(
         subAgents: ctx.subAgents,
         subAgentIndex: ctx.subAgentIndex,
       });
-    case "tool-focus":
-      return chatModeRegistry["tool-focus"].getSelection({
-        selectedToolId: ctx.selectedToolId,
-      });
-    case "tool-detail":
-      return chatModeRegistry["tool-detail"].getSelection({
-        selectedToolId: ctx.selectedToolId,
-      });
   }
 }
 
@@ -498,9 +436,5 @@ export function getChatModeKeymaps(
       return chatModeRegistry["subagent-picker"].getKeymaps(ctx);
     case "subagent-detail":
       return chatModeRegistry["subagent-detail"].getKeymaps(ctx);
-    case "tool-focus":
-      return chatModeRegistry["tool-focus"].getKeymaps(ctx);
-    case "tool-detail":
-      return chatModeRegistry["tool-detail"].getKeymaps(ctx);
   }
 }

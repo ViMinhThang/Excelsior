@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type {
   AgentClientState,
   AgentMode,
+  AskQuestionResponse,
   AppSettings,
   CommandDefinition,
   CommandResult,
@@ -102,6 +103,7 @@ export function useAgentHost() {
       workspace: { id: "", name: "", rootPath: "" },
       mode: "plan",
       pendingConfirmation: null,
+      pendingQuestion: null,
     };
 
     const dummySettings: AppSettings = {
@@ -210,6 +212,13 @@ export function useAgentHost() {
     [client],
   );
 
+  const respondToQuestion = useCallback(
+    (response: AskQuestionResponse) => {
+      void client.respondToQuestion(response);
+    },
+    [client],
+  );
+
   const approveAllConfirmations = useCallback(() => {
     void client.approveAllConfirmations();
   }, [client]);
@@ -243,9 +252,9 @@ export function useAgentHost() {
     setMode,
     saveSettings,
     respondToConfirmation,
+    respondToQuestion,
     approveAllConfirmations,
     clearMessages,
     revertLastTurn,
   };
 }
-

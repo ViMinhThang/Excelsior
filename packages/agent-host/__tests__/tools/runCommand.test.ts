@@ -84,6 +84,22 @@ describe("runCommandTool", () => {
       expect(result).not.toContain("Executable not found");
     });
 
+    it.runIf(process.platform === "win32")("supports Windows command shims like npm", async () => {
+      const npmResult = await executeTool(runCommandTool, { command: "npm", args: ["--version"] });
+      const npxResult = await executeTool(runCommandTool, { command: "npx", args: ["--version"] });
+
+      expect(npmResult.trim()).toMatch(/^\d+\.\d+\.\d+/);
+      expect(npxResult.trim()).toMatch(/^\d+\.\d+\.\d+/);
+      expect(npmResult).not.toContain("Executable not found");
+      expect(npxResult).not.toContain("Executable not found");
+    });
+
+    it.runIf(process.platform === "win32")("maps which to where.exe on Windows", async () => {
+      const result = await executeTool(runCommandTool, { command: "which", args: ["npm"] });
+      expect(result.toLowerCase()).toContain("npm");
+      expect(result).not.toContain("Executable not found");
+    });
+
     it("blocks write-like commands in plan mode", async () => {
       const tool = createRunCommandTool({ mode: "plan", capabilities: new Set(["shell"]) });
       const result = await executeTool(tool, { command: "mkdir", args: ["new-dir"] });

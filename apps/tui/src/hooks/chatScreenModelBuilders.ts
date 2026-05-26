@@ -1,11 +1,13 @@
 import type {
   AgentMode,
+  AskQuestionRequest,
   CommandDefinition,
   ConfirmRequest,
   ProjectedBlock,
 } from "@excelsior/core";
 import type { FooterBarProps } from "../components/chat/FooterBar.js";
 import type { PendingActionPanelProps } from "../components/chat/PendingActionPanel.js";
+import type { PendingQuestionPanelProps } from "../components/chat/PendingQuestionPanel.js";
 import type { CommandSuggestionsProps } from "../components/chat/CommandSuggestions.js";
 import type { CommandPaletteProps } from "../components/palette/CommandPalette.js";
 import type { TuiPanelContext, TuiPanelDefinition } from "../lib/panels.js";
@@ -15,7 +17,6 @@ import type {
   ChatModeRenderContext,
   CommandSuggestionState,
   SubAgentBlock,
-  ToolBlock,
 } from "../chatModes/index.js";
 
 export interface VisibilityModel<TProps> {
@@ -26,6 +27,7 @@ export interface VisibilityModel<TProps> {
 export interface ChatScreenModel {
   modeView: ChatModeRenderContext;
   pendingAction: PendingActionPanelProps | null;
+  pendingQuestion: PendingQuestionPanelProps | null;
   suggestions: VisibilityModel<CommandSuggestionsProps>;
   palette: VisibilityModel<CommandPaletteProps>;
   footer: FooterBarProps;
@@ -47,10 +49,7 @@ export interface BuildModeViewContextInput {
   featureContext: TuiPanelContext;
   subAgents: SubAgentBlock[];
   subAgentIndex: number;
-  toolBlocks: ToolBlock[];
-  selectedSubAgentId: string | null;
-  selectedToolId: string | null;
-  expandedToolIds: ReadonlySet<string>;
+  commandsExpanded: boolean;
 }
 
 interface CommandPaletteState {
@@ -84,15 +83,8 @@ export function buildModeViewContext({
   featureContext,
   subAgents,
   subAgentIndex,
-  toolBlocks,
-  selectedSubAgentId,
-  selectedToolId,
-  expandedToolIds,
+  commandsExpanded,
 }: BuildModeViewContextInput): ChatModeRenderContext {
-  const selectedToolBlock = selectedToolId
-    ? toolBlocks.find((tool) => tool.id === selectedToolId)
-    : undefined;
-
   const conversation = {
     input: {
       value: inputValue,
@@ -109,9 +101,7 @@ export function buildModeViewContext({
     },
     transcript: {
       blocks: displayBlocks,
-      selectedSubAgentId,
-      selectedToolId,
-      expandedToolIds,
+      commandsExpanded,
     },
     panel: {
       active: activePanel,
@@ -137,20 +127,10 @@ export function buildModeViewContext({
     case "subagent-detail":
       return {
         chatMode,
+        commandsExpanded,
         subAgents: {
           blocks: subAgents,
           selectedIndex: subAgentIndex,
-        },
-      };
-    case "tool-focus":
-    case "tool-detail":
-      return {
-        chatMode,
-        ...conversation,
-        tools: {
-          blocks: toolBlocks,
-          selectedId: selectedToolId,
-          selectedBlock: selectedToolBlock,
         },
       };
   }
@@ -174,6 +154,24 @@ export function buildPendingActionModel(
     scrollOffset,
     activeHunkIndex,
     hunkCount,
+  };
+}
+
+export function buildPendingQuestionModel(input: {
+  pending: AskQuestionRequest | null | undefined;
+  answerInput: string;
+  setAnswerInput: (value: string) => void;
+  submitAnswer: () => void;
+  shouldSubmitAnswer: (value: string) => boolean;
+}): PendingQuestionPanelProps | null {
+  if (!input.pending) return null;
+
+  return {
+    pending: input.pending,
+    input: input.answerInput,
+    setInput: input.setAnswerInput,
+    submit: input.submitAnswer,
+    shouldSubmit: input.shouldSubmitAnswer,
   };
 }
 
@@ -214,18 +212,23 @@ export function buildFooterModel(input: {
   chatMode: ChatMode;
   isLoading: boolean;
   pending: unknown;
+  pendingKind?: "confirmation" | "question" | null;
   activePanelId: string | null;
   subAgentCount: number;
-  toolCount: number;
+  commandCount: number;
+  commandsExpanded: boolean;
   workspaceRootPath: string;
 }): FooterBarProps {
-  return {
+  const footer: FooterBarProps = {
     chatMode: input.chatMode,
     isLoading: input.isLoading,
     hasPending: !!input.pending,
     activePanelId: input.activePanelId,
     subAgentCount: input.subAgentCount,
-    toolCount: input.toolCount,
+    commandCount: input.commandCount,
+    commandsExpanded: input.commandsExpanded,
     workspaceRootPath: input.workspaceRootPath,
   };
+  if (input.pendingKind) footer.pendingKind = input.pendingKind;
+  return footer;
 }

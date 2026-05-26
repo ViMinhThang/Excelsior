@@ -1,4 +1,7 @@
-import { createChannelBus } from "@excelsior/run-runtime";
-import type { ConfirmEvents } from "./confirmTypes.js";
+import { createBlockingPromptBus } from "./blockingPrompt.js";
+import type {
+  ConfirmRequest,
+  ConfirmResponse,
+} from "./confirmTypes.js";
 
-export const confirmBus = createChannelBus<ConfirmEvents>();
+export const confirmBus = createBlockingPromptBus<ConfirmRequest, ConfirmResponse>();

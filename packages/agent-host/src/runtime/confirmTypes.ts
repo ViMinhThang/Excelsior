@@ -1,27 +1,12 @@
-import type { DiffAction } from "../diff/unifiedDiff.js";
+import type {
+  ConfirmRequest,
+  ConfirmResponse,
+} from "@excelsior/core";
+import type {
+  BlockingPromptBus,
+  BlockingPromptEvents,
+} from "./blockingPrompt.js";
 
-export type ConfirmRequest = {
-  callId: string;
-  toolName: string;
-  args: string;
-  diff?: string;
-  filePath?: string;
-  action?: DiffAction;
-};
-
-export type ConfirmEvents = {
-  request: ConfirmRequest;
-  response: { callId: string; approved: boolean };
-};
-
-export interface ConfirmBus {
-  getListenerCount(event: "request"): number;
-  on(
-    event: "response",
-    handler: (resp: { callId: string; approved: boolean }) => void,
-  ): () => void;
-  emit(
-    event: "request",
-    data: ConfirmRequest,
-  ): void;
-}
+export type { ConfirmRequest, ConfirmResponse };
+export type ConfirmEvents = BlockingPromptEvents<ConfirmRequest, ConfirmResponse>;
+export type ConfirmPromptBus = BlockingPromptBus<ConfirmRequest, ConfirmResponse>;

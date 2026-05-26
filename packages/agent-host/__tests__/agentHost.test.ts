@@ -4,7 +4,10 @@ import {
   resetDefaultAgentHost,
 } from "@excelsior/agent-host";
 import { resetDb } from "@excelsior/agent-host/testing/persistence";
-import { confirmBus } from "@excelsior/agent-host/testing/runtime";
+import {
+  confirmBus,
+  questionBus,
+} from "@excelsior/agent-host/testing/runtime";
 
 describe("LocalAgentHost", () => {
   beforeEach(() => {
@@ -30,6 +33,7 @@ describe("LocalAgentHost", () => {
       }),
       mode: "plan",
       pendingConfirmation: null,
+      pendingQuestion: null,
     });
     expect("activeRun" in state).toBe(false);
 
@@ -107,6 +111,88 @@ describe("LocalAgentHost", () => {
 
     expect(listener).toHaveBeenCalledTimes(2);
     expect(host.getState().pendingConfirmation).toBeNull();
+
+    host.dispose();
+  });
+
+  it("auto-approves future confirmations after approve all", async () => {
+    const host = new LocalAgentHost();
+    const responses: Array<{ callId: string; approved: boolean }> = [];
+    const unsubscribeResponse = confirmBus.on("response", (response) => {
+      responses.push(response);
+    });
+
+    await host.dispatch({ type: "approve-all-confirmations" });
+    confirmBus.emit("request", {
+      callId: "call_auto",
+      toolName: "writeFile",
+      args: "{\"filePath\":\"demo.ts\"}",
+    });
+
+    expect(responses).toEqual([{ callId: "call_auto", approved: true }]);
+    expect(host.getState().pendingConfirmation).toBeNull();
+
+    unsubscribeResponse();
+    host.dispose();
+  });
+
+  it("keeps pending question state behind the host", async () => {
+    const host = new LocalAgentHost();
+
+    questionBus.emit("request", {
+      callId: "question_1",
+      question: "Which surface?",
+      options: [{ id: "both", label: "Desktop + TUI" }],
+      allowManual: true,
+    });
+
+    expect(host.getState().pendingQuestion).toMatchObject({
+      callId: "question_1",
+      question: "Which surface?",
+    });
+
+    await host.dispatch({
+      type: "respond-to-question",
+      response: {
+        callId: "question_1",
+        answer: "Desktop + TUI",
+        selectedOptionId: "both",
+        selectedOptionLabel: "Desktop + TUI",
+        isManual: false,
+      },
+    });
+
+    expect(host.getState().pendingQuestion).toBeNull();
+
+    host.dispose();
+  });
+
+  it("notifies subscribers when pending question state changes", async () => {
+    const host = new LocalAgentHost();
+    const listener = vi.fn();
+    host.subscribe(listener);
+
+    questionBus.emit("request", {
+      callId: "question_1",
+      question: "Which surface?",
+      options: [],
+      allowManual: true,
+    });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(host.getState().pendingQuestion?.callId).toBe("question_1");
+
+    await host.dispatch({
+      type: "respond-to-question",
+      response: {
+        callId: "question_1",
+        answer: "Manual answer",
+        isManual: true,
+      },
+    });
+
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(host.getState().pendingQuestion).toBeNull();
 
     host.dispose();
   });

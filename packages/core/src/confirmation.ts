@@ -8,3 +8,8 @@ export type ConfirmRequest = {
   filePath?: string;
   action?: DiffAction;
 };
+
+export type ConfirmResponse = {
+  callId: string;
+  approved: boolean;
+};

@@ -2,6 +2,7 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type {
   AgentClientState,
   AgentMode,
+  AskQuestionResponse,
   CommandDefinition,
   CommandResult,
   SendOptions,
@@ -27,6 +28,7 @@ export interface UseAgentHostClientReturn {
   toggleMode: () => AgentMode | undefined;
   respondToConfirmation: (callId: string, approved: boolean) => void;
   approveAllConfirmations: () => void;
+  respondToQuestion: (response: AskQuestionResponse) => void;
 }
 
 export function useAgentHostClient(): UseAgentHostClientReturn {
@@ -85,5 +87,11 @@ export function useAgentHostClient(): UseAgentHostClientReturn {
     approveAllConfirmations: useCallback(() => {
       void client.approveAllConfirmations();
     }, [client]),
+    respondToQuestion: useCallback(
+      (response: AskQuestionResponse) => {
+        void client.respondToQuestion(response);
+      },
+      [client],
+    ),
   };
 }

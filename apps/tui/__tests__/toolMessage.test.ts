@@ -10,7 +10,7 @@ describe("ToolMessage command formatting", () => {
       JSON.stringify({
         filePath: ["packages", "run-runtime", "src", "runOrchestrator.ts"].join("/"),
       }),
-    )).toBe("view runOrchestrator.ts");
+    )).toBe("read runOrchestrator.ts");
   });
 
   it("does not show quoted JSON args for view calls", () => {
@@ -19,7 +19,7 @@ describe("ToolMessage command formatting", () => {
       JSON.stringify({
         filePath: ["packages", "agent-host", "src", "host", "LocalAgentHost.ts"].join("/"),
       }),
-    )).toBe("view LocalAgentHost.ts");
+    )).toBe("read LocalAgentHost.ts");
   });
 
   it("shows ls calls with the directory path value only", () => {
@@ -28,7 +28,7 @@ describe("ToolMessage command formatting", () => {
     expect(formatCliCommand(
       "ls",
       JSON.stringify({ directoryPath }),
-    )).toBe(`ls ${directoryPath}`);
+    )).toBe(`Listfiles ${directoryPath}`);
   });
 
   it("renders expanded edit output as old and new panes", () => {
