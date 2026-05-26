@@ -16,6 +16,7 @@ import {
 } from "../commands.js";
 import { createAgentClientState } from "./clientState.js";
 import { HostConfirmationController } from "./confirmationController.js";
+import { HostQuestionController } from "./questionController.js";
 import type { SettingsStore } from "../ports/SettingsStore.js";
 import { DefaultSettingsStore } from "../ports/DefaultSettingsStore.js";
 
@@ -23,6 +24,7 @@ export class LocalAgentHost implements AgentHost {
   private readonly application: AgentApplication;
   private readonly settings: SettingsStore;
   private readonly confirmations: HostConfirmationController;
+  private readonly questions: HostQuestionController;
   private readonly commandHost: CommandHostAdapter;
   private readonly listeners = new Set<() => void>();
   private snapshot: AgentClientState | null = null;
@@ -37,6 +39,9 @@ export class LocalAgentHost implements AgentHost {
     this.confirmations = new HostConfirmationController(() =>
       this.invalidateAndNotify(),
     );
+    this.questions = new HostQuestionController(() =>
+      this.invalidateAndNotify(),
+    );
     this.commandHost = new CommandHostAdapter(this.application);
     this.unsubscribeApplication = this.application.subscribe(() =>
       this.invalidateAndNotify(),
@@ -49,6 +54,7 @@ export class LocalAgentHost implements AgentHost {
     this.snapshot = createAgentClientState(
       this.application.getSnapshot(),
       this.confirmations.pending,
+      this.questions.pending,
     );
     return this.snapshot;
   }
@@ -89,6 +95,8 @@ export class LocalAgentHost implements AgentHost {
       case "respond-to-confirmation":
       case "approve-all-confirmations":
         return this.handleConfirmationIntent(intent);
+      case "respond-to-question":
+        return this.handleQuestionIntent(intent);
     }
   }
 
@@ -159,9 +167,17 @@ export class LocalAgentHost implements AgentHost {
     }
   }
 
+  private handleQuestionIntent(
+    intent: Extract<AgentHostIntent, { type: "respond-to-question" }>
+  ): AgentHostDispatchResult {
+    this.questions.respond(intent.response);
+    return none();
+  }
+
   dispose(): void {
     this.unsubscribeApplication();
     this.confirmations.dispose();
+    this.questions.dispose();
     this.listeners.clear();
     this.application.dispose();
   }

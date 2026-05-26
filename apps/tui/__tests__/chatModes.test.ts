@@ -35,13 +35,12 @@ function makeKeymapContext(chatMode: ChatMode): ChatModeKeymapContext {
     cancel: noop,
     toggleMode: () => undefined,
     openSubAgent: noop,
+    subAgentCount: 0,
+    commandCount: 0,
+    commandsExpanded: false,
+    toggleCommandsExpanded: noop,
     nextSubAgent: noop,
     prevSubAgent: noop,
-    openToolFocus: noop,
-    openToolDetail: noop,
-    nextTool: noop,
-    prevTool: noop,
-    toggleSelectedTool: noop,
     navigateUp: noop,
     navigateDown: noop,
   } satisfies BuildChatModeKeymapContextInput);
@@ -70,10 +69,7 @@ function makeRenderContext(chatMode: ChatMode): ChatModeRenderContext {
     },
     subAgents: [],
     subAgentIndex: 0,
-    toolBlocks: [],
-    selectedSubAgentId: null,
-    selectedToolId: null,
-    expandedToolIds: new Set(),
+    commandsExpanded: false,
   });
 }
 
@@ -95,9 +91,7 @@ function makeLegacyWideRenderContext(chatMode: ChatMode) {
     },
     transcript: {
       blocks: [],
-      selectedSubAgentId: null,
-      selectedToolId: null,
-      expandedToolIds: new Set(),
+      commandsExpanded: false,
     },
     subAgents: {
       blocks: [],
@@ -135,32 +129,30 @@ describe("chat mode registry", () => {
         hasPending: false,
         activePanelId: null,
         subAgentCount: 0,
-        toolCount: 0,
+        commandCount: 0,
+        commandsExpanded: false,
       });
       const selection = getChatModeSelection(chatMode, {
         subAgents: [],
         subAgentIndex: 0,
-        selectedToolId: null,
       });
       const keymaps = getChatModeKeymaps(makeKeymapContext(chatMode));
 
       expect(rendered).toBeTruthy();
       expect(hint.length).toBeGreaterThan(0);
-      expect(Object.keys(selection).sort()).toEqual([
-        "selectedSubAgentId",
-        "selectedToolId",
-      ]);
+      expect(Object.keys(selection).sort()).toEqual(["selectedSubAgentId"]);
       expect(keymaps.length).toBeGreaterThan(0);
       expect(keymaps[0]?.map).toBeTruthy();
     }
   });
 
   it("rejects the old all-state render shape at the mode seam", () => {
-    const context = makeRenderContext("tool-detail");
-    const legacy = makeLegacyWideRenderContext("tool-detail");
+    const context = makeRenderContext("subagent-detail");
+    const legacy = makeLegacyWideRenderContext("subagent-detail");
 
-    expect("tools" in context).toBe(true);
-    expect("subAgents" in context).toBe(false);
+    expect("subAgents" in context).toBe(true);
+    expect("transcript" in context).toBe(false);
+    expect("tools" in context).toBe(false);
     expect("subAgents" in legacy).toBe(true);
   });
 });

@@ -38,13 +38,12 @@ function makeKeymapContext(
     cancel: noop,
     toggleMode: () => undefined,
     openSubAgent: noop,
+    subAgentCount: 0,
+    commandCount: 0,
+    commandsExpanded: false,
+    toggleCommandsExpanded: noop,
     nextSubAgent: noop,
     prevSubAgent: noop,
-    openToolFocus: noop,
-    openToolDetail: noop,
-    nextTool: noop,
-    prevTool: noop,
-    toggleSelectedTool: noop,
     navigateUp: noop,
     navigateDown: noop,
     ...overrides,
@@ -73,7 +72,10 @@ function makeInputKeymapContext(
     cancel: noop,
     toggleMode: () => undefined,
     openSubAgent: noop,
-    openToolFocus: noop,
+    subAgentCount: 0,
+    commandCount: 0,
+    commandsExpanded: false,
+    toggleCommandsExpanded: noop,
     navigateUp: noop,
     navigateDown: noop,
     ...overrides,
@@ -128,6 +130,15 @@ describe("chat keymap gating", () => {
       isPaletteOpen: false,
     })).toBe(true);
   });
+
+  it("disables normal chat input keymaps while a question is pending", () => {
+    expect(shouldEnableInputKeymap({
+      pending: { callId: "question_1" },
+      activePanelId: null,
+      chatMode: "input",
+      isPaletteOpen: false,
+    })).toBe(false);
+  });
 });
 
 describe("chat mode keymap registry", () => {
@@ -146,8 +157,6 @@ describe("chat mode keymap registry", () => {
       "input",
       "subagent-picker",
       "subagent-detail",
-      "tool-focus",
-      "tool-detail",
     ];
 
     for (const mode of modes) {
@@ -159,13 +168,43 @@ describe("chat mode keymap registry", () => {
 
   it("exposes one focused keymap per non-input mode", () => {
     expect(Object.keys(getChatModeKeymaps(makeKeymapContext("subagent-picker"))[0]!.map).sort())
-      .toEqual(["down", "escape", "return", "up"]);
+      .toEqual(["ctrl+o", "down", "escape", "return", "up"]);
     expect(Object.keys(getChatModeKeymaps(makeKeymapContext("subagent-detail"))[0]!.map).sort())
       .toEqual(["ctrl+o", "escape"]);
-    expect(Object.keys(getChatModeKeymaps(makeKeymapContext("tool-focus"))[0]!.map).sort())
-      .toEqual(["ctrl+t", "d", "down", "escape", "return", "up"]);
-    expect(Object.keys(getChatModeKeymaps(makeKeymapContext("tool-detail"))[0]!.map).sort())
-      .toEqual(["ctrl+t", "escape"]);
+  });
+
+  it("always routes Ctrl+O to toggleCommandsExpanded regardless of sub-agents existence", () => {
+    let openedSubAgent = false;
+    let toggledCommands = false;
+
+    getChatModeKeymaps(makeKeymapContext("input", {
+      subAgentCount: 1,
+      commandCount: 2,
+      openSubAgent: () => {
+        openedSubAgent = true;
+      },
+      toggleCommandsExpanded: () => {
+        toggledCommands = true;
+      },
+    }))[0]!.map["ctrl+o"]!();
+
+    expect(openedSubAgent).toBe(false);
+    expect(toggledCommands).toBe(true);
+
+    toggledCommands = false;
+    getChatModeKeymaps(makeKeymapContext("input", {
+      subAgentCount: 0,
+      commandCount: 1,
+      openSubAgent: () => {
+        openedSubAgent = true;
+      },
+      toggleCommandsExpanded: () => {
+        toggledCommands = true;
+      },
+    }))[0]!.map["ctrl+o"]!();
+
+    expect(openedSubAgent).toBe(false);
+    expect(toggledCommands).toBe(true);
   });
 
   it("routes input navigation to command suggestions while suggestions are visible", () => {

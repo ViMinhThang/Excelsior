@@ -12,6 +12,7 @@ import {
 interface SubAgentPickerPanelProps {
   subAgents: (ProjectedBlock & { type: "sub-agent" })[];
   selectedIndex: number;
+  showToolCalls?: boolean;
 }
 
 const statusMark: Record<ProjectedSubAgent["status"], string> = {
@@ -41,6 +42,7 @@ function toolColor(toolCall: ToolCallInfo): string {
 const SubAgentPickerPanel: FC<SubAgentPickerPanelProps> = ({
   subAgents,
   selectedIndex,
+  showToolCalls = true,
 }) => {
   const [now, setNow] = useState(Date.now());
 
@@ -73,7 +75,7 @@ const SubAgentPickerPanel: FC<SubAgentPickerPanelProps> = ({
       {subAgents.map((block, index) => {
         const agent = block.state;
         const isSelected = index === selectedIndex;
-        const displayedTools = agent.toolCalls.slice(-2);
+        const displayedTools = showToolCalls ? agent.toolCalls.slice(-2) : [];
         const hiddenToolsCount = agent.toolCalls.length - displayedTools.length;
 
         return (
@@ -109,7 +111,7 @@ const SubAgentPickerPanel: FC<SubAgentPickerPanelProps> = ({
               </Box>
             ))}
 
-            {hiddenToolsCount > 0 ? (
+            {showToolCalls && hiddenToolsCount > 0 ? (
               <Box paddingLeft={4}>
                 <Text color={theme.colors.muted} dimColor>
                   {hiddenToolsCount} earlier {hiddenToolsCount === 1 ? "tool" : "tools"}

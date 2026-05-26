@@ -4,6 +4,7 @@ import { AgentEventDataMap } from "../runtime/events.js";
 import { createToolContext, ToolContext } from "../tooling/context.js";
 import type { AgentMode, AgentMessage } from "@excelsior/core";
 import { confirmBus } from "../runtime/confirmBus.js";
+import { questionBus } from "../runtime/questionBus.js";
 import {
   defaultRunRecorder,
   type RunRecorder,
@@ -73,6 +74,7 @@ export class RunSession {
     const ctx = createToolContext({
       abortSignal: this.run.abortSignal,
       confirmBus,
+      questionBus,
       mode: this.config.mode,
       workspaceRoot: this.config.workspaceRoot,
       revert,

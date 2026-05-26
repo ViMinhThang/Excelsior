@@ -1,5 +1,6 @@
 import { PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
 
+export { createAskQuestionTool, askQuestionSchema } from "../agent/tools/askQuestion.js";
 export { createEditTool } from "../agent/tools/fs/edit.js";
 export { createGlobTool } from "../agent/tools/fs/glob.js";
 export { createLsTool } from "../agent/tools/fs/ls.js";

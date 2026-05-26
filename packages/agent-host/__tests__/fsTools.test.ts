@@ -4,10 +4,12 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   authorizeToolAction,
+  createAskQuestionTool,
   createEditTool,
   createGlobTool,
   createLsTool,
   createRipgrepTool,
+  createToolContext,
   createViewTool,
   createWriteTool,
   executeTool,
@@ -15,6 +17,7 @@ import {
   PLAN_MODE_BLOCKED_MESSAGE,
   type ToolContext,
 } from "@excelsior/agent-host/testing/tools";
+import { questionBus } from "@excelsior/agent-host/testing/runtime";
 
 describe("tool authorization policy", () => {
   it("denies missing capabilities with a stable message", async () => {
@@ -73,6 +76,86 @@ describe("tool authorization policy", () => {
 
     expect(result).toEqual({ allowed: false, message: "Denied by user." });
     expect(request).toHaveBeenCalledWith("writeFile", "{}", undefined);
+  });
+});
+
+describe("askQuestion tool", () => {
+  it("returns the user response in plan mode", async () => {
+    const request = vi.fn(async () => ({
+      callId: "question_1",
+      answer: "Desktop + TUI",
+      selectedOptionId: "both",
+      selectedOptionLabel: "Desktop + TUI",
+      isManual: false,
+    }));
+    const result = await executeTool(createAskQuestionTool({
+      capabilities: new Set(),
+      mode: "plan",
+      question: { getListenerCount: () => 1, request },
+    }), {
+      question: "Which client should support this?",
+      options: [{ id: "both", label: "Desktop + TUI" }],
+      allowManual: true,
+    });
+
+    expect(JSON.parse(result)).toMatchObject({
+      answer: "Desktop + TUI",
+      selectedOptionId: "both",
+      isManual: false,
+    });
+    expect(request).toHaveBeenCalledWith({
+      question: "Which client should support this?",
+      options: [{ id: "both", label: "Desktop + TUI" }],
+      allowManual: true,
+    });
+  });
+
+  it("refuses to open outside plan mode", async () => {
+    const request = vi.fn();
+    const result = await executeTool(createAskQuestionTool({
+      capabilities: new Set(),
+      mode: "act",
+      question: { getListenerCount: () => 1, request },
+    }), {
+      question: "Continue?",
+      options: [],
+      allowManual: true,
+    });
+
+    expect(result).toContain("only available in Plan mode");
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("resolves as cancelled when the run aborts while waiting", async () => {
+    const abort = new AbortController();
+    const requestSeen = new Promise<void>((resolve) => {
+      const unsubscribe = questionBus.on("request", () => {
+        unsubscribe();
+        resolve();
+      });
+    });
+    const unsubscribe = questionBus.on("request", () => {});
+    const ctx = createToolContext({
+      abortSignal: abort.signal,
+      mode: "plan",
+      questionBus,
+    });
+
+    const pending = executeTool(createAskQuestionTool(ctx), {
+      question: "Continue?",
+      options: [],
+      allowManual: true,
+    });
+
+    await requestSeen;
+    abort.abort();
+
+    expect(JSON.parse(await pending)).toMatchObject({
+      answer: "",
+      isManual: true,
+      cancelled: true,
+    });
+    unsubscribe();
   });
 });
 

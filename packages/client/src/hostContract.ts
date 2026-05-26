@@ -1,6 +1,7 @@
 import type {
   AgentClientState,
   AgentMode,
+  AskQuestionResponse,
   AppSettings,
   CommandDefinition,
   CommandResult,
@@ -26,6 +27,7 @@ export type AgentHostIntent =
   | { type: "save-settings"; settings: Partial<AppSettings> }
   | { type: "respond-to-confirmation"; callId: string; approved: boolean }
   | { type: "approve-all-confirmations" }
+  | { type: "respond-to-question"; response: AskQuestionResponse }
   | { type: "clear-messages" }
   | { type: "delete-all-sessions" }
   | { type: "revert-last-turn" };

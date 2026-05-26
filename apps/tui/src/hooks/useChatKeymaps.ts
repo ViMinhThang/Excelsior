@@ -11,10 +11,13 @@ import { useKeymap } from "./useKeymap.js";
 
 type UseChatKeymapsOptions = ChatModeKeymapContext & {
   pending: unknown;
+  confirmationPending?: unknown;
+  questionPending?: unknown;
   cancel: () => void;
   approve: () => void;
   approveAll: () => void;
   deny: () => void;
+  cancelQuestion?: () => void;
   scrollUp?: () => void;
   scrollDown?: () => void;
   nextHunk?: () => void;
@@ -37,10 +40,13 @@ export function shouldEnableInputKeymap(options: {
 export function useChatKeymaps(options: UseChatKeymapsOptions) {
   const {
     pending,
+    confirmationPending,
+    questionPending,
     approve,
     approveAll,
     deny,
     cancel,
+    cancelQuestion,
     isPaletteOpen,
     scrollUp,
     scrollDown,
@@ -48,6 +54,8 @@ export function useChatKeymaps(options: UseChatKeymapsOptions) {
     prevHunk,
   } = options;
   const modalKeymapsEnabled = shouldEnableModalKeymap(isPaletteOpen);
+  const hasConfirmationPending =
+    confirmationPending === undefined ? pending : confirmationPending;
 
   useKeymap(
     {
@@ -63,7 +71,16 @@ export function useChatKeymaps(options: UseChatKeymapsOptions) {
       tab: () => nextHunk?.(),
       "shift+tab": () => prevHunk?.(),
     },
-    { enabled: !!pending && modalKeymapsEnabled, priority: 100 },
+    { enabled: !!hasConfirmationPending && modalKeymapsEnabled, priority: 100 },
+  );
+
+  useKeymap(
+    {
+      escape: () => {
+        cancelQuestion?.();
+      },
+    },
+    { enabled: !!questionPending && modalKeymapsEnabled, priority: 100 },
   );
 
   useChatModeKeymaps(options);

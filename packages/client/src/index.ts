@@ -11,10 +11,14 @@ export type {
 export type {
   AgentClientState,
   AgentMode,
+  AskQuestionOption,
+  AskQuestionRequest,
+  AskQuestionResponse,
   AppSettings,
   CommandDefinition,
   CommandResult,
   ConfirmRequest,
+  ConfirmResponse,
   SendOptions,
   Session,
 } from "@excelsior/core";

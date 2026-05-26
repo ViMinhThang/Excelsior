@@ -10,6 +10,16 @@ export type {
 } from "../runtime/agentStream.js";
 export * from "../runtime/streamTypes.js";
 export { confirmBus } from "../runtime/confirmBus.js";
+export { questionBus } from "../runtime/questionBus.js";
+export * from "../runtime/blockingPrompt.js";
+export type {
+  ConfirmEvents,
+  ConfirmPromptBus,
+} from "../runtime/confirmTypes.js";
+export type {
+  QuestionEvents,
+  QuestionPromptBus,
+} from "../runtime/questionTypes.js";
 export { createSubAgentEventSink } from "../runtime/subAgentEventSink.js";
 export type { SubAgentEventSink } from "../runtime/subAgentEventSink.js";
 export { createRunSession } from "../application/runSession.js";

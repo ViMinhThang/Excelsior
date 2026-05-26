@@ -14,7 +14,7 @@
   --color-brand-sidebar-footer: var(--brand-sidebar-footer);
   --color-brand-user-bubble: var(--brand-user-bubble);
   --color-brand-composer: var(--brand-composer);
-  --font-brand: "Sora", sans-serif;
+  --font-brand: var(--font-mono);
   --font-display: "DM Serif Display", serif;
   --font-mono: "JetBrains Mono", monospace;
 }

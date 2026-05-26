@@ -1,6 +1,7 @@
 import type {
   AgentClientState,
   AgentMode,
+  AskQuestionResponse,
   AppSettings,
   CommandDefinition,
   CommandResult,
@@ -108,10 +109,13 @@ export class AgentHostClient {
     await this.host.dispatch({ type: "approve-all-confirmations" });
   }
 
+  async respondToQuestion(response: AskQuestionResponse): Promise<void> {
+    await this.host.dispatch({ type: "respond-to-question", response });
+  }
+
   async revertLastTurn(): Promise<CommandResult> {
     return commandResultOrDefault(
       await this.host.dispatch({ type: "revert-last-turn" }),
     );
   }
 }
-

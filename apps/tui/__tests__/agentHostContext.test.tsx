@@ -18,6 +18,7 @@ function createMockHost(): AgentHost {
     },
     mode: "plan" as const,
     pendingConfirmation: null,
+    pendingQuestion: null,
   };
 
   return {

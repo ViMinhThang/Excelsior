@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { AgentClientState, AgentMode, ConfirmRequest, ProjectedBlock } from "@excelsior/core";
+import type {
+  AgentClientState,
+  AgentMode,
+  AskQuestionRequest,
+  AskQuestionResponse,
+  ConfirmRequest,
+  ProjectedBlock,
+} from "@excelsior/core";
 import {
   AlertTriangle,
   ArrowDown,
@@ -10,6 +17,7 @@ import {
   Compass,
   FileSearch,
   GitPullRequest,
+  HelpCircle,
   Send,
   Square,
   Terminal,
@@ -24,6 +32,7 @@ type ChatPanelProps = {
   onInputChange: (value: string) => void;
   onModeChange: (mode: AgentMode) => void;
   onRespondToConfirmation: (callId: string, approved: boolean) => void;
+  onRespondToQuestion: (response: AskQuestionResponse) => void;
   onSend: () => void;
   onToggleToolCall: (id: string) => void;
 };
@@ -37,6 +46,11 @@ type MessageBlockProps = {
 type PendingConfirmationProps = {
   confirmation: ConfirmRequest;
   onRespond: (callId: string, approved: boolean) => void;
+};
+
+type PendingQuestionProps = {
+  question: AskQuestionRequest;
+  onRespond: (response: AskQuestionResponse) => void;
 };
 
 const BOTTOM_THRESHOLD_PX = 80;
@@ -243,6 +257,111 @@ function PendingConfirmation({ confirmation, onRespond }: PendingConfirmationPro
   );
 }
 
+function PendingQuestion({ question, onRespond }: PendingQuestionProps) {
+  const [manualAnswer, setManualAnswer] = useState("");
+
+  useEffect(() => {
+    setManualAnswer("");
+  }, [question.callId]);
+
+  const submitManual = () => {
+    const answer = manualAnswer.trim();
+    if (!answer || !question.allowManual) return;
+    onRespond({
+      callId: question.callId,
+      answer,
+      isManual: true,
+    });
+    setManualAnswer("");
+  };
+
+  const submitOption = (option: AskQuestionRequest["options"][number]) => {
+    onRespond({
+      callId: question.callId,
+      answer: option.label,
+      selectedOptionId: option.id,
+      selectedOptionLabel: option.label,
+      isManual: false,
+    });
+  };
+
+  const cancelQuestion = () => {
+    onRespond({
+      callId: question.callId,
+      answer: "",
+      isManual: true,
+      cancelled: true,
+    });
+  };
+
+  return (
+    <div className="flex w-full flex-col gap-4 rounded-xl border border-brand-accent/20 bg-brand-surface/95 p-5 shadow-xl backdrop-blur animate-fade-in-snappy">
+      <div className="flex items-start gap-3">
+        <HelpCircle className="mt-0.5 h-5 w-5 shrink-0 text-brand-accent" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-brand-text-strong">Question</p>
+          <p className="mt-1 text-sm leading-6 text-brand-text-light">{question.question}</p>
+        </div>
+      </div>
+
+      {question.options.length > 0 && (
+        <div className="grid gap-2">
+          {question.options.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => submitOption(option)}
+              className="rounded-xl border border-brand-border bg-brand-panel/50 px-4 py-3 text-left hover:border-brand-accent hover:bg-brand-panel scale-snappy transition-snappy-colors"
+            >
+              <span className="block text-xs font-semibold text-brand-text-strong">{option.label}</span>
+              {option.description && (
+                <span className="mt-1 block text-xs leading-5 text-brand-text-muted">
+                  {option.description}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {question.allowManual && (
+        <textarea
+          value={manualAnswer}
+          onChange={(event) => setManualAnswer(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              submitManual();
+            }
+          }}
+          placeholder="Type an answer..."
+          className="min-h-14 resize-none rounded-xl border border-brand-border bg-brand-composer px-3 py-2 text-sm leading-6 text-brand-text-strong outline-none placeholder:text-brand-text-muted focus:border-brand-accent"
+        />
+      )}
+
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={cancelQuestion}
+          className="h-9 rounded-xl border border-brand-border px-4 text-xs font-medium text-brand-text-muted hover:bg-brand-panel hover:text-brand-text-strong scale-snappy transition-snappy-colors"
+        >
+          Cancel
+        </button>
+        {question.allowManual && (
+          <button
+            type="button"
+            onClick={submitManual}
+            disabled={!manualAnswer.trim()}
+            className="h-9 rounded-xl bg-brand-accent px-4 text-xs font-semibold text-brand-accent-contrast hover:bg-brand-accent-hover disabled:opacity-40 disabled:pointer-events-none scale-snappy transition-snappy-colors"
+          >
+            Send
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ScrollToBottomButton({
   hasUnreadMessages,
   isStreaming,
@@ -408,12 +527,15 @@ export function ChatPanel({
   onInputChange,
   onModeChange,
   onRespondToConfirmation,
+  onRespondToQuestion,
   onSend,
   onToggleToolCall,
 }: ChatPanelProps) {
   const blocks = state?.displayBlocks ?? [];
   const isLoading = state?.isLoading ?? false;
   const hasPendingConfirmation = Boolean(state?.pendingConfirmation);
+  const hasPendingQuestion = Boolean(state?.pendingQuestion);
+  const hasPendingAction = hasPendingConfirmation || hasPendingQuestion;
   const mode = state?.mode ?? "plan";
   const currentSessionId = state?.currentSessionId ?? null;
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -472,10 +594,10 @@ export function ChatPanel({
       return;
     }
 
-    if (blocks.length > 0 || isLoading || hasPendingConfirmation) {
+    if (blocks.length > 0 || isLoading || hasPendingAction) {
       setHasUnreadMessages(true);
     }
-  }, [blocks, isLoading, hasPendingConfirmation]);
+  }, [blocks, isLoading, hasPendingAction]);
 
   const showScrollToBottom = !isAtBottom && blocks.length > 0;
 
@@ -485,7 +607,7 @@ export function ChatPanel({
         <div
           ref={transcriptRef}
           onScroll={handleTranscriptScroll}
-          className={`h-full overflow-y-auto px-8 pt-6 ${hasPendingConfirmation ? "pb-80" : "pb-56"
+          className={`h-full overflow-y-auto px-8 pt-6 ${hasPendingAction ? "pb-96" : "pb-56"
             }`}
         >
           {blocks.length > 0 && (
@@ -494,7 +616,7 @@ export function ChatPanel({
                 <MessageBlock
                   key={block.id}
                   block={block}
-                  isToolOpen={Boolean(openToolCalls[block.id])}
+                  isToolOpen={openToolCalls[block.id] !== false}
                   onToggleToolCall={onToggleToolCall}
                 />
               ))}
@@ -520,7 +642,7 @@ export function ChatPanel({
 
         {showScrollToBottom && (
           <div
-            className={`pointer-events-auto absolute left-1/2 z-10 -translate-x-1/2 ${hasPendingConfirmation ? "bottom-80" : "bottom-40"
+            className={`pointer-events-auto absolute left-1/2 z-10 -translate-x-1/2 ${hasPendingAction ? "bottom-96" : "bottom-40"
               }`}
           >
             <ScrollToBottomButton
@@ -531,12 +653,20 @@ export function ChatPanel({
           </div>
         )}
 
-        {state?.pendingConfirmation && (
-          <div className="chat-floating-layer pointer-events-auto absolute bottom-32">
-            <PendingConfirmation
-              confirmation={state.pendingConfirmation}
-              onRespond={onRespondToConfirmation}
-            />
+        {hasPendingAction && (
+          <div className="chat-floating-layer pointer-events-auto absolute bottom-32 flex flex-col gap-3">
+            {state?.pendingConfirmation && (
+              <PendingConfirmation
+                confirmation={state.pendingConfirmation}
+                onRespond={onRespondToConfirmation}
+              />
+            )}
+            {state?.pendingQuestion && (
+              <PendingQuestion
+                question={state.pendingQuestion}
+                onRespond={onRespondToQuestion}
+              />
+            )}
           </div>
         )}
 

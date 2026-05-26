@@ -3,14 +3,15 @@ import { getChatModeHint } from "../src/lib/modeHints.js";
 import { chatModeRegistry } from "../src/chatModes/index.js";
 
 describe("chat mode hints", () => {
-  it("shows Ctrl+O only when sub-agent blocks exist", () => {
+  it("shows Ctrl+O only when commands or sub-agents exist", () => {
     expect(getChatModeHint({
       chatMode: "input",
       isLoading: false,
       hasPending: false,
       activePanelId: null,
       subAgentCount: 0,
-      toolCount: 0,
+      commandCount: 0,
+      commandsExpanded: false,
     })).not.toContain("Ctrl+O");
     expect(getChatModeHint({
       chatMode: "input",
@@ -18,7 +19,8 @@ describe("chat mode hints", () => {
       hasPending: false,
       activePanelId: null,
       subAgentCount: 0,
-      toolCount: 0,
+      commandCount: 0,
+      commandsExpanded: false,
     })).toContain("Ctrl+K");
 
     expect(getChatModeHint({
@@ -27,28 +29,34 @@ describe("chat mode hints", () => {
       hasPending: false,
       activePanelId: null,
       subAgentCount: 1,
-      toolCount: 0,
-    })).toContain("sub-agent");
+      commandCount: 0,
+      commandsExpanded: false,
+    })).toContain("commands");
   });
 
-  it("shows tool focus hints when tool blocks exist", () => {
+  it("uses Ctrl+O for command expansion instead of Ctrl+T", () => {
+    const collapsed = getChatModeHint({
+      chatMode: "input",
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      commandCount: 1,
+      commandsExpanded: false,
+    });
+
+    expect(collapsed).toContain("Ctrl+O commands");
+    expect(collapsed).not.toContain("Ctrl+T");
+
     expect(getChatModeHint({
       chatMode: "input",
       isLoading: false,
       hasPending: false,
       activePanelId: null,
       subAgentCount: 0,
-      toolCount: 1,
-    })).toContain("Ctrl+T tools");
-
-    expect(getChatModeHint({
-      chatMode: "tool-focus",
-      isLoading: false,
-      hasPending: false,
-      activePanelId: null,
-      subAgentCount: 0,
-      toolCount: 1,
-    })).toBe("Enter expand/collapse | d detail | Up/Down tools | Ctrl+T/Esc back");
+      commandCount: 1,
+      commandsExpanded: true,
+    })).toContain("Ctrl+O hide commands");
   });
 
   it("uses panel and sub-agent mode hints", () => {
@@ -58,7 +66,8 @@ describe("chat mode hints", () => {
       hasPending: false,
       activePanelId: "session.picker",
       subAgentCount: 0,
-      toolCount: 0,
+      commandCount: 0,
+      commandsExpanded: false,
     })).toBe("Up/Down select | Enter open | Esc close");
 
     expect(getChatModeHint({
@@ -67,8 +76,9 @@ describe("chat mode hints", () => {
       hasPending: false,
       activePanelId: null,
       subAgentCount: 1,
-      toolCount: 0,
-    })).toBe("Enter view detail | ↑↓ navigate | Esc close");
+      commandCount: 1,
+      commandsExpanded: false,
+    })).toContain("Ctrl+O commands");
 
     expect(getChatModeHint({
       chatMode: "subagent-detail",
@@ -76,20 +86,35 @@ describe("chat mode hints", () => {
       hasPending: false,
       activePanelId: null,
       subAgentCount: 1,
-      toolCount: 0,
-    })).toBe("Esc back to list | Ctrl+O close");
+      commandCount: 1,
+      commandsExpanded: true,
+    })).toBe("Esc back to list | Ctrl+O hide commands");
   });
 
   it("delegates mode-specific hints through the chat mode registry", () => {
     const input = {
-      chatMode: "tool-detail" as const,
+      chatMode: "subagent-detail" as const,
       isLoading: false,
       hasPending: false,
       activePanelId: null,
-      subAgentCount: 0,
-      toolCount: 1,
+      subAgentCount: 1,
+      commandCount: 1,
+      commandsExpanded: true,
     };
 
-    expect(getChatModeHint(input)).toBe(chatModeRegistry["tool-detail"].getHint(input));
+    expect(getChatModeHint(input)).toBe(chatModeRegistry["subagent-detail"].getHint(input));
+  });
+
+  it("shows question answer hints while a question is pending", () => {
+    expect(getChatModeHint({
+      chatMode: "input",
+      isLoading: true,
+      hasPending: true,
+      pendingKind: "question",
+      activePanelId: null,
+      subAgentCount: 0,
+      commandCount: 0,
+      commandsExpanded: false,
+    })).toBe("Enter answer | type option number or custom answer | Esc cancel");
   });
 });

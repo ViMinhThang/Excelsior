@@ -203,7 +203,7 @@ export const FileChangePreviewView: FC<{
       {frame.isCapped && (
         <Box marginTop={1} paddingLeft={1}>
           <Text color={theme.colors.muted} dimColor>
-            {`â†³ +${preview.added} -${preview.removed} lines changed Â· Press Ctrl+T to inspect full diff`}
+            {`â†³ +${preview.added} -${preview.removed} lines changed Â· Press Ctrl+O to inspect commands`}
           </Text>
         </Box>
       )}

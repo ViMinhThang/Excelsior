@@ -1,5 +1,7 @@
 import { tool } from "ai";
 import { spawn } from "child_process";
+import { existsSync } from "fs";
+import path from "path";
 import type { ToolContext } from "../../../tooling/context.js";
 import { classifyCommandRisk } from "../../../tooling/commandRisk.js";
 import { authorizeToolAction } from "../../../tooling/policy.js";
@@ -11,17 +13,79 @@ const DEFAULT_TIMEOUT = 30_000;
 
 const isWindows = process.platform === "win32";
 
-function windowsShellCompatibility(command: string, args: string[]): { command: string; args: string[] } | null {
-  if (!isWindows || args.length > 0) return null;
+const WINDOWS_SCRIPT_EXTENSIONS = new Set([".bat", ".cmd"]);
+const SAFE_WINDOWS_COMMAND_NAME = /^[A-Za-z0-9_.-]+$/;
 
-  if (command.toLowerCase() === "date") {
+function getWindowsPathEntries(): string[] {
+  const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path");
+  const rawPath = pathKey ? process.env[pathKey] : process.env.PATH;
+  return (rawPath ?? "").split(path.delimiter).filter(Boolean);
+}
+
+function getWindowsPathExtensions(): string[] {
+  return (process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function hasDirectorySegment(command: string): boolean {
+  return command.includes("/") || command.includes("\\");
+}
+
+function candidateCommandNames(command: string): string[] {
+  if (path.extname(command)) return [command];
+  return [command, ...getWindowsPathExtensions().map((ext) => command + ext)];
+}
+
+function findWindowsScriptShim(command: string, cwd: string): string | null {
+  const searchDirs = hasDirectorySegment(command)
+    ? [""]
+    : [cwd, ...getWindowsPathEntries()];
+
+  for (const dir of searchDirs) {
+    for (const candidate of candidateCommandNames(command)) {
+      const fullPath = path.resolve(dir || cwd, candidate);
+      if (
+        WINDOWS_SCRIPT_EXTENSIONS.has(path.extname(fullPath).toLowerCase()) &&
+        existsSync(fullPath)
+      ) {
+        return fullPath;
+      }
+    }
+  }
+
+  return null;
+}
+
+function windowsShellCompatibility(
+  command: string,
+  args: string[],
+  ctx?: ToolContext,
+): { command: string; args: string[] } | null {
+  if (!isWindows) return null;
+
+  if (command.toLowerCase() === "which") {
+    return {
+      command: "where.exe",
+      args,
+    };
+  }
+
+  if (command.toLowerCase() === "date" && args.length === 0) {
     return {
       command: "powershell.exe",
       args: ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "Get-Date"],
     };
   }
 
-  return null;
+  if (!SAFE_WINDOWS_COMMAND_NAME.test(command)) return null;
+  if (!findWindowsScriptShim(command, getWorkspaceRoot(ctx))) return null;
+
+  return {
+    command: process.env.ComSpec || "cmd.exe",
+    args: ["/d", "/c", command, ...args],
+  };
 }
 
 interface ProcessResult {
@@ -131,7 +195,7 @@ export function createRunCommandTool(ctx?: ToolContext) {
       const result = await runProcess(command, normalizedArgs, ctx);
       if (!result.notFound) return result.output;
 
-      const compatibleCommand = windowsShellCompatibility(command, normalizedArgs);
+      const compatibleCommand = windowsShellCompatibility(command, normalizedArgs, ctx);
       if (!compatibleCommand) return result.output;
 
       return (await runProcess(compatibleCommand.command, compatibleCommand.args, ctx)).output;

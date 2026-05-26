@@ -1,7 +1,6 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   buildChatModeKeymapContext,
-  getChatModeSelection,
   getCommandInputWithSelection,
 } from "../chatModes/index.js";
 import {
@@ -9,16 +8,17 @@ import {
   buildModeViewContext,
   buildPaletteModel,
   buildPendingActionModel,
+  buildPendingQuestionModel,
   buildSuggestionsModel,
   type ChatScreenModel,
 } from "./chatScreenModelBuilders.js";
 import { useNavigation } from "../context/NavigationContext.js";
 import { useAgentHostClient } from "./useAgentHostClient.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";
+import { useQuestionResponse } from "./useQuestionResponse.js";
 import { useCommandAutocomplete } from "./useCommandAutocomplete.js";
 import { useInputHistory } from "./useInputHistory.js";
 import { useSubAgentNavigation } from "./useSubAgentNavigation.js";
-import { useToolNavigation } from "./useToolNavigation.js";
 import { useCommandResult } from "./useCommandResult.js";
 import { useChatPanel } from "./useChatPanel.js";
 import { useChatSubmission } from "./useChatSubmission.js";
@@ -36,17 +36,36 @@ export function useChatInteractionController(): ChatScreenModel {
     workspace,
     mode,
     pendingConfirmation,
+    pendingQuestion,
   } = agent.state;
 
   const inputHistory = useInputHistory(displayBlocks);
   const subAgentNav = useSubAgentNavigation(displayBlocks);
-  const toolNav = useToolNavigation(displayBlocks);
+  const [commandsExpanded, setCommandsExpanded] = useState(false);
+  const commandCount = useMemo(
+    () => displayBlocks.reduce((count, block) => {
+      if (block.type === "tool-call") return count + 1;
+      if (block.type === "sub-agent") return count + block.state.toolCalls.length;
+      return count;
+    }, 0),
+    [displayBlocks],
+  );
   const command = useCommandResult(inputHistory.input);
   const confirmation = useToolConfirmation(
     pendingConfirmation,
     agent.respondToConfirmation,
     agent.approveAllConfirmations,
   );
+  const question = useQuestionResponse(
+    pendingQuestion,
+    agent.respondToQuestion,
+  );
+  const pending = confirmation.pending ?? question.pending;
+  const pendingKind = question.pending
+    ? "question" as const
+    : confirmation.pending
+      ? "confirmation" as const
+      : null;
   const suggestion = useCommandAutocomplete(inputHistory.input);
 
   const panel = useChatPanel({
@@ -64,18 +83,28 @@ export function useChatInteractionController(): ChatScreenModel {
   });
 
   useEffect(() => {
-    if (confirmation.pending) subAgentNav.setChatMode("input");
-  }, [confirmation.pending, subAgentNav]);
+    if (!pending) return;
+    subAgentNav.setChatMode("input");
+    setCommandsExpanded(false);
+  }, [pending, subAgentNav]);
 
-  const openToolFocus = () => {
-    if (toolNav.toolBlocks.length > 0) subAgentNav.setChatMode("tool-focus");
-  };
-  const openToolDetail = () => {
-    if (toolNav.selectedToolId) subAgentNav.setChatMode("tool-detail");
-  };
+  const toggleCommandsExpanded = useCallback(() => {
+    setCommandsExpanded((expanded) => !expanded);
+  }, []);
+
+  const setChatMode = useCallback((nextMode: typeof subAgentNav.chatMode) => {
+    subAgentNav.setChatMode(nextMode);
+    if (nextMode === "input") setCommandsExpanded(false);
+  }, [subAgentNav]);
+
+  const openSubAgent = useCallback(() => {
+    setCommandsExpanded(true);
+    subAgentNav.openSubAgent();
+  }, [subAgentNav]);
+
   const inputModeKeymap = {
     chatMode: "input" as const,
-    pending: confirmation.pending,
+    pending,
     activePanelId: panel.activePanelId,
     isPaletteOpen: palette.isOpen,
     isLoading,
@@ -83,8 +112,11 @@ export function useChatInteractionController(): ChatScreenModel {
     setInput: inputHistory.setInput,
     cancel: agent.cancel,
     toggleMode: agent.toggleMode,
-    openSubAgent: subAgentNav.openSubAgent,
-    openToolFocus,
+    openSubAgent,
+    subAgentCount: subAgentNav.subAgentBlocks.length,
+    commandCount,
+    commandsExpanded,
+    toggleCommandsExpanded,
     navigateUp: inputHistory.navigateUp,
     navigateDown: inputHistory.navigateDown,
     openPalette: palette.toggle,
@@ -92,13 +124,9 @@ export function useChatInteractionController(): ChatScreenModel {
   const chatModeKeymap = buildChatModeKeymapContext({
     ...inputModeKeymap,
     chatMode: subAgentNav.chatMode,
-    setChatMode: subAgentNav.setChatMode,
+    setChatMode,
     nextSubAgent: subAgentNav.nextSubAgent,
     prevSubAgent: subAgentNav.prevSubAgent,
-    openToolDetail,
-    nextTool: toolNav.nextTool,
-    prevTool: toolNav.prevTool,
-    toggleSelectedTool: toolNav.toggleSelectedTool,
   });
 
   const handleSubmit = useChatSubmission({
@@ -118,21 +146,18 @@ export function useChatInteractionController(): ChatScreenModel {
 
   useChatKeymaps({
     ...chatModeKeymap,
-    pending: confirmation.pending,
+    pending,
+    confirmationPending: confirmation.pending,
+    questionPending: question.pending,
     approve: confirmation.approve,
     approveAll: confirmation.approveAll,
     deny: confirmation.deny,
+    cancelQuestion: question.cancel,
     scrollUp: confirmation.scrollUp,
     scrollDown: confirmation.scrollDown,
     nextHunk: confirmation.nextHunk,
     prevHunk: confirmation.prevHunk,
     cancel: agent.cancel,
-  });
-
-  const selection = getChatModeSelection(subAgentNav.chatMode, {
-    subAgents: subAgentNav.subAgentBlocks,
-    subAgentIndex: subAgentNav.subAgentIndex,
-    selectedToolId: toolNav.selectedToolId,
   });
 
   return {
@@ -144,7 +169,7 @@ export function useChatInteractionController(): ChatScreenModel {
       handleSubmit,
       shouldSubmit: shouldSubmitInput,
       isLoading,
-      pending: confirmation.pending,
+      pending,
       paletteOpen: palette.isOpen,
       commandResult: command.commandResult,
       agentMode: mode,
@@ -152,10 +177,7 @@ export function useChatInteractionController(): ChatScreenModel {
       featureContext: panel.panelContext,
       subAgents: subAgentNav.subAgentBlocks,
       subAgentIndex: subAgentNav.subAgentIndex,
-      toolBlocks: toolNav.toolBlocks,
-      selectedSubAgentId: selection.selectedSubAgentId,
-      selectedToolId: selection.selectedToolId,
-      expandedToolIds: toolNav.expandedToolIds,
+      commandsExpanded,
     }),
     pendingAction: buildPendingActionModel(
       confirmation.pending,
@@ -163,15 +185,24 @@ export function useChatInteractionController(): ChatScreenModel {
       confirmation.activeHunkIndex,
       confirmation.hunkCount,
     ),
+    pendingQuestion: buildPendingQuestionModel({
+      pending: question.pending,
+      answerInput: question.input,
+      setAnswerInput: question.setInput,
+      submitAnswer: question.submit,
+      shouldSubmitAnswer: question.shouldSubmit,
+    }),
     suggestions: buildSuggestionsModel(suggestion, palette.isOpen),
     palette: buildPaletteModel(palette),
     footer: buildFooterModel({
       chatMode: subAgentNav.chatMode,
       isLoading,
-      pending: confirmation.pending,
+      pending,
+      pendingKind,
       activePanelId: panel.activePanelId,
       subAgentCount: subAgentNav.subAgentBlocks.length,
-      toolCount: toolNav.toolBlocks.length,
+      commandCount,
+      commandsExpanded,
       workspaceRootPath: workspace.rootPath,
     }),
   };

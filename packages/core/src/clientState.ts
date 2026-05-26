@@ -1,6 +1,7 @@
 import type { AgentMode } from "./agent.js";
 import type { ConfirmRequest } from "./confirmation.js";
 import type { ProjectedBlock } from "./projection.js";
+import type { AskQuestionRequest } from "./question.js";
 import type { Session, Workspace } from "./session.js";
 
 export interface AgentClientState {
@@ -11,4 +12,5 @@ export interface AgentClientState {
   workspace: Workspace;
   mode: AgentMode;
   pendingConfirmation: ConfirmRequest | null;
+  pendingQuestion: AskQuestionRequest | null;
 }

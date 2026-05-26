@@ -7,12 +7,19 @@ import { theme } from "../../../theme.js";
 
 interface SubAgentDetailProps {
   agent: SubAgentViewModel;
+  showToolCalls?: boolean;
 }
 
-const SubAgentDetail: FC<SubAgentDetailProps> = ({ agent }) => {
+const SubAgentDetail: FC<SubAgentDetailProps> = ({
+  agent,
+  showToolCalls = true,
+}) => {
   const statusColor = agent.status === "running" ? theme.colors.activity : agent.status === "error" ? theme.colors.error : theme.colors.success;
   const statusLabel = agent.status === "running" ? "running" : agent.status === "error" ? "error" : "done";
-  const hasParts = agent.outputParts && agent.outputParts.length > 0;
+  const visibleParts = agent.outputParts?.filter((part) =>
+    showToolCalls || part.type !== "tool-call"
+  ) ?? [];
+  const hasParts = visibleParts.length > 0;
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -21,7 +28,7 @@ const SubAgentDetail: FC<SubAgentDetailProps> = ({ agent }) => {
       </Text>
       <Box flexGrow={1} marginTop={1} flexDirection="column">
         {hasParts ? (
-          agent.outputParts.map((part, i) => {
+          visibleParts.map((part, i) => {
             if (part.type === "text") return <MarkdownRenderer key={i} content={part.text} />;
             return (
               <ToolMessage
@@ -31,6 +38,8 @@ const SubAgentDetail: FC<SubAgentDetailProps> = ({ agent }) => {
                 status={part.status || "completed"}
                 content=""
                 marginTop={1}
+                nested
+                expanded
               />
             );
           })

@@ -8,9 +8,11 @@ export interface FooterBarProps {
   chatMode: ChatMode;
   isLoading: boolean;
   hasPending: boolean;
+  pendingKind?: "confirmation" | "question" | null;
   activePanelId: string | null;
   subAgentCount: number;
-  toolCount: number;
+  commandCount: number;
+  commandsExpanded: boolean;
   workspaceRootPath: string;
 }
 
@@ -18,12 +20,23 @@ const FooterBar: FC<FooterBarProps> = ({
   chatMode,
   isLoading,
   hasPending,
+  pendingKind,
   activePanelId,
   subAgentCount,
-  toolCount,
+  commandCount,
+  commandsExpanded,
   workspaceRootPath,
 }) => {
-  const footerHint = getChatModeHint({ chatMode, isLoading, hasPending, activePanelId, subAgentCount, toolCount });
+  const footerHint = getChatModeHint({
+    chatMode,
+    isLoading,
+    hasPending,
+    pendingKind,
+    activePanelId,
+    subAgentCount,
+    commandCount,
+    commandsExpanded,
+  });
 
   return (
     <Box marginTop={1} paddingLeft={1} flexDirection="row">
