@@ -9,6 +9,11 @@ import SubAgentDetail from "../features/review/components/SubAgentDetail.js";
 import SubAgentPickerPanel from "../features/review/components/SubAgentPickerPanel.js";
 import ThinkingIndicator from "../components/chat/ThinkingIndicator.js";
 import { completeCommandInput } from "../lib/commandSubmission.js";
+import {
+  ownsChatInput,
+  ownsModalInput,
+  type TuiInputOwnershipState,
+} from "../lib/inputOwnership.js";
 import { theme } from "../theme.js";
 import type {
   ChatMode,
@@ -84,7 +89,7 @@ function subAgentSelection(
 }
 
 export function shouldEnableModalModeKeymap(isPaletteOpen: boolean): boolean {
-  return !isPaletteOpen;
+  return ownsModalInput(isPaletteOpen);
 }
 
 export function shouldEnableInputModeKeymap(options: {
@@ -93,12 +98,7 @@ export function shouldEnableInputModeKeymap(options: {
   chatMode: ChatMode;
   isPaletteOpen: boolean;
 }): boolean {
-  return (
-    !options.pending &&
-    !options.activePanelId &&
-    options.chatMode === "input" &&
-    !options.isPaletteOpen
-  );
+  return ownsChatInput(options satisfies TuiInputOwnershipState);
 }
 
 export interface BuildChatModeKeymapContextInput {

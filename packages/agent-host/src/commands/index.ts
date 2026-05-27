@@ -16,3 +16,7 @@ export type {
   AgentCommandHost,
   ReviewCommandServices,
 } from "./types.js";
+export {
+  AgentCommandExecutor,
+  type AgentCommandExecutorOptions,
+} from "./executor.js";

@@ -64,6 +64,42 @@ describe("SessionStorageCoordinator", () => {
     expect(calls).toEqual(["sessions:all", "events:all"]);
     expect(storage.getCurrentSessionId()).toBeNull();
   });
+
+  it("delegates getLastCompletedTurn, trimLastCompletedTurn, and recordTurnComplete to recorder", async () => {
+    const sessions = createMetadataStore("ses_1");
+    const getLastCompletedTurn = vi.fn(async () => ({
+      runId: "run_1",
+      eventCount: 2,
+      checkpointIndex: 3,
+    }));
+    const dropLastCompletedTurn = vi.fn(async () => ({
+      dropped: true,
+      removedEvents: 2,
+    }));
+    const recordTurnComplete = vi.fn(async () => {});
+    const recorder = createRecorder({
+      getLastCompletedTurn,
+      dropLastCompletedTurn,
+      recordTurnComplete,
+    });
+    const storage = new SessionStorageCoordinator({ sessions, recorder });
+
+    await expect(storage.getLastCompletedTurn("ses_1")).resolves.toEqual({
+      runId: "run_1",
+      eventCount: 2,
+      checkpointIndex: 3,
+    });
+    expect(getLastCompletedTurn).toHaveBeenCalledWith("ses_1");
+
+    await expect(storage.trimLastCompletedTurn("ses_1", "run_1")).resolves.toEqual({
+      dropped: true,
+      removedEvents: 2,
+    });
+    expect(dropLastCompletedTurn).toHaveBeenCalledWith("ses_1", "run_1");
+
+    await storage.recordTurnComplete("ses_1", "run_1", 5);
+    expect(recordTurnComplete).toHaveBeenCalledWith("ses_1", "run_1", 5);
+  });
 });
 
 function createMetadataStore(

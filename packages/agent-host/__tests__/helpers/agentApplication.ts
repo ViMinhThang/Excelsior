@@ -11,6 +11,7 @@ import {
 } from "@excelsior/agent-host/testing/runtime";
 import type { Session } from "@excelsior/agent-host/testing/session";
 import type { RunHandle } from "@excelsior/run-runtime";
+import { JsonlRunRecorder } from "../../src/persistence/runRecorder.js";
 
 export function makeSession(id: string, title: string): Session {
   return {
@@ -76,11 +77,15 @@ export function createFakeSessionManager(
 
 export function createFakeSessionStorage(
   workspaceRoot = "/tmp/workspace",
+  recorder = new JsonlRunRecorder(),
 ): AgentSessionStorage {
   const sessions = createFakeSessionManager(workspaceRoot);
   return {
     ...sessions,
     loadCurrentSessionEvents: async () => [],
+    getLastCompletedTurn: (sessionId) => recorder.getLastCompletedTurn(sessionId),
+    trimLastCompletedTurn: (sessionId, expectedRunId) => recorder.dropLastCompletedTurn(sessionId, expectedRunId),
+    recordTurnComplete: (sessionId, runId, sequence) => recorder.recordTurnComplete(sessionId, runId, sequence),
   };
 }
 

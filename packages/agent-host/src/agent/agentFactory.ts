@@ -1,7 +1,7 @@
 import { createAgent } from "./agent.js";
 import type { StreamCapableAgent } from "../runtime/agentStream.js";
 import { createSpawnSubAgentTool } from "./spawn/spawnSubAgent.js";
-import type { RunContext } from "../application/runSession.js";
+import type { RunContext } from "../application/turns/runSession.js";
 
 export interface AgentFactory {
   create(

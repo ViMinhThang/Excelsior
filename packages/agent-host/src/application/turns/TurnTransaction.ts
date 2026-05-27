@@ -6,6 +6,7 @@ import type {
   AnyAgentEvent,
 } from "../../runtime/events.js";
 import type { RevertCapability } from "../../tooling/context.js";
+import type { AgentSessionStorage } from "../sessions/SessionStorage.js";
 
 export type TurnRevertResult =
   | { type: "no-checkpoint" }
@@ -25,16 +26,19 @@ export interface TurnTransactionRun {
 }
 
 export interface TurnTransactionCoordinatorOptions {
-  recorder: RunRecorder;
+  recorder?: RunRecorder;
+  sessionStorage?: AgentSessionStorage;
   fileCheckpoint?: FileCheckpoint;
 }
 
 export class TurnTransactionCoordinator {
-  private readonly recorder: RunRecorder;
+  private readonly recorder?: RunRecorder;
+  private readonly sessionStorage?: AgentSessionStorage;
   private readonly fileCheckpoint: FileCheckpoint;
 
   constructor(options: TurnTransactionCoordinatorOptions) {
     this.recorder = options.recorder;
+    this.sessionStorage = options.sessionStorage;
     this.fileCheckpoint = options.fileCheckpoint ?? new FileCheckpoint();
   }
 
@@ -67,7 +71,9 @@ export class TurnTransactionCoordinator {
       return { type: "no-checkpoint" };
     }
 
-    const latestTurn = await this.recorder.getLastCompletedTurn(sessionId);
+    const latestTurn = this.sessionStorage
+      ? await this.sessionStorage.getLastCompletedTurn(sessionId)
+      : await this.recorder!.getLastCompletedTurn(sessionId);
     if (!latestTurn) {
       return { type: "no-history" };
     }
@@ -84,10 +90,9 @@ export class TurnTransactionCoordinator {
       };
     }
 
-    const drop = await this.recorder.dropLastCompletedTurn(
-      sessionId,
-      checkpoint.runId,
-    );
+    const drop = this.sessionStorage
+      ? await this.sessionStorage.trimLastCompletedTurn(sessionId, checkpoint.runId)
+      : await this.recorder!.dropLastCompletedTurn(sessionId, checkpoint.runId);
     const restoredFilePaths = restore.restored.map((entry) => entry.filePath);
     if (!drop.dropped) {
       return { type: "trim-failed", restoredFilePaths };
@@ -102,11 +107,19 @@ export class TurnTransactionCoordinator {
     run: TurnTransactionRun,
   ): Promise<void> {
     try {
-      await this.recorder.recordTurnComplete(
-        sessionId,
-        run.id,
-        getNextSequence(run.getSnapshot()),
-      );
+      if (this.sessionStorage) {
+        await this.sessionStorage.recordTurnComplete(
+          sessionId,
+          run.id,
+          getNextSequence(run.getSnapshot()),
+        );
+      } else {
+        await this.recorder!.recordTurnComplete(
+          sessionId,
+          run.id,
+          getNextSequence(run.getSnapshot()),
+        );
+      }
     } catch (error: unknown) {
       run.emit(PERSISTENCE_ERROR, {
         message: `Failed to persist turn checkpoint: ${formatError(error)}`,

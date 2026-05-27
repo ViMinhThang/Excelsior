@@ -4,6 +4,7 @@ import {
   ProjectionPolicy,
   TurnLifecycle,
   TurnTransactionCoordinator,
+  type AgentSessionStorage,
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
@@ -43,6 +44,25 @@ function createRecorder(): RunRecorder {
   };
 }
 
+function createSessionStorage(): AgentSessionStorage {
+  return {
+    getCurrentSessionId: () => "ses_test",
+    getWorkspaceId: () => "ws_test",
+    getWorkspace: () => ({ id: "ws_test", name: "Test workspace", rootPath: "/tmp/workspace" }),
+    ensureSession: () => "ses_test",
+    createSession: () => ({} as any),
+    switchSession: () => {},
+    deleteSession: async () => {},
+    deleteAllSessions: async () => {},
+    renameSession: () => {},
+    listSessions: () => [],
+    loadCurrentSessionEvents: async () => [],
+    getLastCompletedTurn: async () => null,
+    trimLastCompletedTurn: async () => ({ dropped: true, removedEvents: 0 }),
+    recordTurnComplete: async () => {},
+  };
+}
+
 describe("TurnLifecycle context assembly", () => {
   it("builds AI history, run options, and display input behind one lifecycle seam", () => {
     const state = createState();
@@ -76,9 +96,9 @@ describe("TurnLifecycle context assembly", () => {
       projection: new ProjectionPolicy(),
       recorder,
       subAgentEvents,
-      turnTransactions,
+      sessionStorage: createSessionStorage(),
       appendFinalEvents: vi.fn(),
-      dependencies: { createRunSession },
+      dependencies: { createRunSession, turnTransactions },
     });
 
     lifecycle.startUserTurn({

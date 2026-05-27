@@ -1,5 +1,9 @@
 import type { Session, Workspace } from "@excelsior/core";
-import type { RunRecorder } from "../../persistence/runRecorder.js";
+import type {
+  RunRecorder,
+  LastCompletedTurn,
+  DropLastCompletedTurnResult,
+} from "../../persistence/runRecorder.js";
 import type { AnyAgentEvent } from "../../runtime/events.js";
 
 export interface SessionMetadataStore {
@@ -17,6 +21,9 @@ export interface SessionMetadataStore {
 
 export interface AgentSessionStorage extends SessionMetadataStore {
   loadCurrentSessionEvents(): Promise<AnyAgentEvent[]>;
+  getLastCompletedTurn(sessionId: string): Promise<LastCompletedTurn | null>;
+  trimLastCompletedTurn(sessionId: string, expectedRunId?: string): Promise<DropLastCompletedTurnResult>;
+  recordTurnComplete(sessionId: string, runId: string, sequence: number): Promise<void>;
 }
 
 export interface SessionStorageCoordinatorOptions {
@@ -78,5 +85,17 @@ export class SessionStorageCoordinator implements AgentSessionStorage {
   async loadCurrentSessionEvents(): Promise<AnyAgentEvent[]> {
     const sessionId = this.getCurrentSessionId();
     return sessionId ? this.recorder.loadCompletedEvents(sessionId) : [];
+  }
+
+  async getLastCompletedTurn(sessionId: string): Promise<LastCompletedTurn | null> {
+    return this.recorder.getLastCompletedTurn(sessionId);
+  }
+
+  async trimLastCompletedTurn(sessionId: string, expectedRunId?: string): Promise<DropLastCompletedTurnResult> {
+    return this.recorder.dropLastCompletedTurn(sessionId, expectedRunId);
+  }
+
+  async recordTurnComplete(sessionId: string, runId: string, sequence: number): Promise<void> {
+    await this.recorder.recordTurnComplete(sessionId, runId, sequence);
   }
 }

@@ -17,11 +17,11 @@ export function register(entry: KeymapEntry): () => void {
   };
 }
 
-/** Find the highest-priority enabled entry that handles `combo`. */
-export function getAction(
+export function resolveKeyAction(
+  entries: KeymapEntry[],
   combo: string,
 ): { entry: KeymapEntry; action: KeyAction } | undefined {
-  const sorted = [...stack].sort((a, b) => b.priority - a.priority);
+  const sorted = [...entries].sort((a, b) => b.priority - a.priority);
   for (const entry of sorted) {
     if (entry.enabled) {
       const action = entry.getMap()[combo];
@@ -29,6 +29,13 @@ export function getAction(
     }
   }
   return undefined;
+}
+
+/** Find the highest-priority enabled entry that handles `combo`. */
+export function getAction(
+  combo: string,
+): { entry: KeymapEntry; action: KeyAction } | undefined {
+  return resolveKeyAction(stack, combo);
 }
 
 /** For tests only — clears all registered entries. */

@@ -1,10 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { getCommandInputWithSelection } from "../chatModes/index.js";
 import {
-  buildChatModeKeymapContext,
-  getCommandInputWithSelection,
-} from "../chatModes/index.js";
-import {
-  buildFooterModel,
   buildModeViewContext,
   buildPaletteModel,
   buildPendingActionModel,
@@ -24,6 +20,11 @@ import { useChatPanel } from "./useChatPanel.js";
 import { useChatSubmission } from "./useChatSubmission.js";
 import { useChatKeymaps } from "./useChatKeymaps.js";
 import { useCommandPalette } from "./useCommandPalette.js";
+import {
+  buildChatControlPlane,
+  shouldCollapseCommandsForChatMode,
+  shouldResetChatModeForPending,
+} from "./chatScreenControlPlane.js";
 
 export function useChatInteractionController(): ChatScreenModel {
   const { navigate } = useNavigation();
@@ -42,14 +43,6 @@ export function useChatInteractionController(): ChatScreenModel {
   const inputHistory = useInputHistory(displayBlocks);
   const subAgentNav = useSubAgentNavigation(displayBlocks);
   const [commandsExpanded, setCommandsExpanded] = useState(false);
-  const commandCount = useMemo(
-    () => displayBlocks.reduce((count, block) => {
-      if (block.type === "tool-call") return count + 1;
-      if (block.type === "sub-agent") return count + block.state.toolCalls.length;
-      return count;
-    }, 0),
-    [displayBlocks],
-  );
   const command = useCommandResult(inputHistory.input);
   const confirmation = useToolConfirmation(
     pendingConfirmation,
@@ -60,12 +53,6 @@ export function useChatInteractionController(): ChatScreenModel {
     pendingQuestion,
     agent.respondToQuestion,
   );
-  const pending = confirmation.pending ?? question.pending;
-  const pendingKind = question.pending
-    ? "question" as const
-    : confirmation.pending
-      ? "confirmation" as const
-      : null;
   const suggestion = useCommandAutocomplete(inputHistory.input);
 
   const panel = useChatPanel({
@@ -82,52 +69,50 @@ export function useChatInteractionController(): ChatScreenModel {
     setInput: inputHistory.setInput,
   });
 
-  useEffect(() => {
-    if (!pending) return;
-    subAgentNav.setChatMode("input");
-    setCommandsExpanded(false);
-  }, [pending, subAgentNav]);
-
   const toggleCommandsExpanded = useCallback(() => {
     setCommandsExpanded((expanded) => !expanded);
   }, []);
 
   const setChatMode = useCallback((nextMode: typeof subAgentNav.chatMode) => {
     subAgentNav.setChatMode(nextMode);
-    if (nextMode === "input") setCommandsExpanded(false);
-  }, [subAgentNav]);
+    if (shouldCollapseCommandsForChatMode(nextMode)) setCommandsExpanded(false);
+  }, [subAgentNav.setChatMode]);
 
   const openSubAgent = useCallback(() => {
     setCommandsExpanded(true);
     subAgentNav.openSubAgent();
-  }, [subAgentNav]);
+  }, [subAgentNav.openSubAgent]);
 
-  const inputModeKeymap = {
-    chatMode: "input" as const,
-    pending,
+  const controlPlane = buildChatControlPlane({
+    displayBlocks,
+    chatMode: subAgentNav.chatMode,
+    isLoading,
+    pendingConfirmation: confirmation.pending,
+    pendingQuestion: question.pending,
     activePanelId: panel.activePanelId,
     isPaletteOpen: palette.isOpen,
-    isLoading,
     suggestion,
     setInput: inputHistory.setInput,
     cancel: agent.cancel,
     toggleMode: agent.toggleMode,
     openSubAgent,
-    subAgentCount: subAgentNav.subAgentBlocks.length,
-    commandCount,
+    subAgentBlocks: subAgentNav.subAgentBlocks,
     commandsExpanded,
     toggleCommandsExpanded,
     navigateUp: inputHistory.navigateUp,
     navigateDown: inputHistory.navigateDown,
     openPalette: palette.toggle,
-  };
-  const chatModeKeymap = buildChatModeKeymapContext({
-    ...inputModeKeymap,
-    chatMode: subAgentNav.chatMode,
     setChatMode,
     nextSubAgent: subAgentNav.nextSubAgent,
     prevSubAgent: subAgentNav.prevSubAgent,
+    workspaceRootPath: workspace.rootPath,
   });
+
+  useEffect(() => {
+    if (!shouldResetChatModeForPending(controlPlane.pending)) return;
+    subAgentNav.setChatMode("input");
+    setCommandsExpanded(false);
+  }, [controlPlane.pending, subAgentNav.setChatMode]);
 
   const handleSubmit = useChatSubmission({
     isLoading,
@@ -139,14 +124,17 @@ export function useChatInteractionController(): ChatScreenModel {
     setCommandResult: command.setCommandResult,
     openPanel: panel.openPanel,
     navigate,
-    getSubmittedInput: () => getCommandInputWithSelection(inputModeKeymap, inputHistory.input),
+    getSubmittedInput: () => getCommandInputWithSelection(
+      controlPlane.inputModeKeymap,
+      inputHistory.input,
+    ),
   });
 
   const shouldSubmitInput = () => true;
 
   useChatKeymaps({
-    ...chatModeKeymap,
-    pending,
+    ...controlPlane.chatModeKeymap,
+    pending: controlPlane.pending,
     confirmationPending: confirmation.pending,
     questionPending: question.pending,
     approve: confirmation.approve,
@@ -169,7 +157,7 @@ export function useChatInteractionController(): ChatScreenModel {
       handleSubmit,
       shouldSubmit: shouldSubmitInput,
       isLoading,
-      pending,
+      pending: controlPlane.pending,
       paletteOpen: palette.isOpen,
       commandResult: command.commandResult,
       agentMode: mode,
@@ -194,16 +182,6 @@ export function useChatInteractionController(): ChatScreenModel {
     }),
     suggestions: buildSuggestionsModel(suggestion, palette.isOpen),
     palette: buildPaletteModel(palette),
-    footer: buildFooterModel({
-      chatMode: subAgentNav.chatMode,
-      isLoading,
-      pending,
-      pendingKind,
-      activePanelId: panel.activePanelId,
-      subAgentCount: subAgentNav.subAgentBlocks.length,
-      commandCount,
-      commandsExpanded,
-      workspaceRootPath: workspace.rootPath,
-    }),
+    footer: controlPlane.footer,
   };
 }

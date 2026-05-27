@@ -2,10 +2,6 @@ import type { FC } from "react";
 import { Box, Text } from "ink";
 import type { ConfirmRequest } from "@excelsior/core";
 import type { ToolDisplay } from "../../lib/toolDisplay.js";
-import {
-  getFileChangeToolName,
-  parsePendingFileChangePreview,
-} from "../../lib/fileChangePreview.js";
 import { theme } from "../../theme.js";
 import Panel from "../shared/Panel.js";
 import { FileChangePreviewView } from "../../features/fileChangePreview/FileChangePreviewView.js";
@@ -19,15 +15,11 @@ export interface PendingActionPanelProps {
 }
 
 const PendingActionPanel: FC<PendingActionPanelProps> = ({
-  pending,
   display,
   scrollOffset,
   activeHunkIndex,
   hunkCount,
 }) => {
-  const previewToolName = getFileChangeToolName(pending.toolName);
-  const fileChangePreview = parsePendingFileChangePreview(pending);
-
   return (
     <Panel
       title="Action Required"
@@ -43,10 +35,10 @@ const PendingActionPanel: FC<PendingActionPanelProps> = ({
         </Box>
         <Box flexDirection="column" paddingLeft={theme.spacing.toolIndent} marginTop={1}>
           <Text color={theme.colors.secondary}>{display.detail || "waiting for approval"}</Text>
-          {fileChangePreview ? (
+          {display.fileChangePreview ? (
             <FileChangePreviewView
-              command={`${previewToolName} ${pending.filePath ?? display.summary}`}
-              preview={fileChangePreview}
+              command={display.command}
+              preview={display.fileChangePreview}
               scrollOffset={scrollOffset}
               activeHunkIndex={activeHunkIndex}
               hunkCount={hunkCount}

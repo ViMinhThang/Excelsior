@@ -41,7 +41,9 @@ describe("RevertController", () => {
     const controller = new RevertController(
       state,
       sessions,
-      turnTransactions,
+      {
+        revertLatestTurn: (sessionId) => turnTransactions.revertLatestTurn(sessionId),
+      },
     );
     return { controller, state, sessions, turnTransactions };
   }

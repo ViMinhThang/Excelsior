@@ -22,11 +22,11 @@ export type {
 } from "../runtime/questionTypes.js";
 export { createSubAgentEventSink } from "../runtime/subAgentEventSink.js";
 export type { SubAgentEventSink } from "../runtime/subAgentEventSink.js";
-export { createRunSession } from "../application/runSession.js";
+export { createRunSession } from "../application/turns/runSession.js";
 export type {
   AgentResponseStreamer,
   RunContext,
   RunSessionConfig,
   RunSessionResult,
-} from "../application/runSession.js";
+} from "../application/turns/runSession.js";
 export type { RunRecorder } from "../persistence/runRecorder.js";

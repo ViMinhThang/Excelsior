@@ -1,17 +1,21 @@
 import type { CommandResult } from "@excelsior/core";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
-import type { TurnTransactionCoordinator } from "../turns/TurnTransaction.js";
+import type { TurnRevertResult } from "../turns/TurnTransaction.js";
 
 export interface RevertSessionCoordinator {
   readonly currentSessionId: string | null;
   reloadCurrentSessionEvents(): Promise<void>;
 }
 
+export interface RevertTurnCoordinator {
+  revertLatestTurn(sessionId: string): Promise<TurnRevertResult>;
+}
+
 export class RevertController {
   constructor(
     private readonly state: AgentStateStore,
     private readonly sessions: RevertSessionCoordinator,
-    private readonly turnTransactions: TurnTransactionCoordinator,
+    private readonly turnTransactions: RevertTurnCoordinator,
   ) {}
 
   async revertLastTurn(): Promise<CommandResult> {
