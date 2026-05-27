@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseKeyCombo } from "../src/lib/parseKeyCombo.js";
+import { getTuiInputOwner } from "../src/lib/inputOwnership.js";
+import { resolveKeyAction, type KeymapEntry } from "../src/lib/keymapRegistry.js";
 import {
   shouldEnableInputKeymap,
   shouldEnableModalKeymap,
@@ -108,6 +110,36 @@ describe("parseKeyCombo logic", () => {
 });
 
 describe("chat keymap gating", () => {
+  it("centralizes active input ownership", () => {
+    expect(getTuiInputOwner({
+      pending: null,
+      activePanelId: null,
+      chatMode: "input",
+      isPaletteOpen: true,
+    })).toBe("command-palette");
+
+    expect(getTuiInputOwner({
+      pending: { callId: "confirm_1" },
+      activePanelId: null,
+      chatMode: "input",
+      isPaletteOpen: false,
+    })).toBe("pending-prompt");
+
+    expect(getTuiInputOwner({
+      pending: null,
+      activePanelId: "session.picker",
+      chatMode: "input",
+      isPaletteOpen: false,
+    })).toBe("feature-panel");
+
+    expect(getTuiInputOwner({
+      pending: null,
+      activePanelId: null,
+      chatMode: "subagent-picker",
+      isPaletteOpen: false,
+    })).toBe("chat-mode");
+  });
+
   it("disables lower-priority modal keymaps while command palette is open", () => {
     expect(shouldEnableModalKeymap(true)).toBe(false);
     expect(shouldEnableModalKeymap(false)).toBe(true);
@@ -138,6 +170,55 @@ describe("chat keymap gating", () => {
       chatMode: "input",
       isPaletteOpen: false,
     })).toBe(false);
+  });
+});
+
+describe("keymap precedence", () => {
+  it("resolves the highest-priority enabled owner for a key", () => {
+    let called = "";
+    const low: KeymapEntry = {
+      priority: 10,
+      enabled: true,
+      getMap: () => ({
+        escape: () => {
+          called = "low";
+        },
+      }),
+    };
+    const high: KeymapEntry = {
+      priority: 100,
+      enabled: true,
+      getMap: () => ({
+        escape: () => {
+          called = "high";
+        },
+      }),
+    };
+
+    const winner = resolveKeyAction([low, high], "escape");
+    winner?.action();
+
+    expect(winner?.entry).toBe(high);
+    expect(called).toBe("high");
+  });
+
+  it("skips disabled owners while resolving keys", () => {
+    const disabled: KeymapEntry = {
+      priority: 100,
+      enabled: false,
+      getMap: () => ({
+        escape: () => {},
+      }),
+    };
+    const enabled: KeymapEntry = {
+      priority: 10,
+      enabled: true,
+      getMap: () => ({
+        escape: () => {},
+      }),
+    };
+
+    expect(resolveKeyAction([disabled, enabled], "escape")?.entry).toBe(enabled);
   });
 });
 

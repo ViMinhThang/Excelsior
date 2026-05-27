@@ -150,6 +150,8 @@ export function buildPendingActionModel(
       toolName: pending.toolName,
       toolArgs: pending.args,
       status: "pending",
+      filePath: pending.filePath,
+      diff: pending.diff,
     }),
     scrollOffset,
     activeHunkIndex,

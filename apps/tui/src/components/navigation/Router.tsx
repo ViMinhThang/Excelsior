@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { Box, useInput, useApp } from 'ink';
+import { Box, useApp } from 'ink';
 import { Screen } from '../../lib/navigationTypes.js';
 import { useNavigation } from '../../context/NavigationContext.js';
 import { useEvent } from '../../hooks/useEvent.js';
+import { useKeymap } from '../../hooks/useKeymap.js';
 import ChatScreen from '../../screens/ChatScreen.js';
 import SettingsScreen from '../../screens/SettingsScreen.js';
 import type { TuiKey } from '../../lib/tuiKey.js';
@@ -41,14 +42,24 @@ const Router = () => {
   const onGoBack = useEvent(goBack);
   const onExit = useEvent(exit);
 
-  const handleInput = useEvent((input: string, key: TuiKey) => {
-    const action = getGlobalNavigationAction(input, key, currentScreen);
+  const runNavigationAction = useEvent((action: "exit" | "back" | "settings" | null) => {
     if (action === "exit") onExit();
     if (action === "back") onGoBack();
     if (action === "settings") onNavigate('settings');
   });
 
-  useInput(handleInput);
+  useKeymap(
+    {
+      "ctrl+c": () => runNavigationAction("exit"),
+      "ctrl+s": () => runNavigationAction(
+        getGlobalNavigationAction("s", { ctrl: true }, currentScreen),
+      ),
+      backspace: () => runNavigationAction(
+        getGlobalNavigationAction("", { backspace: true }, currentScreen),
+      ),
+    },
+    { priority: 1 },
+  );
 
   return (
     <Box flexDirection="column" minHeight={20}>

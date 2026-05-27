@@ -5,6 +5,7 @@ import {
   getHelpText,
   parseCommandInput,
   type AgentCommandHost,
+  AgentCommandExecutor,
 } from "@excelsior/agent-host/commands";
 
 function createHost(): AgentCommandHost {
@@ -110,6 +111,35 @@ describe("agent command registry", () => {
     await expect(
       executeAgentCommand("/review-post 42 Looks good", host, commands),
     ).resolves.toMatchObject({
+      handled: true,
+      message: "posted",
+    });
+    expect(services.postPRComment).toHaveBeenCalledWith(42, "Looks good");
+  });
+
+  it("encapsulates parsing, execution, definitions, and help text within AgentCommandExecutor", async () => {
+    const host = createHost();
+    const services = {
+      fetchPRDiff: vi.fn(async () => "diff"),
+      postPRComment: vi.fn(async () => "posted"),
+    };
+    const executor = new AgentCommandExecutor({ host, services });
+
+    expect(executor.getDefinitions().length).toBeGreaterThan(0);
+    expect(executor.getHelpText()).toContain("Core\n/help - List all available commands");
+
+    await expect(executor.execute("/nope")).resolves.toMatchObject({
+      handled: true,
+      message: "Unknown command: /nope. Type /help for a list of commands.",
+    });
+
+    await expect(executor.execute("/mode act")).resolves.toMatchObject({
+      handled: true,
+      message: "Mode switched to Act.",
+    });
+    expect(host.setMode).toHaveBeenCalledWith("act");
+
+    await expect(executor.execute("/review-post 42 Looks good")).resolves.toMatchObject({
       handled: true,
       message: "posted",
     });

@@ -6,6 +6,7 @@ import {
   ProjectionPolicy,
   TurnLifecycle,
   TurnTransactionCoordinator,
+  type AgentSessionStorage,
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
@@ -60,6 +61,25 @@ function createState() {
   );
 }
 
+function createSessionStorage(): AgentSessionStorage {
+  return {
+    getCurrentSessionId: () => "ses_test",
+    getWorkspaceId: () => "ws_test",
+    getWorkspace: () => ({ id: "ws_test", name: "Test workspace", rootPath: "/tmp/workspace" }),
+    ensureSession: () => "ses_test",
+    createSession: () => ({} as any),
+    switchSession: () => {},
+    deleteSession: async () => {},
+    deleteAllSessions: async () => {},
+    renameSession: () => {},
+    listSessions: () => [],
+    loadCurrentSessionEvents: async () => [],
+    getLastCompletedTurn: async () => null,
+    trimLastCompletedTurn: async () => ({ dropped: true, removedEvents: 0 }),
+    recordTurnComplete: async () => {},
+  };
+}
+
 function createLifecycle(input: {
   state: AgentStateStore;
   createRunSession: CreateRunSession;
@@ -70,9 +90,12 @@ function createLifecycle(input: {
     projection: new ProjectionPolicy(),
     recorder,
     subAgentEvents: { emit: () => {}, on: () => () => {} },
-    turnTransactions: new TurnTransactionCoordinator({ recorder }),
+    sessionStorage: createSessionStorage(),
     appendFinalEvents: vi.fn(),
-    dependencies: { createRunSession: input.createRunSession },
+    dependencies: {
+      createRunSession: input.createRunSession,
+      turnTransactions: new TurnTransactionCoordinator({ recorder }),
+    },
   });
 }
 
@@ -123,7 +146,7 @@ describe("TurnLifecycle", () => {
       projection: new ProjectionPolicy(),
       recorder,
       subAgentEvents: { emit: () => {}, on: () => () => {} },
-      turnTransactions: new TurnTransactionCoordinator({ recorder }),
+      sessionStorage: createSessionStorage(),
       appendFinalEvents,
       dependencies: {
         createRunSession: (config) => {
@@ -135,6 +158,7 @@ describe("TurnLifecycle", () => {
             sessionId: config.sessionId ?? run.id,
           };
         },
+        turnTransactions: new TurnTransactionCoordinator({ recorder }),
       },
     });
 
@@ -167,7 +191,7 @@ describe("TurnLifecycle", () => {
       projection: new ProjectionPolicy(),
       recorder,
       subAgentEvents: { emit: () => {}, on: () => () => {} },
-      turnTransactions: new TurnTransactionCoordinator({ recorder }),
+      sessionStorage: createSessionStorage(),
       appendFinalEvents,
       dependencies: {
         createRunSession: (config) => {
@@ -179,6 +203,7 @@ describe("TurnLifecycle", () => {
             sessionId: config.sessionId ?? run.id,
           };
         },
+        turnTransactions: new TurnTransactionCoordinator({ recorder }),
       },
     });
 

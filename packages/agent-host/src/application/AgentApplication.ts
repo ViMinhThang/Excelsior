@@ -14,7 +14,6 @@ import {
   type AgentSessionStorage,
 } from "./sessions/SessionStorage.js";
 import { AgentStateStore } from "./state/AgentStateStore.js";
-import { TurnTransactionCoordinator } from "./turns/TurnTransaction.js";
 import { TurnLifecycle } from "./turns/TurnLifecycle.js";
 import {
   defaultRunRecorder,
@@ -34,7 +33,6 @@ export class AgentApplication implements RevertSessionCoordinator {
   private readonly turns: TurnLifecycle;
   private readonly revert: RevertController;
   private readonly subAgentEvents: SubAgentEventSink;
-  private readonly turnTransactions: TurnTransactionCoordinator;
   private readonly recorder: RunRecorder;
   private subAgentUnsubs: Array<() => void> = [];
   private notifyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -50,28 +48,30 @@ export class AgentApplication implements RevertSessionCoordinator {
       });
 
     this.projection = new ProjectionPolicy();
-    this.turnTransactions =
-      options?.turnTransactions ??
-      new TurnTransactionCoordinator({ recorder: this.recorder });
     this.subAgentEvents = createSubAgentEventSink();
     this.state = new AgentStateStore(
       { workspace: this.sessions.getWorkspace() },
       this.projection,
     );
 
+    const turnLifecycleDeps = {
+      ...options?.turnLifecycle,
+      turnTransactions: options?.turnTransactions,
+    };
+
     this.turns = new TurnLifecycle({
       state: this.state,
       projection: this.projection,
       recorder: this.recorder,
       subAgentEvents: this.subAgentEvents,
-      turnTransactions: this.turnTransactions,
+      sessionStorage: this.sessions,
       appendFinalEvents: (events) => this.state.appendPersistedEvents(events),
-      dependencies: options?.turnLifecycle,
+      dependencies: turnLifecycleDeps,
     });
     this.revert = new RevertController(
       this.state,
       this,
-      this.turnTransactions,
+      this.turns,
     );
 
     this.refreshSessions();

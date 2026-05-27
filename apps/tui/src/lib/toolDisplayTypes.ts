@@ -8,11 +8,15 @@ export interface ToolDisplayInput {
   toolArgs?: string;
   status?: ToolStatus;
   content?: string;
+  filePath?: string;
+  diff?: string;
 }
 
 export interface ToolDisplay {
+  command: string;
   label: string;
   summary: string;
+  summaryLine?: string;
   detail?: string;
   resultPreview?: string[];
   omittedResultLines?: number;

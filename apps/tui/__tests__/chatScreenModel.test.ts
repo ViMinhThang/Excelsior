@@ -13,6 +13,13 @@ import {
   buildPendingQuestionModel,
   buildSuggestionsModel,
 } from "../src/hooks/useChatScreenModel.js";
+import {
+  buildChatControlPlane,
+  countVisibleCommands,
+  getChatPendingState,
+  shouldCollapseCommandsForChatMode,
+  shouldResetChatModeForPending,
+} from "../src/hooks/chatScreenControlPlane.js";
 
 const noop = () => {};
 
@@ -59,6 +66,33 @@ function pendingRequest(): ConfirmRequest {
   };
 }
 
+function subAgentBlockWithTool(id = "sub_tool"): ProjectedBlock & { type: "sub-agent" } {
+  const block = subAgentBlock(id);
+  block.state.toolCalls = [{
+    toolName: "runCommand",
+    toolArgs: "{\"command\":\"npm test\"}",
+    toolCallId: "tool_sub_1",
+    status: "completed",
+  }];
+  return block;
+}
+
+function pendingFileChangeRequest(): ConfirmRequest {
+  return {
+    callId: "confirm_2",
+    toolName: "editFile",
+    args: "{\"filePath\":\"demo.ts\"}",
+    filePath: "demo.ts",
+    diff: [
+      "--- demo.ts",
+      "+++ demo.ts",
+      "@@ -1,1 +1,1 @@",
+      "-old",
+      "+new",
+    ].join("\n"),
+  };
+}
+
 function pendingQuestion(): AskQuestionRequest {
   return {
     callId: "question_1",
@@ -80,6 +114,18 @@ describe("chat screen model builders", () => {
     expect(model?.pending).toBe(pending);
     expect(model?.display.label).toBeTruthy();
     expect(model?.display.summary).toBeTruthy();
+  });
+
+  it("keeps pending file change preview behind the tool display model", () => {
+    const model = buildPendingActionModel(pendingFileChangeRequest());
+
+    expect(model?.display.command).toBe("edit demo.ts");
+    expect(model?.display.fileChangePreview).toMatchObject({
+      filePath: "demo.ts",
+      action: "edit",
+      added: 1,
+      removed: 1,
+    });
   });
 
   it("builds pending question props with input handlers", () => {
@@ -172,6 +218,69 @@ describe("chat screen model builders", () => {
       hasPending: true,
       pendingKind: "question",
     });
+  });
+
+  it("builds chat control plane state from one input", () => {
+    const selectedSubAgent = subAgentBlockWithTool("sub_selected");
+    const suggestion = {
+      show: false,
+      filtered: [],
+      selectedIndex: 0,
+      maxVisibleCount: 0,
+      next: noop,
+      prev: noop,
+    };
+
+    const plane = buildChatControlPlane({
+      displayBlocks: [toolBlock("tool_root"), selectedSubAgent],
+      chatMode: "input",
+      isLoading: false,
+      pendingConfirmation: null,
+      pendingQuestion: pendingQuestion(),
+      activePanelId: null,
+      isPaletteOpen: false,
+      suggestion,
+      setInput: noop,
+      cancel: noop,
+      toggleMode: () => undefined,
+      openSubAgent: noop,
+      subAgentBlocks: [selectedSubAgent],
+      commandsExpanded: true,
+      toggleCommandsExpanded: noop,
+      navigateUp: noop,
+      navigateDown: noop,
+      openPalette: noop,
+      setChatMode: noop,
+      nextSubAgent: noop,
+      prevSubAgent: noop,
+      workspaceRootPath: "C:/repo",
+    });
+
+    expect(plane.pendingKind).toBe("question");
+    expect(plane.commandCount).toBe(2);
+    expect(plane.inputModeKeymap.commandCount).toBe(2);
+    expect(plane.footer).toMatchObject({
+      hasPending: true,
+      pendingKind: "question",
+      commandCount: 2,
+      subAgentCount: 1,
+      commandsExpanded: true,
+    });
+  });
+
+  it("keeps chat control plane derivations local", () => {
+    expect(countVisibleCommands([
+      toolBlock("tool_root"),
+      subAgentBlockWithTool("sub_tool"),
+    ])).toBe(2);
+    expect(getChatPendingState({
+      pendingConfirmation: pendingRequest(),
+      pendingQuestion: null,
+    }).pendingKind).toBe("confirmation");
+    expect(shouldResetChatModeForPending(null)).toBe(false);
+    expect(shouldResetChatModeForPending(pendingQuestion())).toBe(true);
+    expect(shouldCollapseCommandsForChatMode("input")).toBe(true);
+    expect(shouldCollapseCommandsForChatMode("subagent-detail")).toBe(false);
   });
 
   it("builds sub-agent picker context with command expansion state", () => {

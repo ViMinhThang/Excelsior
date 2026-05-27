@@ -10,12 +10,13 @@ import type {
 import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { ProjectionPolicy } from "../projection/ProjectionPolicy.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
-import type { TurnTransactionCoordinator } from "./TurnTransaction.js";
+import { TurnTransactionCoordinator, type TurnRevertResult } from "./TurnTransaction.js";
+import type { AgentSessionStorage } from "../sessions/SessionStorage.js";
 import {
   createRunSession,
   type RunSessionConfig,
   type RunSessionResult,
-} from "../runSession.js";
+} from "./runSession.js";
 
 export type CreateRunSession = (
   config: RunSessionConfig,
@@ -25,6 +26,7 @@ export interface TurnLifecycleDependencies {
   createRunSession?: CreateRunSession;
   extraTools?: Record<string, unknown>;
   agentFactory?: AgentFactory;
+  turnTransactions?: TurnTransactionCoordinator;
 }
 
 export interface TurnLifecycleOptions {
@@ -32,7 +34,7 @@ export interface TurnLifecycleOptions {
   projection: ProjectionPolicy;
   recorder: RunRecorder;
   subAgentEvents: SubAgentEventSink;
-  turnTransactions: TurnTransactionCoordinator;
+  sessionStorage: AgentSessionStorage;
   appendFinalEvents(events: readonly AnyAgentEvent[]): void;
   dependencies?: TurnLifecycleDependencies;
 }
@@ -61,9 +63,11 @@ export class TurnLifecycle {
     this.projection = options.projection;
     this.recorder = options.recorder;
     this.subAgentEvents = options.subAgentEvents;
-    this.turnTransactions = options.turnTransactions;
     this.appendFinalEvents = options.appendFinalEvents;
     this.dependencies = options.dependencies ?? {};
+    this.turnTransactions =
+      this.dependencies.turnTransactions ??
+      new TurnTransactionCoordinator({ sessionStorage: options.sessionStorage });
     this.agentFactory = this.dependencies.agentFactory ?? new DefaultAgentFactory();
   }
 
@@ -84,6 +88,10 @@ export class TurnLifecycle {
 
   dispose(): void {
     this.cancel();
+  }
+
+  revertLatestTurn(sessionId: string): Promise<TurnRevertResult> {
+    return this.turnTransactions.revertLatestTurn(sessionId);
   }
 
   private createTurnRun(

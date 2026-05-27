@@ -1,9 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { ConfirmRequest } from "@excelsior/core";
-import {
-  getFileChangePreviewNavigation,
-  parsePendingFileChangePreview,
-} from "../lib/fileChangePreview.js";
+import { getFileChangePreviewNavigation } from "../lib/fileChangePreview.js";
+import { createToolDisplay } from "../lib/toolDisplay.js";
 
 export function useToolConfirmation(
   pending: ConfirmRequest | null,
@@ -12,7 +10,13 @@ export function useToolConfirmation(
 ) {
   const preview = useMemo(() => {
     if (!pending) return null;
-    return parsePendingFileChangePreview(pending) ?? null;
+    return createToolDisplay({
+      toolName: pending.toolName,
+      toolArgs: pending.args,
+      status: "pending",
+      filePath: pending.filePath,
+      diff: pending.diff,
+    }).fileChangePreview ?? null;
   }, [pending]);
 
   const navigation = getFileChangePreviewNavigation(preview);
