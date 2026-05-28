@@ -1,34 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
-import type { RunCompletion, RunHandle } from "@excelsior/run-runtime";
+import type { Session } from "@excelsior/core";
 import {
   AgentStateStore,
-  type CreateRunSession,
+  type AgentFactory,
   ProjectionPolicy,
   TurnLifecycle,
-  TurnTransactionCoordinator,
   type AgentSessionStorage,
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
-  type AgentEventDataMap,
   type RunRecorder,
 } from "@excelsior/agent-host/testing/runtime";
 
-function createDeferredRunHandle(cancel = vi.fn()): {
-  handle: RunHandle<AgentEventDataMap>;
-  resolveCompletion(completion: RunCompletion<AgentEventDataMap>): void;
-} {
-  let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
-  const completion = new Promise<RunCompletion<AgentEventDataMap>>((resolve) => {
-    resolveCompletion = resolve;
-  });
-  return {
-    handle: {
-      completion,
-      cancel,
-    },
-    resolveCompletion,
-  };
+interface ControlledAgentStream {
+  run: AgentRun;
+  resolve(): void;
 }
 
 function createRecorder(): RunRecorder {
@@ -67,7 +53,7 @@ function createSessionStorage(): AgentSessionStorage {
     getWorkspaceId: () => "ws_test",
     getWorkspace: () => ({ id: "ws_test", name: "Test workspace", rootPath: "/tmp/workspace" }),
     ensureSession: () => "ses_test",
-    createSession: () => ({} as any),
+    createSession: () => testSession(),
     switchSession: () => {},
     deleteSession: async () => {},
     deleteAllSessions: async () => {},
@@ -80,41 +66,75 @@ function createSessionStorage(): AgentSessionStorage {
   };
 }
 
+function testSession(): Session {
+  return {
+    id: "ses_test",
+    startedAt: "2026-05-27T00:00:00.000Z",
+    updatedAt: "2026-05-27T00:00:00.000Z",
+    metadata: { userInput: "test" },
+    workspaceId: "ws_test",
+    title: "Test session",
+  };
+}
+
+function createControlledAgentFactory(): {
+  agentFactory: AgentFactory;
+  streams: ControlledAgentStream[];
+} {
+  const streams: ControlledAgentStream[] = [];
+  const agentFactory: AgentFactory = {
+    create: vi.fn((runCtx) => {
+      let resolve!: () => void;
+      const completion = new Promise<void>((finish) => {
+        resolve = finish;
+      });
+      streams.push({ run: runCtx.run, resolve });
+      return {
+        stream: async () => {
+          await completion;
+        },
+      };
+    }),
+  };
+
+  return { agentFactory, streams };
+}
+
+async function waitForStream(
+  streams: ControlledAgentStream[],
+): Promise<ControlledAgentStream> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const stream = streams[0];
+    if (stream) return stream;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error("Timed out waiting for fake agent stream");
+}
+
 function createLifecycle(input: {
   state: AgentStateStore;
-  createRunSession: CreateRunSession;
+  appendFinalEvents?: (events: readonly unknown[]) => void;
 }) {
   const recorder = createRecorder();
-  return new TurnLifecycle({
+  const controls = createControlledAgentFactory();
+  const lifecycle = new TurnLifecycle({
     state: input.state,
     projection: new ProjectionPolicy(),
     recorder,
     subAgentEvents: { emit: () => {}, on: () => () => {} },
     sessionStorage: createSessionStorage(),
-    appendFinalEvents: vi.fn(),
+    appendFinalEvents: input.appendFinalEvents ?? vi.fn(),
     dependencies: {
-      createRunSession: input.createRunSession,
-      turnTransactions: new TurnTransactionCoordinator({ recorder }),
+      agentFactory: controls.agentFactory,
     },
   });
+  return { lifecycle, controls };
 }
 
 describe("TurnLifecycle", () => {
-  it("starts a turn and updates live events", () => {
-    let run!: AgentRun;
+  it("starts a turn and updates live events", async () => {
     const state = createState();
-    const lifecycle = createLifecycle({
-      state,
-      createRunSession: (config) => {
-        run = new AgentRun(config.sessionId);
-        return {
-          run,
-          childRuns: new Map(),
-          handle: createDeferredRunHandle().handle,
-          sessionId: config.sessionId ?? run.id,
-        };
-      },
-    });
+    const { lifecycle } = createLifecycle({ state });
 
     lifecycle.startUserTurn({
       content: "hello",
@@ -122,6 +142,7 @@ describe("TurnLifecycle", () => {
       sessionId: "ses_1",
       workspaceRoot: "/tmp/workspace",
     });
+    const run = state.activeRun!;
     run.emit("text-delta", { delta: "hello" });
     run.flushNotify();
 
@@ -134,32 +155,11 @@ describe("TurnLifecycle", () => {
   });
 
   it("appends final events and clears loading on completion", async () => {
-    let run!: AgentRun;
-    let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
     const state = createState();
     const appendFinalEvents = vi.fn();
-    const deferred = createDeferredRunHandle();
-    const recorder = createRecorder();
-    resolveCompletion = deferred.resolveCompletion;
-    const lifecycle = new TurnLifecycle({
+    const { lifecycle, controls } = createLifecycle({
       state,
-      projection: new ProjectionPolicy(),
-      recorder,
-      subAgentEvents: { emit: () => {}, on: () => () => {} },
-      sessionStorage: createSessionStorage(),
       appendFinalEvents,
-      dependencies: {
-        createRunSession: (config) => {
-          run = new AgentRun(config.sessionId);
-          return {
-            run,
-            childRuns: new Map(),
-            handle: deferred.handle,
-            sessionId: config.sessionId ?? run.id,
-          };
-        },
-        turnTransactions: new TurnTransactionCoordinator({ recorder }),
-      },
     });
 
     lifecycle.startUserTurn({
@@ -168,7 +168,8 @@ describe("TurnLifecycle", () => {
       sessionId: "ses_1",
       workspaceRoot: "/tmp/workspace",
     });
-    resolveCompletion({ status: "completed", events: [...run.getSnapshot()] });
+    const stream = await waitForStream(controls.streams);
+    stream.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(appendFinalEvents).toHaveBeenCalledWith([
@@ -179,32 +180,11 @@ describe("TurnLifecycle", () => {
   });
 
   it("ignores stale completions after cancel", async () => {
-    let run!: AgentRun;
-    let resolveCompletion!: (completion: RunCompletion<AgentEventDataMap>) => void;
     const state = createState();
     const appendFinalEvents = vi.fn();
-    const deferred = createDeferredRunHandle();
-    const recorder = createRecorder();
-    resolveCompletion = deferred.resolveCompletion;
-    const lifecycle = new TurnLifecycle({
+    const { lifecycle, controls } = createLifecycle({
       state,
-      projection: new ProjectionPolicy(),
-      recorder,
-      subAgentEvents: { emit: () => {}, on: () => () => {} },
-      sessionStorage: createSessionStorage(),
       appendFinalEvents,
-      dependencies: {
-        createRunSession: (config) => {
-          run = new AgentRun(config.sessionId);
-          return {
-            run,
-            childRuns: new Map(),
-            handle: deferred.handle,
-            sessionId: config.sessionId ?? run.id,
-          };
-        },
-        turnTransactions: new TurnTransactionCoordinator({ recorder }),
-      },
     });
 
     lifecycle.startUserTurn({
@@ -213,8 +193,9 @@ describe("TurnLifecycle", () => {
       sessionId: "ses_1",
       workspaceRoot: "/tmp/workspace",
     });
+    const stream = await waitForStream(controls.streams);
     lifecycle.cancel();
-    resolveCompletion({ status: "completed", events: [...run.getSnapshot()] });
+    stream.resolve();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(appendFinalEvents).not.toHaveBeenCalled();

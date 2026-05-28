@@ -8,9 +8,9 @@ import type {
 import type { AgentRun } from "../runtime/agentRun.js";
 import type { AnyAgentEvent } from "../runtime/events.js";
 import type { RunRecorder } from "../persistence/runRecorder.js";
-import type { AgentSessionStorage } from "./sessions/SessionStorage.js";
+import type { StorageEngine } from "../persistence/storageEngine.js";
+import type { AgentSessionStorage } from "../sessionManager.js";
 import type { TurnLifecycleDependencies } from "./turns/TurnLifecycle.js";
-import type { TurnTransactionCoordinator } from "./turns/TurnTransaction.js";
 
 export interface ChatSessionState {
   displayBlocks: ProjectedBlock[];
@@ -22,11 +22,16 @@ export interface ChatSessionState {
   mode: AgentMode;
 }
 
+import type { ConfirmPromptBus } from "../runtime/confirmTypes.js";
+import type { QuestionPromptBus } from "../runtime/questionTypes.js";
+
 export interface AgentApplicationOptions {
   sessionStorage?: AgentSessionStorage;
   recorder?: RunRecorder;
-  turnTransactions?: TurnTransactionCoordinator;
+  storageEngine?: StorageEngine;
   turnLifecycle?: TurnLifecycleDependencies;
+  confirmBus?: ConfirmPromptBus;
+  questionBus?: QuestionPromptBus;
 }
 
 export type { SendOptions };

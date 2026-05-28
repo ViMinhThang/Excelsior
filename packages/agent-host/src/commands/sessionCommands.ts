@@ -1,6 +1,6 @@
 import type { CommandResult } from "@excelsior/core";
 import { SESSION_PICKER_PANEL_ID } from "@excelsior/core";
-import type { AgentCommand, AgentCommandHost } from "./types.js";
+import type { AgentCommand, AgentCommandApplication } from "./types.js";
 
 const SESSION_USAGE =
   "/session | /session new <title> | /session open <id> | /session rename <id> <title> | /session delete <id>";
@@ -19,7 +19,7 @@ export function createSessionCommand(): AgentCommand {
 
 async function executeSessionCommand(
   args: string[],
-  host: AgentCommandHost,
+  application: AgentCommandApplication,
 ): Promise<CommandResult> {
   const sub = args[0]?.toLowerCase();
   switch (sub) {
@@ -34,7 +34,7 @@ async function executeSessionCommand(
 
     case "new": {
       const title = args.slice(1).join(" ") || "Untitled";
-      host.createSession(title);
+      application.createSession(title);
       return {
         handled: true,
         message: `Created session: "${title}".`,
@@ -51,7 +51,7 @@ async function executeSessionCommand(
           clearInput: true,
         };
       }
-      await host.switchSession(id);
+      await application.switchSession(id);
       return {
         handled: true,
         message: `Switched to session ${id.slice(0, 8)}...`,
@@ -69,7 +69,7 @@ async function executeSessionCommand(
           clearInput: true,
         };
       }
-      host.renameSession(id, title);
+      application.renameSession(id, title);
       return {
         handled: true,
         message: `Renamed session to "${title}".`,
@@ -86,7 +86,7 @@ async function executeSessionCommand(
           clearInput: true,
         };
       }
-      await host.deleteSession(id);
+      await application.deleteSession(id);
       return {
         handled: true,
         message: `Deleted session ${id.slice(0, 8)}...`,

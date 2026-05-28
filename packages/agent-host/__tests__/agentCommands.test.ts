@@ -1,23 +1,31 @@
 import { describe, expect, it, vi } from "vitest";
+import type { Session } from "@excelsior/core";
 import {
-  createAgentCommands,
-  executeAgentCommand,
-  getHelpText,
-  parseCommandInput,
-  type AgentCommandHost,
   AgentCommandExecutor,
+  type AgentCommandApplication,
 } from "@excelsior/agent-host/commands";
 
-function createHost(): AgentCommandHost {
+function testSession(title = "Test session"): Session {
+  return {
+    id: "ses_test",
+    startedAt: "2026-05-27T00:00:00.000Z",
+    updatedAt: "2026-05-27T00:00:00.000Z",
+    metadata: { userInput: "test" },
+    workspaceId: "ws_test",
+    title,
+  };
+}
+
+function createApplication(): AgentCommandApplication {
   return {
     send: vi.fn(),
-    clearMessages: vi.fn(),
+    clear: vi.fn(),
     deleteAllSessions: vi.fn(),
-    createSession: vi.fn(),
+    createSession: vi.fn((title?: string) => testSession(title)),
     switchSession: vi.fn(async () => {}),
     deleteSession: vi.fn(async () => {}),
     renameSession: vi.fn(),
-    getMode: vi.fn(() => "plan" as const),
+    getSnapshot: vi.fn(() => ({ mode: "plan" as const })),
     setMode: vi.fn(),
     revertLastTurn: vi.fn(async () => ({
       handled: true,
@@ -27,26 +35,22 @@ function createHost(): AgentCommandHost {
   };
 }
 
-describe("agent command registry", () => {
-  it("parses slash command input into name, args, and raw argument text", () => {
-    expect(parseCommandInput("hello")).toBeNull();
-    expect(parseCommandInput("/review-post 42 Looks good")).toEqual({
-      raw: "/review-post 42 Looks good",
-      name: "review-post",
-      args: ["42", "Looks", "good"],
-      argText: "42 Looks good",
+describe("agent command executor", () => {
+  it("keeps parsing and slash-command normalization behind the executor", async () => {
+    const application = createApplication();
+    const executor = new AgentCommandExecutor({ application });
+
+    await expect(executor.execute("hello")).resolves.toEqual({ handled: false });
+    await expect(executor.execute("/MODE   act")).resolves.toMatchObject({
+      handled: true,
+      message: "Mode switched to Act.",
     });
-    expect(parseCommandInput("/MODE   act")).toEqual({
-      raw: "/MODE   act",
-      name: "mode",
-      args: ["act"],
-      argText: "act",
-    });
+    expect(application.setMode).toHaveBeenCalledWith("act");
   });
 
   it("formats help text from command categories in the expected order", () => {
-    const commands = createAgentCommands();
-    const help = getHelpText(commands.map((command) => command.definition));
+    const executor = new AgentCommandExecutor({ application: createApplication() });
+    const help = executor.getHelpText();
 
     expect(help).toContain("Core\n/help - List all available commands");
     expect(help).toContain("/revert - Revert the latest turn's write/edit file changes");
@@ -58,58 +62,58 @@ describe("agent command registry", () => {
     expect(help.indexOf("Session")).toBeLessThan(help.indexOf("Review"));
   });
 
-  it("handles core, mode, session, and unknown commands through registry entries", async () => {
-    const host = createHost();
-    const commands = createAgentCommands();
+  it("handles core, mode, session, and unknown commands through executor entries", async () => {
+    const application = createApplication();
+    const executor = new AgentCommandExecutor({ application });
 
-    await expect(executeAgentCommand("/help", host, commands)).resolves.toMatchObject({
+    await expect(executor.execute("/help")).resolves.toMatchObject({
       handled: true,
       clearInput: true,
     });
 
-    await expect(executeAgentCommand("/mode act", host, commands)).resolves.toMatchObject({
+    await expect(executor.execute("/mode act")).resolves.toMatchObject({
       handled: true,
       message: "Mode switched to Act.",
     });
-    expect(host.setMode).toHaveBeenCalledWith("act");
+    expect(application.setMode).toHaveBeenCalledWith("act");
 
-    await expect(executeAgentCommand("/session", host, commands)).resolves.toMatchObject({
+    await expect(executor.execute("/session")).resolves.toMatchObject({
       handled: true,
       openPanelId: "session.picker",
     });
 
-    await expect(executeAgentCommand("/revert", host, commands)).resolves.toMatchObject({
+    await expect(executor.execute("/revert")).resolves.toMatchObject({
       handled: true,
       message: "Reverted latest turn.",
     });
-    expect(host.revertLastTurn).toHaveBeenCalled();
+    expect(application.revertLastTurn).toHaveBeenCalled();
 
-    await expect(executeAgentCommand("/nope", host, commands)).resolves.toMatchObject({
+    await expect(executor.execute("/nope")).resolves.toMatchObject({
       handled: true,
       message: "Unknown command: /nope. Type /help for a list of commands.",
     });
   });
 
   it("uses injected review services for review commands", async () => {
-    const host = createHost();
+    const application = createApplication();
     const services = {
       fetchPRDiff: vi.fn(async () => "diff --git a/a.ts b/a.ts"),
       postPRComment: vi.fn(async () => "posted"),
     };
-    const commands = createAgentCommands(services);
+    const executor = new AgentCommandExecutor({ application, services });
 
-    await expect(executeAgentCommand("/review 42", host, commands)).resolves.toMatchObject({
+    await expect(executor.execute("/review 42")).resolves.toMatchObject({
       handled: true,
       message: "Running code review on PR #42...",
     });
     expect(services.fetchPRDiff).toHaveBeenCalledWith(42);
-    expect(host.send).toHaveBeenCalledWith(
+    expect(application.send).toHaveBeenCalledWith(
       expect.stringContaining("PR #42"),
       { displayContent: "Reviewing PR #42" },
     );
 
     await expect(
-      executeAgentCommand("/review-post 42 Looks good", host, commands),
+      executor.execute("/review-post 42 Looks good"),
     ).resolves.toMatchObject({
       handled: true,
       message: "posted",
@@ -118,12 +122,12 @@ describe("agent command registry", () => {
   });
 
   it("encapsulates parsing, execution, definitions, and help text within AgentCommandExecutor", async () => {
-    const host = createHost();
+    const application = createApplication();
     const services = {
       fetchPRDiff: vi.fn(async () => "diff"),
       postPRComment: vi.fn(async () => "posted"),
     };
-    const executor = new AgentCommandExecutor({ host, services });
+    const executor = new AgentCommandExecutor({ application, services });
 
     expect(executor.getDefinitions().length).toBeGreaterThan(0);
     expect(executor.getHelpText()).toContain("Core\n/help - List all available commands");
@@ -137,7 +141,7 @@ describe("agent command registry", () => {
       handled: true,
       message: "Mode switched to Act.",
     });
-    expect(host.setMode).toHaveBeenCalledWith("act");
+    expect(application.setMode).toHaveBeenCalledWith("act");
 
     await expect(executor.execute("/review-post 42 Looks good")).resolves.toMatchObject({
       handled: true,

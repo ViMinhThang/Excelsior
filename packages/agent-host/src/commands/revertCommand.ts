@@ -8,6 +8,6 @@ export function createRevertCommand(): AgentCommand {
       description: "Revert the latest turn's write/edit file changes",
       usage: "/revert",
     },
-    execute: (_args, host) => host.revertLastTurn(),
+    execute: (_args, application) => application.revertLastTurn(),
   };
 }

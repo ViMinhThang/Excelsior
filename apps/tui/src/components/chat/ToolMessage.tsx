@@ -5,7 +5,6 @@ import { theme } from "../../theme.js";
 import { createToolDisplay } from "../../lib/toolDisplay.js";
 import { FileChangePreviewView } from "../../features/fileChangePreview/FileChangePreviewView.js";
 import { normalizeToolText } from "../../lib/toolDisplayUtils.js";
-export { formatCliCommand } from "../../lib/toolDisplay.js";
 
 interface ToolMessageProps {
   toolName?: string;

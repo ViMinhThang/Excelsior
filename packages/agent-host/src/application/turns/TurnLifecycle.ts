@@ -11,22 +11,17 @@ import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { ProjectionPolicy } from "../projection/ProjectionPolicy.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
 import { TurnTransactionCoordinator, type TurnRevertResult } from "./TurnTransaction.js";
-import type { AgentSessionStorage } from "../sessions/SessionStorage.js";
+import type { ConfirmPromptBus } from "../../runtime/confirmTypes.js";
+import type { QuestionPromptBus } from "../../runtime/questionTypes.js";
+import type { AgentSessionStorage } from "../../sessionManager.js";
 import {
   createRunSession,
-  type RunSessionConfig,
   type RunSessionResult,
 } from "./runSession.js";
 
-export type CreateRunSession = (
-  config: RunSessionConfig,
-) => RunSessionResult;
-
 export interface TurnLifecycleDependencies {
-  createRunSession?: CreateRunSession;
   extraTools?: Record<string, unknown>;
   agentFactory?: AgentFactory;
-  turnTransactions?: TurnTransactionCoordinator;
 }
 
 export interface TurnLifecycleOptions {
@@ -37,6 +32,8 @@ export interface TurnLifecycleOptions {
   sessionStorage: AgentSessionStorage;
   appendFinalEvents(events: readonly AnyAgentEvent[]): void;
   dependencies?: TurnLifecycleDependencies;
+  confirmBus?: ConfirmPromptBus;
+  questionBus?: QuestionPromptBus;
 }
 
 export interface StartUserTurnOptions extends SendOptions {
@@ -55,6 +52,8 @@ export class TurnLifecycle {
   private readonly appendFinalEvents: (events: readonly AnyAgentEvent[]) => void;
   private readonly dependencies: TurnLifecycleDependencies;
   private readonly agentFactory: AgentFactory;
+  private readonly confirmBus?: ConfirmPromptBus;
+  private readonly questionBus?: QuestionPromptBus;
   private handle: RunHandle<AgentEventDataMap> | null = null;
   private unsubscribeLive: (() => void) | null = null;
 
@@ -65,10 +64,12 @@ export class TurnLifecycle {
     this.subAgentEvents = options.subAgentEvents;
     this.appendFinalEvents = options.appendFinalEvents;
     this.dependencies = options.dependencies ?? {};
-    this.turnTransactions =
-      this.dependencies.turnTransactions ??
-      new TurnTransactionCoordinator({ sessionStorage: options.sessionStorage });
+    this.turnTransactions = new TurnTransactionCoordinator({
+      sessionStorage: options.sessionStorage,
+    });
     this.agentFactory = this.dependencies.agentFactory ?? new DefaultAgentFactory();
+    this.confirmBus = options.confirmBus;
+    this.questionBus = options.questionBus;
   }
 
   get run(): AgentRun | null {
@@ -101,9 +102,7 @@ export class TurnLifecycle {
       ...this.buildAIHistory(),
       { role: "user", content: options.content },
     ];
-    const startRunSession =
-      this.dependencies.createRunSession ?? createRunSession;
-    const result = startRunSession({
+    const result = createRunSession({
       messages,
       createAgent: (runCtx) =>
         this.agentFactory.create(runCtx, {
@@ -115,6 +114,8 @@ export class TurnLifecycle {
       mode: options.mode,
       workspaceRoot: options.workspaceRoot,
       turnTransactions: this.turnTransactions,
+      confirmBus: this.confirmBus,
+      questionBus: this.questionBus,
     });
 
     return result;

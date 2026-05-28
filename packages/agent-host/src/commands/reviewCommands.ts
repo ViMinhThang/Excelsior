@@ -1,12 +1,8 @@
 import type { CommandResult } from "@excelsior/core";
-import { postPRComment } from "../github/ghComment.js";
-import { fetchPRDiff } from "../github/github.js";
-import type { AgentCommand, AgentCommandHost, ReviewCommandServices } from "./types.js";
+import { GitHubClient } from "../github/GitHubClient.js";
+import type { AgentCommand, AgentCommandApplication, ReviewCommandServices } from "./types.js";
 
-export const defaultReviewCommandServices: ReviewCommandServices = {
-  fetchPRDiff,
-  postPRComment,
-};
+const defaultReviewCommandServices: ReviewCommandServices = new GitHubClient();
 
 export function createReviewCommands(
   services: ReviewCommandServices = defaultReviewCommandServices,
@@ -19,7 +15,7 @@ export function createReviewCommands(
         description: "Review a pull request by number (e.g. /review 42)",
         usage: "/review <pr-number>",
       },
-      execute: (args, host) => executeReviewCommand(args, host, services),
+      execute: (args, application) => executeReviewCommand(args, application, services),
     },
     {
       definition: {
@@ -35,7 +31,7 @@ export function createReviewCommands(
 
 async function executeReviewCommand(
   args: string[],
-  host: AgentCommandHost,
+  application: AgentCommandApplication,
   services: ReviewCommandServices,
 ): Promise<CommandResult> {
   const prNumber = Number.parseInt(args[0], 10);
@@ -50,7 +46,7 @@ async function executeReviewCommand(
 
   try {
     const diff = await services.fetchPRDiff(prNumber);
-    host.send(
+    application.send(
       `### NEW CODE REVIEW: PR #${prNumber} ###\n\n` +
         `IMPORTANT: This is a fresh review request for PR #${prNumber}. ` +
         `Please ignore any previous PR reviews or sub-agent findings in the chat history. ` +

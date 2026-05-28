@@ -1,13 +1,14 @@
 import { vi } from "vitest";
+import type { AgentMessage } from "@excelsior/core";
 import type {
+  AgentFactory,
   AgentSessionStorage,
-  SessionMetadataStore,
   TurnLifecycleDependencies,
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
   type AgentEventDataMap,
-  type RunSessionConfig,
+  type RunContext,
 } from "@excelsior/agent-host/testing/runtime";
 import type { Session } from "@excelsior/agent-host/testing/session";
 import type { RunHandle } from "@excelsior/run-runtime";
@@ -26,7 +27,7 @@ export function makeSession(id: string, title: string): Session {
 
 export function createFakeSessionManager(
   workspaceRoot = "/tmp/workspace",
-): SessionMetadataStore {
+) {
   const sessions: Session[] = [];
   let currentSessionId: string | null = null;
 
@@ -98,20 +99,60 @@ export function createPendingRunHandle(
   };
 }
 
-export function createFakeTurnLifecycle(
-  onRun?: (run: AgentRun, config: RunSessionConfig) => void,
-): TurnLifecycleDependencies & { createRunSession: ReturnType<typeof vi.fn> } {
-  const createRunSession = vi.fn((config: RunSessionConfig) => {
-    const sessionId = config.sessionId ?? "ses_test";
-    const run = new AgentRun(sessionId);
-    onRun?.(run, config);
-    return {
-      run,
-      childRuns: new Map(),
-      handle: createPendingRunHandle(),
-      sessionId,
-    };
-  });
+export interface FakeAgentStream {
+  run: AgentRun;
+  runContext: RunContext;
+  messages: unknown[] | null;
+  resolve(): void;
+  reject(error: unknown): void;
+}
 
-  return { createRunSession };
+export interface FakeTurnLifecycle extends TurnLifecycleDependencies {
+  agentFactory: AgentFactory & { create: ReturnType<typeof vi.fn> };
+  streams: FakeAgentStream[];
+}
+
+export function createFakeTurnLifecycle(
+  onRun?: (run: AgentRun, context: RunContext) => void,
+): FakeTurnLifecycle {
+  const streams: FakeAgentStream[] = [];
+  const agentFactory = {
+    create: vi.fn((runContext: RunContext) => {
+      let resolve!: () => void;
+      let reject!: (error: unknown) => void;
+      const completion = new Promise<void>((finish, fail) => {
+        resolve = finish;
+        reject = fail;
+      });
+      const stream: FakeAgentStream = {
+        run: runContext.run,
+        runContext,
+        messages: null,
+        resolve,
+        reject,
+      };
+      streams.push(stream);
+      onRun?.(runContext.run, runContext);
+      return {
+        stream: async ({ messages }: { messages: AgentMessage[] }) => {
+          stream.messages = messages;
+          await completion;
+        },
+      };
+    }),
+  };
+
+  return { agentFactory, streams };
+}
+
+export async function waitForFakeAgentStream(
+  lifecycle: FakeTurnLifecycle,
+  index = 0,
+): Promise<FakeAgentStream> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const stream = lifecycle.streams[index];
+    if (stream) return stream;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error("Timed out waiting for fake agent stream");
 }

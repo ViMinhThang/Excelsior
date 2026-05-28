@@ -9,8 +9,6 @@ export type {
   StreamCapableAgent,
 } from "../runtime/agentStream.js";
 export * from "../runtime/streamTypes.js";
-export { confirmBus } from "../runtime/confirmBus.js";
-export { questionBus } from "../runtime/questionBus.js";
 export * from "../runtime/blockingPrompt.js";
 export type {
   ConfirmEvents,

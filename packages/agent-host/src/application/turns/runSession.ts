@@ -3,8 +3,8 @@ import { AgentRun } from "../../runtime/agentRun.js";
 import { AgentEventDataMap } from "../../runtime/events.js";
 import { createToolContext, ToolContext } from "../../tooling/context.js";
 import type { AgentMode, AgentMessage } from "@excelsior/core";
-import { confirmBus } from "../../runtime/confirmBus.js";
-import { questionBus } from "../../runtime/questionBus.js";
+import type { ConfirmPromptBus } from "../../runtime/confirmTypes.js";
+import type { QuestionPromptBus } from "../../runtime/questionTypes.js";
 import {
   defaultRunRecorder,
   type RunRecorder,
@@ -38,6 +38,8 @@ export interface RunSessionConfig {
   workspaceRoot?: string;
   streamAgentResponse?: AgentResponseStreamer;
   turnTransactions?: TurnTransactionCoordinator;
+  confirmBus?: ConfirmPromptBus;
+  questionBus?: QuestionPromptBus;
 }
 
 export interface RunSessionResult {
@@ -47,7 +49,7 @@ export interface RunSessionResult {
   sessionId: string;
 }
 
-export class RunSession {
+class RunSession {
   readonly run: AgentRun;
   readonly childRuns = new Map<string, AgentRun>();
   readonly sessionId: string;
@@ -55,7 +57,6 @@ export class RunSession {
   private readonly subAgentEvents: SubAgentEventSink;
   private readonly turnTransactions: TurnTransactionCoordinator;
   private readonly config: RunSessionConfig;
-  private handle!: RunHandle<AgentEventDataMap>;
 
   constructor(config: RunSessionConfig) {
     this.config = config;
@@ -73,8 +74,8 @@ export class RunSession {
 
     const ctx = createToolContext({
       abortSignal: this.run.abortSignal,
-      confirmBus,
-      questionBus,
+      confirmBus: this.config.confirmBus,
+      questionBus: this.config.questionBus,
       mode: this.config.mode,
       workspaceRoot: this.config.workspaceRoot,
       revert,
@@ -127,7 +128,7 @@ export class RunSession {
       },
     );
 
-    this.handle = {
+    const handle = {
       ...baseHandle,
       completion,
     };
@@ -135,13 +136,9 @@ export class RunSession {
     return {
       run: this.run,
       childRuns: this.childRuns,
-      handle: this.handle,
+      handle,
       sessionId: this.sessionId,
     };
-  }
-
-  cancel(): void {
-    this.handle?.cancel();
   }
 }
 

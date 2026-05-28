@@ -83,7 +83,7 @@ export class DesktopWorkspaceHost {
 
     this.currentWorkspaceRoot = rootPath;
     const application = new AgentApplication(workspace.id);
-    this.agentHost = new LocalAgentHost(application);
+    this.agentHost = new LocalAgentHost({ application });
     this.stateChangeUnsubscribe = this.agentHost.subscribe(() => {
       if (this.agentHost) {
         this.onStateChanged(this.agentHost.getState());

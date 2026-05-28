@@ -1,4 +1,4 @@
-import { ToolLoopAgent } from "ai";
+import { ToolLoopAgent, type ModelMessage } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createFileTools } from "./tools/index.js";
 import { getSetting } from "../persistence/db.js";
@@ -24,7 +24,10 @@ import {
 } from "../runtime/eventNames.js";
 
 interface Streamable {
-  stream(input: { messages: unknown[] }): Promise<{ fullStream: AsyncIterable<unknown> }>;
+  stream(input: {
+    messages: ModelMessage[];
+    abortSignal?: AbortSignal;
+  }): PromiseLike<{ fullStream: AsyncIterable<unknown> }>;
 }
 
 export class ExcelsiorAgent implements StreamCapableAgent {
@@ -41,16 +44,23 @@ export class ExcelsiorAgent implements StreamCapableAgent {
     emit(RUN_START, {});
 
     try {
-      const stream = (await withRetry(() => this.agent.stream({ messages: messages as unknown as unknown[] }), {
-        signal,
-        maxRetries: 3,
-        baseDelayMs: 1000,
-        onRetry: (error, attempt) => {
-          emit(TEXT_DELTA, {
-            delta: `\nRetry ${attempt}/3  API error: ${error.message} - retrying...\n`,
-          });
+      const stream = await withRetry(
+        async () =>
+          this.agent.stream({
+            messages: toModelMessages(messages),
+            abortSignal: signal,
+          }),
+        {
+          signal,
+          maxRetries: 3,
+          baseDelayMs: 1000,
+          onRetry: (error, attempt) => {
+            emit(TEXT_DELTA, {
+              delta: `\nRetry ${attempt}/3  API error: ${error.message} - retrying...\n`,
+            });
+          },
         },
-      })) as { fullStream: AsyncIterable<unknown> };
+      );
 
       for await (const rawPart of stream.fullStream) {
         if (signal.aborted) {
@@ -134,5 +144,82 @@ export function createAgent(
     },
   });
 
-  return new ExcelsiorAgent(agent as unknown as Streamable);
+  return new ExcelsiorAgent(agent);
+}
+
+function toModelMessages(messages: readonly AgentMessage[]): ModelMessage[] {
+  return messages.map(toModelMessage);
+}
+
+function toModelMessage(message: AgentMessage): ModelMessage {
+  switch (message.role) {
+    case "system":
+      return { role: "system", content: normalizeMessageContent(message.content) };
+    case "user":
+      return {
+        role: "user",
+        content: toTextContent(message.content),
+      };
+    case "assistant": {
+      const textContent = toTextContent(message.content);
+      const toolCalls =
+        message.tool_calls?.map((toolCall) => ({
+          type: "tool-call" as const,
+          toolCallId: toolCall.id,
+          toolName: toolCall.function.name,
+          input: parseToolInput(toolCall.function.arguments),
+        })) ?? [];
+
+      if (toolCalls.length === 0) {
+        return { role: "assistant", content: textContent };
+      }
+
+      return {
+        role: "assistant",
+        content: [
+          ...(typeof textContent === "string" && textContent.length > 0
+            ? [{ type: "text" as const, text: textContent }]
+            : Array.isArray(textContent)
+              ? textContent
+              : []),
+          ...toolCalls,
+        ],
+      };
+    }
+    case "tool":
+      return {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId: message.tool_call_id ?? "tool-call",
+            toolName: "tool",
+            output: {
+              type: "text",
+              value: normalizeMessageContent(message.content),
+            },
+          },
+        ],
+      };
+  }
+}
+
+function toTextContent(
+  content: AgentMessage["content"],
+): string | Array<{ type: "text"; text: string }> {
+  if (typeof content === "string") return content;
+  return content.map((part) => ({ type: "text", text: part.text }));
+}
+
+function normalizeMessageContent(content: AgentMessage["content"]): string {
+  if (typeof content === "string") return content;
+  return content.map((part) => part.text).join("\n");
+}
+
+function parseToolInput(input: string): unknown {
+  try {
+    return JSON.parse(input);
+  } catch {
+    return input;
+  }
 }

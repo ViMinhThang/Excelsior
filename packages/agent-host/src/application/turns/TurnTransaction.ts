@@ -6,7 +6,7 @@ import type {
   AnyAgentEvent,
 } from "../../runtime/events.js";
 import type { RevertCapability } from "../../tooling/context.js";
-import type { AgentSessionStorage } from "../sessions/SessionStorage.js";
+import type { AgentSessionStorage } from "../../sessionManager.js";
 
 export type TurnRevertResult =
   | { type: "no-checkpoint" }

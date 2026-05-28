@@ -145,7 +145,6 @@ export function buildPendingActionModel(
   if (!pending) return null;
 
   return {
-    pending,
     display: createToolDisplay({
       toolName: pending.toolName,
       toolArgs: pending.args,

@@ -4,8 +4,6 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   JsonlRunRecorder,
-  resetSessionsDirForTests,
-  setSessionsDirForTests,
 } from "@excelsior/agent-host/testing/persistence";
 import {
   makeEvent,
@@ -23,12 +21,10 @@ describe("JsonlRunRecorder", () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), "excelsior-jsonl-"));
-    setSessionsDirForTests(tempDir);
-    recorder = new JsonlRunRecorder();
+    recorder = new JsonlRunRecorder(tempDir);
   });
 
   afterEach(async () => {
-    resetSessionsDirForTests();
     await rm(tempDir, { recursive: true, force: true });
   });
 

@@ -6,17 +6,32 @@ import type {
   Session,
 } from "@excelsior/client";
 import type { AgentApplication } from "../application/AgentApplication.js";
-import type { SettingsStore } from "../ports/SettingsStore.js";
+import type { SettingsStore } from "../persistence/SettingsStore.js";
 import type { HostConfirmationController } from "./confirmationController.js";
 import type { HostQuestionController } from "./questionController.js";
 import type { AgentCommandExecutor } from "../commands.js";
 
+type DispatchApplication = Pick<
+  AgentApplication,
+  | "send"
+  | "cancel"
+  | "clear"
+  | "revertLastTurn"
+  | "createSession"
+  | "switchSession"
+  | "deleteSession"
+  | "renameSession"
+  | "deleteAllSessions"
+  | "setMode"
+  | "toggleMode"
+>;
+
 export interface AgentHostIntentDispatcherOptions {
-  application: AgentApplication;
-  settings: SettingsStore;
-  confirmations: HostConfirmationController;
-  questions: HostQuestionController;
-  commandExecutor: AgentCommandExecutor;
+  application: DispatchApplication;
+  settings: Pick<SettingsStore, "saveSettings">;
+  confirmations: Pick<HostConfirmationController, "respond" | "approveAll">;
+  questions: Pick<HostQuestionController, "respond">;
+  commandExecutor: Pick<AgentCommandExecutor, "execute">;
 }
 
 export class AgentHostIntentDispatcher {

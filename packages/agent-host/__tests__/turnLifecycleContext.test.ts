@@ -1,17 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
+import type { AgentMessage, Session } from "@excelsior/core";
 import {
   AgentStateStore,
+  type AgentFactory,
   ProjectionPolicy,
   TurnLifecycle,
-  TurnTransactionCoordinator,
   type AgentSessionStorage,
 } from "@excelsior/agent-host/testing/application";
 import {
-  AgentRun,
   makeEvent,
   type AnyAgentEvent,
   type RunRecorder,
-  type RunSessionConfig,
 } from "@excelsior/agent-host/testing/runtime";
 
 function createState(): AgentStateStore {
@@ -50,7 +49,7 @@ function createSessionStorage(): AgentSessionStorage {
     getWorkspaceId: () => "ws_test",
     getWorkspace: () => ({ id: "ws_test", name: "Test workspace", rootPath: "/tmp/workspace" }),
     ensureSession: () => "ses_test",
-    createSession: () => ({} as any),
+    createSession: () => testSession(),
     switchSession: () => {},
     deleteSession: async () => {},
     deleteAllSessions: async () => {},
@@ -63,8 +62,19 @@ function createSessionStorage(): AgentSessionStorage {
   };
 }
 
+function testSession(): Session {
+  return {
+    id: "ses_test",
+    startedAt: "2026-05-27T00:00:00.000Z",
+    updatedAt: "2026-05-27T00:00:00.000Z",
+    metadata: { userInput: "test" },
+    workspaceId: "ws_test",
+    title: "Test session",
+  };
+}
+
 describe("TurnLifecycle context assembly", () => {
-  it("builds AI history, run options, and display input behind one lifecycle seam", () => {
+  it("builds AI history, run options, and display input behind one lifecycle seam", async () => {
     const state = createState();
     state.setPersistedEvents([
       makeEvent("run_1", "user-input", { content: "history user" }, 0),
@@ -75,22 +85,19 @@ describe("TurnLifecycle context assembly", () => {
       on: vi.fn(() => () => {}),
     };
     const recorder = createRecorder();
-    const turnTransactions = new TurnTransactionCoordinator({ recorder });
-    const configs: RunSessionConfig[] = [];
-    let run!: AgentRun;
-    const createRunSession = vi.fn((config: RunSessionConfig) => {
-      configs.push(config);
-      run = new AgentRun(config.sessionId);
-      return {
-        run,
-        childRuns: new Map(),
-        handle: {
-          completion: new Promise<never>(() => {}),
-          cancel: vi.fn(),
-        },
-        sessionId: config.sessionId ?? run.id,
-      };
-    });
+    let seenMessages: AgentMessage[] = [];
+    let seenRunContext: Parameters<AgentFactory["create"]>[0] | undefined;
+    const agentFactory: AgentFactory = {
+      create: vi.fn((runCtx) => {
+        seenRunContext = runCtx;
+        return {
+          stream: async ({ messages }: { messages: AgentMessage[] }) => {
+            seenMessages = messages;
+            await new Promise<never>(() => {});
+          },
+        };
+      }),
+    };
     const lifecycle = new TurnLifecycle({
       state,
       projection: new ProjectionPolicy(),
@@ -98,7 +105,7 @@ describe("TurnLifecycle context assembly", () => {
       subAgentEvents,
       sessionStorage: createSessionStorage(),
       appendFinalEvents: vi.fn(),
-      dependencies: { createRunSession, turnTransactions },
+      dependencies: { agentFactory },
     });
 
     lifecycle.startUserTurn({
@@ -108,19 +115,19 @@ describe("TurnLifecycle context assembly", () => {
       displayContent: "Displayed request",
       mode: "act",
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const config = configs[0];
-    expect(config.messages).toEqual([
+    expect(seenMessages).toEqual([
       { role: "user", content: "history user" },
       { role: "assistant", content: "history assistant" },
       { role: "user", content: "current exact" },
     ]);
-    expect(config.sessionId).toBe("ses_test");
-    expect(config.mode).toBe("act");
-    expect(config.workspaceRoot).toBe("C:/workspace");
-    expect(config.subAgentEvents).toBe(subAgentEvents);
-    expect(config.turnTransactions).toBe(turnTransactions);
-    expect(run.getSnapshot()).toEqual([
+    expect(seenRunContext?.run.sessionId).toBe("ses_test");
+    expect(seenRunContext?.ctx.mode).toBe("act");
+    expect(seenRunContext?.ctx.workspaceRoot).toBe("C:/workspace");
+    expect(seenRunContext?.subAgentEvents).toBe(subAgentEvents);
+    expect(seenRunContext?.ctx.revert).toBeDefined();
+    expect(seenRunContext?.run.getSnapshot()).toEqual([
       expect.objectContaining({
         type: "user-input",
         data: { content: "Displayed request" },

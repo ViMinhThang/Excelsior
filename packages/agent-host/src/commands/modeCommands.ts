@@ -1,6 +1,6 @@
 import type { CommandResult } from "@excelsior/core";
 import { formatAgentMode } from "@excelsior/core";
-import type { AgentCommand, AgentCommandHost } from "./types.js";
+import type { AgentCommand, AgentCommandApplication } from "./types.js";
 
 export function createModeCommand(): AgentCommand {
   return {
@@ -14,12 +14,12 @@ export function createModeCommand(): AgentCommand {
   };
 }
 
-function executeModeCommand(args: string[], host: AgentCommandHost): CommandResult {
+function executeModeCommand(args: string[], application: AgentCommandApplication): CommandResult {
   const next = args[0]?.toLowerCase();
   if (!next) {
     return {
       handled: true,
-      message: `Current mode: ${formatAgentMode(host.getMode())}. Usage: /mode plan | /mode act`,
+      message: `Current mode: ${formatAgentMode(application.getSnapshot().mode)}. Usage: /mode plan | /mode act`,
       clearInput: true,
     };
   }
@@ -32,7 +32,7 @@ function executeModeCommand(args: string[], host: AgentCommandHost): CommandResu
     };
   }
 
-  host.setMode(next);
+  application.setMode(next);
   return {
     handled: true,
     message: `Mode switched to ${formatAgentMode(next)}.`,

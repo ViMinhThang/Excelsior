@@ -9,7 +9,6 @@ interface ChatInputProps {
   onChange: (value: string) => void;
   onSubmit: () => void;
   placeholder?: string;
-  isLoading?: boolean;
   focus?: boolean;
   mask?: string;
   shouldSubmit?: (value: string) => boolean;

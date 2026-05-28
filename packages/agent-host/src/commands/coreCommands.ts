@@ -14,8 +14,8 @@ export function createCoreCommands(
         description: "Clear chat messages from the screen",
         usage: "/clear",
       },
-      execute: (_args, host) => {
-        host.clearMessages();
+      execute: (_args, application) => {
+        application.clear();
         return {
           handled: true,
           message: "Chat history cleared from UI.",
@@ -30,9 +30,9 @@ export function createCoreCommands(
         description: "Delete all conversation history from database",
         usage: "/reset",
       },
-      execute: async (_args, host) => {
-        await host.deleteAllSessions();
-        host.clearMessages();
+      execute: async (_args, application) => {
+        await application.deleteAllSessions();
+        application.clear();
         return { handled: true, message: "Database history reset.", clearInput: true };
       },
     },

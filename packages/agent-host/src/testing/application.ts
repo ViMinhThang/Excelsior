@@ -9,22 +9,19 @@ export {
   storageEngine,
   type StorageEngine,
 } from "../persistence/storageEngine.js";
-export { SessionStorageCoordinator } from "../application/sessions/SessionStorage.js";
 export type {
   ChatSessionState,
 } from "../application/types.js";
 export type {
   AgentSessionStorage,
-  SessionMetadataStore,
-  SessionStorageCoordinatorOptions,
-} from "../application/sessions/SessionStorage.js";
+} from "../sessionManager.js";
 export type { AgentApplicationOptions } from "../application/AgentApplication.js";
 export type {
-  CreateRunSession,
   StartUserTurnOptions,
   TurnLifecycleDependencies,
   TurnLifecycleOptions,
 } from "../application/turns/TurnLifecycle.js";
+export type { AgentFactory } from "../agent/agentFactory.js";
 export type {
   TurnRevertResult,
   TurnTransactionCoordinatorOptions,

@@ -15,13 +15,15 @@ import { useRef, useCallback } from "react";
  *
  * Result: Stable Identity + Fresh Implementation.
  */
-export function useEvent<T extends (...args: never[]) => unknown>(fn: T): T {
-  const ref = useRef<T>(fn);
+export function useEvent<TArgs extends unknown[], TReturn>(
+  fn: (...args: TArgs) => TReturn,
+): (...args: TArgs) => TReturn {
+  const ref = useRef(fn);
   // We update ref.current to the newest version of 'fn' on every render.
   ref.current = fn;
   // This wrapper identity NEVER changes ([] deps).
   // It acts as a permanent middleman that forwards calls to the latest ref.current.
-  return useCallback((...args: Parameters<T>): ReturnType<T> => {
-    return ref.current(...args as never[]) as ReturnType<T>;
-  }, []) as unknown as T;
+  return useCallback((...args: TArgs): TReturn => {
+    return ref.current(...args);
+  }, []);
 }
