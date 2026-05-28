@@ -22,7 +22,7 @@ function asDisplayString(value: unknown): string {
   return typeof value === "string" ? value : String(value ?? "");
 }
 
-export function formatCliCommand(toolName?: string, argsStr?: string): string {
+function formatCliCommand(toolName?: string, argsStr?: string): string {
   const name = toolName || "tool";
   const args = parseArgs(argsStr) ?? {};
 

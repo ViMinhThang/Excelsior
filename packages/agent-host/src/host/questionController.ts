@@ -2,7 +2,7 @@ import type {
   AskQuestionRequest,
   AskQuestionResponse,
 } from "@excelsior/core";
-import { questionBus } from "../runtime/questionBus.js";
+import type { QuestionPromptBus } from "../runtime/questionTypes.js";
 import { HostBlockingPromptController } from "./BlockingPromptController.js";
 
 export class HostQuestionController {
@@ -11,7 +11,10 @@ export class HostQuestionController {
     AskQuestionResponse
   >;
 
-  constructor(private readonly notify: () => void) {
+  constructor(
+    questionBus: QuestionPromptBus,
+    private readonly notify: () => void,
+  ) {
     this.controller = new HostBlockingPromptController(questionBus, this.notify);
   }
 

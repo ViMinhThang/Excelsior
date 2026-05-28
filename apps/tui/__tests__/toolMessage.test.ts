@@ -1,33 +1,41 @@
 import { createElement } from "react";
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
-import ToolMessage, { formatCliCommand } from "../src/components/chat/ToolMessage.js";
+import ToolMessage from "../src/components/chat/ToolMessage.js";
+import { createToolDisplay } from "../src/lib/toolDisplay.js";
+
+function commandFor(toolName: string, args: Record<string, unknown>): string {
+  return createToolDisplay({
+    toolName,
+    toolArgs: JSON.stringify(args),
+  }).command;
+}
 
 describe("ToolMessage command formatting", () => {
   it("shows view calls with only the final path segment", () => {
-    expect(formatCliCommand(
+    expect(commandFor(
       "view",
-      JSON.stringify({
+      {
         filePath: ["packages", "run-runtime", "src", "runOrchestrator.ts"].join("/"),
-      }),
+      },
     )).toBe("read runOrchestrator.ts");
   });
 
   it("does not show quoted JSON args for view calls", () => {
-    expect(formatCliCommand(
+    expect(commandFor(
       "view",
-      JSON.stringify({
+      {
         filePath: ["packages", "agent-host", "src", "host", "LocalAgentHost.ts"].join("/"),
-      }),
+      },
     )).toBe("read LocalAgentHost.ts");
   });
 
   it("shows ls calls with the directory path value only", () => {
     const directoryPath = ["packages", "agent-host", "src", "application"].join("/");
 
-    expect(formatCliCommand(
+    expect(commandFor(
       "ls",
-      JSON.stringify({ directoryPath }),
+      { directoryPath },
     )).toBe(`Listfiles ${directoryPath}`);
   });
 

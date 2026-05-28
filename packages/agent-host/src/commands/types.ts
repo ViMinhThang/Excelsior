@@ -2,18 +2,19 @@ import type {
   AgentMode,
   CommandDefinition,
   CommandResult,
+  Session,
   SendOptions,
 } from "@excelsior/core";
 
-export interface AgentCommandHost {
+export interface AgentCommandApplication {
   send(content: string, options?: SendOptions): void;
-  clearMessages(): void;
+  clear(): void;
   deleteAllSessions(): void | Promise<void>;
-  createSession(title?: string): unknown;
+  createSession(title?: string): Session;
   switchSession(sessionId: string): Promise<void>;
   deleteSession(sessionId: string): void | Promise<void>;
   renameSession(sessionId: string, title: string): void;
-  getMode(): AgentMode;
+  getSnapshot(): { mode: AgentMode };
   setMode(mode: AgentMode): void;
   revertLastTurn(): Promise<CommandResult>;
 }
@@ -25,5 +26,5 @@ export interface ReviewCommandServices {
 
 export interface AgentCommand {
   definition: CommandDefinition;
-  execute(args: string[], host: AgentCommandHost): CommandResult | Promise<CommandResult>;
+  execute(args: string[], application: AgentCommandApplication): CommandResult | Promise<CommandResult>;
 }

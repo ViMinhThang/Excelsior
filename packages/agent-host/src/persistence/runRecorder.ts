@@ -11,20 +11,6 @@ import { join } from "path";
 import { AnyAgentEvent, makeEvent } from "../runtime/events.js";
 import { TURN_COMPLETE } from "../runtime/eventNames.js";
 
-let sessionsDir =
-  process.env.EXCELSIOR_SESSIONS_DIR ?? join(process.cwd(), "data", "sessions");
-const appendQueues = new Map<string, Promise<void>>();
-
-export function setSessionsDirForTests(dir: string): void {
-  sessionsDir = dir;
-}
-
-export function resetSessionsDirForTests(): void {
-  sessionsDir =
-    process.env.EXCELSIOR_SESSIONS_DIR ??
-    join(process.cwd(), "data", "sessions");
-}
-
 export interface LastCompletedTurn {
   runId: string;
   eventCount: number;
@@ -54,16 +40,6 @@ export interface RunRecorder {
   ): Promise<DropLastCompletedTurnResult>;
   deleteSessionEvents(sessionId: string): Promise<void>;
   deleteAllSessionEvents(): Promise<void>;
-}
-
-async function ensureDir(): Promise<void> {
-  if (!existsSync(sessionsDir)) {
-    await mkdir(sessionsDir, { recursive: true });
-  }
-}
-
-function filePath(sessionId: string): string {
-  return join(sessionsDir, `${sessionId}.jsonl`);
 }
 
 function timestampMs(event: AnyAgentEvent): number {
@@ -113,10 +89,6 @@ function belongsToRun(event: AnyAgentEvent, runId: string): boolean {
   );
 }
 
-async function waitForSessionQueue(sessionId: string): Promise<void> {
-  await appendQueues.get(sessionId)?.catch(() => {});
-}
-
 function findLastCompletedTurn(
   events: AnyAgentEvent[],
 ): LastCompletedTurn | null {
@@ -137,61 +109,69 @@ function findLastCompletedTurn(
   };
 }
 
-async function appendRecordedEvent(
-  sessionId: string,
-  event: AnyAgentEvent,
-): Promise<void> {
-  const previous = appendQueues.get(sessionId) ?? Promise.resolve();
-  const next = previous
-    .catch(() => {})
-    .then(async () => {
-      await ensureDir();
-      await appendFile(filePath(sessionId), JSON.stringify(event) + "\n");
-    });
+export class JsonlRunRecorder implements RunRecorder {
+  private readonly appendQueues = new Map<string, Promise<void>>();
 
-  appendQueues.set(sessionId, next);
+  constructor(
+    public readonly sessionsDir: string = process.env.EXCELSIOR_SESSIONS_DIR ??
+      join(process.cwd(), "data", "sessions"),
+  ) {}
 
-  try {
-    await next;
-  } finally {
-    if (appendQueues.get(sessionId) === next) {
-      appendQueues.delete(sessionId);
+  private async ensureDir(): Promise<void> {
+    if (!existsSync(this.sessionsDir)) {
+      await mkdir(this.sessionsDir, { recursive: true });
     }
   }
-}
 
-async function loadRawEvents(sessionId: string): Promise<AnyAgentEvent[]> {
-  const path = filePath(sessionId);
-  try {
-    const raw = await readFile(path, "utf-8");
-    return raw
-      .split("\n")
-      .filter((line) => line.trim())
-      .map((line) => JSON.parse(line) as AnyAgentEvent);
-  } catch {
-    return [];
+  private filePath(sessionId: string): string {
+    return join(this.sessionsDir, `${sessionId}.jsonl`);
   }
-}
 
-async function loadCompletedReplay(sessionId: string): Promise<AnyAgentEvent[]> {
-  const all = await loadRawEvents(sessionId);
-  const checkpoints = all.filter((event) => event.type === TURN_COMPLETE);
+  private async waitForSessionQueue(sessionId: string): Promise<void> {
+    await this.appendQueues.get(sessionId)?.catch(() => {});
+  }
 
-  if (checkpoints.length === 0) return sortEventsForReplay(all);
+  private async appendRecordedEvent(
+    sessionId: string,
+    event: AnyAgentEvent,
+  ): Promise<void> {
+    const previous = this.appendQueues.get(sessionId) ?? Promise.resolve();
+    const next = previous
+      .catch(() => {})
+      .then(async () => {
+        await this.ensureDir();
+        await appendFile(this.filePath(sessionId), JSON.stringify(event) + "\n");
+      });
 
-  const completedRunIds = new Set(
-    checkpoints.map((event) => (event.data as { runId: string }).runId),
-  );
-  const completedEvents = all.filter((event) =>
-    belongsToCompletedRun(event, completedRunIds),
-  );
+    this.appendQueues.set(sessionId, next);
 
-  return sortEventsForReplay(completedEvents);
-}
+    try {
+      await next;
+    } finally {
+      if (this.appendQueues.get(sessionId) === next) {
+        this.appendQueues.delete(sessionId);
+      }
+    }
+  }
 
-export class JsonlRunRecorder implements RunRecorder {
+  private async loadCompletedReplay(sessionId: string): Promise<AnyAgentEvent[]> {
+    const all = await this.loadRawEvents(sessionId);
+    const checkpoints = all.filter((event) => event.type === TURN_COMPLETE);
+
+    if (checkpoints.length === 0) return sortEventsForReplay(all);
+
+    const completedRunIds = new Set(
+      checkpoints.map((event) => (event.data as { runId: string }).runId),
+    );
+    const completedEvents = all.filter((event) =>
+      belongsToCompletedRun(event, completedRunIds),
+    );
+
+    return sortEventsForReplay(completedEvents);
+  }
+
   recordEvent(sessionId: string, event: AnyAgentEvent): Promise<void> {
-    return appendRecordedEvent(sessionId, event);
+    return this.appendRecordedEvent(sessionId, event);
   }
 
   recordTurnComplete(
@@ -200,30 +180,39 @@ export class JsonlRunRecorder implements RunRecorder {
     sequence: number,
   ): Promise<void> {
     const checkpoint = makeEvent(runId, TURN_COMPLETE, { runId }, sequence);
-    return appendRecordedEvent(sessionId, checkpoint as AnyAgentEvent);
+    return this.appendRecordedEvent(sessionId, checkpoint as AnyAgentEvent);
   }
 
   async loadCompletedEvents(sessionId: string): Promise<AnyAgentEvent[]> {
-    return loadCompletedReplay(sessionId);
+    return this.loadCompletedReplay(sessionId);
   }
 
-  loadRawEvents(sessionId: string): Promise<AnyAgentEvent[]> {
-    return loadRawEvents(sessionId);
+  async loadRawEvents(sessionId: string): Promise<AnyAgentEvent[]> {
+    const path = this.filePath(sessionId);
+    try {
+      const raw = await readFile(path, "utf-8");
+      return raw
+        .split("\n")
+        .filter((line) => line.trim())
+        .map((line) => JSON.parse(line) as AnyAgentEvent);
+    } catch {
+      return [];
+    }
   }
 
   async getLastCompletedTurn(
     sessionId: string,
   ): Promise<LastCompletedTurn | null> {
-    await waitForSessionQueue(sessionId);
-    return findLastCompletedTurn(await loadRawEvents(sessionId));
+    await this.waitForSessionQueue(sessionId);
+    return findLastCompletedTurn(await this.loadRawEvents(sessionId));
   }
 
   async dropLastCompletedTurn(
     sessionId: string,
     expectedRunId?: string,
   ): Promise<DropLastCompletedTurnResult> {
-    await waitForSessionQueue(sessionId);
-    const events = await loadRawEvents(sessionId);
+    await this.waitForSessionQueue(sessionId);
+    const events = await this.loadRawEvents(sessionId);
     const latest = findLastCompletedTurn(events);
 
     if (!latest) {
@@ -242,9 +231,9 @@ export class JsonlRunRecorder implements RunRecorder {
     const remaining = events.filter(
       (event) => !belongsToRun(event, latest.runId),
     );
-    await ensureDir();
+    await this.ensureDir();
     await writeFile(
-      filePath(sessionId),
+      this.filePath(sessionId),
       remaining.map((event) => JSON.stringify(event)).join("\n") +
         (remaining.length > 0 ? "\n" : ""),
       "utf-8",
@@ -258,22 +247,22 @@ export class JsonlRunRecorder implements RunRecorder {
   }
 
   async deleteSessionEvents(sessionId: string): Promise<void> {
-    await waitForSessionQueue(sessionId);
+    await this.waitForSessionQueue(sessionId);
     try {
-      await unlink(filePath(sessionId));
+      await unlink(this.filePath(sessionId));
     } catch {}
   }
 
   async deleteAllSessionEvents(): Promise<void> {
     await Promise.all(
-      [...appendQueues.values()].map((queue) => queue.catch(() => {})),
+      [...this.appendQueues.values()].map((queue) => queue.catch(() => {})),
     );
-    if (!existsSync(sessionsDir)) return;
-    const files = await readdir(sessionsDir);
+    if (!existsSync(this.sessionsDir)) return;
+    const files = await readdir(this.sessionsDir);
     await Promise.all(
       files
         .filter((file) => file.endsWith(".jsonl"))
-        .map((file) => unlink(join(sessionsDir, file)).catch(() => {})),
+        .map((file) => unlink(join(this.sessionsDir, file)).catch(() => {})),
     );
   }
 }

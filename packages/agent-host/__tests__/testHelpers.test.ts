@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  AgentRun,
+  createSubAgentEventSink,
+  type RunRecorder,
+} from "@excelsior/agent-host/testing/runtime";
+import {
   createFakeSessionManager,
   createPendingRunHandle,
   createFakeTurnLifecycle,
@@ -24,19 +29,29 @@ describe("test helper fixtures", () => {
     expect(manager.listSessions()).toEqual([]);
   });
 
-  it("creates fake turn lifecycle run sessions with pending run handles", () => {
+  it("creates fake turn lifecycle agent streams with pending completion", async () => {
     const lifecycle = createFakeTurnLifecycle();
-    const result = lifecycle.createRunSession({
+    const run = new AgentRun("ses_test");
+    const agent = lifecycle.agentFactory.create({
+      ctx: { capabilities: new Set() },
+      run,
+      childRuns: new Map(),
+      recorder: createRecorder(),
+      subAgentEvents: createSubAgentEventSink(),
+    });
+    const stream = agent.stream({
       messages: [{ role: "user", content: "hello" }],
-      createAgent: () => ({
-        stream: async () => {},
-      }),
-      sessionId: "ses_test",
+      signal: new AbortController().signal,
+      emit: () => {},
     });
 
-    expect(result.run.sessionId).toBe("ses_test");
-    expect(result.childRuns.size).toBe(0);
-    expect(typeof result.handle.cancel).toBe("function");
+    expect(lifecycle.streams[0].run.sessionId).toBe("ses_test");
+    expect(lifecycle.streams[0].messages).toEqual([
+      { role: "user", content: "hello" },
+    ]);
+
+    lifecycle.streams[0].resolve();
+    await stream;
   });
 
   it("creates cancellable pending run handles", () => {
@@ -47,3 +62,20 @@ describe("test helper fixtures", () => {
     expect(typeof handle.completion.then).toBe("function");
   });
 });
+
+function createRecorder(): RunRecorder {
+  return {
+    recordEvent: async () => {},
+    recordTurnComplete: async () => {},
+    loadCompletedEvents: async () => [],
+    loadRawEvents: async () => [],
+    getLastCompletedTurn: async () => null,
+    dropLastCompletedTurn: async () => ({
+      dropped: false,
+      removedEvents: 0,
+      reason: "no-completed-turn",
+    }),
+    deleteSessionEvents: async () => {},
+    deleteAllSessionEvents: async () => {},
+  };
+}

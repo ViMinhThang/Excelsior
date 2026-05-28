@@ -1,15 +1,7 @@
 import type { ReactNode } from "react";
 import { Text } from "ink";
 import { Chalk } from "chalk";
-import cliHighlight from "cli-highlight";
-
-// Type-safe interface to avoid "casual any" that fails our architectural lint checks
-interface CliHighlightLib {
-  highlight: (code: string, options?: unknown) => string;
-}
-
-// Handle dynamic ESM/CommonJS default import interop in a strictly type-safe way
-const highlight = (cliHighlight as unknown as CliHighlightLib)?.highlight || cliHighlight;
+import { highlight } from "cli-highlight";
 
 const customChalk = new Chalk({ level: 3 });
 

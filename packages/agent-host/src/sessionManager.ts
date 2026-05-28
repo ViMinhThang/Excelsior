@@ -1,8 +1,31 @@
 import { generateId } from "@excelsior/core";
 import type { Session, Workspace } from "@excelsior/core";
 import type { StorageEngine } from "./persistence/storageEngine.js";
+import type {
+  RunRecorder,
+  LastCompletedTurn,
+  DropLastCompletedTurnResult,
+} from "./persistence/runRecorder.js";
+import type { AnyAgentEvent } from "./runtime/events.js";
 
-export class SessionManager {
+export interface AgentSessionStorage {
+  getCurrentSessionId(): string | null;
+  getWorkspaceId(): string;
+  getWorkspace(): Workspace;
+  ensureSession(title?: string, userInput?: string): string;
+  createSession(title?: string): Session;
+  switchSession(sessionId: string): void;
+  deleteSession(sessionId: string): Promise<void>;
+  deleteAllSessions(): Promise<void>;
+  renameSession(sessionId: string, title: string): void;
+  listSessions(): Session[];
+  loadCurrentSessionEvents(): Promise<AnyAgentEvent[]>;
+  getLastCompletedTurn(sessionId: string): Promise<LastCompletedTurn | null>;
+  trimLastCompletedTurn(sessionId: string, expectedRunId?: string): Promise<DropLastCompletedTurnResult>;
+  recordTurnComplete(sessionId: string, runId: string, sequence: number): Promise<void>;
+}
+
+export class SessionManager implements AgentSessionStorage {
   private _workspace: Workspace;
   private _currentSessionId: string | null = null;
   private _sessions: Session[] = [];
@@ -10,6 +33,7 @@ export class SessionManager {
   constructor(
     workspaceId: string | undefined,
     private readonly storage: StorageEngine,
+    private readonly recorder: RunRecorder,
   ) {
     const ws = workspaceId
       ? this.storage.workspaces.load(workspaceId) ?? this.storage.workspaces.getOrCreateDefault()
@@ -70,6 +94,7 @@ export class SessionManager {
 
   async deleteSession(sessionId: string): Promise<void> {
     await this.storage.sessions.delete(sessionId);
+    await this.recorder.deleteSessionEvents(sessionId);
     if (this._currentSessionId === sessionId) {
       this._currentSessionId = null;
     }
@@ -78,6 +103,7 @@ export class SessionManager {
 
   async deleteAllSessions(): Promise<void> {
     await this.storage.sessions.deleteAll();
+    await this.recorder.deleteAllSessionEvents();
     this._currentSessionId = null;
     this._reloadSessions();
   }
@@ -89,6 +115,23 @@ export class SessionManager {
 
   listSessions(): Session[] {
     return [...this._sessions];
+  }
+
+  async loadCurrentSessionEvents(): Promise<AnyAgentEvent[]> {
+    const sessionId = this.getCurrentSessionId();
+    return sessionId ? this.recorder.loadCompletedEvents(sessionId) : [];
+  }
+
+  async getLastCompletedTurn(sessionId: string): Promise<LastCompletedTurn | null> {
+    return this.recorder.getLastCompletedTurn(sessionId);
+  }
+
+  async trimLastCompletedTurn(sessionId: string, expectedRunId?: string): Promise<DropLastCompletedTurnResult> {
+    return this.recorder.dropLastCompletedTurn(sessionId, expectedRunId);
+  }
+
+  async recordTurnComplete(sessionId: string, runId: string, sequence: number): Promise<void> {
+    await this.recorder.recordTurnComplete(sessionId, runId, sequence);
   }
 
   private _normalizeTitle(title?: string): string {

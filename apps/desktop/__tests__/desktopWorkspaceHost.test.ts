@@ -39,7 +39,8 @@ vi.mock("@excelsior/agent-host", () => {
     listener: (() => void) | null = null;
     state: { workspaceId: string };
 
-    constructor(readonly application: AgentApplication) {
+    constructor(options: { application?: AgentApplication } = {}) {
+      const application = options.application ?? new AgentApplication();
       this.state = { workspaceId: application.workspaceId ?? "ws_unknown" };
       agentHostMock.hosts.push(this);
     }

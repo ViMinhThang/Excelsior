@@ -1,12 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { AgentHostIntentDispatcher } from "../src/host/dispatcher.js";
-import type { AgentApplication } from "../src/application/AgentApplication.js";
-import type { SettingsStore } from "../src/ports/SettingsStore.js";
-import type { HostConfirmationController } from "../src/host/confirmationController.js";
-import type { HostQuestionController } from "../src/host/questionController.js";
-import type { AgentCommandExecutor } from "../src/commands.js";
+import {
+  AgentHostIntentDispatcher,
+  type AgentHostIntentDispatcherOptions,
+} from "../src/host/dispatcher.js";
 
-function createMockOptions() {
+function createMockOptions(): AgentHostIntentDispatcherOptions {
   return {
     application: {
       send: vi.fn(),
@@ -25,24 +23,24 @@ function createMockOptions() {
       renameSession: vi.fn(),
       deleteAllSessions: vi.fn(),
       setMode: vi.fn(),
-      toggleMode: vi.fn(() => "act"),
-    } as unknown as AgentApplication,
+      toggleMode: vi.fn((): "act" => "act"),
+    },
     settings: {
       saveSettings: vi.fn(),
-    } as unknown as SettingsStore,
+    },
     confirmations: {
       respond: vi.fn(),
       approveAll: vi.fn(),
-    } as unknown as HostConfirmationController,
+    },
     questions: {
       respond: vi.fn(),
-    } as unknown as HostQuestionController,
+    },
     commandExecutor: {
       execute: vi.fn(async (input) => ({
         handled: true,
         message: `Executed: ${input}`,
       })),
-    } as unknown as AgentCommandExecutor,
+    },
   };
 }
 

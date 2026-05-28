@@ -6,42 +6,62 @@ import type {
   AgentHostIntent,
 } from "@excelsior/client";
 import { AgentApplication } from "../application/AgentApplication.js";
-import { CommandHostAdapter } from "../application/commands/CommandHostAdapter.js";
 import { AgentCommandExecutor } from "../commands.js";
 import { createAgentClientState } from "./clientState.js";
 import { HostConfirmationController } from "./confirmationController.js";
 import { HostQuestionController } from "./questionController.js";
-import type { SettingsStore } from "../ports/SettingsStore.js";
-import { DefaultSettingsStore } from "../ports/DefaultSettingsStore.js";
+import { SettingsStore } from "../persistence/SettingsStore.js";
 import { AgentHostIntentDispatcher } from "./dispatcher.js";
+import { createBlockingPromptBus } from "../runtime/blockingPrompt.js";
+import type { ConfirmPromptBus } from "../runtime/confirmTypes.js";
+import type { QuestionPromptBus } from "../runtime/questionTypes.js";
+import type { ConfirmRequest, ConfirmResponse } from "../runtime/confirmTypes.js";
+import type { AskQuestionRequest, AskQuestionResponse } from "@excelsior/core";
+import type { StorageEngine } from "../persistence/storageEngine.js";
+import type { RunRecorder } from "../persistence/runRecorder.js";
 
 export class LocalAgentHost implements AgentHost {
   private readonly application: AgentApplication;
   private readonly settings: SettingsStore;
   private readonly confirmations: HostConfirmationController;
   private readonly questions: HostQuestionController;
-  private readonly commandHost: CommandHostAdapter;
   private readonly commandExecutor: AgentCommandExecutor;
   private readonly dispatcher: AgentHostIntentDispatcher;
   private readonly listeners = new Set<() => void>();
   private snapshot: AgentClientState | null = null;
   private readonly unsubscribeApplication: () => void;
 
-  constructor(
-    application = new AgentApplication(),
-    settingsStore?: SettingsStore,
-  ) {
-    this.application = application;
-    this.settings = settingsStore ?? new DefaultSettingsStore();
-    this.confirmations = new HostConfirmationController(() =>
-      this.invalidateAndNotify(),
+  constructor(options: {
+    workspaceId?: string;
+    settingsStore?: SettingsStore;
+    application?: AgentApplication;
+    confirmBus?: ConfirmPromptBus;
+    questionBus?: QuestionPromptBus;
+    storageEngine?: StorageEngine;
+    recorder?: RunRecorder;
+  } = {}) {
+    const confirmBus = options.confirmBus ?? createBlockingPromptBus<ConfirmRequest, ConfirmResponse>();
+    const questionBus = options.questionBus ?? createBlockingPromptBus<AskQuestionRequest, AskQuestionResponse>();
+
+    this.application =
+      options.application ??
+      new AgentApplication(options.workspaceId, {
+        confirmBus,
+        questionBus,
+        storageEngine: options.storageEngine,
+        recorder: options.recorder,
+      });
+    this.settings = options.settingsStore ?? new SettingsStore();
+    this.confirmations = new HostConfirmationController(
+      confirmBus,
+      () => this.invalidateAndNotify(),
     );
-    this.questions = new HostQuestionController(() =>
-      this.invalidateAndNotify(),
+    this.questions = new HostQuestionController(
+      questionBus,
+      () => this.invalidateAndNotify(),
     );
-    this.commandHost = new CommandHostAdapter(this.application);
     this.commandExecutor = new AgentCommandExecutor({
-      host: this.commandHost,
+      application: this.application,
     });
     this.dispatcher = new AgentHostIntentDispatcher({
       application: this.application,

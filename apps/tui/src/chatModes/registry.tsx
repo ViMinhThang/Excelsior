@@ -300,7 +300,6 @@ function renderConversation(
             onSubmit={ctx.input.submit}
             shouldSubmit={ctx.input.shouldSubmit}
             placeholder="Type your coding task here..."
-            isLoading={ctx.runtime.isLoading}
             focus={ctx.chatMode === "input" && !ctx.runtime.pending && !ctx.runtime.paletteOpen}
           />
           <Box paddingLeft={1}>

@@ -2,7 +2,7 @@ import type {
   ConfirmRequest,
   ConfirmResponse,
 } from "@excelsior/core";
-import { confirmBus } from "../runtime/confirmBus.js";
+import type { ConfirmPromptBus } from "../runtime/confirmTypes.js";
 import { HostBlockingPromptController } from "./BlockingPromptController.js";
 
 export class HostConfirmationController {
@@ -12,7 +12,10 @@ export class HostConfirmationController {
     ConfirmResponse
   >;
 
-  constructor(private readonly notify: () => void) {
+  constructor(
+    confirmBus: ConfirmPromptBus,
+    private readonly notify: () => void,
+  ) {
     this.controller = new HostBlockingPromptController(
       confirmBus,
       this.notify,

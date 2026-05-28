@@ -111,7 +111,6 @@ describe("chat screen model builders", () => {
     const pending = pendingRequest();
     const model = buildPendingActionModel(pending);
 
-    expect(model?.pending).toBe(pending);
     expect(model?.display.label).toBeTruthy();
     expect(model?.display.summary).toBeTruthy();
   });

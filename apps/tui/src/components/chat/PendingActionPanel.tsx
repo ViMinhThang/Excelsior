@@ -1,13 +1,11 @@
 import type { FC } from "react";
 import { Box, Text } from "ink";
-import type { ConfirmRequest } from "@excelsior/core";
 import type { ToolDisplay } from "../../lib/toolDisplay.js";
 import { theme } from "../../theme.js";
 import Panel from "../shared/Panel.js";
 import { FileChangePreviewView } from "../../features/fileChangePreview/FileChangePreviewView.js";
 
 export interface PendingActionPanelProps {
-  pending: ConfirmRequest;
   display: ToolDisplay;
   scrollOffset?: number;
   activeHunkIndex?: number;

@@ -1,19 +1,29 @@
 import type { CommandDefinition, CommandResult } from "@excelsior/core";
-import { createAgentCommands, getHelpText } from "./registry.js";
-import { parseCommandInput } from "./parser.js";
-import type { AgentCommand, AgentCommandHost, ReviewCommandServices } from "./types.js";
+import { createCoreCommands } from "./coreCommands.js";
+import { formatHelpText } from "./helpCommand.js";
+import { createModeCommand } from "./modeCommands.js";
+import { createReviewCommands } from "./reviewCommands.js";
+import { createRevertCommand } from "./revertCommand.js";
+import { createSessionCommand } from "./sessionCommands.js";
+import { createSettingsCommand } from "./settingsCommands.js";
+import type { AgentCommand, AgentCommandApplication, ReviewCommandServices } from "./types.js";
 
 export interface AgentCommandExecutorOptions {
-  host: AgentCommandHost;
+  application: AgentCommandApplication;
   services?: ReviewCommandServices;
 }
 
+interface ParsedCommandInput {
+  name: string;
+  args: string[];
+}
+
 export class AgentCommandExecutor {
-  private readonly host: AgentCommandHost;
+  private readonly application: AgentCommandApplication;
   private readonly commands: AgentCommand[];
 
   constructor(options: AgentCommandExecutorOptions) {
-    this.host = options.host;
+    this.application = options.application;
     this.commands = createAgentCommands(options.services);
   }
 
@@ -22,7 +32,7 @@ export class AgentCommandExecutor {
   }
 
   getHelpText(): string {
-    return getHelpText(this.getDefinitions());
+    return formatHelpText(this.getDefinitions());
   }
 
   async execute(input: string): Promise<CommandResult> {
@@ -38,6 +48,37 @@ export class AgentCommandExecutor {
       };
     }
 
-    return command.execute(parsed.args, this.host);
+    return command.execute(parsed.args, this.application);
   }
+}
+
+function createAgentCommands(
+  services?: ReviewCommandServices,
+): AgentCommand[] {
+  let commands: AgentCommand[] = [];
+  commands = [
+    ...createCoreCommands(() => commands.map((command) => command.definition)),
+    createRevertCommand(),
+    createModeCommand(),
+    createSettingsCommand(),
+    createSessionCommand(),
+    ...createReviewCommands(services),
+  ];
+  return commands;
+}
+
+function parseCommandInput(input: string): ParsedCommandInput | null {
+  if (!input.startsWith("/")) return null;
+
+  const commandText = input.slice(1).trimStart();
+  const firstWhitespace = commandText.search(/\s/);
+  const name =
+    firstWhitespace === -1
+      ? commandText.toLowerCase()
+      : commandText.slice(0, firstWhitespace).toLowerCase();
+  const argText =
+    firstWhitespace === -1 ? "" : commandText.slice(firstWhitespace).trim();
+  const args = argText ? argText.split(/\s+/) : [];
+
+  return { name, args };
 }

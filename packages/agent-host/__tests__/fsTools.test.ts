@@ -17,7 +17,8 @@ import {
   PLAN_MODE_BLOCKED_MESSAGE,
   type ToolContext,
 } from "@excelsior/agent-host/testing/tools";
-import { questionBus } from "@excelsior/agent-host/testing/runtime";
+import { createBlockingPromptBus } from "@excelsior/agent-host/testing/runtime";
+import type { AskQuestionRequest, AskQuestionResponse } from "@excelsior/core";
 
 describe("tool authorization policy", () => {
   it("denies missing capabilities with a stable message", async () => {
@@ -128,6 +129,7 @@ describe("askQuestion tool", () => {
 
   it("resolves as cancelled when the run aborts while waiting", async () => {
     const abort = new AbortController();
+    const questionBus = createBlockingPromptBus<AskQuestionRequest, AskQuestionResponse>();
     const requestSeen = new Promise<void>((resolve) => {
       const unsubscribe = questionBus.on("request", () => {
         unsubscribe();

@@ -4,10 +4,9 @@ import {
   resetDefaultAgentHost,
 } from "@excelsior/agent-host";
 import { resetDb } from "@excelsior/agent-host/testing/persistence";
-import {
-  confirmBus,
-  questionBus,
-} from "@excelsior/agent-host/testing/runtime";
+import { createBlockingPromptBus } from "@excelsior/agent-host/testing/runtime";
+import type { ConfirmPromptBus, QuestionPromptBus } from "@excelsior/agent-host/testing/runtime";
+import type { AskQuestionRequest, AskQuestionResponse, ConfirmRequest, ConfirmResponse } from "@excelsior/core";
 
 describe("LocalAgentHost", () => {
   beforeEach(() => {
@@ -62,7 +61,8 @@ describe("LocalAgentHost", () => {
   });
 
   it("keeps tool confirmation state behind the host", () => {
-    const host = new LocalAgentHost();
+    const confirmBus = createBlockingPromptBus<ConfirmRequest, ConfirmResponse>();
+    const host = new LocalAgentHost({ confirmBus });
 
     confirmBus.emit("request", {
       callId: "call_1",
@@ -87,7 +87,8 @@ describe("LocalAgentHost", () => {
   });
 
   it("notifies subscribers when confirmation state changes", () => {
-    const host = new LocalAgentHost();
+    const confirmBus = createBlockingPromptBus<ConfirmRequest, ConfirmResponse>();
+    const host = new LocalAgentHost({ confirmBus });
     const listener = vi.fn();
     host.subscribe(listener);
 
@@ -116,7 +117,8 @@ describe("LocalAgentHost", () => {
   });
 
   it("auto-approves future confirmations after approve all", async () => {
-    const host = new LocalAgentHost();
+    const confirmBus = createBlockingPromptBus<ConfirmRequest, ConfirmResponse>();
+    const host = new LocalAgentHost({ confirmBus });
     const responses: Array<{ callId: string; approved: boolean }> = [];
     const unsubscribeResponse = confirmBus.on("response", (response) => {
       responses.push(response);
@@ -137,7 +139,8 @@ describe("LocalAgentHost", () => {
   });
 
   it("keeps pending question state behind the host", async () => {
-    const host = new LocalAgentHost();
+    const questionBus = createBlockingPromptBus<AskQuestionRequest, AskQuestionResponse>();
+    const host = new LocalAgentHost({ questionBus });
 
     questionBus.emit("request", {
       callId: "question_1",
@@ -168,7 +171,8 @@ describe("LocalAgentHost", () => {
   });
 
   it("notifies subscribers when pending question state changes", async () => {
-    const host = new LocalAgentHost();
+    const questionBus = createBlockingPromptBus<AskQuestionRequest, AskQuestionResponse>();
+    const host = new LocalAgentHost({ questionBus });
     const listener = vi.fn();
     host.subscribe(listener);
 

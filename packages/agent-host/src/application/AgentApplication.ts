@@ -3,23 +3,19 @@ import type {
   CommandResult,
   Session,
 } from "@excelsior/core";
-import { SessionManager } from "../sessionManager.js";
+import { SessionManager, type AgentSessionStorage } from "../sessionManager.js";
 import { createSubAgentEventSink } from "../runtime/subAgentEventSink.js";
 import type { SubAgentEventSink } from "../runtime/subAgentEventSink.js";
 import { subscribeSubAgentNotifications } from "./turns/subAgentNotifications.js";
 import { ProjectionPolicy } from "./projection/ProjectionPolicy.js";
 import { RevertController, type RevertSessionCoordinator } from "./revert/RevertController.js";
-import {
-  SessionStorageCoordinator,
-  type AgentSessionStorage,
-} from "./sessions/SessionStorage.js";
 import { AgentStateStore } from "./state/AgentStateStore.js";
 import { TurnLifecycle } from "./turns/TurnLifecycle.js";
 import {
   defaultRunRecorder,
   type RunRecorder,
 } from "../persistence/runRecorder.js";
-import { storageEngine } from "../persistence/storageEngine.js";
+import { storageEngine as defaultStorageEngine } from "../persistence/storageEngine.js";
 import type {
   AgentApplicationOptions,
   ChatSessionState,
@@ -42,10 +38,11 @@ export class AgentApplication implements RevertSessionCoordinator {
     this.recorder = options?.recorder ?? defaultRunRecorder;
     this.sessions =
       options?.sessionStorage ??
-      new SessionStorageCoordinator({
-        sessions: new SessionManager(workspaceId, storageEngine),
-        recorder: this.recorder,
-      });
+      new SessionManager(
+        workspaceId,
+        options?.storageEngine ?? defaultStorageEngine,
+        this.recorder,
+      );
 
     this.projection = new ProjectionPolicy();
     this.subAgentEvents = createSubAgentEventSink();
@@ -54,11 +51,6 @@ export class AgentApplication implements RevertSessionCoordinator {
       this.projection,
     );
 
-    const turnLifecycleDeps = {
-      ...options?.turnLifecycle,
-      turnTransactions: options?.turnTransactions,
-    };
-
     this.turns = new TurnLifecycle({
       state: this.state,
       projection: this.projection,
@@ -66,7 +58,9 @@ export class AgentApplication implements RevertSessionCoordinator {
       subAgentEvents: this.subAgentEvents,
       sessionStorage: this.sessions,
       appendFinalEvents: (events) => this.state.appendPersistedEvents(events),
-      dependencies: turnLifecycleDeps,
+      dependencies: options?.turnLifecycle,
+      confirmBus: options?.confirmBus,
+      questionBus: options?.questionBus,
     });
     this.revert = new RevertController(
       this.state,
