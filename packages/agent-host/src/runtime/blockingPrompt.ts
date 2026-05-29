@@ -3,6 +3,15 @@ import {
   createChannelBus,
   type Bus,
 } from "@excelsior/run-runtime";
+import type {
+  ConfirmRequest,
+  ConfirmResponse,
+  AskQuestionRequest,
+  AskQuestionResponse,
+} from "@excelsior/core";
+
+export type { ConfirmRequest, ConfirmResponse };
+
 
 export type BlockingPromptRequest = { callId: string };
 export type BlockingPromptResponse = { callId: string };
@@ -19,6 +28,13 @@ export type BlockingPromptBus<
   TRequest extends BlockingPromptRequest,
   TResponse extends BlockingPromptResponse,
 > = Bus<BlockingPromptEvents<TRequest, TResponse>>;
+
+export type ConfirmEvents = BlockingPromptEvents<ConfirmRequest, ConfirmResponse>;
+export type ConfirmPromptBus = BlockingPromptBus<ConfirmRequest, ConfirmResponse>;
+
+export type QuestionEvents = BlockingPromptEvents<AskQuestionRequest, AskQuestionResponse>;
+export type QuestionPromptBus = BlockingPromptBus<AskQuestionRequest, AskQuestionResponse>;
+
 
 export function createBlockingPromptBus<
   TRequest extends BlockingPromptRequest,

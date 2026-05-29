@@ -22,8 +22,10 @@ export interface ChatSessionState {
   mode: AgentMode;
 }
 
-import type { ConfirmPromptBus } from "../runtime/confirmTypes.js";
-import type { QuestionPromptBus } from "../runtime/questionTypes.js";
+import type {
+  ConfirmPromptBus,
+  QuestionPromptBus,
+} from "../runtime/blockingPrompt.js";
 
 export interface AgentApplicationOptions {
   sessionStorage?: AgentSessionStorage;

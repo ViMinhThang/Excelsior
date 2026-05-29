@@ -3,21 +3,15 @@ import { AgentRun } from "../../runtime/agentRun.js";
 import { AgentEventDataMap } from "../../runtime/events.js";
 import { createToolContext, ToolContext } from "../../tooling/context.js";
 import type { AgentMode, AgentMessage } from "@excelsior/core";
-import type { ConfirmPromptBus } from "../../runtime/confirmTypes.js";
-import type { QuestionPromptBus } from "../../runtime/questionTypes.js";
+import type { ConfirmPromptBus, QuestionPromptBus } from "../../runtime/blockingPrompt.js";
 import {
   defaultRunRecorder,
   type RunRecorder,
 } from "../../persistence/runRecorder.js";
 import { createSubAgentEventSink, SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { ERROR, PERSISTENCE_ERROR, RUN_START } from "../../runtime/eventNames.js";
-import {
-  streamAgentResponse as defaultStreamAgentResponse,
-  type StreamCapableAgent,
-} from "../../runtime/agentStream.js";
+import { StreamCapableAgent } from "../../runtime/events.js";
 import { TurnTransactionCoordinator } from "./TurnTransaction.js";
-
-export type AgentResponseStreamer = typeof defaultStreamAgentResponse;
 
 export interface RunContext {
   ctx: ToolContext;
@@ -36,7 +30,6 @@ export interface RunSessionConfig {
   subAgentEvents?: SubAgentEventSink;
   mode?: AgentMode;
   workspaceRoot?: string;
-  streamAgentResponse?: AgentResponseStreamer;
   turnTransactions?: TurnTransactionCoordinator;
   confirmBus?: ConfirmPromptBus;
   questionBus?: QuestionPromptBus;
@@ -90,8 +83,8 @@ class RunSession {
 
     const baseHandle = this.run.start({
       execute: async ({ signal, emit }) => {
-        await (this.config.streamAgentResponse ?? defaultStreamAgentResponse)({
-          agent: this.config.createAgent(runCtx),
+        const agent = this.config.createAgent(runCtx);
+        await agent.stream({
           messages: this.config.messages,
           signal,
           emit,

@@ -6,9 +6,11 @@ import type {
   ConfirmRequest,
   ConfirmResponse,
 } from "@excelsior/core";
-import type { ConfirmPromptBus } from "../runtime/confirmTypes.js";
-import type { QuestionPromptBus } from "../runtime/questionTypes.js";
-import { requestBlockingPrompt } from "../runtime/blockingPrompt.js";
+import {
+  requestBlockingPrompt,
+  type ConfirmPromptBus,
+  type QuestionPromptBus,
+} from "../runtime/blockingPrompt.js";
 
 export type ToolCapability =
   | "fs:read"

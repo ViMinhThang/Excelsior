@@ -21,7 +21,7 @@ export type {
   TurnLifecycleDependencies,
   TurnLifecycleOptions,
 } from "../application/turns/TurnLifecycle.js";
-export type { AgentFactory } from "../agent/agentFactory.js";
+export type { CreateAgentFunction } from "../application/turns/TurnLifecycle.js";
 export type {
   TurnRevertResult,
   TurnTransactionCoordinatorOptions,

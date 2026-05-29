@@ -7,6 +7,7 @@ import { createRevertCommand } from "./revertCommand.js";
 import { createSessionCommand } from "./sessionCommands.js";
 import { createSettingsCommand } from "./settingsCommands.js";
 import type { AgentCommand, AgentCommandApplication, ReviewCommandServices } from "./types.js";
+import { SkillsManager } from "../agent/skills/SkillsManager.js";
 
 export interface AgentCommandExecutorOptions {
   application: AgentCommandApplication;
@@ -24,7 +25,7 @@ export class AgentCommandExecutor {
 
   constructor(options: AgentCommandExecutorOptions) {
     this.application = options.application;
-    this.commands = createAgentCommands(options.services);
+    this.commands = createAgentCommands(options.services, this.application.workspaceRoot);
   }
 
   getDefinitions(): CommandDefinition[] {
@@ -54,8 +55,44 @@ export class AgentCommandExecutor {
 
 function createAgentCommands(
   services?: ReviewCommandServices,
+  workspaceRoot?: string,
 ): AgentCommand[] {
   let commands: AgentCommand[] = [];
+
+  const skillCommands: AgentCommand[] = [];
+  if (workspaceRoot) {
+    const skillsManager = new SkillsManager(workspaceRoot);
+    skillsManager.discoverSkills();
+    const skills = skillsManager.getSkills();
+    for (const skill of skills) {
+      const commandName = skill.name.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+      skillCommands.push({
+        definition: {
+          name: commandName,
+          category: "skills",
+          description: skill.shortDescription,
+          usage: `/${commandName}`,
+        },
+        execute: async (_args, application) => {
+          const body = skillsManager.getSkillBody(skill.name);
+          if (!body) {
+            return {
+              handled: true,
+              message: `Skill ${skill.name} not found or disabled.`,
+              clearInput: true,
+            };
+          }
+          application.send(body, { displayContent: `Running skill: ${skill.name}` });
+          return {
+            handled: true,
+            message: `Starting skill: ${skill.name}...`,
+            clearInput: true,
+          };
+        },
+      });
+    }
+  }
+
   commands = [
     ...createCoreCommands(() => commands.map((command) => command.definition)),
     createRevertCommand(),
@@ -63,6 +100,7 @@ function createAgentCommands(
     createSettingsCommand(),
     createSessionCommand(),
     ...createReviewCommands(services),
+    ...skillCommands,
   ];
   return commands;
 }

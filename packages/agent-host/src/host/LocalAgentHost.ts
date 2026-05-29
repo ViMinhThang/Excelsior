@@ -8,14 +8,16 @@ import type {
 import { AgentApplication } from "../application/AgentApplication.js";
 import { AgentCommandExecutor } from "../commands.js";
 import { createAgentClientState } from "./clientState.js";
-import { HostConfirmationController } from "./confirmationController.js";
-import { HostQuestionController } from "./questionController.js";
+import { HostBlockingPromptController } from "./BlockingPromptController.js";
 import { SettingsStore } from "../persistence/SettingsStore.js";
 import { AgentHostIntentDispatcher } from "./dispatcher.js";
-import { createBlockingPromptBus } from "../runtime/blockingPrompt.js";
-import type { ConfirmPromptBus } from "../runtime/confirmTypes.js";
-import type { QuestionPromptBus } from "../runtime/questionTypes.js";
-import type { ConfirmRequest, ConfirmResponse } from "../runtime/confirmTypes.js";
+import {
+  createBlockingPromptBus,
+  type ConfirmPromptBus,
+  type QuestionPromptBus,
+  type ConfirmRequest,
+  type ConfirmResponse,
+} from "../runtime/blockingPrompt.js";
 import type { AskQuestionRequest, AskQuestionResponse } from "@excelsior/core";
 import type { StorageEngine } from "../persistence/storageEngine.js";
 import type { RunRecorder } from "../persistence/runRecorder.js";
@@ -23,13 +25,14 @@ import type { RunRecorder } from "../persistence/runRecorder.js";
 export class LocalAgentHost implements AgentHost {
   private readonly application: AgentApplication;
   private readonly settings: SettingsStore;
-  private readonly confirmations: HostConfirmationController;
-  private readonly questions: HostQuestionController;
+  private readonly confirmations: HostBlockingPromptController<ConfirmRequest, ConfirmResponse>;
+  private readonly questions: HostBlockingPromptController<AskQuestionRequest, AskQuestionResponse>;
   private readonly commandExecutor: AgentCommandExecutor;
   private readonly dispatcher: AgentHostIntentDispatcher;
   private readonly listeners = new Set<() => void>();
   private snapshot: AgentClientState | null = null;
   private readonly unsubscribeApplication: () => void;
+  private autoApproveConfirmations = false;
 
   constructor(options: {
     workspaceId?: string;
@@ -52,11 +55,15 @@ export class LocalAgentHost implements AgentHost {
         recorder: options.recorder,
       });
     this.settings = options.settingsStore ?? new SettingsStore();
-    this.confirmations = new HostConfirmationController(
+    this.confirmations = new HostBlockingPromptController(
       confirmBus,
       () => this.invalidateAndNotify(),
+      (request) =>
+        this.autoApproveConfirmations
+          ? { callId: request.callId, approved: true }
+          : null,
     );
-    this.questions = new HostQuestionController(
+    this.questions = new HostBlockingPromptController(
       questionBus,
       () => this.invalidateAndNotify(),
     );
@@ -66,8 +73,13 @@ export class LocalAgentHost implements AgentHost {
     this.dispatcher = new AgentHostIntentDispatcher({
       application: this.application,
       settings: this.settings,
-      confirmations: this.confirmations,
-      questions: this.questions,
+      confirmations: {
+        respond: (callId, approved) => this.confirmations.respond({ callId, approved }),
+        approveAll: () => this.approveAllConfirmations(),
+      },
+      questions: {
+        respond: (response) => this.questions.respond(response),
+      },
       commandExecutor: this.commandExecutor,
     });
     this.unsubscribeApplication = this.application.subscribe(() =>
@@ -102,6 +114,16 @@ export class LocalAgentHost implements AgentHost {
 
   async dispatch(intent: AgentHostIntent): Promise<AgentHostDispatchResult> {
     return this.dispatcher.dispatch(intent);
+  }
+
+  approveAllConfirmations(): void {
+    this.autoApproveConfirmations = true;
+    if (this.confirmations.pending) {
+      this.confirmations.respond({
+        callId: this.confirmations.pending.callId,
+        approved: true,
+      });
+    }
   }
 
   dispose(): void {

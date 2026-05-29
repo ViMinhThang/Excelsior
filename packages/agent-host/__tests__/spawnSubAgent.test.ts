@@ -27,14 +27,7 @@ const captured = {
 
 function createSpawnDependencies() {
   const noopAgent: StreamCapableAgent = {
-    stream: async () => {},
-  };
-  return {
-    createAgent: vi.fn((_instructions, _extraTools, ctx) => {
-      captured.ctx = ctx;
-      return noopAgent;
-    }),
-    streamAgentResponse: vi.fn(async ({ emit, signal }) => {
+    stream: vi.fn(async ({ emit, signal }) => {
       captured.signal = signal;
       if (captured.emitText) {
         emit("text-delta", { delta: "child output" });
@@ -44,6 +37,12 @@ function createSpawnDependencies() {
         if (signal.aborted) resolve();
         signal.addEventListener("abort", () => resolve(), { once: true });
       });
+    }),
+  };
+  return {
+    createAgent: vi.fn((_instructions, _extraTools, ctx) => {
+      captured.ctx = ctx;
+      return noopAgent;
     }),
   };
 }

@@ -1,20 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   PERSISTENCE_ERROR,
-  streamAgentResponse,
   type AgentEventEmitter,
-  type AgentResponseStreamer,
   type AnyAgentEvent,
   type RunRecorder,
   type StreamCapableAgent,
 } from "@excelsior/agent-host/testing/runtime";
 
-const streamTextDelta: AgentResponseStreamer = async ({ emit }) => {
+const streamTextDelta = async ({ emit }: { emit: AgentEventEmitter }) => {
   emit("text-delta", { delta: "hello" });
-};
-
-const noopAgent: StreamCapableAgent = {
-  stream: async () => {},
 };
 
 function fakeRecorder() {
@@ -53,9 +47,8 @@ describe("run recorder integration", () => {
     const result = createRunSession({
       sessionId: "ses_test",
       messages: [{ role: "user", content: "hello" }],
-      createAgent: () => noopAgent,
+      createAgent: () => ({ stream: streamTextDelta }),
       recorder,
-      streamAgentResponse: streamTextDelta,
     });
 
     await result.handle.completion;
@@ -78,8 +71,7 @@ describe("run recorder integration", () => {
       },
     };
 
-    await streamAgentResponse({
-      agent,
+    await agent.stream({
       messages: [],
       signal: new AbortController().signal,
       emit: ((type, data, overrides) => {
@@ -125,9 +117,8 @@ describe("run recorder integration", () => {
     const result = createRunSession({
       sessionId: "ses_test",
       messages: [{ role: "user", content: "hello" }],
-      createAgent: () => noopAgent,
+      createAgent: () => ({ stream: streamTextDelta }),
       recorder,
-      streamAgentResponse: streamTextDelta,
     });
 
     const completion = await result.handle.completion;
@@ -155,11 +146,12 @@ describe("run recorder integration", () => {
     const result = createRunSession({
       sessionId: "ses_test",
       messages: [{ role: "user", content: "hello" }],
-      createAgent: () => noopAgent,
+      createAgent: () => ({
+        stream: async () => {
+          throw new Error("model exploded");
+        },
+      }),
       recorder,
-      streamAgentResponse: async () => {
-        throw new Error("model exploded");
-      },
     });
 
     await result.handle.completion;

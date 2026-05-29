@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Session } from "@excelsior/core";
 import {
   AgentStateStore,
-  type AgentFactory,
+  type CreateAgentFunction,
   ProjectionPolicy,
   TurnLifecycle,
   type AgentSessionStorage,
@@ -78,26 +78,24 @@ function testSession(): Session {
 }
 
 function createControlledAgentFactory(): {
-  agentFactory: AgentFactory;
+  createAgent: CreateAgentFunction & ReturnType<typeof vi.fn>;
   streams: ControlledAgentStream[];
 } {
   const streams: ControlledAgentStream[] = [];
-  const agentFactory: AgentFactory = {
-    create: vi.fn((runCtx) => {
-      let resolve!: () => void;
-      const completion = new Promise<void>((finish) => {
-        resolve = finish;
-      });
-      streams.push({ run: runCtx.run, resolve });
-      return {
-        stream: async () => {
-          await completion;
-        },
-      };
-    }),
-  };
+  const createAgent = vi.fn((runCtx) => {
+    let resolve!: () => void;
+    const completion = new Promise<void>((finish) => {
+      resolve = finish;
+    });
+    streams.push({ run: runCtx.run, resolve });
+    return {
+      stream: async () => {
+        await completion;
+      },
+    };
+  });
 
-  return { agentFactory, streams };
+  return { createAgent, streams };
 }
 
 async function waitForStream(
@@ -125,7 +123,7 @@ function createLifecycle(input: {
     sessionStorage: createSessionStorage(),
     appendFinalEvents: input.appendFinalEvents ?? vi.fn(),
     dependencies: {
-      agentFactory: controls.agentFactory,
+      createAgent: controls.createAgent,
     },
   });
   return { lifecycle, controls };

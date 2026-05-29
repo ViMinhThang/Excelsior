@@ -3,7 +3,6 @@ import { z } from "zod";
 import { createAgent as defaultCreateAgent } from "../agent.js";
 import { AgentRun } from "../../runtime/agentRun.js";
 import { AnyAgentEvent } from "../../runtime/events.js";
-import { streamAgentResponse as defaultStreamAgentResponse } from "../../runtime/agentStream.js";
 import { projectSubAgentEvents } from "../../projection/subAgentProjection.js";
 import type { RunRecorder } from "../../persistence/runRecorder.js";
 import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
@@ -12,7 +11,6 @@ import type { ToolContext } from "../../tooling/context.js";
 
 export interface SpawnSubAgentToolDependencies {
   createAgent?: typeof defaultCreateAgent;
-  streamAgentResponse?: typeof defaultStreamAgentResponse;
 }
 
 function setupChildEventBus(
@@ -126,8 +124,7 @@ export function createSpawnSubAgentTool(
 
       let terminalError = "";
       try {
-        await (dependencies.streamAgentResponse ?? defaultStreamAgentResponse)({
-          agent,
+        await agent.stream({
           messages: [{ role: "user", content: instruction }],
           signal: childRun.abortSignal,
           emit: childRun.emit.bind(childRun),
