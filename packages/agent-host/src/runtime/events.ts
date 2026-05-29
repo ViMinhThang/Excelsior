@@ -7,6 +7,7 @@ import {
   CHILD_RUN_ATTACHED,
   PERSISTENCE_ERROR,
   TURN_COMPLETE,
+  HISTORY_COMPACTED,
 } from "./eventNames.js";
 
 export const EVENT_SCHEMA_VERSION = 1;
@@ -15,6 +16,11 @@ export type AgentEventDataMap = {
   [RUN_START]: Record<string, never>;
   [RUN_END]: { cancelled: boolean };
   [TURN_COMPLETE]: { runId: string };
+  [HISTORY_COMPACTED]: {
+    summary: string;
+    compactedEventCount: number;
+    triggerMode: "manual" | "auto";
+  };
   [CHILD_RUN_ATTACHED]: {
     childRunId: string;
     parentToolCallId: string;

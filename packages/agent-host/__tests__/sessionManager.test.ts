@@ -21,7 +21,7 @@ function createRecorder(overrides: Partial<RunRecorder> = {}): RunRecorder {
     deleteSessionEvents: vi.fn(async () => {}),
     deleteAllSessionEvents: vi.fn(async () => {}),
     ...overrides,
-  };
+  } as any;
 }
 
 describe("SessionManager", () => {

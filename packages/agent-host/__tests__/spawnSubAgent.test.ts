@@ -58,7 +58,7 @@ describe("spawnSubAgent tool safety context", () => {
   function fakeRecorder() {
     const events: AnyAgentEvent[] = [];
     const recorder: RunRecorder = {
-      async recordEvent(_sessionId, event) {
+      async recordEvent(_sessionId: string, event: AnyAgentEvent) {
         events.push(event);
       },
       async recordTurnComplete() {},
@@ -76,7 +76,7 @@ describe("spawnSubAgent tool safety context", () => {
       },
       async deleteSessionEvents() {},
       async deleteAllSessionEvents() {},
-    };
+    } as any;
     return { recorder, events };
   }
 

@@ -6,6 +6,7 @@ import { createReviewCommands } from "./reviewCommands.js";
 import { createRevertCommand } from "./revertCommand.js";
 import { createSessionCommand } from "./sessionCommands.js";
 import { createSettingsCommand } from "./settingsCommands.js";
+import { createCompactCommand } from "./compactCommand.js";
 import type { AgentCommand, AgentCommandApplication, ReviewCommandServices } from "./types.js";
 import { SkillsManager } from "../agent/skills/SkillsManager.js";
 
@@ -99,6 +100,7 @@ function createAgentCommands(
     createModeCommand(),
     createSettingsCommand(),
     createSessionCommand(),
+    createCompactCommand(),
     ...createReviewCommands(services),
     ...skillCommands,
   ];

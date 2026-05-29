@@ -15,10 +15,10 @@ function fakeRecorder() {
   const events: AnyAgentEvent[] = [];
   const checkpoints: Array<{ sessionId: string; runId: string; sequence: number }> = [];
   const recorder: RunRecorder = {
-    async recordEvent(_sessionId, event) {
+    async recordEvent(_sessionId: string, event: AnyAgentEvent) {
       events.push(event);
     },
-    async recordTurnComplete(sessionId, runId, sequence) {
+    async recordTurnComplete(sessionId: string, runId: string, sequence: number) {
       checkpoints.push({ sessionId, runId, sequence });
     },
     async loadCompletedEvents() {
@@ -35,7 +35,7 @@ function fakeRecorder() {
     },
     async deleteSessionEvents() {},
     async deleteAllSessionEvents() {},
-  };
+  } as any;
   return { recorder, events, checkpoints };
 }
 
@@ -112,7 +112,7 @@ describe("run recorder integration", () => {
       },
       async deleteSessionEvents() {},
       async deleteAllSessionEvents() {},
-    };
+    } as any;
 
     const result = createRunSession({
       sessionId: "ses_test",

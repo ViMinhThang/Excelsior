@@ -1,6 +1,6 @@
 import { AnyAgentEvent } from "../runtime/events.js";
 import { defineReadModel, projectEvents, type ReadModel } from "@excelsior/projection";
-import { CHILD_RUN_ATTACHED, RUN_START, RUN_END, USER_INPUT, TEXT_DELTA, TOOL_CALL_END, TOOL_CALL_START, ERROR, PERSISTENCE_ERROR, TURN_COMPLETE } from "../runtime/eventNames.js";
+import { CHILD_RUN_ATTACHED, RUN_START, RUN_END, USER_INPUT, TEXT_DELTA, TOOL_CALL_END, TOOL_CALL_START, ERROR, PERSISTENCE_ERROR, TURN_COMPLETE, HISTORY_COMPACTED } from "../runtime/eventNames.js";
 import type { AgentMessage } from "@excelsior/core";
 
 export interface AIHistoryProjectionState {
@@ -74,6 +74,17 @@ export const AI_HISTORY_MODEL: ReadModel<AIHistoryProjectionState, AnyAgentEvent
       case ERROR: {
         const flushed = flushPendingAssistant(state);
         return appendMessage(flushed, { role: "assistant", content: `[Error] ${event.data.message}` });
+      }
+      case HISTORY_COMPACTED: {
+        return {
+          messages: [
+            {
+              role: "system",
+              content: `Previous conversation compacted for context. Chronological summary of earlier turns:\n\n${event.data.summary}`,
+            },
+          ],
+          pendingAssistant: "",
+        };
       }
       case TOOL_CALL_START:
       case CHILD_RUN_ATTACHED:

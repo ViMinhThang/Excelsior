@@ -6,7 +6,7 @@ import type {
   Session,
 } from "@excelsior/client";
 import type { AgentApplication } from "../application/AgentApplication.js";
-import type { SettingsStore } from "../persistence/SettingsStore.js";
+import type { SettingsStore } from "@excelsior/agent-storage";
 import type { AskQuestionResponse } from "@excelsior/core";
 import type { AgentCommandExecutor } from "../commands.js";
 

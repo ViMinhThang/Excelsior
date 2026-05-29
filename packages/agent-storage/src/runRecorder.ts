@@ -8,38 +8,33 @@ import {
 } from "fs/promises";
 import { existsSync } from "fs";
 import { join } from "path";
-import { AnyAgentEvent, makeEvent } from "../runtime/events.js";
-import { TURN_COMPLETE } from "../runtime/eventNames.js";
+import type {
+  AnyAgentEvent,
+  RunEventStore,
+  TurnCheckpointStore,
+  LastCompletedTurn,
+  DropLastCompletedTurnResult,
+} from "./ports.js";
 
-export interface LastCompletedTurn {
-  runId: string;
-  eventCount: number;
-  checkpointIndex: number;
-}
+const TURN_COMPLETE = "turn-complete";
 
-export interface DropLastCompletedTurnResult {
-  dropped: boolean;
-  runId?: string;
-  removedEvents: number;
-  reason?: "no-completed-turn" | "latest-turn-mismatch";
-}
-
-export interface RunRecorder {
-  recordEvent(sessionId: string, event: AnyAgentEvent): Promise<void>;
-  recordTurnComplete(
-    sessionId: string,
-    runId: string,
-    sequence: number,
-  ): Promise<void>;
-  loadCompletedEvents(sessionId: string): Promise<AnyAgentEvent[]>;
-  loadRawEvents(sessionId: string): Promise<AnyAgentEvent[]>;
-  getLastCompletedTurn(sessionId: string): Promise<LastCompletedTurn | null>;
-  dropLastCompletedTurn(
-    sessionId: string,
-    expectedRunId?: string,
-  ): Promise<DropLastCompletedTurnResult>;
-  deleteSessionEvents(sessionId: string): Promise<void>;
-  deleteAllSessionEvents(): Promise<void>;
+function makeEvent(
+  runId: string,
+  type: string,
+  data: any,
+  sequence: number,
+): AnyAgentEvent {
+  return {
+    id: `evt_chk_${Math.random().toString(36).substring(2, 11)}`,
+    runId,
+    sequence,
+    type,
+    version: 1,
+    causationId: "",
+    correlationId: runId,
+    timestamp: new Date().toISOString(),
+    data,
+  };
 }
 
 function timestampMs(event: AnyAgentEvent): number {
@@ -74,7 +69,7 @@ function belongsToCompletedRun(
   return (
     completedRunIds.has(event.runId) ||
     (!!event.parentEventId && completedRunIds.has(event.parentEventId)) ||
-    completedRunIds.has(event.correlationId)
+    (!!event.correlationId && completedRunIds.has(event.correlationId))
   );
 }
 
@@ -109,7 +104,7 @@ function findLastCompletedTurn(
   };
 }
 
-export class JsonlRunRecorder implements RunRecorder {
+export class JsonlRunRecorder implements RunEventStore, TurnCheckpointStore {
   private readonly appendQueues = new Map<string, Promise<void>>();
 
   constructor(
@@ -155,7 +150,7 @@ export class JsonlRunRecorder implements RunRecorder {
   }
 
   private async loadCompletedReplay(sessionId: string): Promise<AnyAgentEvent[]> {
-    const all = await this.loadRawEvents(sessionId);
+    const all = await this.load(sessionId);
     const checkpoints = all.filter((event) => event.type === TURN_COMPLETE);
 
     if (checkpoints.length === 0) return sortEventsForReplay(all);
@@ -170,24 +165,24 @@ export class JsonlRunRecorder implements RunRecorder {
     return sortEventsForReplay(completedEvents);
   }
 
-  recordEvent(sessionId: string, event: AnyAgentEvent): Promise<void> {
+  append(sessionId: string, event: AnyAgentEvent): Promise<void> {
     return this.appendRecordedEvent(sessionId, event);
   }
 
-  recordTurnComplete(
+  completeTurn(
     sessionId: string,
     runId: string,
     sequence: number,
   ): Promise<void> {
     const checkpoint = makeEvent(runId, TURN_COMPLETE, { runId }, sequence);
-    return this.appendRecordedEvent(sessionId, checkpoint as AnyAgentEvent);
+    return this.appendRecordedEvent(sessionId, checkpoint);
   }
 
   async loadCompletedEvents(sessionId: string): Promise<AnyAgentEvent[]> {
     return this.loadCompletedReplay(sessionId);
   }
 
-  async loadRawEvents(sessionId: string): Promise<AnyAgentEvent[]> {
+  async load(sessionId: string): Promise<AnyAgentEvent[]> {
     const path = this.filePath(sessionId);
     try {
       const raw = await readFile(path, "utf-8");
@@ -204,7 +199,7 @@ export class JsonlRunRecorder implements RunRecorder {
     sessionId: string,
   ): Promise<LastCompletedTurn | null> {
     await this.waitForSessionQueue(sessionId);
-    return findLastCompletedTurn(await this.loadRawEvents(sessionId));
+    return findLastCompletedTurn(await this.load(sessionId));
   }
 
   async dropLastCompletedTurn(
@@ -212,7 +207,7 @@ export class JsonlRunRecorder implements RunRecorder {
     expectedRunId?: string,
   ): Promise<DropLastCompletedTurnResult> {
     await this.waitForSessionQueue(sessionId);
-    const events = await this.loadRawEvents(sessionId);
+    const events = await this.load(sessionId);
     const latest = findLastCompletedTurn(events);
 
     if (!latest) {
@@ -246,14 +241,14 @@ export class JsonlRunRecorder implements RunRecorder {
     };
   }
 
-  async deleteSessionEvents(sessionId: string): Promise<void> {
+  async delete(sessionId: string): Promise<void> {
     await this.waitForSessionQueue(sessionId);
     try {
       await unlink(this.filePath(sessionId));
     } catch {}
   }
 
-  async deleteAllSessionEvents(): Promise<void> {
+  async deleteAll(): Promise<void> {
     await Promise.all(
       [...this.appendQueues.values()].map((queue) => queue.catch(() => {})),
     );
@@ -265,6 +260,39 @@ export class JsonlRunRecorder implements RunRecorder {
         .map((file) => unlink(join(this.sessionsDir, file)).catch(() => {})),
     );
   }
+
+  deleteSessionEvents(sessionId: string): Promise<void> {
+    return this.delete(sessionId);
+  }
+
+  deleteAllSessionEvents(): Promise<void> {
+    return this.deleteAll();
+  }
+
+  recordEvent(sessionId: string, event: AnyAgentEvent): Promise<void> {
+    return this.append(sessionId, event);
+  }
+
+  recordTurnComplete(
+    sessionId: string,
+    runId: string,
+    sequence: number,
+  ): Promise<void> {
+    return this.completeTurn(sessionId, runId, sequence);
+  }
+
+  loadRawEvents(sessionId: string): Promise<AnyAgentEvent[]> {
+    return this.load(sessionId);
+  }
 }
 
 export const defaultRunRecorder = new JsonlRunRecorder();
+export type RunRecorder = RunEventStore & TurnCheckpointStore & {
+  loadCompletedEvents(sessionId: string): Promise<AnyAgentEvent[]>;
+  deleteSessionEvents(sessionId: string): Promise<void>;
+  deleteAllSessionEvents(): Promise<void>;
+  recordEvent(sessionId: string, event: AnyAgentEvent): Promise<void>;
+  recordTurnComplete(sessionId: string, runId: string, sequence: number): Promise<void>;
+  loadRawEvents(sessionId: string): Promise<AnyAgentEvent[]>;
+};
+export const defaultRunStore = defaultRunRecorder;

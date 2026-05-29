@@ -12,4 +12,4 @@ export type {
   RunSessionConfig,
   RunSessionResult,
 } from "../application/turns/runSession.js";
-export type { RunRecorder } from "../persistence/runRecorder.js";
+export type { RunRecorder } from "@excelsior/agent-storage";

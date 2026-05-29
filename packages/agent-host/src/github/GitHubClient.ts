@@ -1,6 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import { execFile } from "child_process";
-import { getSetting } from "../persistence/db.js";
+import { getSetting } from "@excelsior/agent-storage";
 import type { ReviewCommandServices } from "../commands/types.js";
 
 export class GitHubClient implements ReviewCommandServices {

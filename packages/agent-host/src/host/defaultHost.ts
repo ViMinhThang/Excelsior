@@ -1,4 +1,4 @@
-import { SettingsStore } from "../persistence/SettingsStore.js";
+import { SettingsStore } from "@excelsior/agent-storage";
 import { LocalAgentHost } from "./LocalAgentHost.js";
 
 let defaultHost: LocalAgentHost | null = null;

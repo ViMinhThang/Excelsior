@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentMessage, Session } from "@excelsior/core";
 import {
   AgentStateStore,
-  type CreateAgentFunction,
+  type AgentFactory,
   ProjectionPolicy,
   TurnLifecycle,
   type AgentSessionStorage,
@@ -40,7 +40,7 @@ function createRecorder(): RunRecorder {
     }),
     deleteSessionEvents: async () => {},
     deleteAllSessionEvents: async () => {},
-  };
+  } as any;
 }
 
 function createSessionStorage(): AgentSessionStorage {
@@ -86,16 +86,18 @@ describe("TurnLifecycle context assembly", () => {
     };
     const recorder = createRecorder();
     let seenMessages: AgentMessage[] = [];
-    let seenRunContext: Parameters<CreateAgentFunction>[0] | undefined;
-    const createAgent: CreateAgentFunction = vi.fn((runCtx) => {
-      seenRunContext = runCtx;
-      return {
-        stream: async ({ messages }: { messages: AgentMessage[] }) => {
-          seenMessages = messages;
-          await new Promise<never>(() => {});
-        },
-      };
-    });
+    let seenRunContext: any = undefined;
+    const agentFactory: AgentFactory = {
+      create: vi.fn((input) => {
+        seenRunContext = input.runContext;
+        return {
+          stream: async ({ messages }: { messages: AgentMessage[] }) => {
+            seenMessages = messages;
+            await new Promise<never>(() => {});
+          },
+        };
+      }),
+    };
     const lifecycle = new TurnLifecycle({
       state,
       projection: new ProjectionPolicy(),
@@ -103,7 +105,7 @@ describe("TurnLifecycle context assembly", () => {
       subAgentEvents,
       sessionStorage: createSessionStorage(),
       appendFinalEvents: vi.fn(),
-      dependencies: { createAgent },
+      dependencies: { agentFactory },
     });
 
     lifecycle.startUserTurn({

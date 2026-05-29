@@ -1,11 +1,11 @@
 import { generateId } from "@excelsior/core";
 import type { Session, Workspace } from "@excelsior/core";
-import type { StorageEngine } from "./persistence/storageEngine.js";
 import type {
+  StorageEngine,
   RunRecorder,
   LastCompletedTurn,
   DropLastCompletedTurnResult,
-} from "./persistence/runRecorder.js";
+} from "@excelsior/agent-storage";
 import type { AnyAgentEvent } from "./runtime/events.js";
 
 export interface AgentSessionStorage {
@@ -119,7 +119,9 @@ export class SessionManager implements AgentSessionStorage {
 
   async loadCurrentSessionEvents(): Promise<AnyAgentEvent[]> {
     const sessionId = this.getCurrentSessionId();
-    return sessionId ? this.recorder.loadCompletedEvents(sessionId) : [];
+    return sessionId
+      ? (await this.recorder.loadCompletedEvents(sessionId)) as AnyAgentEvent[]
+      : [];
   }
 
   async getLastCompletedTurn(sessionId: string): Promise<LastCompletedTurn | null> {

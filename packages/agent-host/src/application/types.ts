@@ -7,8 +7,7 @@ import type {
 } from "@excelsior/core";
 import type { AgentRun } from "../runtime/agentRun.js";
 import type { AnyAgentEvent } from "../runtime/events.js";
-import type { RunRecorder } from "../persistence/runRecorder.js";
-import type { StorageEngine } from "../persistence/storageEngine.js";
+import type { RunRecorder, StorageEngine } from "@excelsior/agent-storage";
 import type { AgentSessionStorage } from "../sessionManager.js";
 import type { TurnLifecycleDependencies } from "./turns/TurnLifecycle.js";
 
