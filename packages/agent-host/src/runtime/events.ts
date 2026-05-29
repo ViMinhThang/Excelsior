@@ -1,5 +1,6 @@
-import type { AnyRunEvent, RunEvent } from "@excelsior/run-runtime";
+import type { AnyRunEvent, RunEvent, RunEventOverrides } from "@excelsior/run-runtime";
 import { makeRunEvent } from "@excelsior/run-runtime";
+import type { AgentMessage } from "@excelsior/core";
 import {
   RUN_START,
   RUN_END,
@@ -58,4 +59,18 @@ export function makeEvent<T extends AgentEventType>(
     eventVersion: EVENT_SCHEMA_VERSION,
     ...overrides,
   });
+}
+
+export type AgentEventEmitter = <T extends AgentEventType>(
+  type: T,
+  data: AgentEventDataMap[T],
+  overrides?: RunEventOverrides,
+) => void;
+
+export interface StreamCapableAgent {
+  stream(input: {
+    messages: AgentMessage[];
+    signal: AbortSignal;
+    emit: AgentEventEmitter;
+  }): Promise<void>;
 }

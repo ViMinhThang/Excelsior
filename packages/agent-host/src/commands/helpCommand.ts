@@ -22,6 +22,10 @@ const HELP_GROUPS = [
     title: "Review",
     category: "review",
   },
+  {
+    title: "Skills",
+    category: "skills",
+  },
 ];
 
 export function formatHelpText(commands: CommandDefinition[]): string {
@@ -34,8 +38,10 @@ export function formatHelpText(commands: CommandDefinition[]): string {
           return `/${command.name} - ${command.description}${usage}`;
         })
         .join("\n");
+      if (!entries) return "";
       return `${group.title}\n${entries}`;
     })
+    .filter(Boolean)
     .join("\n\n");
 
   return `Available commands:\n\n${body}`;

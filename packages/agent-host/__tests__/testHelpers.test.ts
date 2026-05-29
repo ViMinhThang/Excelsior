@@ -32,7 +32,7 @@ describe("test helper fixtures", () => {
   it("creates fake turn lifecycle agent streams with pending completion", async () => {
     const lifecycle = createFakeTurnLifecycle();
     const run = new AgentRun("ses_test");
-    const agent = lifecycle.agentFactory.create({
+    const agent = lifecycle.createAgent({
       ctx: { capabilities: new Set() },
       run,
       childRuns: new Map(),

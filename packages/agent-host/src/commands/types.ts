@@ -7,6 +7,7 @@ import type {
 } from "@excelsior/core";
 
 export interface AgentCommandApplication {
+  readonly workspaceRoot?: string;
   send(content: string, options?: SendOptions): void;
   clear(): void;
   deleteAllSessions(): void | Promise<void>;

@@ -1,10 +1,12 @@
-import { ToolLoopAgent, type ModelMessage } from "ai";
+import { ToolLoopAgent, type ModelMessage, tool } from "ai";
+import { z } from "zod";
+import { SkillsManager } from "./skills/SkillsManager.js";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createFileTools } from "./tools/index.js";
 import { getSetting } from "../persistence/db.js";
 import { buildSystemPrompt } from "./prompt.js";
 import type { ToolContext } from "../tooling/context.js";
-import type { StreamCapableAgent, AgentEventEmitter } from "../runtime/agentStream.js";
+import type { StreamCapableAgent, AgentEventEmitter } from "../runtime/events.js";
 import type { AgentMessage } from "@excelsior/core";
 import {
   StreamPart,
@@ -135,11 +137,38 @@ export function createAgent(
     ? `${systemPrompt}\n\n---\n${instructions}\n---`
     : systemPrompt;
 
+  const skillsManager = new SkillsManager(ctx?.workspaceRoot);
+  skillsManager.discoverSkills();
+  const skills = skillsManager.getSkills();
+
+  const dynamicSkillTools: Record<string, unknown> = {};
+  for (const skill of skills) {
+    const sanitizedName = skill.name.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+    const toolName = `skill_${sanitizedName}`;
+    dynamicSkillTools[toolName] = tool({
+      description: skill.description,
+      inputSchema: z.object({}),
+      execute: async () => {
+        const body = skillsManager.getSkillBody(skill.name);
+        return body || `Skill ${skill.name} not found or disabled.`;
+      },
+    });
+  }
+
+  let dynamicInstructions = finalInstructions;
+  if (skills.length > 0) {
+    const skillsList = skills
+      .map((s) => `- ${s.name}: ${s.description}`)
+      .join("\n");
+    dynamicInstructions += `\n\n---\n## Available Agent Skills\nYou have access to the following specialized engineering and productivity skills. To load the detailed instructions for a skill, execute its corresponding tool \`skill_<name>\` (e.g. \`skill_diagnose\`).\n\n${skillsList}\n---`;
+  }
+
   const agent = new ToolLoopAgent({
     model,
-    instructions: finalInstructions,
+    instructions: dynamicInstructions,
     tools: {
       ...createFileTools(ctx),
+      ...dynamicSkillTools,
       ...extraTools,
     },
   });

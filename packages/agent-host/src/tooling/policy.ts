@@ -1,5 +1,5 @@
 import { PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
-import type { ConfirmRequest } from "../runtime/confirmTypes.js";
+import type { ConfirmRequest } from "../runtime/blockingPrompt.js";
 import type { ToolCapability, ToolContext } from "./context.js";
 
 export type ToolModePolicy = "read" | "write" | "shell";

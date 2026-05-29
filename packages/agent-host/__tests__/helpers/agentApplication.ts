@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 import type { AgentMessage } from "@excelsior/core";
 import type {
-  AgentFactory,
+  CreateAgentFunction,
   AgentSessionStorage,
   TurnLifecycleDependencies,
 } from "@excelsior/agent-host/testing/application";
@@ -108,7 +108,7 @@ export interface FakeAgentStream {
 }
 
 export interface FakeTurnLifecycle extends TurnLifecycleDependencies {
-  agentFactory: AgentFactory & { create: ReturnType<typeof vi.fn> };
+  createAgent: CreateAgentFunction & ReturnType<typeof vi.fn>;
   streams: FakeAgentStream[];
 }
 
@@ -116,33 +116,31 @@ export function createFakeTurnLifecycle(
   onRun?: (run: AgentRun, context: RunContext) => void,
 ): FakeTurnLifecycle {
   const streams: FakeAgentStream[] = [];
-  const agentFactory = {
-    create: vi.fn((runContext: RunContext) => {
-      let resolve!: () => void;
-      let reject!: (error: unknown) => void;
-      const completion = new Promise<void>((finish, fail) => {
-        resolve = finish;
-        reject = fail;
-      });
-      const stream: FakeAgentStream = {
-        run: runContext.run,
-        runContext,
-        messages: null,
-        resolve,
-        reject,
-      };
-      streams.push(stream);
-      onRun?.(runContext.run, runContext);
-      return {
-        stream: async ({ messages }: { messages: AgentMessage[] }) => {
-          stream.messages = messages;
-          await completion;
-        },
-      };
-    }),
-  };
+  const createAgent = vi.fn((runContext: RunContext) => {
+    let resolve!: () => void;
+    let reject!: (error: unknown) => void;
+    const completion = new Promise<void>((finish, fail) => {
+      resolve = finish;
+      reject = fail;
+    });
+    const stream: FakeAgentStream = {
+      run: runContext.run,
+      runContext,
+      messages: null,
+      resolve,
+      reject,
+    };
+    streams.push(stream);
+    onRun?.(runContext.run, runContext);
+    return {
+      stream: async ({ messages }: { messages: AgentMessage[] }) => {
+        stream.messages = messages;
+        await completion;
+      },
+    };
+  });
 
-  return { agentFactory, streams };
+  return { createAgent, streams };
 }
 
 export async function waitForFakeAgentStream(

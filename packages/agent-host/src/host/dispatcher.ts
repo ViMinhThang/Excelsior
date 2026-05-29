@@ -7,8 +7,7 @@ import type {
 } from "@excelsior/client";
 import type { AgentApplication } from "../application/AgentApplication.js";
 import type { SettingsStore } from "../persistence/SettingsStore.js";
-import type { HostConfirmationController } from "./confirmationController.js";
-import type { HostQuestionController } from "./questionController.js";
+import type { AskQuestionResponse } from "@excelsior/core";
 import type { AgentCommandExecutor } from "../commands.js";
 
 type DispatchApplication = Pick<
@@ -29,8 +28,13 @@ type DispatchApplication = Pick<
 export interface AgentHostIntentDispatcherOptions {
   application: DispatchApplication;
   settings: Pick<SettingsStore, "saveSettings">;
-  confirmations: Pick<HostConfirmationController, "respond" | "approveAll">;
-  questions: Pick<HostQuestionController, "respond">;
+  confirmations: {
+    respond(callId: string, approved: boolean): void;
+    approveAll(): void;
+  };
+  questions: {
+    respond(response: AskQuestionResponse): void;
+  };
   commandExecutor: Pick<AgentCommandExecutor, "execute">;
 }
 

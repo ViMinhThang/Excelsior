@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentMessage, Session } from "@excelsior/core";
 import {
   AgentStateStore,
-  type AgentFactory,
+  type CreateAgentFunction,
   ProjectionPolicy,
   TurnLifecycle,
   type AgentSessionStorage,
@@ -86,18 +86,16 @@ describe("TurnLifecycle context assembly", () => {
     };
     const recorder = createRecorder();
     let seenMessages: AgentMessage[] = [];
-    let seenRunContext: Parameters<AgentFactory["create"]>[0] | undefined;
-    const agentFactory: AgentFactory = {
-      create: vi.fn((runCtx) => {
-        seenRunContext = runCtx;
-        return {
-          stream: async ({ messages }: { messages: AgentMessage[] }) => {
-            seenMessages = messages;
-            await new Promise<never>(() => {});
-          },
-        };
-      }),
-    };
+    let seenRunContext: Parameters<CreateAgentFunction>[0] | undefined;
+    const createAgent: CreateAgentFunction = vi.fn((runCtx) => {
+      seenRunContext = runCtx;
+      return {
+        stream: async ({ messages }: { messages: AgentMessage[] }) => {
+          seenMessages = messages;
+          await new Promise<never>(() => {});
+        },
+      };
+    });
     const lifecycle = new TurnLifecycle({
       state,
       projection: new ProjectionPolicy(),
@@ -105,7 +103,7 @@ describe("TurnLifecycle context assembly", () => {
       subAgentEvents,
       sessionStorage: createSessionStorage(),
       appendFinalEvents: vi.fn(),
-      dependencies: { agentFactory },
+      dependencies: { createAgent },
     });
 
     lifecycle.startUserTurn({

@@ -1,6 +1,8 @@
 import type { AgentMode, AgentMessage, SendOptions } from "@excelsior/core";
 import type { RunHandle } from "@excelsior/run-runtime";
-import { type AgentFactory, DefaultAgentFactory } from "../../agent/agentFactory.js";
+import { createAgent } from "../../agent/agent.js";
+import { createSpawnSubAgentTool } from "../../agent/spawn/spawnSubAgent.js";
+import type { StreamCapableAgent } from "../../runtime/events.js";
 import type { RunRecorder } from "../../persistence/runRecorder.js";
 import type { AgentRun } from "../../runtime/agentRun.js";
 import type {
@@ -11,17 +13,25 @@ import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { ProjectionPolicy } from "../projection/ProjectionPolicy.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
 import { TurnTransactionCoordinator, type TurnRevertResult } from "./TurnTransaction.js";
-import type { ConfirmPromptBus } from "../../runtime/confirmTypes.js";
-import type { QuestionPromptBus } from "../../runtime/questionTypes.js";
+import type { ConfirmPromptBus, QuestionPromptBus } from "../../runtime/blockingPrompt.js";
 import type { AgentSessionStorage } from "../../sessionManager.js";
 import {
   createRunSession,
+  type RunContext,
   type RunSessionResult,
 } from "./runSession.js";
 
+export type CreateAgentFunction = (
+  runCtx: RunContext,
+  options?: {
+    instructions?: string;
+    extraTools?: Record<string, unknown>;
+  },
+) => StreamCapableAgent;
+
 export interface TurnLifecycleDependencies {
   extraTools?: Record<string, unknown>;
-  agentFactory?: AgentFactory;
+  createAgent?: CreateAgentFunction;
 }
 
 export interface TurnLifecycleOptions {
@@ -35,6 +45,31 @@ export interface TurnLifecycleOptions {
   confirmBus?: ConfirmPromptBus;
   questionBus?: QuestionPromptBus;
 }
+
+const defaultCreateAgent: CreateAgentFunction = (runCtx, options) => {
+  const spawnSubAgentTool = createSpawnSubAgentTool(
+    runCtx.run,
+    runCtx.childRuns,
+    runCtx.run.sessionId,
+    runCtx.ctx,
+    runCtx.recorder,
+    runCtx.subAgentEvents,
+    {
+      createAgent: (subInstructions, extraTools, subCtx) => {
+        return createAgent(subInstructions, extraTools, subCtx);
+      },
+    },
+  );
+
+  return createAgent(
+    options?.instructions,
+    {
+      spawnSubAgent: spawnSubAgentTool,
+      ...options?.extraTools,
+    },
+    runCtx.ctx,
+  );
+};
 
 export interface StartUserTurnOptions extends SendOptions {
   content: string;
@@ -51,7 +86,7 @@ export class TurnLifecycle {
   private readonly turnTransactions: TurnTransactionCoordinator;
   private readonly appendFinalEvents: (events: readonly AnyAgentEvent[]) => void;
   private readonly dependencies: TurnLifecycleDependencies;
-  private readonly agentFactory: AgentFactory;
+  private readonly createAgent: CreateAgentFunction;
   private readonly confirmBus?: ConfirmPromptBus;
   private readonly questionBus?: QuestionPromptBus;
   private handle: RunHandle<AgentEventDataMap> | null = null;
@@ -67,7 +102,7 @@ export class TurnLifecycle {
     this.turnTransactions = new TurnTransactionCoordinator({
       sessionStorage: options.sessionStorage,
     });
-    this.agentFactory = this.dependencies.agentFactory ?? new DefaultAgentFactory();
+    this.createAgent = this.dependencies.createAgent ?? defaultCreateAgent;
     this.confirmBus = options.confirmBus;
     this.questionBus = options.questionBus;
   }
@@ -105,7 +140,7 @@ export class TurnLifecycle {
     const result = createRunSession({
       messages,
       createAgent: (runCtx) =>
-        this.agentFactory.create(runCtx, {
+        this.createAgent(runCtx, {
           extraTools: this.dependencies.extraTools,
         }),
       sessionId: options.sessionId,
