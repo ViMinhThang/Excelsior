@@ -35,4 +35,4 @@ export {
   createStorageEngine,
   storageEngine,
   type StorageEngine,
-} from "./persistence/storageEngine.js";
+} from "@excelsior/agent-storage";

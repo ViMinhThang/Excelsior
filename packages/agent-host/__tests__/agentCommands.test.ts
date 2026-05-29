@@ -32,6 +32,7 @@ function createApplication(): AgentCommandApplication {
       message: "Reverted latest turn.",
       clearInput: true,
     })),
+    compactCurrentSession: vi.fn(async () => {}),
   };
 }
 

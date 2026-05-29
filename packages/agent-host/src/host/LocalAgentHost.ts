@@ -9,7 +9,7 @@ import { AgentApplication } from "../application/AgentApplication.js";
 import { AgentCommandExecutor } from "../commands.js";
 import { createAgentClientState } from "./clientState.js";
 import { HostBlockingPromptController } from "./BlockingPromptController.js";
-import { SettingsStore } from "../persistence/SettingsStore.js";
+import { SettingsStore, type StorageEngine, type RunRecorder } from "@excelsior/agent-storage";
 import { AgentHostIntentDispatcher } from "./dispatcher.js";
 import {
   createBlockingPromptBus,
@@ -19,8 +19,6 @@ import {
   type ConfirmResponse,
 } from "../runtime/blockingPrompt.js";
 import type { AskQuestionRequest, AskQuestionResponse } from "@excelsior/core";
-import type { StorageEngine } from "../persistence/storageEngine.js";
-import type { RunRecorder } from "../persistence/runRecorder.js";
 
 export class LocalAgentHost implements AgentHost {
   private readonly application: AgentApplication;

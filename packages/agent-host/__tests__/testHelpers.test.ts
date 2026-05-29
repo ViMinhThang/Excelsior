@@ -32,12 +32,15 @@ describe("test helper fixtures", () => {
   it("creates fake turn lifecycle agent streams with pending completion", async () => {
     const lifecycle = createFakeTurnLifecycle();
     const run = new AgentRun("ses_test");
-    const agent = lifecycle.createAgent({
-      ctx: { capabilities: new Set() },
-      run,
-      childRuns: new Map(),
-      recorder: createRecorder(),
-      subAgentEvents: createSubAgentEventSink(),
+    const agent = lifecycle.agentFactory.create({
+      runContext: {
+        ctx: { capabilities: new Set() } as any,
+        run,
+        childRuns: new Map(),
+        recorder: createRecorder(),
+        subAgentEvents: createSubAgentEventSink(),
+      },
+      mode: "act",
     });
     const stream = agent.stream({
       messages: [{ role: "user", content: "hello" }],
@@ -77,5 +80,5 @@ function createRecorder(): RunRecorder {
     }),
     deleteSessionEvents: async () => {},
     deleteAllSessionEvents: async () => {},
-  };
+  } as any;
 }

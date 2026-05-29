@@ -22,6 +22,10 @@ const packages = [
     target: "packages/agent-host/dist",
   },
   {
+    source: "dist/packages/agent-storage/src",
+    target: "packages/agent-storage/dist",
+  },
+  {
     source: "dist/apps/tui/src",
     target: "apps/tui/dist",
   },

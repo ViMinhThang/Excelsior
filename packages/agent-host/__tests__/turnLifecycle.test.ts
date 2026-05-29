@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Session } from "@excelsior/core";
 import {
   AgentStateStore,
-  type CreateAgentFunction,
+  type AgentFactory,
   ProjectionPolicy,
   TurnLifecycle,
   type AgentSessionStorage,
@@ -31,7 +31,7 @@ function createRecorder(): RunRecorder {
     }),
     deleteSessionEvents: async () => {},
     deleteAllSessionEvents: async () => {},
-  };
+  } as any;
 }
 
 function createState() {
@@ -78,11 +78,12 @@ function testSession(): Session {
 }
 
 function createControlledAgentFactory(): {
-  createAgent: CreateAgentFunction & ReturnType<typeof vi.fn>;
+  agentFactory: AgentFactory;
   streams: ControlledAgentStream[];
 } {
   const streams: ControlledAgentStream[] = [];
-  const createAgent = vi.fn((runCtx) => {
+  const create = vi.fn((input) => {
+    const runCtx = input.runContext;
     let resolve!: () => void;
     const completion = new Promise<void>((finish) => {
       resolve = finish;
@@ -95,7 +96,7 @@ function createControlledAgentFactory(): {
     };
   });
 
-  return { createAgent, streams };
+  return { agentFactory: { create }, streams };
 }
 
 async function waitForStream(
@@ -123,7 +124,7 @@ function createLifecycle(input: {
     sessionStorage: createSessionStorage(),
     appendFinalEvents: input.appendFinalEvents ?? vi.fn(),
     dependencies: {
-      createAgent: controls.createAgent,
+      agentFactory: controls.agentFactory,
     },
   });
   return { lifecycle, controls };

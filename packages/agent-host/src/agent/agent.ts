@@ -3,11 +3,12 @@ import { z } from "zod";
 import { SkillsManager } from "./skills/SkillsManager.js";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createFileTools } from "./tools/index.js";
-import { getSetting } from "../persistence/db.js";
+import { getSetting } from "@excelsior/agent-storage";
 import { buildSystemPrompt } from "./prompt.js";
 import type { ToolContext } from "../tooling/context.js";
 import type { StreamCapableAgent, AgentEventEmitter } from "../runtime/events.js";
 import type { AgentMessage } from "@excelsior/core";
+import { normalizeMessageContent } from "../application/context/messageUtils.js";
 import {
   StreamPart,
   getTextDelta,
@@ -238,11 +239,6 @@ function toTextContent(
 ): string | Array<{ type: "text"; text: string }> {
   if (typeof content === "string") return content;
   return content.map((part) => ({ type: "text", text: part.text }));
-}
-
-function normalizeMessageContent(content: AgentMessage["content"]): string {
-  if (typeof content === "string") return content;
-  return content.map((part) => part.text).join("\n");
 }
 
 function parseToolInput(input: string): unknown {

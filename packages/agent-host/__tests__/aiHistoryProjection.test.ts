@@ -74,4 +74,31 @@ describe("AI history projection", () => {
 
     expect(history).toEqual([]);
   });
+
+  it("resets and summarizes history when encountering a HISTORY_COMPACTED event", () => {
+    const events: AnyAgentEvent[] = [
+      makeEvent({ type: "user-input", data: { content: "old message 1" } }),
+      makeEvent({ type: "text-delta", data: { delta: "old response 1" } }),
+      makeEvent({
+        type: "history-compacted",
+        data: {
+          summary: "This is a summary of old messages.",
+          compactedEventCount: 2,
+          triggerMode: "manual",
+        },
+      }),
+      makeEvent({ type: "user-input", data: { content: "new message" } }),
+    ];
+
+    const history = projectHistory(events);
+    expect(history).toHaveLength(2);
+    expect(history[0]).toMatchObject({
+      role: "system",
+      content: expect.stringContaining("This is a summary of old messages."),
+    });
+    expect(history[1]).toMatchObject({
+      role: "user",
+      content: "new message",
+    });
+  });
 });

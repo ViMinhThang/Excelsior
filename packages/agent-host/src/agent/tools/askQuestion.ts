@@ -25,7 +25,7 @@ export const askQuestionSchema = z.object({
 export function createAskQuestionTool(ctx?: ToolContext) {
   return tool({
     description:
-      "Ask the user one blocking question in Plan mode. The UI displays options and an optional manual answer field.",
+      "When the user tell you to create a plan and you need a decision from the user. Ask the user one blocking question in Plan mode. The UI displays options and an optional manual answer field.",
     inputSchema: askQuestionSchema,
     execute: async ({ question, options, allowManual }) => {
       const choices = options ?? [];

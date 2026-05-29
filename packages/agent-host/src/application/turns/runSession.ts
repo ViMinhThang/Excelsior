@@ -7,7 +7,7 @@ import type { ConfirmPromptBus, QuestionPromptBus } from "../../runtime/blocking
 import {
   defaultRunRecorder,
   type RunRecorder,
-} from "../../persistence/runRecorder.js";
+} from "@excelsior/agent-storage";
 import { createSubAgentEventSink, SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { ERROR, PERSISTENCE_ERROR, RUN_START } from "../../runtime/eventNames.js";
 import { StreamCapableAgent } from "../../runtime/events.js";

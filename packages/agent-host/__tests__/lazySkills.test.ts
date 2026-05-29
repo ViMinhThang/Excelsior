@@ -218,6 +218,7 @@ description: Dynamic grilling skill
       getSnapshot: vi.fn(() => ({ mode: "plan" as const })),
       setMode: vi.fn(),
       revertLastTurn: vi.fn(),
+      compactCurrentSession: vi.fn(),
     };
 
     const executor = new AgentCommandExecutor({ application });

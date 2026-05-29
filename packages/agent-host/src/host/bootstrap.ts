@@ -1,4 +1,4 @@
-import { initDb, logError } from "../persistence/db.js";
+import { initDb, logError } from "@excelsior/agent-storage";
 
 export function initializeAgentHostRuntime(): void {
   initDb();

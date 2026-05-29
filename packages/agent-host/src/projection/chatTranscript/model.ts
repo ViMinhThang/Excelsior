@@ -55,6 +55,7 @@ export function reduceChatTranscriptEvent(
     case RUN_END:
       return flushAll(state, context);
   }
+  return state;
 }
 
 export function projectEventsToDisplayBlocks(

@@ -18,6 +18,7 @@ export interface AgentCommandApplication {
   getSnapshot(): { mode: AgentMode };
   setMode(mode: AgentMode): void;
   revertLastTurn(): Promise<CommandResult>;
+  compactCurrentSession(triggerMode?: "manual" | "auto"): Promise<void>;
 }
 
 export interface ReviewCommandServices {

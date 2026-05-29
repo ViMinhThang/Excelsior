@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 import type { AgentMessage } from "@excelsior/core";
 import type {
-  CreateAgentFunction,
+  AgentFactory,
   AgentSessionStorage,
   TurnLifecycleDependencies,
 } from "@excelsior/agent-host/testing/application";
@@ -12,7 +12,7 @@ import {
 } from "@excelsior/agent-host/testing/runtime";
 import type { Session } from "@excelsior/agent-host/testing/session";
 import type { RunHandle } from "@excelsior/run-runtime";
-import { JsonlRunRecorder } from "../../src/persistence/runRecorder.js";
+import { JsonlRunRecorder } from "@excelsior/agent-storage";
 
 export function makeSession(id: string, title: string): Session {
   return {
@@ -108,7 +108,7 @@ export interface FakeAgentStream {
 }
 
 export interface FakeTurnLifecycle extends TurnLifecycleDependencies {
-  createAgent: CreateAgentFunction & ReturnType<typeof vi.fn>;
+  agentFactory: AgentFactory;
   streams: FakeAgentStream[];
 }
 
@@ -116,7 +116,8 @@ export function createFakeTurnLifecycle(
   onRun?: (run: AgentRun, context: RunContext) => void,
 ): FakeTurnLifecycle {
   const streams: FakeAgentStream[] = [];
-  const createAgent = vi.fn((runContext: RunContext) => {
+  const create = vi.fn((input) => {
+    const runContext = input.runContext;
     let resolve!: () => void;
     let reject!: (error: unknown) => void;
     const completion = new Promise<void>((finish, fail) => {
@@ -140,7 +141,9 @@ export function createFakeTurnLifecycle(
     };
   });
 
-  return { createAgent, streams };
+  const agentFactory: AgentFactory = { create };
+
+  return { agentFactory, streams };
 }
 
 export async function waitForFakeAgentStream(

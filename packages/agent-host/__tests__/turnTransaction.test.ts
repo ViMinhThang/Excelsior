@@ -4,6 +4,8 @@ import { join } from "path";
 import { tmpdir } from "os";
 import {
   TurnTransactionCoordinator,
+  AgentStateStore,
+  type AgentSessionStorage,
   type TurnTransactionRun,
 } from "@excelsior/agent-host/testing/application";
 import {
@@ -181,6 +183,97 @@ describe("TurnTransactionCoordinator", () => {
     });
     await expect(readFile(fullPath, "utf-8")).resolves.toBe("original");
   });
+
+  it("revertLastTurn refuses while a run is active", async () => {
+    const recorder = createRecorder();
+    const transactions = new TurnTransactionCoordinator({ recorder });
+    const state = new AgentStateStore(
+      {
+        workspace: {
+          id: "ws_test",
+          name: "Test workspace",
+          rootPath: workspaceRoot,
+        },
+      },
+      new (class {} as any)(),
+    );
+    state.setLoading(true);
+
+    const sessionStorage = {
+      getCurrentSessionId: () => "ses_1",
+    } as any;
+
+    await expect(transactions.revertLastTurn(state, sessionStorage)).resolves.toMatchObject({
+      message: "Cannot revert while a run is active. Cancel it first.",
+    });
+  });
+
+  it("revertLastTurn successfully restores files, trims history, reloads events and formats result", async () => {
+    const fullPath = join(workspaceRoot, "demo.txt");
+    await writeFile(fullPath, "original", "utf-8");
+    const recorder = createRecorder({ latestRunId: "run_1" });
+    const transactions = new TurnTransactionCoordinator({ recorder });
+    const state = new AgentStateStore(
+      {
+        workspace: {
+          id: "ws_test",
+          name: "Test workspace",
+          rootPath: workspaceRoot,
+        },
+      },
+      new (class {} as any)(),
+    );
+    
+    const events: AnyAgentEvent[] = [];
+    const sessionStorage = {
+      getCurrentSessionId: () => "ses_1",
+      loadCurrentSessionEvents: vi.fn(async () => events),
+    } as any;
+
+    const revert = transactions.beginTurn("ses_1", "run_1");
+    await revert.captureBeforeWrite("demo.txt", fullPath);
+    await writeFile(fullPath, "agent edit", "utf-8");
+    revert.recordWrite("demo.txt", fullPath, "agent edit");
+    await transactions.completeTurn("ses_1", fakeRun("run_1"));
+
+    const result = await transactions.revertLastTurn(state, sessionStorage);
+
+    expect(result.message).toContain("Reverted latest turn and restored 1 file");
+    expect(sessionStorage.loadCurrentSessionEvents).toHaveBeenCalled();
+    await expect(readFile(fullPath, "utf-8")).resolves.toBe("original");
+  });
+
+  it("revertLastTurn formats file conflict message properly", async () => {
+    const fullPath = join(workspaceRoot, "demo.txt");
+    await writeFile(fullPath, "original", "utf-8");
+    const recorder = createRecorder({ latestRunId: "run_1" });
+    const transactions = new TurnTransactionCoordinator({ recorder });
+    const state = new AgentStateStore(
+      {
+        workspace: {
+          id: "ws_test",
+          name: "Test workspace",
+          rootPath: workspaceRoot,
+        },
+      },
+      new (class {} as any)(),
+    );
+    
+    const sessionStorage = {
+      getCurrentSessionId: () => "ses_1",
+    } as any;
+
+    const revert = transactions.beginTurn("ses_1", "run_1");
+    await revert.captureBeforeWrite("demo.txt", fullPath);
+    await writeFile(fullPath, "agent edit", "utf-8");
+    revert.recordWrite("demo.txt", fullPath, "agent edit");
+    await transactions.completeTurn("ses_1", fakeRun("run_1"));
+    await writeFile(fullPath, "user edit", "utf-8");
+
+    const result = await transactions.revertLastTurn(state, sessionStorage);
+
+    expect(result.message).toContain("Cannot revert because 1 file(s) changed after the turn");
+  });
 });
 
 function fakeRun(
@@ -218,5 +311,5 @@ function createRecorder(options?: {
     ),
     deleteSessionEvents: vi.fn(async () => {}),
     deleteAllSessionEvents: vi.fn(async () => {}),
-  };
+  } as any;
 }
