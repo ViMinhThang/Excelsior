@@ -1,9 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ToolContext } from "../../../tooling/context.js";
+import type { ToolContext } from "../core/context.js";
 import { createUnifiedDiff, type DiffAction } from "../../../diff/unifiedDiff.js";
-import { authorizeToolAction } from "../../../tooling/policy.js";
-import { resolveWorkspacePath } from "../../../tooling/workspace.js";
+import { authorizeToolAction } from "../core/policy.js";
+import { resolveWorkspacePath } from "../core/workspace.js";
 
 type FileChangeToolName = "writeFile" | "editFile";
 

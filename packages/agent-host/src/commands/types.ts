@@ -26,6 +26,12 @@ export interface ReviewCommandServices {
   postPRComment(prNumber: number, body: string): Promise<string>;
 }
 
+export type CommandHandler<Context, Args = any> = (
+  args: Args,
+  context: Context,
+  rawArgs: string[]
+) => CommandResult | Promise<CommandResult>;
+
 export interface AgentCommand {
   definition: CommandDefinition;
   execute(args: string[], application: AgentCommandApplication): CommandResult | Promise<CommandResult>;

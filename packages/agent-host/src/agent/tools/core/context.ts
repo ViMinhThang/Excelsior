@@ -10,7 +10,7 @@ import {
   requestBlockingPrompt,
   type ConfirmPromptBus,
   type QuestionPromptBus,
-} from "../runtime/blockingPrompt.js";
+} from "../../../runtime/blockingPrompt.js";
 
 export type ToolCapability =
   | "fs:read"

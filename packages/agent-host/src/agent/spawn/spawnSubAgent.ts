@@ -7,7 +7,7 @@ import { projectSubAgentEvents } from "../../projection/subAgentProjection.js";
 import type { RunRecorder } from "@excelsior/agent-storage";
 import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { CHILD_RUN_ATTACHED } from "../../runtime/eventNames.js";
-import type { ToolContext } from "../../tooling/context.js";
+import type { ToolContext } from "../tools/core/context.js";
 
 export interface SpawnSubAgentToolDependencies {
   createAgent?: typeof defaultCreateAgent;
