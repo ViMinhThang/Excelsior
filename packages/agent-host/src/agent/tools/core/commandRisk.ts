@@ -1,4 +1,4 @@
-import type { ToolRisk } from "./policy.js";
+import { ToolRisk } from "./policy.js";
 
 const isWindows = process.platform === "win32";
 

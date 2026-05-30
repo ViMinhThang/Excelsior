@@ -150,4 +150,48 @@ describe("agent command executor", () => {
     });
     expect(services.postPRComment).toHaveBeenCalledWith(42, "Looks good");
   });
+
+  describe("declarative signature parsing and validation", () => {
+    it("automatically validates missing required arguments for subcommands", async () => {
+      const application = createApplication();
+      const executor = new AgentCommandExecutor({ application });
+
+      await expect(executor.execute("/session open")).resolves.toMatchObject({
+        handled: true,
+        message: expect.stringContaining("Missing required argument: <id>"),
+      });
+
+      await expect(executor.execute("/session rename 123")).resolves.toMatchObject({
+        handled: true,
+        message: expect.stringContaining("Missing required argument: <title>"),
+      });
+    });
+
+    it("automatically parses and validates numeric arguments", async () => {
+      const application = createApplication();
+      const services = {
+        fetchPRDiff: vi.fn(),
+        postPRComment: vi.fn(),
+      };
+      const executor = new AgentCommandExecutor({ application, services });
+
+      await expect(executor.execute("/review abc")).resolves.toMatchObject({
+        handled: true,
+        message: expect.stringContaining("Argument <prNumber> must be a valid number"),
+      });
+
+      await expect(executor.execute("/review")).resolves.toMatchObject({
+        handled: true,
+        message: expect.stringContaining("Missing required argument: <prNumber>"),
+      });
+    });
+
+    it("correctly parses rest parameters", async () => {
+      const application = createApplication();
+      const executor = new AgentCommandExecutor({ application });
+
+      await executor.execute("/session new   My Gorgeous New Session Title   ");
+      expect(application.createSession).toHaveBeenCalledWith("My Gorgeous New Session Title");
+    });
+  });
 });
