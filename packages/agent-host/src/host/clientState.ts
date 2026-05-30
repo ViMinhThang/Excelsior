@@ -1,0 +1,23 @@
+import type {
+  AgentClientState,
+  AskQuestionRequest,
+  ConfirmRequest,
+} from "@excelsior/core";
+import type { ChatSessionState } from "../application/types.js";
+
+export function createAgentClientState(
+  snapshot: ChatSessionState,
+  pendingConfirmation: ConfirmRequest | null,
+  pendingQuestion: AskQuestionRequest | null,
+): AgentClientState {
+  return {
+    displayBlocks: snapshot.displayBlocks,
+    isLoading: snapshot.isLoading,
+    sessions: snapshot.sessions,
+    currentSessionId: snapshot.currentSessionId,
+    workspace: snapshot.workspace,
+    mode: snapshot.mode,
+    pendingConfirmation,
+    pendingQuestion,
+  };
+}

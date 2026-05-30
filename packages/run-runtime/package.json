@@ -1,0 +1,13 @@
+{
+  "name": "@excelsior/run-runtime",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@excelsior/client",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@excelsior/core": "1.0.0"
+  }
+}
