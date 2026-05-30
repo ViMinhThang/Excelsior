@@ -24,9 +24,10 @@ export {
 } from "./host/bootstrap.js";
 export { LocalAgentHost } from "./host/LocalAgentHost.js";
 export {
-  AgentHostIntentDispatcher,
+  createIntentDispatcher,
   type AgentHostIntentDispatcherOptions,
 } from "./host/dispatcher.js";
+export { IntentRegistry } from "./host/intentRegistry.js";
 export {
   getDefaultAgentHost,
   resetDefaultAgentHost,
