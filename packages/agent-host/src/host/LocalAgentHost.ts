@@ -10,7 +10,8 @@ import { AgentCommandExecutor } from "../commands.js";
 import { createAgentClientState } from "./clientState.js";
 import { HostBlockingPromptController } from "./BlockingPromptController.js";
 import { SettingsStore, type StorageEngine, type RunRecorder } from "@excelsior/agent-storage";
-import { AgentHostIntentDispatcher } from "./dispatcher.js";
+import { createIntentDispatcher } from "./dispatcher.js";
+import { IntentRegistry } from "./intentRegistry.js";
 import {
   createBlockingPromptBus,
   type ConfirmPromptBus,
@@ -26,7 +27,7 @@ export class LocalAgentHost implements AgentHost {
   private readonly confirmations: HostBlockingPromptController<ConfirmRequest, ConfirmResponse>;
   private readonly questions: HostBlockingPromptController<AskQuestionRequest, AskQuestionResponse>;
   private readonly commandExecutor: AgentCommandExecutor;
-  private readonly dispatcher: AgentHostIntentDispatcher;
+  private readonly dispatcher: IntentRegistry;
   private readonly listeners = new Set<() => void>();
   private snapshot: AgentClientState | null = null;
   private readonly unsubscribeApplication: () => void;
@@ -68,7 +69,7 @@ export class LocalAgentHost implements AgentHost {
     this.commandExecutor = new AgentCommandExecutor({
       application: this.application,
     });
-    this.dispatcher = new AgentHostIntentDispatcher({
+    this.dispatcher = createIntentDispatcher({
       application: this.application,
       settings: this.settings,
       confirmations: {

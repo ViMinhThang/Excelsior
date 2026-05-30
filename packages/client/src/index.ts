@@ -1,4 +1,5 @@
 export * from "./hostActions.js";
+export type { IntentHandler, IntentMiddleware } from "./intentHandler.js";
 export type {
   AgentHost,
   AgentHostCatalog,
