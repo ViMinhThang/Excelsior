@@ -4,7 +4,7 @@ import type {
   AppSettings,
   CommandDefinition,
 } from "@excelsior/client";
-import type { ExcelsiorApi } from "../../main/preload";
+import type { ExcelsiorApi } from "../../main/preload.js";
 
 const emptyState: AgentClientState = {
   displayBlocks: [],

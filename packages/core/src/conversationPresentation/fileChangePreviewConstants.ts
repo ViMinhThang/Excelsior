@@ -1,0 +1,2 @@
+export const PENDING_VIEWPORT_HEIGHT = 12;
+export const COLLAPSED_VIEWPORT_HEIGHT = 10;

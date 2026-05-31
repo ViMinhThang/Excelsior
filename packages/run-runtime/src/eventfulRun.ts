@@ -3,6 +3,12 @@ import type { Bus, Unsubscribe } from "./bus.js";
 import { DisposableScope } from "./disposable.js";
 import { AnyRunEvent, makeRunEvent, RunEventOverrides } from "./events.js";
 import { generateId } from "./id.js";
+import {
+  createRunPersistenceTracker,
+  type RunPersistenceConfig,
+} from "./runPersistence.js";
+
+export type { RunPersistenceConfig };
 
 export type RunEventMap<TEvents extends { [K in keyof TEvents]: unknown }> = {
   event: AnyRunEvent<TEvents>;
@@ -43,12 +49,6 @@ export interface RunExecutionContext<TEvents extends { [K in keyof TEvents]: unk
     data: TEvents[T],
     overrides?: RunEventOverrides,
   ): void;
-}
-
-export interface RunPersistenceConfig<TEvents extends { [K in keyof TEvents]: unknown }> {
-  filter?: (event: AnyRunEvent<TEvents>) => boolean;
-  write?: (event: AnyRunEvent<TEvents>) => Promise<void> | void;
-  onError?: (error: unknown, event: AnyRunEvent<TEvents>) => void;
 }
 
 export interface RunConfig<TEvents extends { [K in keyof TEvents]: unknown }> {
@@ -157,49 +157,17 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
   }
 
   start(config: RunConfig<TEvents>): RunHandle<TEvents> {
-    const shouldRecordEvent = config.persist?.filter ?? (() => true);
-    const allEvents = this.getSnapshot().filter(shouldRecordEvent);
-    let recordFailed = false;
-    let writeQueue: Promise<void> = Promise.resolve();
+    const persistence = createRunPersistenceTracker({
+      initialEvents: this.getSnapshot(),
+      persist: config.persist,
+    });
 
     const emit: RunExecutionContext<TEvents>["emit"] = (type, data, overrides) => {
       this.emit(type, data, overrides);
     };
 
-    const notifyPersistError = (error: unknown, event: AnyRunEvent<TEvents>): void => {
-      if (recordFailed) return;
-      recordFailed = true;
-      try {
-        config.persist?.onError?.(error, event);
-      } catch {
-      }
-    };
-
-    const trackWrite = (event: AnyRunEvent<TEvents>): void => {
-      if (!config.persist?.write) return;
-      const write = config.persist.write;
-      writeQueue = writeQueue.then(async () => {
-        try {
-          await write(event);
-        } catch (error: unknown) {
-          notifyPersistError(error, event);
-        }
-      });
-    };
-
-    const waitForPendingWrites = async (): Promise<void> => {
-      let observedQueue: Promise<void>;
-      do {
-        observedQueue = writeQueue;
-        await observedQueue;
-      } while (observedQueue !== writeQueue);
-    };
-
     let unsub: Unsubscribe | null = this.bus.on("event", (event) => {
-      if (shouldRecordEvent(event)) {
-        allEvents.push(event);
-        trackWrite(event);
-      }
+      persistence.record(event);
     });
 
     const cleanup = (): void => {
@@ -210,7 +178,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
     const finish = async (
       completion: RunCompletion<TEvents>,
     ): Promise<RunCompletion<TEvents>> => {
-      await waitForPendingWrites();
+      await persistence.flush();
       cleanup();
       return completion;
     };
@@ -222,8 +190,8 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
     const cancelledCompletion = (fallback?: unknown): RunCompletion<TEvents> => {
       const cancelReason = getCancelReason(fallback);
       return cancelReason === undefined
-        ? { status: "cancelled", events: allEvents }
-        : { status: "cancelled", events: allEvents, cancelReason };
+        ? { status: "cancelled", events: persistence.events }
+        : { status: "cancelled", events: persistence.events, cancelReason };
     };
 
     const isAbortError = (error: unknown): boolean =>
@@ -237,7 +205,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
         return finish(
           this.isCancelled
             ? cancelledCompletion()
-            : { status: "completed", events: allEvents },
+            : { status: "completed", events: persistence.events },
         );
       })
       .catch(async (error: unknown) => {
@@ -248,10 +216,10 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
         try {
           config.onError?.(error);
         } catch (handlerError: unknown) {
-          return finish({ status: "failed", events: allEvents, error: handlerError });
+          return finish({ status: "failed", events: persistence.events, error: handlerError });
         }
 
-        return finish({ status: "failed", events: allEvents, error });
+        return finish({ status: "failed", events: persistence.events, error });
       });
 
     return {

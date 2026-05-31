@@ -1,7 +1,7 @@
 import type {
   ExcelsiorApi,
   WorkspaceTreeNode,
-} from "../../main/preload";
+} from "../../main/preload.js";
 
 export async function selectWorkspaceFolder(api: ExcelsiorApi): Promise<{
   workspacePath: string | null;
