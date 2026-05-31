@@ -49,25 +49,10 @@ function globalHint(ctx: ChatModeHintContext): string | null {
 function inputHint(ctx: ChatModeHintContext): string {
   const override = globalHint(ctx);
   if (override) return override;
-  const commandHint = getCommandHint(ctx);
   if (ctx.isLoading) {
-    return "Esc cancel" + (commandHint ? `${sep}${commandHint}` : "");
+    return "Esc cancel";
   }
-  return `Enter send${sep}/ commands`
-    + (commandHint ? `${sep}${commandHint}` : "")
-    + `${sep}Ctrl+K command palette`;
-}
-
-function getCommandHint(ctx: ChatModeHintContext): string {
-  if (ctx.commandCount > 0 || ctx.subAgentCount > 0) {
-    return ctx.commandsExpanded ? "Ctrl+O hide commands" : "Ctrl+O commands";
-  }
-  return "";
-}
-
-function getCommandToggleHint(ctx: ChatModeHintContext): string {
-  if (ctx.commandCount <= 0) return "";
-  return ctx.commandsExpanded ? "Ctrl+O hide commands" : "Ctrl+O commands";
+  return `Ctrl+K command palette`;
 }
 
 function modeHint(ctx: ChatModeHintContext, hint: string): string {
@@ -328,10 +313,9 @@ const inputMode: ChatModeDefinition<"input"> = {
 const subAgentPickerMode: ChatModeDefinition<"subagent-picker"> = {
   render: (ctx) => renderConversation(ctx, { showSubAgentPicker: true }),
   getHint: (ctx) => {
-    const commandHint = getCommandToggleHint(ctx);
     return modeHint(
       ctx,
-      `Enter view detail${sep}\u2191\u2193 navigate${commandHint ? `${sep}${commandHint}` : ""}${sep}Esc close`,
+      `Enter view detail${sep}\u2191\u2193 navigate${sep}Esc close`,
     );
   },
   getSelection: subAgentSelection,
@@ -367,10 +351,9 @@ const subAgentDetailMode: ChatModeDefinition<"subagent-detail"> = {
     );
   },
   getHint: (ctx) => {
-    const commandHint = getCommandToggleHint(ctx);
     return modeHint(
       ctx,
-      `Esc back to list${commandHint ? `${sep}${commandHint}` : ""}`,
+      "Esc back to list",
     );
   },
   getSelection: subAgentSelection,

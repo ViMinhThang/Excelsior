@@ -3,7 +3,6 @@ import type { RunHandle } from "@excelsior/run-runtime";
 import { type AgentFactory } from "./AgentFactory.js";
 import { DefaultAgentFactory } from "../../agent/DefaultAgentFactory.js";
 import { getSetting, type RunRecorder } from "@excelsior/agent-storage";
-import type { StreamCapableAgent } from "../../runtime/events.js";
 import type { AgentRun } from "../../runtime/agentRun.js";
 import {
   AgentEventDataMap,
@@ -13,12 +12,11 @@ import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { estimateTokens } from "../context/tokenizer.js";
 import { ProjectionPolicy } from "../projection/ProjectionPolicy.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
-import { TurnTransactionCoordinator, type TurnRevertResult } from "./TurnTransaction.js";
+import { TurnTransactionCoordinator } from "./TurnTransaction.js";
 import type { ConfirmPromptBus, QuestionPromptBus } from "../../runtime/blockingPrompt.js";
 import type { AgentSessionStorage } from "../../sessionManager.js";
 import {
-  createRunSession,
-  type RunContext,
+  createManagedRunSession,
   type RunSessionResult,
 } from "./runSession.js";
 
@@ -83,7 +81,7 @@ export class TurnLifecycle {
   }
 
   async startUserTurn(options: StartUserTurnOptions): Promise<void> {
-    await this.maybeAutoCompact(options.sessionId);
+    await this.maybeAutoCompact();
     const result = this.createTurnRun(options);
     this.attachRun(result.run, result.childRuns, result.handle);
     this.emitDisplayedUserInput(result.run, options);
@@ -112,22 +110,24 @@ export class TurnLifecycle {
       ...this.buildAIHistory(),
       { role: "user", content: options.content },
     ];
-    const result = createRunSession({
-      messages,
-      createAgent: (runCtx) =>
-        this.agentFactory.create({
-          runContext: runCtx,
-          mode: options.mode,
-        }),
-      sessionId: options.sessionId,
-      recorder: this.recorder,
-      subAgentEvents: this.subAgentEvents,
-      mode: options.mode,
-      workspaceRoot: options.workspaceRoot,
-      turnTransactions: this.turnTransactions,
-      confirmBus: this.confirmBus,
-      questionBus: this.questionBus,
-    });
+    const result = createManagedRunSession(
+      {
+        messages,
+        createAgent: (runCtx) =>
+          this.agentFactory.create({
+            runContext: runCtx,
+            mode: options.mode,
+          }),
+        sessionId: options.sessionId,
+        recorder: this.recorder,
+        subAgentEvents: this.subAgentEvents,
+        mode: options.mode,
+        workspaceRoot: options.workspaceRoot,
+        confirmBus: this.confirmBus,
+        questionBus: this.questionBus,
+      },
+      this.turnTransactions,
+    );
 
     return result;
   }
@@ -182,7 +182,7 @@ export class TurnLifecycle {
     this.state.clearActiveRun();
   }
 
-  private async maybeAutoCompact(sessionId: string): Promise<void> {
+  private async maybeAutoCompact(): Promise<void> {
     const autoCompactEnabled = getSetting("AUTO_COMPACT_ENABLED") !== "false";
     if (!autoCompactEnabled) return;
 

@@ -26,9 +26,12 @@ export interface ReviewCommandServices {
   postPRComment(prNumber: number, body: string): Promise<string>;
 }
 
-export type CommandHandler<Context, Args = any> = (
+export type CommandValue = string | number | boolean | undefined;
+export type CommandArguments = Record<string, CommandValue>;
+
+export type CommandHandler<Args = CommandArguments> = (
   args: Args,
-  context: Context,
+  application: AgentCommandApplication,
   rawArgs: string[]
 ) => CommandResult | Promise<CommandResult>;
 

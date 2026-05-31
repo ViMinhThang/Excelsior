@@ -50,7 +50,7 @@ describe("ChatHistory command expansion", () => {
 
     const collapsed = render(createElement(ChatHistory, { blocks, commandsExpanded: false }));
     const collapsedFrame = collapsed.lastFrame() ?? "";
-    expect(collapsedFrame).toContain("read README.md");
+    expect(collapsedFrame).toContain("read(README.md)");
     expect(collapsedFrame).toContain("(Ctrl+O to expand)");
     expect(collapsedFrame).not.toContain("README contents");
     expect(collapsedFrame).toContain("reviewer");
@@ -61,7 +61,7 @@ describe("ChatHistory command expansion", () => {
       commandsExpanded: true,
     }));
     const expandedFrame = expanded.lastFrame() ?? "";
-    expect(expandedFrame).toContain("read README.md");
+    expect(expandedFrame).toContain("read(README.md)");
     expect(expandedFrame).toContain("Read 1 lines");
     expect(expandedFrame).toContain("0 files, 0 folders");
     expect(expandedFrame).not.toContain("README contents");

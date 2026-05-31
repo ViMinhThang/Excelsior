@@ -9,7 +9,7 @@ export interface AnyAgentEvent {
   causationId: string;
   correlationId: string;
   timestamp: string;
-  data: any;
+  data: unknown;
   parentEventId?: string;
   relatedToolCallId?: string;
 }

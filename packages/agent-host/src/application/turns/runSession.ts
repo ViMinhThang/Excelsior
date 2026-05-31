@@ -30,9 +30,12 @@ export interface RunSessionConfig {
   subAgentEvents?: SubAgentEventSink;
   mode?: AgentMode;
   workspaceRoot?: string;
-  turnTransactions?: TurnTransactionCoordinator;
   confirmBus?: ConfirmPromptBus;
   questionBus?: QuestionPromptBus;
+}
+
+interface ManagedRunSessionConfig extends RunSessionConfig {
+  turnTransactions?: TurnTransactionCoordinator;
 }
 
 export interface RunSessionResult {
@@ -49,9 +52,9 @@ class RunSession {
   private readonly recorder: RunRecorder;
   private readonly subAgentEvents: SubAgentEventSink;
   private readonly turnTransactions: TurnTransactionCoordinator;
-  private readonly config: RunSessionConfig;
+  private readonly config: ManagedRunSessionConfig;
 
-  constructor(config: RunSessionConfig) {
+  constructor(config: ManagedRunSessionConfig) {
     this.config = config;
     this.sessionId = config.sessionId ?? `ses_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     this.run = new AgentRun({ sessionId: this.sessionId, parentSignal: config.signal });
@@ -137,6 +140,13 @@ class RunSession {
 
 export function createRunSession(config: RunSessionConfig): RunSessionResult {
   return new RunSession(config).start();
+}
+
+export function createManagedRunSession(
+  config: RunSessionConfig,
+  turnTransactions: TurnTransactionCoordinator,
+): RunSessionResult {
+  return new RunSession({ ...config, turnTransactions }).start();
 }
 
 function formatError(error: unknown): string {

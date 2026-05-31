@@ -22,6 +22,18 @@ export class IntentRegistry {
     return this;
   }
 
+  on<T extends AgentHostIntent["type"]>(
+    type: T,
+    handle: (intent: Extract<AgentHostIntent, { type: T }>) => Promise<AgentHostDispatchResult> | AgentHostDispatchResult,
+  ): this {
+    this.handlers.set(type, {
+      handle: (intent: AgentHostIntent) => {
+        return handle(intent as Extract<AgentHostIntent, { type: T }>);
+      },
+    });
+    return this;
+  }
+
   use(mw: IntentMiddleware): this {
     this.middleware.push(mw);
     return this;

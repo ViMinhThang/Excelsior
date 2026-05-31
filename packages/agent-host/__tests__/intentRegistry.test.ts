@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { IntentRegistry } from "../src/host/intentRegistry.js";
-import type { AgentHostIntent, AgentHostDispatchResult } from "@excelsior/client";
+import type { AgentHostIntent } from "@excelsior/client";
 
 describe("IntentRegistry", () => {
   it("registers and dispatches handlers", async () => {
@@ -22,6 +22,21 @@ describe("IntentRegistry", () => {
     expect(handleFn).toHaveBeenCalledWith(intent);
   });
 
+  it("registers and dispatches handlers using .on()", async () => {
+    const registry = new IntentRegistry();
+    const handleFn = vi.fn(() => ({ type: "none" as const }));
+
+    registry.on("cancel", handleFn);
+
+    expect(registry.has("cancel")).toBe(true);
+    
+    const intent: AgentHostIntent = { type: "cancel" };
+    const result = await registry.dispatch(intent);
+
+    expect(result).toEqual({ type: "none" });
+    expect(handleFn).toHaveBeenCalledWith(intent);
+  });
+
   it("throws when dispatching unregistered intent", async () => {
     const registry = new IntentRegistry();
     const intent: AgentHostIntent = { type: "cancel" };
@@ -35,14 +50,14 @@ describe("IntentRegistry", () => {
     const registry = new IntentRegistry();
     const sequence: string[] = [];
 
-    registry.use(async (intent, next) => {
+    registry.use(async (_intent, next) => {
       sequence.push("mw1-start");
       const res = await next();
       sequence.push("mw1-end");
       return res;
     });
 
-    registry.use(async (intent, next) => {
+    registry.use(async (_intent, next) => {
       sequence.push("mw2-start");
       const res = await next();
       sequence.push("mw2-end");
@@ -73,7 +88,7 @@ describe("IntentRegistry", () => {
     const registry = new IntentRegistry();
     const handlerFn = vi.fn();
 
-    registry.use(async (intent, next) => {
+    registry.use(async () => {
       // Short-circuit without calling next()
       return { type: "mode", mode: "plan" };
     });

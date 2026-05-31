@@ -1,13 +1,10 @@
+import { CommandBuilder } from "./commandBuilder.js";
 import type { AgentCommand } from "./types.js";
 
 export function createRevertCommand(): AgentCommand {
-  return {
-    definition: {
-      name: "revert",
-      category: "core",
-      description: "Revert the latest turn's write/edit file changes",
-      usage: "/revert",
-    },
-    execute: (_args, application) => application.revertLastTurn(),
-  };
+  return new CommandBuilder("revert")
+    .category("core")
+    .description("Revert the latest turn's write/edit file changes")
+    .default((_args, application) => application.revertLastTurn())
+    .build();
 }

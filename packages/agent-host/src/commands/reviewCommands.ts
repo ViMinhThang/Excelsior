@@ -1,5 +1,5 @@
 import { GitHubClient } from "../github/GitHubClient.js";
-import type { AgentCommand, AgentCommandApplication, ReviewCommandServices } from "./types.js";
+import type { AgentCommand, ReviewCommandServices } from "./types.js";
 import { CommandBuilder } from "./commandBuilder.js";
 
 const defaultReviewCommandServices: ReviewCommandServices = new GitHubClient();
@@ -8,12 +8,19 @@ export function createReviewCommands(
   services: ReviewCommandServices = defaultReviewCommandServices,
 ): AgentCommand[] {
   return [
-    new CommandBuilder<AgentCommandApplication>("review")
+    new CommandBuilder("review")
       .category("review")
       .description("Review a pull request by number (e.g. /review 42)")
       .signature("<prNumber:number>")
       .default(async ({ prNumber }, application) => {
         try {
+          if (typeof prNumber !== "number") {
+            return {
+              handled: true,
+              message: "Usage: /review <prNumber:number>",
+              clearInput: true,
+            };
+          }
           const diff = await services.fetchPRDiff(prNumber);
           application.send(
             `### NEW CODE REVIEW: PR #${prNumber} ###\n\n` +
@@ -45,14 +52,21 @@ export function createReviewCommands(
       })
       .build(),
 
-    new CommandBuilder<void>("review-post") // Not using app context
+    new CommandBuilder("review-post")
       .category("review")
       .description('Post a comment to a PR (e.g. /review-post 42 "Looks good")')
       .signature("<prNumber:number> <commentBody...>")
       .default(async ({ prNumber, commentBody }) => {
+        if (typeof prNumber !== "number" || typeof commentBody !== "string") {
+          return {
+            handled: true,
+            message: "Usage: /review-post <prNumber:number> <commentBody...>",
+            clearInput: true,
+          };
+        }
         const result = await services.postPRComment(prNumber, commentBody);
         return { handled: true, message: result, clearInput: true };
       })
-      .build() as unknown as AgentCommand, // Coerce as we don't strictly need the application param for this one
+      .build(),
   ];
 }

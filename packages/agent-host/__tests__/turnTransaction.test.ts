@@ -5,7 +5,6 @@ import { tmpdir } from "os";
 import {
   TurnTransactionCoordinator,
   AgentStateStore,
-  type AgentSessionStorage,
   type TurnTransactionRun,
 } from "@excelsior/agent-host/testing/application";
 import {

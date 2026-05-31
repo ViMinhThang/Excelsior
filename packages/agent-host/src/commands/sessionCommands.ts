@@ -1,9 +1,9 @@
 import { SESSION_PICKER_PANEL_ID } from "@excelsior/core";
-import type { AgentCommand, AgentCommandApplication } from "./types.js";
+import type { AgentCommand } from "./types.js";
 import { CommandBuilder } from "./commandBuilder.js";
 
 export function createSessionCommand(): AgentCommand {
-  return new CommandBuilder<AgentCommandApplication>("session")
+  return new CommandBuilder("session")
     .category("session")
     .description("Open the session picker")
     .default(() => ({
@@ -17,7 +17,9 @@ export function createSessionCommand(): AgentCommand {
       clearInput: true,
     }))
     .subCommand("new", "[title...]", ({ title }, application) => {
-      const finalTitle = title || "Untitled";
+      const finalTitle = typeof title === "string" && title.length > 0
+        ? title
+        : "Untitled";
       application.createSession(finalTitle);
       return {
         handled: true,
@@ -26,6 +28,13 @@ export function createSessionCommand(): AgentCommand {
       };
     })
     .subCommand("open", "<id>", async ({ id }, application) => {
+      if (typeof id !== "string") {
+        return {
+          handled: true,
+          message: "Usage: /session open <id>",
+          clearInput: true,
+        };
+      }
       await application.switchSession(id);
       return {
         handled: true,
@@ -34,6 +43,13 @@ export function createSessionCommand(): AgentCommand {
       };
     })
     .subCommand("rename", "<id> <title...>", ({ id, title }, application) => {
+      if (typeof id !== "string" || typeof title !== "string") {
+        return {
+          handled: true,
+          message: "Usage: /session rename <id> <title...>",
+          clearInput: true,
+        };
+      }
       application.renameSession(id, title);
       return {
         handled: true,
@@ -42,6 +58,13 @@ export function createSessionCommand(): AgentCommand {
       };
     })
     .subCommand("delete", "<id>", async ({ id }, application) => {
+      if (typeof id !== "string") {
+        return {
+          handled: true,
+          message: "Usage: /session delete <id>",
+          clearInput: true,
+        };
+      }
       await application.deleteSession(id);
       return {
         handled: true,

@@ -1,5 +1,10 @@
-import type { CommandResult } from "@excelsior/core";
-import type { AgentCommand, CommandHandler } from "./types.js";
+import type {
+  AgentCommand,
+  AgentCommandApplication,
+  CommandArguments,
+  CommandHandler,
+  CommandValue,
+} from "./types.js";
 
 export interface ParameterDefinition {
   name: string;
@@ -43,8 +48,8 @@ export function parseSignature(signature: string): ParameterDefinition[] {
 export function parseArguments(
   defs: ParameterDefinition[],
   args: string[]
-): { success: true; values: Record<string, any> } | { success: false; error: string } {
-  const values: Record<string, any> = {};
+): { success: true; values: CommandArguments } | { success: false; error: string } {
+  const values: Record<string, CommandValue> = {};
 
   for (let i = 0; i < defs.length; i++) {
     const def = defs[i];
@@ -89,20 +94,20 @@ export function parseArguments(
   return { success: true, values };
 }
 
-interface SubCommandDef<Context> {
+interface SubCommandDef {
   name: string;
   argString: string;
   paramDefs: ParameterDefinition[];
-  handler: CommandHandler<Context>;
+  handler: CommandHandler;
 }
 
-export class CommandBuilder<Context> {
+export class CommandBuilder {
   private _category = "general";
   private _description = "";
   private _signature = "";
   private _paramDefs: ParameterDefinition[] = [];
-  private _subCommands: SubCommandDef<Context>[] = [];
-  private _defaultHandler?: CommandHandler<Context>;
+  private _subCommands: SubCommandDef[] = [];
+  private _defaultHandler?: CommandHandler;
 
   constructor(private readonly commandName: string) {}
 
@@ -125,7 +130,7 @@ export class CommandBuilder<Context> {
   subCommand(
     name: string | string[],
     argString: string,
-    handler: CommandHandler<Context>,
+    handler: CommandHandler,
   ): this {
     const names = Array.isArray(name) ? name : [name];
     const paramDefs = parseSignature(argString);
@@ -135,7 +140,7 @@ export class CommandBuilder<Context> {
     return this;
   }
 
-  default(handler: CommandHandler<Context>): this {
+  default(handler: CommandHandler): this {
     this._defaultHandler = handler;
     return this;
   }
@@ -171,7 +176,7 @@ export class CommandBuilder<Context> {
         description: this._description,
         usage: usageString,
       },
-      execute: (args: string[], context: any) => {
+      execute: (args: string[], application: AgentCommandApplication) => {
         const subName = (args[0] || "").toLowerCase();
         
         // Find matching subcommand
@@ -188,7 +193,7 @@ export class CommandBuilder<Context> {
               clearInput: true,
             };
           }
-          return sub.handler(parseResult.values, context, subArgs);
+          return sub.handler(parseResult.values, application, subArgs);
         }
 
         if (this._subCommands.length > 0 && !this._defaultHandler) {
@@ -209,7 +214,7 @@ export class CommandBuilder<Context> {
               clearInput: true,
             };
           }
-          return this._defaultHandler(parseResult.values, context, args);
+          return this._defaultHandler(parseResult.values, application, args);
         }
 
         return {

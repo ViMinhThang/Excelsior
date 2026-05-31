@@ -135,7 +135,7 @@ describe("TurnLifecycle", () => {
     const state = createState();
     const { lifecycle } = createLifecycle({ state });
 
-    lifecycle.startUserTurn({
+    await lifecycle.startUserTurn({
       content: "hello",
       mode: "act",
       sessionId: "ses_1",
@@ -161,7 +161,7 @@ describe("TurnLifecycle", () => {
       appendFinalEvents,
     });
 
-    lifecycle.startUserTurn({
+    await lifecycle.startUserTurn({
       content: "hello",
       mode: "act",
       sessionId: "ses_1",
@@ -186,7 +186,7 @@ describe("TurnLifecycle", () => {
       appendFinalEvents,
     });
 
-    lifecycle.startUserTurn({
+    await lifecycle.startUserTurn({
       content: "hello",
       mode: "act",
       sessionId: "ses_1",

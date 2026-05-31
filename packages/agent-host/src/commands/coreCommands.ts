@@ -1,6 +1,6 @@
 import type { CommandDefinition } from "@excelsior/core";
 import { createHelpCommand } from "./helpCommand.js";
-import type { AgentCommand, AgentCommandApplication } from "./types.js";
+import type { AgentCommand } from "./types.js";
 import { CommandBuilder } from "./commandBuilder.js";
 
 export function createCoreCommands(
@@ -8,7 +8,7 @@ export function createCoreCommands(
 ): AgentCommand[] {
   return [
     createHelpCommand(getDefinitions),
-    new CommandBuilder<AgentCommandApplication>("clear")
+    new CommandBuilder("clear")
       .category("core")
       .description("Clear chat messages from the screen")
       .default((_args, application) => {
@@ -20,7 +20,7 @@ export function createCoreCommands(
         };
       })
       .build(),
-    new CommandBuilder<AgentCommandApplication>("reset")
+    new CommandBuilder("reset")
       .category("core")
       .description("Delete all conversation history from database")
       .default(async (_args, application) => {

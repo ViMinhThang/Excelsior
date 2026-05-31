@@ -44,7 +44,7 @@ describe("JsonlRunRecorder", () => {
     expect(loaded).toHaveLength(2);
     expect(loaded[0].type).toBe("user-input");
     if (loaded[0].type !== "user-input") throw new Error("Expected user input");
-    expect(loaded[0].data.content).toBe("hello");
+    expect((loaded[0].data as { content: string }).content).toBe("hello");
     expect(loaded[1].type).toBe("text-delta");
   });
 
@@ -274,7 +274,7 @@ describe("JsonlRunRecorder", () => {
     for (let i = 0; i < 10; i++) {
       const event = loaded[i];
       if (!event || event.type !== "text-delta") throw new Error("Expected text delta");
-      expect(event.data.delta).toBe(String(i));
+      expect((event.data as { delta: string }).delta).toBe(String(i));
     }
   });
 });

@@ -34,7 +34,7 @@ export class ProjectionRegistry<
   TEvent extends { type: string },
   TContext = undefined,
 > {
-  private reducers = new Map<string, (state: TState, event: any, context?: TContext) => TState>();
+  private reducers = new Map<string, (state: TState, event: TEvent, context?: TContext) => TState>();
   private middleware: ProjectionMiddleware<TState, TEvent, TContext>[] = [];
   private initial?: () => TState;
 
@@ -52,7 +52,7 @@ export class ProjectionRegistry<
     type: K,
     reducer: (state: TState, event: Extract<TEvent, { type: K }>, context?: TContext) => TState,
   ): this {
-    this.reducers.set(type, reducer);
+    this.reducers.set(type, reducer as unknown as (state: TState, event: TEvent, context?: TContext) => TState);
     return this;
   }
 
@@ -77,5 +77,47 @@ export class ProjectionRegistry<
       },
     };
   }
+}
+
+/**
+ * Composes multiple state mutator functions from left to right.
+ * Each mutator function accepts state, event, and optional context, and returns modified state.
+ */
+export function compose<TState, TEvent, TContext = undefined>(
+  ...fns: readonly ((state: TState, event: TEvent, context?: TContext) => TState)[]
+): (state: TState, event: TEvent, context?: TContext) => TState {
+  return (state: TState, event: TEvent, context?: TContext) => {
+    return fns.reduce((s, fn) => fn(s, event, context), state);
+  };
+}
+
+/**
+ * Creates a mutator that accumulates value(s) into state by merging a partial state.
+ * Works similarly to assign, but allows retrieving the partial update dynamically via a mapper function.
+ */
+export function accumulate<TState, TEvent, TContext = undefined>(
+  mapper: (state: TState, event: TEvent, context?: TContext) => Partial<TState>,
+): (state: TState, event: TEvent, context?: TContext) => TState {
+  return (state: TState, event: TEvent, context?: TContext) => {
+    return {
+      ...state,
+      ...mapper(state, event, context),
+    };
+  };
+}
+
+/**
+ * Creates a mutator that shallow-copies state and updates a specific key using an updater function.
+ */
+export function assign<TState, TKey extends keyof TState, TEvent, TContext = undefined>(
+  key: TKey,
+  updater: (state: TState, event: TEvent, context?: TContext) => TState[TKey],
+): (state: TState, event: TEvent, context?: TContext) => TState {
+  return (state: TState, event: TEvent, context?: TContext) => {
+    return {
+      ...state,
+      [key]: updater(state, event, context),
+    };
+  };
 }
 

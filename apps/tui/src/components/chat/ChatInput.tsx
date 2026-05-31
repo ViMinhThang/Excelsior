@@ -24,14 +24,14 @@ const ChatInput: FC<ChatInputProps> = ({
   shouldSubmit,
 }) => {
   return (
-    <Panel 
-      marginTop={1} 
-      marginBottom={0} 
+    <Panel
+      marginTop={1}
+      marginBottom={0}
       backgroundColor="transparent"
-      borderColor={focus ? theme.colors.highlightBrand : theme.colors.border}
+      borderTopBottomColor={focus ? theme.colors.muted : theme.colors.border}
     >
-      <Box paddingLeft={1} flexDirection="row">
-        <Text color={focus ? theme.colors.highlightBrand : theme.colors.muted} bold={focus}>&gt; </Text>
+      <Box paddingLeft={0} flexDirection="row">
+        <Text color="white" dimColor>&gt; </Text>
         <TextInput
           value={value}
           onChange={onChange}
