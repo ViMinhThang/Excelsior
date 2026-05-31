@@ -1,0 +1,151 @@
+/* ============================
+   GLOBAL RESET
+   ============================ */
+* {
+  box-sizing: border-box;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  background-color: var(--brand-bg);
+  color: var(--brand-text-strong);
+  font-family: var(--font-brand), ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Subtle noise texture overlay on body */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: var(--bg-noise);
+  pointer-events: none;
+  z-index: 9999;
+  mix-blend-mode: overlay;
+}
+
+/* ============================
+   TITLEBAR
+   ============================ */
+.titlebar {
+  -webkit-app-region: drag;
+  align-items: center;
+  background-color: var(--titlebar-bg);
+  border-bottom: 1px solid var(--brand-border);
+  color: var(--titlebar-text);
+  display: flex;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 16px;
+  height: 36px;
+  justify-content: center;
+  letter-spacing: 0.03em;
+  padding: 0 152px;
+}
+
+.titlebar-title {
+  max-width: min(520px, 100%);
+  text-align: center;
+}
+
+/* ============================
+   CHAT HEADER
+   ============================ */
+.chat-header {
+  min-width: 0;
+  overflow: hidden;
+  padding-left: 32px;
+  padding-right: 40px;
+}
+
+/* ============================
+   INTERACTIVE ELEMENTS
+   ============================ */
+button,
+input,
+textarea,
+a,
+select {
+  -webkit-app-region: no-drag;
+}
+
+button,
+select {
+  cursor: default;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand-accent) 30%, transparent);
+}
+
+::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 1px solid var(--scrollbar-track);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+pre {
+  background-color: var(--codeblock-bg) !important;
+  border: 1px solid var(--brand-border);
+  border-radius: 8px;
+  color: var(--brand-text-light);
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-x: auto;
+  padding: 16px 18px;
+  white-space: pre-wrap;
+}
+
+/* Code block styles */
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: color-mix(in srgb, var(--codeblock-bg) 95%, var(--brand-accent));
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--brand-border);
+  user-select: none;
+}
+
+.code-block-lang {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand-text-muted);
+  font-family: var(--font-mono), monospace;
+}
+
+pre.code-block-pre {
+  border: 0 !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+}

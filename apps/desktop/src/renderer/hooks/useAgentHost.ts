@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type {
-  AgentClientState,
   AgentMode,
   AskQuestionResponse,
   AppSettings,
@@ -8,48 +7,22 @@ import type {
   CommandResult,
   SendOptions,
   Session,
-  AgentHost,
 } from "@excelsior/client";
 import { AgentHostClient } from "@excelsior/client";
 import type { ExcelsiorApi } from "../../main/preload";
 import type { WorkspaceTreeNode } from "../../main/preload";
+import {
+  createDesktopHostAdapter,
+  createIpcStateStore,
+  type IpcStateStore,
+} from "./desktopHostStore.js";
+import { selectWorkspaceFolder } from "./workspaceSelection.js";
 
 // Extend global window type
 declare global {
   interface Window {
     api: ExcelsiorApi;
   }
-}
-
-/**
- * A store that wraps the IPC subscription + getState into a
- * subscribe/getSnapshot interface compatible with useSyncExternalStore.
- *
- * The store is updated ONLY from the push subscription (host:state-changed),
- * never from manual getState() calls. This eliminates race conditions.
- */
-function createIpcStateStore() {
-  let snapshot: AgentClientState | null = null;
-  const listeners = new Set<() => void>();
-
-  const unsub = window.api.onStateChanged((newState) => {
-    snapshot = newState;
-    listeners.forEach((fn) => fn());
-  });
-
-  return {
-    getSnapshot: () => snapshot,
-    subscribe: (cb: () => void) => {
-      listeners.add(cb);
-      return () => listeners.delete(cb);
-    },
-    /** Fetch initial state from main process. Call once on creation. */
-    init: async () => {
-      snapshot = await window.api.getState();
-      listeners.forEach((fn) => fn());
-    },
-    dispose: unsub,
-  };
 }
 
 export function useAgentHost() {
@@ -60,13 +33,12 @@ export function useAgentHost() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
-  // Created once per workspacePath; disposed on cleanup
-  const storeRef = useRef<ReturnType<typeof createIpcStateStore> | null>(null);
+  const storeRef = useRef<IpcStateStore | null>(null);
 
   useEffect(() => {
     if (!workspacePath) return;
 
-    const store = createIpcStateStore();
+    const store = createIpcStateStore(window.api);
     storeRef.current = store;
 
     store.init();
@@ -95,29 +67,12 @@ export function useAgentHost() {
   );
 
   const client = useMemo(() => {
-    const dummyState: AgentClientState = {
-      displayBlocks: [],
-      isLoading: false,
-      sessions: [],
-      currentSessionId: null,
-      workspace: { id: "", name: "", rootPath: "" },
-      mode: "plan",
-      pendingConfirmation: null,
-      pendingQuestion: null,
-    };
-
-    const dummySettings: AppSettings = {
-      deepseekApiKey: "",
-      githubToken: "",
-    };
-
-    const hostAdapter: AgentHost = {
-      getState: () => storeRef.current?.getSnapshot() ?? dummyState,
-      subscribe: (cb) => storeRef.current?.subscribe(cb) ?? (() => {}),
-      getCatalog: () => ({ commands, settings: settings ?? dummySettings }),
-      dispatch: (intent) => window.api.dispatch(intent),
-      dispose: () => {},
-    };
+    const hostAdapter = createDesktopHostAdapter({
+      api: window.api,
+      commands,
+      getStore: () => storeRef.current,
+      settings,
+    });
     return new AgentHostClient(hostAdapter);
   }, [commands, settings]);
 
@@ -126,17 +81,10 @@ export function useAgentHost() {
     setIsInitializing(true);
     setWorkspaceError(null);
     try {
-      if (!window.api?.selectWorkspaceFolder) {
-        throw new Error(
-          "Desktop bridge is unavailable. Please run the Electron desktop app, not the browser preview.",
-        );
-      }
-
-      const folderPath = await window.api.selectWorkspaceFolder();
-      if (folderPath) {
-        setWorkspacePath(folderPath);
-        await window.api.initializeWorkspace(folderPath);
-        setWorkspaceTree(await window.api.getWorkspaceTree());
+      const result = await selectWorkspaceFolder(window.api);
+      if (result.workspacePath) {
+        setWorkspacePath(result.workspacePath);
+        setWorkspaceTree(result.workspaceTree);
       }
     } catch (err) {
       console.error("Workspace selection failed:", err);

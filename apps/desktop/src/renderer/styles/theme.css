@@ -1,0 +1,143 @@
+@theme {
+  --color-brand-bg: var(--brand-bg);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-panel: var(--brand-panel);
+  --color-brand-border: var(--brand-border);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-accent-hover: var(--brand-accent-hover);
+  --color-brand-accent-contrast: var(--brand-accent-contrast);
+  --color-brand-text-muted: var(--brand-text-muted);
+  --color-brand-text-light: var(--brand-text-light);
+  --color-brand-text-strong: var(--brand-text-strong);
+  --color-brand-sidebar-footer: var(--brand-sidebar-footer);
+  --color-brand-user-bubble: var(--brand-user-bubble);
+  --color-brand-composer: var(--brand-composer);
+  --font-brand: var(--font-mono);
+  --font-display: "DM Serif Display", serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* ============================
+   THEME: One Dark Pro (Default Dark)
+   ============================ */
+:root,
+:root[data-theme="one-dark-pro"] {
+  --brand-bg: #282c34;
+  --brand-surface: #21252b;
+  --brand-panel: #2c313c;
+  --brand-border: #3e4451;
+  --brand-accent: #61afef;
+  --brand-accent-hover: #528bff;
+  --brand-accent-contrast: #282c34;
+  --brand-text-muted: #5c6370;
+  --brand-text-light: #abb2bf;
+  --brand-text-strong: #abb2bf;
+  --brand-sidebar-footer: #1e2227;
+  --brand-user-bubble: #2c313c;
+  --brand-composer: rgba(33, 37, 43, 0.92);
+
+  --titlebar-bg: #1e2227;
+  --titlebar-text: #5c6370;
+  --scrollbar-track: #282c34;
+  --scrollbar-thumb: #3e4451;
+  --scrollbar-thumb-hover: #4b5263;
+  --codeblock-bg: #1e2227;
+  --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-snappy: 160ms;
+  --gold-glow: rgba(97, 175, 239, 0.12);
+  --gold-glow-strong: rgba(97, 175, 239, 0.25);
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* ============================
+   THEME: Tokyo Night (Dark)
+   ============================ */
+:root[data-theme="tokyo-night"] {
+  --brand-bg: #1a1b26;
+  --brand-surface: #16161e;
+  --brand-panel: #1f2335;
+  --brand-border: #3b4261;
+  --brand-accent: #7aa2f7;
+  --brand-accent-hover: #89ddff;
+  --brand-accent-contrast: #1a1b26;
+  --brand-text-muted: #565f89;
+  --brand-text-light: #a9b1d6;
+  --brand-text-strong: #c0caf5;
+  --brand-sidebar-footer: #13131a;
+  --brand-user-bubble: #1f2335;
+  --brand-composer: rgba(22, 22, 30, 0.92);
+
+  --titlebar-bg: #13131a;
+  --titlebar-text: #565f89;
+  --scrollbar-track: #1a1b26;
+  --scrollbar-thumb: #3b4261;
+  --scrollbar-thumb-hover: #414868;
+  --codeblock-bg: #13131a;
+  --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-snappy: 160ms;
+  --gold-glow: rgba(122, 162, 247, 0.12);
+  --gold-glow-strong: rgba(122, 162, 247, 0.25);
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* ============================
+   THEME: Gruvbox Light
+   ============================ */
+:root[data-theme="gruvbox"] {
+  --brand-bg: #fbf1c7;
+  --brand-surface: #f4e8c1;
+  --brand-panel: #ebdbb2;
+  --brand-border: #d5c4a1;
+  --brand-accent: #b57614;
+  --brand-accent-hover: #d65d0e;
+  --brand-accent-contrast: #fbf1c7;
+  --brand-text-muted: #928374;
+  --brand-text-light: #3c3836;
+  --brand-text-strong: #282828;
+  --brand-sidebar-footer: #ebdbb2;
+  --brand-user-bubble: #ebdbb2;
+  --brand-composer: rgba(244, 232, 193, 0.92);
+
+  --titlebar-bg: #ebdbb2;
+  --titlebar-text: #928374;
+  --scrollbar-track: #fbf1c7;
+  --scrollbar-thumb: #d5c4a1;
+  --scrollbar-thumb-hover: #bdae93;
+  --codeblock-bg: #ebdbb2;
+  --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-snappy: 160ms;
+  --gold-glow: rgba(181, 118, 20, 0.1);
+  --gold-glow-strong: rgba(181, 118, 20, 0.2);
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
+}
+
+/* ============================
+   THEME: Tokyo Night Light
+   ============================ */
+:root[data-theme="tokyo-night-light"] {
+  --brand-bg: #e1e2e7;
+  --brand-surface: #d5d6db;
+  --brand-panel: #c8c9d1;
+  --brand-border: #b2b3bd;
+  --brand-accent: #385af6;
+  --brand-accent-hover: #2f4dd3;
+  --brand-accent-contrast: #e1e2e7;
+  --brand-text-muted: #9699a3;
+  --brand-text-light: #4c505e;
+  --brand-text-strong: #343b58;
+  --brand-sidebar-footer: #c8c9d1;
+  --brand-user-bubble: #c8c9d1;
+  --brand-composer: rgba(213, 214, 219, 0.92);
+
+  --titlebar-bg: #c8c9d1;
+  --titlebar-text: #9699a3;
+  --scrollbar-track: #e1e2e7;
+  --scrollbar-thumb: #b2b3bd;
+  --scrollbar-thumb-hover: #9699a3;
+  --codeblock-bg: #d5d6db;
+  --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-snappy: 160ms;
+  --gold-glow: rgba(56, 90, 246, 0.1);
+  --gold-glow-strong: rgba(56, 90, 246, 0.2);
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
+}
