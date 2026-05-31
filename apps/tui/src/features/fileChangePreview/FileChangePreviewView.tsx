@@ -3,11 +3,11 @@ import { Box, Text, useStdout } from "ink";
 import type {
   FileChangePreview,
   FileChangeRow,
-} from "../../lib/toolDisplayTypes.js";
+  InlineDiffRow,
+} from "@excelsior/core";
 import {
   buildFileChangePreviewFrame,
-  type InlineDiffRow,
-} from "../../lib/fileChangePreview.js";
+} from "@excelsior/core";
 import { theme } from "../../theme.js";
 
 const FileChangeInlineView: FC<{

@@ -2,14 +2,17 @@ import type { AgentMode, AgentMessage, SendOptions, CommandResult } from "@excel
 import type { RunHandle } from "@excelsior/run-runtime";
 import { type AgentFactory } from "./AgentFactory.js";
 import { DefaultAgentFactory } from "../../agent/DefaultAgentFactory.js";
-import { getSetting, type RunRecorder } from "@excelsior/agent-storage";
+import { type RunRecorder } from "@excelsior/agent-storage";
 import type { AgentRun } from "../../runtime/agentRun.js";
 import {
   AgentEventDataMap,
   AnyAgentEvent,
 } from "../../runtime/events.js";
 import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
-import { estimateTokens } from "../context/tokenizer.js";
+import {
+  maybeAutoCompactConversation,
+  type CompactionTriggerMode,
+} from "../context/compactionPolicy.js";
 import { ProjectionPolicy } from "../projection/ProjectionPolicy.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
 import { TurnTransactionCoordinator } from "./TurnTransaction.js";
@@ -35,7 +38,7 @@ export interface TurnLifecycleOptions {
   dependencies?: TurnLifecycleDependencies;
   confirmBus?: ConfirmPromptBus;
   questionBus?: QuestionPromptBus;
-  compactCurrentSession?: (triggerMode: "manual" | "auto") => Promise<void>;
+  compactCurrentSession?: (triggerMode: CompactionTriggerMode) => Promise<void>;
 }
 
 export interface StartUserTurnOptions extends SendOptions {
@@ -56,7 +59,7 @@ export class TurnLifecycle {
   private readonly agentFactory: AgentFactory;
   private readonly confirmBus?: ConfirmPromptBus;
   private readonly questionBus?: QuestionPromptBus;
-  private readonly compactCurrentSessionCallback?: (triggerMode: "manual" | "auto") => Promise<void>;
+  private readonly compactCurrentSessionCallback?: (triggerMode: CompactionTriggerMode) => Promise<void>;
   private handle: RunHandle<AgentEventDataMap> | null = null;
   private unsubscribeLive: (() => void) | null = null;
 
@@ -183,39 +186,10 @@ export class TurnLifecycle {
   }
 
   private async maybeAutoCompact(): Promise<void> {
-    const autoCompactEnabled = getSetting("AUTO_COMPACT_ENABLED") !== "false";
-    if (!autoCompactEnabled) return;
-
-    const limitStr = getSetting("MODEL_AUTO_COMPACT_TOKEN_LIMIT");
-    const limit = limitStr ? parseInt(limitStr, 10) : 253_000;
-
-    const scope = getSetting("MODEL_AUTO_COMPACT_TOKEN_LIMIT_SCOPE") || "Total";
-
-    const history = this.buildAIHistory();
-    if (history.length === 0) return;
-
-    let messagesForScope = [...history];
-    if (scope === "BodyAfterPrefix") {
-      const firstNonSystemIndex = history.findIndex((msg) => msg.role !== "system");
-      if (firstNonSystemIndex !== -1) {
-        messagesForScope = history.slice(firstNonSystemIndex);
-      }
-    }
-
-    const totalText = messagesForScope
-      .map((msg) => typeof msg.content === "string" ? msg.content : msg.content.map(p => p.text).join("\n"))
-      .join("\n");
-    const estimatedTokens = estimateTokens(totalText);
-
-    if (estimatedTokens > limit) {
-      this.state.setLoading(true);
-      try {
-        if (this.compactCurrentSessionCallback) {
-          await this.compactCurrentSessionCallback("auto");
-        }
-      } finally {
-        this.state.setLoading(false);
-      }
-    }
+    await maybeAutoCompactConversation({
+      getHistory: () => this.buildAIHistory(),
+      setLoading: (isLoading) => this.state.setLoading(isLoading),
+      compactCurrentSession: this.compactCurrentSessionCallback,
+    });
   }
 }

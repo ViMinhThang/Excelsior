@@ -1,6 +1,6 @@
 import { ToolLoopAgent, type ModelMessage, tool } from "ai";
 import { z } from "zod";
-import { SkillsManager } from "./skills/SkillsManager.js";
+import { SkillCatalog } from "./skills/SkillCatalog.js";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createFileTools } from "./tools/index.js";
 import { getSetting } from "@excelsior/agent-storage";
@@ -138,19 +138,16 @@ export function createAgent(
     ? `${systemPrompt}\n\n---\n${instructions}\n---`
     : systemPrompt;
 
-  const skillsManager = new SkillsManager(ctx?.workspaceRoot);
-  skillsManager.discoverSkills();
-  const skills = skillsManager.getSkills();
+  const skillCatalog = SkillCatalog.discover(ctx?.workspaceRoot);
+  const skills = skillCatalog.getSkills();
 
   const dynamicSkillTools: Record<string, unknown> = {};
-  for (const skill of skills) {
-    const sanitizedName = skill.name.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
-    const toolName = `skill_${sanitizedName}`;
+  for (const { skill, toolName } of skillCatalog.getEntries()) {
     dynamicSkillTools[toolName] = tool({
       description: skill.description,
       inputSchema: z.object({}),
       execute: async () => {
-        const body = skillsManager.getSkillBody(skill.name);
+        const body = skillCatalog.getSkillBody(skill.name);
         return body || `Skill ${skill.name} not found or disabled.`;
       },
     });

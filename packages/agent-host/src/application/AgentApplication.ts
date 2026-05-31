@@ -15,9 +15,10 @@ import {
   type RunRecorder,
   storageEngine as defaultStorageEngine,
 } from "@excelsior/agent-storage";
-import { makeEvent, type AnyAgentEvent } from "../runtime/events.js";
-import { HISTORY_COMPACTED } from "../runtime/eventNames.js";
-import { runLocalCompaction } from "./context/compactor.js";
+import {
+  compactProjectedConversation,
+  type CompactionTriggerMode,
+} from "./context/compactionPolicy.js";
 import type {
   AgentApplicationOptions,
   ChatSessionState,
@@ -183,25 +184,16 @@ export class AgentApplication {
     return this.turns.run;
   }
 
-  async compactCurrentSession(triggerMode: "manual" | "auto" = "manual"): Promise<void> {
-    const sessionId = this.getCurrentSessionId();
-    if (!sessionId) return;
-
-    const history = this.projection.project(this.state.getProjectionInput()).aiHistory;
-    if (history.length === 0) return;
-
-    const summary = await runLocalCompaction(history);
-
-    const runId = this.state.activeRun?.id || `run_${Date.now()}`;
-    const sequence = this.state.persistedEvents.length + 1;
-    const event = makeEvent(runId, HISTORY_COMPACTED, {
-      summary,
-      compactedEventCount: this.state.persistedEvents.length,
+  async compactCurrentSession(triggerMode: CompactionTriggerMode = "manual"): Promise<void> {
+    await compactProjectedConversation({
+      sessionId: this.getCurrentSessionId(),
+      history: this.projection.project(this.state.getProjectionInput()).aiHistory,
+      persistedEventCount: this.state.persistedEvents.length,
       triggerMode,
-    }, sequence);
-
-    await this.recorder.recordEvent(sessionId, event as AnyAgentEvent);
-    await this.reloadCurrentSessionEvents();
+      activeRunId: this.state.activeRun?.id,
+      recordEvent: (sessionId, event) => this.recorder.recordEvent(sessionId, event),
+      reloadCurrentSessionEvents: () => this.reloadCurrentSessionEvents(),
+    });
   }
 
   dispose(): void {

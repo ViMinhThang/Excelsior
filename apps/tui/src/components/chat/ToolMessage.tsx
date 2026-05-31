@@ -1,10 +1,9 @@
 import { memo, type FC } from "react";
 import { Box, Text } from "ink";
+import { createToolDisplay, normalizeToolText } from "@excelsior/core";
 import StatusIndicator from "./StatusIndicator.js";
 import { theme } from "../../theme.js";
-import { createToolDisplay } from "../../lib/toolDisplay.js";
 import { FileChangePreviewView } from "../../features/fileChangePreview/FileChangePreviewView.js";
-import { normalizeToolText } from "../../lib/toolDisplayUtils.js";
 
 interface ToolMessageProps {
   toolName?: string;

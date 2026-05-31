@@ -8,7 +8,7 @@ import { createSessionCommand } from "./sessionCommands.js";
 import { createCompactCommand } from "./compactCommand.js";
 import { createReviewCommands } from "./reviewCommands.js";
 import type { AgentCommand, AgentCommandApplication, ReviewCommandServices } from "./types.js";
-import { SkillsManager } from "../agent/skills/SkillsManager.js";
+import { SkillCatalog } from "../agent/skills/SkillCatalog.js";
 import { CommandBuilder } from "./commandBuilder.js";
 
 export interface CommandRegistryOptions {
@@ -42,16 +42,13 @@ export class CommandRegistry {
     }
 
     if (workspaceRoot) {
-      const skillsManager = new SkillsManager(workspaceRoot);
-      skillsManager.discoverSkills();
-      const skills = skillsManager.getSkills();
-      for (const skill of skills) {
-        const commandName = skill.name.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+      const skillCatalog = SkillCatalog.discover(workspaceRoot);
+      for (const { skill, commandName } of skillCatalog.getEntries()) {
         const skillCommand = new CommandBuilder(commandName)
           .category("skills")
           .description(skill.shortDescription)
           .default(async (_args, application) => {
-            const body = skillsManager.getSkillBody(skill.name);
+            const body = skillCatalog.getSkillBody(skill.name);
             if (!body) {
               return {
                 handled: true,

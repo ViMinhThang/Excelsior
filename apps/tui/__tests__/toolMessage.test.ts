@@ -1,8 +1,8 @@
 import { createElement } from "react";
 import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
+import { createToolDisplay } from "@excelsior/core";
 import ToolMessage from "../src/components/chat/ToolMessage.js";
-import { createToolDisplay } from "../src/lib/toolDisplay.js";
 
 function commandFor(toolName: string, args: Record<string, unknown>): string {
   return createToolDisplay({
