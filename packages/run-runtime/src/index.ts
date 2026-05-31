@@ -19,5 +19,9 @@ export type {
   RunHandle,
   RunPersistenceConfig,
 } from "./eventfulRun.js";
+export {
+  createRunPersistenceTracker,
+  type RunPersistenceTracker,
+} from "./runPersistence.js";
 
 export { generateId } from "./id.js";

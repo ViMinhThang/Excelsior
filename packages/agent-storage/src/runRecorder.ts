@@ -10,99 +10,17 @@ import { existsSync } from "fs";
 import { join } from "path";
 import type {
   AnyAgentEvent,
+  DropLastCompletedTurnResult,
+  LastCompletedTurn,
   RunEventStore,
   TurnCheckpointStore,
-  LastCompletedTurn,
-  DropLastCompletedTurnResult,
 } from "./ports.js";
-
-const TURN_COMPLETE = "turn-complete";
-
-function makeEvent(
-  runId: string,
-  type: string,
-  data: unknown,
-  sequence: number,
-): AnyAgentEvent {
-  return {
-    id: `evt_chk_${Math.random().toString(36).substring(2, 11)}`,
-    runId,
-    sequence,
-    type,
-    version: 1,
-    causationId: "",
-    correlationId: runId,
-    timestamp: new Date().toISOString(),
-    data,
-  };
-}
-
-function timestampMs(event: AnyAgentEvent): number {
-  const parsed = Date.parse(event.timestamp);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function sortEventsForReplay(events: AnyAgentEvent[]): AnyAgentEvent[] {
-  return events
-    .map((event, index) => ({ event, index }))
-    .sort((a, b) => {
-      if (a.event.runId === b.event.runId) {
-        return a.event.sequence - b.event.sequence || a.index - b.index;
-      }
-      return timestampMs(a.event) - timestampMs(b.event) || a.index - b.index;
-    })
-    .map(({ event }) => event);
-}
-
-function turnCompleteRunId(event: AnyAgentEvent): string | null {
-  if (event.type !== TURN_COMPLETE) return null;
-  return (event.data as { runId?: string }).runId ?? null;
-}
-
-function belongsToCompletedRun(
-  event: AnyAgentEvent,
-  completedRunIds: Set<string>,
-): boolean {
-  const checkpointRunId = turnCompleteRunId(event);
-  if (checkpointRunId) return completedRunIds.has(checkpointRunId);
-
-  return (
-    completedRunIds.has(event.runId) ||
-    (!!event.parentEventId && completedRunIds.has(event.parentEventId)) ||
-    (!!event.correlationId && completedRunIds.has(event.correlationId))
-  );
-}
-
-function belongsToRun(event: AnyAgentEvent, runId: string): boolean {
-  const checkpointRunId = turnCompleteRunId(event);
-  if (checkpointRunId) return checkpointRunId === runId;
-
-  return (
-    event.runId === runId ||
-    event.parentEventId === runId ||
-    event.correlationId === runId
-  );
-}
-
-function findLastCompletedTurn(
-  events: AnyAgentEvent[],
-): LastCompletedTurn | null {
-  const checkpoint = events
-    .map((event, index) => ({ event, index }))
-    .filter(({ event }) => event.type === TURN_COMPLETE)
-    .at(-1);
-
-  if (!checkpoint) return null;
-
-  const runId = turnCompleteRunId(checkpoint.event);
-  if (!runId) return null;
-
-  return {
-    runId,
-    checkpointIndex: checkpoint.index,
-    eventCount: events.filter((event) => belongsToRun(event, runId)).length,
-  };
-}
+import {
+  completedReplayEvents,
+  createTurnCompleteEvent,
+  dropLastCompletedTurnFromEvents,
+  findLastCompletedTurn,
+} from "./runReplayPolicy.js";
 
 export class JsonlRunRecorder implements RunEventStore, TurnCheckpointStore {
   private readonly appendQueues = new Map<string, Promise<void>>();
@@ -149,22 +67,6 @@ export class JsonlRunRecorder implements RunEventStore, TurnCheckpointStore {
     }
   }
 
-  private async loadCompletedReplay(sessionId: string): Promise<AnyAgentEvent[]> {
-    const all = await this.load(sessionId);
-    const checkpoints = all.filter((event) => event.type === TURN_COMPLETE);
-
-    if (checkpoints.length === 0) return sortEventsForReplay(all);
-
-    const completedRunIds = new Set(
-      checkpoints.map((event) => (event.data as { runId: string }).runId),
-    );
-    const completedEvents = all.filter((event) =>
-      belongsToCompletedRun(event, completedRunIds),
-    );
-
-    return sortEventsForReplay(completedEvents);
-  }
-
   append(sessionId: string, event: AnyAgentEvent): Promise<void> {
     return this.appendRecordedEvent(sessionId, event);
   }
@@ -174,12 +76,12 @@ export class JsonlRunRecorder implements RunEventStore, TurnCheckpointStore {
     runId: string,
     sequence: number,
   ): Promise<void> {
-    const checkpoint = makeEvent(runId, TURN_COMPLETE, { runId }, sequence);
+    const checkpoint = createTurnCompleteEvent(runId, sequence);
     return this.appendRecordedEvent(sessionId, checkpoint);
   }
 
   async loadCompletedEvents(sessionId: string): Promise<AnyAgentEvent[]> {
-    return this.loadCompletedReplay(sessionId);
+    return completedReplayEvents(await this.load(sessionId));
   }
 
   async load(sessionId: string): Promise<AnyAgentEvent[]> {
@@ -208,37 +110,21 @@ export class JsonlRunRecorder implements RunEventStore, TurnCheckpointStore {
   ): Promise<DropLastCompletedTurnResult> {
     await this.waitForSessionQueue(sessionId);
     const events = await this.load(sessionId);
-    const latest = findLastCompletedTurn(events);
-
-    if (!latest) {
-      return { dropped: false, removedEvents: 0, reason: "no-completed-turn" };
-    }
-
-    if (expectedRunId && latest.runId !== expectedRunId) {
-      return {
-        dropped: false,
-        runId: latest.runId,
-        removedEvents: 0,
-        reason: "latest-turn-mismatch",
-      };
-    }
-
-    const remaining = events.filter(
-      (event) => !belongsToRun(event, latest.runId),
+    const { remainingEvents, ...result } = dropLastCompletedTurnFromEvents(
+      events,
+      expectedRunId,
     );
+    if (!result.dropped) return result;
+
     await this.ensureDir();
     await writeFile(
       this.filePath(sessionId),
-      remaining.map((event) => JSON.stringify(event)).join("\n") +
-        (remaining.length > 0 ? "\n" : ""),
+      remainingEvents.map((event) => JSON.stringify(event)).join("\n") +
+        (remainingEvents.length > 0 ? "\n" : ""),
       "utf-8",
     );
 
-    return {
-      dropped: true,
-      runId: latest.runId,
-      removedEvents: events.length - remaining.length,
-    };
+    return result;
   }
 
   async delete(sessionId: string): Promise<void> {
