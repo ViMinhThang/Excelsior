@@ -1,4 +1,4 @@
-import { defineReadModel, projectEvents, ProjectionRegistry, type ReadModel } from "@excelsior/projection";
+import { projectEvents, ProjectionRegistry, type ReadModel } from "@excelsior/projection";
 import type { AnyAgentEvent } from "../../runtime/events.js";
 import type { ProjectedBlock } from "@excelsior/core";
 import { flushAll, finalizeChatTranscriptProjection } from "./flush.js";
@@ -34,7 +34,7 @@ export const CHAT_TRANSCRIPT_MODEL: ReadModel<
   .on("tool-call-end", handleToolCallEnd)
   .on("error", handleError)
   .on("persistence-error", handlePersistenceError)
-  .on("run-end", (state, event, context) => flushAll(state, context))
+  .on("run-end", (state, _event, context) => flushAll(state, context))
   .build();
 
 export function reduceChatTranscriptEvent(

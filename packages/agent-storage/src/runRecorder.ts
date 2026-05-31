@@ -21,7 +21,7 @@ const TURN_COMPLETE = "turn-complete";
 function makeEvent(
   runId: string,
   type: string,
-  data: any,
+  data: unknown,
   sequence: number,
 ): AnyAgentEvent {
   return {

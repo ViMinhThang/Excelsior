@@ -8,7 +8,6 @@ import { theme } from "../../theme.js";
 
 export { highlightCode, highlightFilenames } from "../../lib/markdown/highlight.js";
 export { normalizePipeTables, formatMarkdownTable, type MarkdownTableInput } from "../../lib/markdown/tables.js";
-
 const InlineRenderer: FC<{ tokens: Token[] }> = ({ tokens }) => (
   <>
     {tokens.map((token, i) => {

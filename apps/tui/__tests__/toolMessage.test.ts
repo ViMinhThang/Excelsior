@@ -12,22 +12,20 @@ function commandFor(toolName: string, args: Record<string, unknown>): string {
 }
 
 describe("ToolMessage command formatting", () => {
-  it("shows view calls with only the final path segment", () => {
+  it("shows view calls with the full path", () => {
+    const filePath = ["packages", "run-runtime", "src", "runOrchestrator.ts"].join("/");
     expect(commandFor(
       "view",
-      {
-        filePath: ["packages", "run-runtime", "src", "runOrchestrator.ts"].join("/"),
-      },
-    )).toBe("read runOrchestrator.ts");
+      { filePath },
+    )).toBe("read(" + filePath + ")");
   });
 
   it("does not show quoted JSON args for view calls", () => {
+    const filePath = ["packages", "agent-host", "src", "host", "LocalAgentHost.ts"].join("/");
     expect(commandFor(
       "view",
-      {
-        filePath: ["packages", "agent-host", "src", "host", "LocalAgentHost.ts"].join("/"),
-      },
-    )).toBe("read LocalAgentHost.ts");
+      { filePath },
+    )).toBe("read(" + filePath + ")");
   });
 
   it("shows ls calls with the directory path value only", () => {

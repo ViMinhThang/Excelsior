@@ -3,10 +3,9 @@ import {
   AgentStateStore,
   ProjectionPolicy,
   TurnLifecycle,
-  AgentApplication,
 } from "@excelsior/agent-host/testing/application";
 import { makeEvent } from "./projection/helpers.js";
-import { getSetting, setSetting } from "@excelsior/agent-storage";
+import { setSetting } from "@excelsior/agent-storage";
 import { estimateTokens } from "../src/application/context/tokenizer.js";
 
 // Mock runLocalCompaction

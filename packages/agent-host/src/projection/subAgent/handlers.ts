@@ -1,6 +1,5 @@
 import type { AnyAgentEvent } from "../../runtime/events.js";
 import {
-  TEXT_DELTA,
   TOOL_CALL_END,
   TOOL_CALL_START,
 } from "../../runtime/eventNames.js";
@@ -22,7 +21,7 @@ export function rememberTimestamp(
   };
 }
 
-function appendTextPart(
+export function appendTextPart(
   parts: readonly SubAgentProjectionPart[],
   text: string,
 ): SubAgentProjectionPart[] {
@@ -52,16 +51,6 @@ function updateToolCallStatus(
   };
 }
 
-export function handleTextDelta(
-  state: SubAgentProjectionState,
-  event: SubAgentProjectionEvent<typeof TEXT_DELTA>,
-): SubAgentProjectionState {
-  return {
-    ...state,
-    fullOutput: state.fullOutput + event.data.delta,
-    parts: appendTextPart(state.parts, event.data.delta),
-  };
-}
 
 export function handleToolCallStart(
   state: SubAgentProjectionState,

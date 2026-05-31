@@ -1,6 +1,5 @@
 import type {
   AgentHostDispatchResult,
-  AgentHostIntent,
   AgentMode,
   CommandResult,
   Session,
@@ -44,129 +43,67 @@ export function createIntentDispatcher(
 ): IntentRegistry {
   const registry = new IntentRegistry();
 
-  registry.register({
-    type: "send",
-    handle(intent) {
+  registry
+    .on("send", (intent) => {
       options.application.send(intent.content, intent.options);
       return none();
-    },
-  });
-
-  registry.register({
-    type: "cancel",
-    handle() {
+    })
+    .on("cancel", () => {
       options.application.cancel();
       return none();
-    },
-  });
-
-  registry.register({
-    type: "clear-messages",
-    handle() {
+    })
+    .on("clear-messages", () => {
       options.application.clear();
       return none();
-    },
-  });
-
-  registry.register({
-    type: "revert-last-turn",
-    async handle() {
+    })
+    .on("revert-last-turn", async () => {
       return commandResult(await options.application.revertLastTurn());
-    },
-  });
-
-  registry.register({
-    type: "execute-command",
-    async handle(intent) {
+    })
+    .on("execute-command", async (intent) => {
       return commandResult(await options.commandExecutor.execute(intent.input));
-    },
-  });
-
-  registry.register({
-    type: "create-session",
-    handle(intent) {
+    })
+    .on("create-session", (intent) => {
       return sessionResult(options.application.createSession(intent.title));
-    },
-  });
-
-  registry.register({
-    type: "switch-session",
-    async handle(intent) {
+    })
+    .on("switch-session", async (intent) => {
       await options.application.switchSession(intent.sessionId);
       return none();
-    },
-  });
-
-  registry.register({
-    type: "delete-session",
-    async handle(intent) {
+    })
+    .on("delete-session", async (intent) => {
       await options.application.deleteSession(intent.sessionId);
       return none();
-    },
-  });
-
-  registry.register({
-    type: "rename-session",
-    handle(intent) {
+    })
+    .on("rename-session", (intent) => {
       options.application.renameSession(intent.sessionId, intent.title);
       return none();
-    },
-  });
-
-  registry.register({
-    type: "delete-all-sessions",
-    async handle() {
+    })
+    .on("delete-all-sessions", async () => {
       await options.application.deleteAllSessions();
       return none();
-    },
-  });
-
-  registry.register({
-    type: "set-mode",
-    handle(intent) {
+    })
+    .on("set-mode", (intent) => {
       options.application.setMode(intent.mode);
       return none();
-    },
-  });
-
-  registry.register({
-    type: "toggle-mode",
-    handle() {
+    })
+    .on("toggle-mode", () => {
       return modeResult(options.application.toggleMode());
-    },
-  });
-
-  registry.register({
-    type: "save-settings",
-    handle(intent) {
+    })
+    .on("save-settings", (intent) => {
       options.settings.saveSettings(intent.settings);
       return none();
-    },
-  });
-
-  registry.register({
-    type: "respond-to-confirmation",
-    handle(intent) {
+    })
+    .on("respond-to-confirmation", (intent) => {
       options.confirmations.respond(intent.callId, intent.approved);
       return none();
-    },
-  });
-
-  registry.register({
-    type: "approve-all-confirmations",
-    handle() {
+    })
+    .on("approve-all-confirmations", () => {
       options.confirmations.approveAll();
       return none();
-    },
-  });
-
-  registry.register({
-    type: "respond-to-question",
-    handle(intent) {
+    })
+    .on("respond-to-question", (intent) => {
       options.questions.respond(intent.response);
       return none();
-    },
-  });
+    });
 
   return registry;
 }

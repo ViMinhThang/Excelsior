@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
+import type { ProjectedBlock } from "@excelsior/core";
 import { getCommandInputWithSelection } from "../chatModes/index.js";
 import {
   buildModeViewContext,
@@ -40,8 +41,59 @@ export function useChatInteractionController(): ChatScreenModel {
     pendingQuestion,
   } = agent.state;
 
-  const inputHistory = useInputHistory(displayBlocks);
-  const subAgentNav = useSubAgentNavigation(displayBlocks);
+  const [optimisticUserMessage, setOptimisticUserMessage] = useState<string | null>(null);
+
+  const customSend = useCallback((content: string) => {
+    setOptimisticUserMessage(content);
+    agent.send(content);
+  }, [agent.send]);
+
+  const derivedDisplayBlocks = useMemo(() => {
+    if (!optimisticUserMessage) return displayBlocks;
+
+    // Check if the optimistic message is already in displayBlocks
+    const alreadyPresent = displayBlocks.some(
+      (block) => block.type === "user" && block.content === optimisticUserMessage
+    );
+    if (alreadyPresent) return displayBlocks;
+
+    const optimisticBlock: ProjectedBlock = {
+      type: "user",
+      id: `optimistic_${Date.now()}`,
+      content: optimisticUserMessage,
+      timestamp: new Date().toISOString(),
+      isFrozen: true,
+    };
+
+    return [...displayBlocks, optimisticBlock];
+  }, [displayBlocks, optimisticUserMessage]);
+
+  useEffect(() => {
+    if (optimisticUserMessage) {
+      const userBlocks = displayBlocks.filter((b) => b.type === "user");
+      const latestUserBlock = userBlocks[userBlocks.length - 1];
+      if (latestUserBlock && latestUserBlock.content === optimisticUserMessage) {
+        setOptimisticUserMessage(null);
+      }
+    }
+  }, [displayBlocks, optimisticUserMessage]);
+
+  useEffect(() => {
+    setOptimisticUserMessage(null);
+  }, [currentSessionId]);
+
+  const [wasLoading, setWasLoading] = useState(false);
+  useEffect(() => {
+    if (isLoading) {
+      setWasLoading(true);
+    } else if (wasLoading) {
+      setOptimisticUserMessage(null);
+      setWasLoading(false);
+    }
+  }, [isLoading, wasLoading]);
+
+  const inputHistory = useInputHistory(derivedDisplayBlocks);
+  const subAgentNav = useSubAgentNavigation(derivedDisplayBlocks);
   const [commandsExpanded, setCommandsExpanded] = useState(false);
   const command = useCommandResult(inputHistory.input);
   const confirmation = useToolConfirmation(
@@ -84,7 +136,7 @@ export function useChatInteractionController(): ChatScreenModel {
   }, [subAgentNav.openSubAgent]);
 
   const controlPlane = buildChatControlPlane({
-    displayBlocks,
+    displayBlocks: derivedDisplayBlocks,
     chatMode: subAgentNav.chatMode,
     isLoading,
     pendingConfirmation: confirmation.pending,
@@ -118,7 +170,7 @@ export function useChatInteractionController(): ChatScreenModel {
     isLoading,
     inputRef: inputHistory.inputRef,
     executeCommand: agent.executeCommand,
-    send: agent.send,
+    send: customSend,
     resetInput: inputHistory.resetInput,
     setInput: inputHistory.setInput,
     setCommandResult: command.setCommandResult,
@@ -151,7 +203,7 @@ export function useChatInteractionController(): ChatScreenModel {
   return {
     modeView: buildModeViewContext({
       chatMode: subAgentNav.chatMode,
-      displayBlocks,
+      displayBlocks: derivedDisplayBlocks,
       inputValue: inputHistory.input,
       setInput: inputHistory.setInput,
       handleSubmit,

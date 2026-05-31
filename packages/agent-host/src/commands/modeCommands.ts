@@ -1,9 +1,9 @@
 import { formatAgentMode } from "@excelsior/core";
-import type { AgentCommand, AgentCommandApplication } from "./types.js";
+import type { AgentCommand } from "./types.js";
 import { CommandBuilder } from "./commandBuilder.js";
 
 export function createModeCommand(): AgentCommand {
-  return new CommandBuilder<AgentCommandApplication>("mode")
+  return new CommandBuilder("mode")
     .category("mode")
     .description("Show or switch Plan/Act mode")
     .default((_args, application) => ({
