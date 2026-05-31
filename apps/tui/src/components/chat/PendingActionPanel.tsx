@@ -1,6 +1,6 @@
 import type { FC } from "react";
 import { Box, Text } from "ink";
-import type { ToolDisplay } from "../../lib/toolDisplay.js";
+import type { ToolDisplay } from "@excelsior/core";
 import { theme } from "../../theme.js";
 import Panel from "../shared/Panel.js";
 import { FileChangePreviewView } from "../../features/fileChangePreview/FileChangePreviewView.js";

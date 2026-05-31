@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createToolDisplay, getCommandRisk } from "../src/lib/toolDisplay.js";
+import { createToolDisplay, getCommandRisk } from "@excelsior/core";
 
 describe("tool display model", () => {
   it("summarizes runCommand risk, result, and errors", () => {
@@ -131,6 +131,30 @@ describe("tool display model", () => {
 
     expect(display.detail).toBe("demo.ts (+1 -1 lines)");
     expect(display.resultPreview).toBeUndefined();
+    expect(display.fileChangePreview).toMatchObject({
+      action: "edit",
+      oldLines: ["old"],
+      newLines: ["new"],
+    });
+  });
+
+  it("keeps editFile alias formatting aligned with edit", () => {
+    const display = createToolDisplay({
+      toolName: "editFile",
+      toolArgs: JSON.stringify({ filePath: "demo.ts" }),
+      status: "completed",
+      content: [
+        "Successfully replaced the block in demo.ts.",
+        "--- demo.ts",
+        "+++ demo.ts",
+        "@@ -1,1 +1,1 @@",
+        "-old",
+        "+new",
+      ].join("\n"),
+    });
+
+    expect(display.label).toBe("Edit");
+    expect(display.command).toBe("edit demo.ts");
     expect(display.fileChangePreview).toMatchObject({
       action: "edit",
       oldLines: ["old"],
