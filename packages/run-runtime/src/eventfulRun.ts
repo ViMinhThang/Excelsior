@@ -1,12 +1,10 @@
 import { createChannelBus } from "./bus.js";
-import type { Bus, Unsubscribe } from "./bus.js";
+import type { Bus } from "./bus.js";
 import { DisposableScope } from "./disposable.js";
 import { AnyRunEvent, makeRunEvent, RunEventOverrides } from "./events.js";
 import { generateId } from "./id.js";
-import {
-  createRunPersistenceTracker,
-  type RunPersistenceConfig,
-} from "./runPersistence.js";
+import type { RunPersistenceConfig } from "./runPersistence.js";
+import { RunRunner } from "./runRunner.js";
 
 export type { RunPersistenceConfig };
 
@@ -157,77 +155,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
   }
 
   start(config: RunConfig<TEvents>): RunHandle<TEvents> {
-    const persistence = createRunPersistenceTracker({
-      initialEvents: this.getSnapshot(),
-      persist: config.persist,
-    });
-
-    const emit: RunExecutionContext<TEvents>["emit"] = (type, data, overrides) => {
-      this.emit(type, data, overrides);
-    };
-
-    let unsub: Unsubscribe | null = this.bus.on("event", (event) => {
-      persistence.record(event);
-    });
-
-    const cleanup = (): void => {
-      unsub?.();
-      unsub = null;
-    };
-
-    const finish = async (
-      completion: RunCompletion<TEvents>,
-    ): Promise<RunCompletion<TEvents>> => {
-      await persistence.flush();
-      cleanup();
-      return completion;
-    };
-
-    const getCancelReason = (fallback?: unknown): unknown => {
-      return this.abortSignal.aborted ? this.abortSignal.reason : fallback;
-    };
-
-    const cancelledCompletion = (fallback?: unknown): RunCompletion<TEvents> => {
-      const cancelReason = getCancelReason(fallback);
-      return cancelReason === undefined
-        ? { status: "cancelled", events: persistence.events }
-        : { status: "cancelled", events: persistence.events, cancelReason };
-    };
-
-    const isAbortError = (error: unknown): boolean =>
-      config.isAbortError?.(error) ??
-      (error instanceof Error &&
-        (error.name === "AbortError" || error.message.includes("abort")));
-
-    const completion = Promise.resolve()
-      .then(() => config.execute({ run: this, signal: this.abortSignal, emit }))
-      .then(async () => {
-        return finish(
-          this.isCancelled
-            ? cancelledCompletion()
-            : { status: "completed", events: persistence.events },
-        );
-      })
-      .catch(async (error: unknown) => {
-        if (isAbortError(error)) {
-          return finish(cancelledCompletion(error));
-        }
-
-        try {
-          config.onError?.(error);
-        } catch (handlerError: unknown) {
-          return finish({ status: "failed", events: persistence.events, error: handlerError });
-        }
-
-        return finish({ status: "failed", events: persistence.events, error });
-      });
-
-    return {
-      cancel: (reason?: unknown) => {
-        this.cancel(reason);
-      },
-      completion,
-    };
+    return RunRunner.run(this, config);
   }
 
   private _clearNotifyTimer(): boolean {

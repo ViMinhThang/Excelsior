@@ -298,13 +298,14 @@ describe("runCommandTool", () => {
       expect(result).not.toContain("Blocked");
     });
 
-    it("allows safe python inline scripts", async () => {
-      const result = await executeTool(runCommandTool, {
-        command: "python",
-        args: ["-c", "print('safe inline py')"]
+    it("classifies safe python inline scripts without requiring python to be installed", () => {
+      const result = classifyCommandRisk("python", ["-c", "print('safe inline py')"]);
+
+      expect(result).toMatchObject({
+        kind: "read",
+        risk: "low",
       });
-      expect(result).toContain("safe inline py");
-      expect(result).not.toContain("Blocked");
+      expect(result.blockedMessage).toBeUndefined();
     });
   });
 });

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
-import type { ProjectedBlock } from "@excelsior/core";
 import { getCommandInputWithSelection } from "../chatModes/index.js";
 import {
   buildModeViewContext,
@@ -26,6 +25,10 @@ import {
   shouldCollapseCommandsForChatMode,
   shouldResetChatModeForPending,
 } from "./chatScreenControlPlane.js";
+import {
+  buildOptimisticTranscript,
+  shouldClearOptimisticMessage,
+} from "./optimisticTranscript.js";
 
 export function useChatInteractionController(): ChatScreenModel {
   const { navigate } = useNavigation();
@@ -48,33 +51,14 @@ export function useChatInteractionController(): ChatScreenModel {
     agent.send(content);
   }, [agent.send]);
 
-  const derivedDisplayBlocks = useMemo(() => {
-    if (!optimisticUserMessage) return displayBlocks;
-
-    // Check if the optimistic message is already in displayBlocks
-    const alreadyPresent = displayBlocks.some(
-      (block) => block.type === "user" && block.content === optimisticUserMessage
-    );
-    if (alreadyPresent) return displayBlocks;
-
-    const optimisticBlock: ProjectedBlock = {
-      type: "user",
-      id: `optimistic_${Date.now()}`,
-      content: optimisticUserMessage,
-      timestamp: new Date().toISOString(),
-      isFrozen: true,
-    };
-
-    return [...displayBlocks, optimisticBlock];
-  }, [displayBlocks, optimisticUserMessage]);
+  const derivedDisplayBlocks = useMemo(() => buildOptimisticTranscript({
+    displayBlocks,
+    optimisticUserMessage,
+  }), [displayBlocks, optimisticUserMessage]);
 
   useEffect(() => {
-    if (optimisticUserMessage) {
-      const userBlocks = displayBlocks.filter((b) => b.type === "user");
-      const latestUserBlock = userBlocks[userBlocks.length - 1];
-      if (latestUserBlock && latestUserBlock.content === optimisticUserMessage) {
-        setOptimisticUserMessage(null);
-      }
+    if (shouldClearOptimisticMessage(displayBlocks, optimisticUserMessage)) {
+      setOptimisticUserMessage(null);
     }
   }, [displayBlocks, optimisticUserMessage]);
 
