@@ -1,6 +1,6 @@
 import {
   parsePendingFileChangePreview,
-} from "./fileChangePreview.js";
+} from "./fileChangePreviewParser.js";
 import {
   normalizeToolText,
   previewContent,

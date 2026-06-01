@@ -6,7 +6,7 @@ import { join } from "path";
 import {
   createDb,
   resetDb,
-} from "@excelsior/agent-host/testing/persistence";
+} from "@excelsior/agent-storage";
 import { createStorageEngine } from "@excelsior/agent-host/testing/application";
 import Database from "better-sqlite3";
 

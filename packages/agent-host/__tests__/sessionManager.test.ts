@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { resetDb, storageEngine } from "@excelsior/agent-host/testing/persistence";
+import { resetDb, storageEngine } from "@excelsior/agent-storage";
 import { SessionManager } from "@excelsior/agent-host/testing/session";
 import { makeEvent } from "@excelsior/agent-host/testing/runtime";
 import { createFakeRunRecorder } from "./helpers/agentApplication.js";

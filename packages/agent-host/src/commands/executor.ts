@@ -2,6 +2,11 @@ import type { CommandDefinition, CommandResult } from "@excelsior/core";
 import { CommandRegistry } from "./registry.js";
 import type { AgentCommandApplication, ReviewCommandServices } from "./types.js";
 
+export type {
+  AgentCommandApplication,
+  ReviewCommandServices,
+} from "./types.js";
+
 export interface AgentCommandExecutorOptions {
   application: AgentCommandApplication;
   services?: ReviewCommandServices;
