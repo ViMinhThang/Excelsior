@@ -1,4 +1,5 @@
 export * from "./conversationPresentation/types.js";
+export * from "./conversationPresentation/toolArgs.js";
 export * from "./conversationPresentation/toolText.js";
 export * from "./conversationPresentation/fileChangePreview.js";
 export * from "./conversationPresentation/toolDisplayRegistry.js";

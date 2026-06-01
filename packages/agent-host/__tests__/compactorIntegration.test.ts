@@ -4,7 +4,9 @@ import {
   ProjectionPolicy,
   TurnLifecycle,
 } from "@excelsior/agent-host/testing/application";
+import type { AnyAgentEvent } from "@excelsior/agent-host/testing/runtime";
 import { makeEvent } from "./projection/helpers.js";
+import { createFakeRunRecorder } from "./helpers/agentApplication.js";
 import { setSetting } from "@excelsior/agent-storage";
 import { estimateTokens } from "../src/application/context/tokenizer.js";
 
@@ -81,31 +83,28 @@ describe("Compaction Integration & Auto-Compaction", () => {
       makeEvent({ type: "user-input", data: { content: "this text is long and will exceed the limit" } }),
     ]);
 
-    const recorder = {
+    const loadCompactedEvents = async (): Promise<AnyAgentEvent[]> => [
+      makeEvent({ type: "user-input", data: { content: "this text is long and will exceed the limit" } }),
+      makeEvent({
+        type: "history-compacted",
+        data: {
+          summary: "Integrated bullet-point conversation summary.",
+          compactedEventCount: 1,
+          triggerMode: "auto",
+        },
+      }),
+    ];
+
+    const recorder = createFakeRunRecorder({
       recordEvent: vi.fn(),
-      recordTurnComplete: async () => {},
-      loadCompletedEvents: async (_sessionId: string) => [
-        makeEvent({ type: "user-input", data: { content: "this text is long and will exceed the limit" } }),
-        makeEvent({
-          type: "history-compacted",
-          data: {
-            summary: "Integrated bullet-point conversation summary.",
-            compactedEventCount: 1,
-            triggerMode: "auto",
-          },
-        }),
-      ],
-      loadRawEvents: async (_sessionId: string) => [],
-      getLastCompletedTurn: async (_sessionId: string) => null,
+      loadCompletedEvents: loadCompactedEvents,
       dropLastCompletedTurn: async (_sessionId: string) => ({ dropped: true, removedEvents: 0 }),
-      deleteSessionEvents: async (_sessionId: string) => {},
-      deleteAllSessionEvents: async () => {},
-    };
+    });
 
     const lifecycle = new TurnLifecycle({
       state,
       projection: new ProjectionPolicy(),
-      recorder: recorder as any,
+      recorder,
       subAgentEvents: { emit: () => {}, on: () => () => {} },
       sessionStorage: {
         getCurrentSessionId: () => "ses_test",
@@ -135,7 +134,7 @@ describe("Compaction Integration & Auto-Compaction", () => {
           },
         });
         await recorder.recordEvent("ses_test", event);
-        state.setPersistedEvents(await recorder.loadCompletedEvents("ses_test"));
+        state.setPersistedEvents(await loadCompactedEvents());
       },
       dependencies: {
         agentFactory: { create: () => ({ stream: async () => {} }) },

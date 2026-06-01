@@ -1,5 +1,8 @@
 import type { ModelMessage } from "ai";
-import type { AgentMessage } from "@excelsior/core";
+import {
+  parseToolInput,
+  type AgentMessage,
+} from "@excelsior/core";
 import { normalizeMessageContent } from "../application/context/messageUtils.js";
 
 export function toModelMessages(messages: readonly AgentMessage[]): ModelMessage[] {
@@ -64,12 +67,4 @@ function toTextContent(
 ): string | Array<{ type: "text"; text: string }> {
   if (typeof content === "string") return content;
   return content.map((part) => ({ type: "text", text: part.text }));
-}
-
-function parseToolInput(input: string): unknown {
-  try {
-    return JSON.parse(input);
-  } catch {
-    return input;
-  }
 }

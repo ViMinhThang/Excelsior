@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   AgentRun,
   createSubAgentEventSink,
-  type RunRecorder,
 } from "@excelsior/agent-host/testing/runtime";
+import { createToolContext } from "@excelsior/agent-host/testing/tools";
 import {
+  createFakeRunRecorder,
   createFakeSessionManager,
   createPendingRunHandle,
   createFakeTurnLifecycle,
@@ -34,10 +35,10 @@ describe("test helper fixtures", () => {
     const run = new AgentRun("ses_test");
     const agent = lifecycle.agentFactory.create({
       runContext: {
-        ctx: { capabilities: new Set() } as any,
+        ctx: createToolContext(),
         run,
         childRuns: new Map(),
-        recorder: createRecorder(),
+        recorder: createFakeRunRecorder(),
         subAgentEvents: createSubAgentEventSink(),
       },
       mode: "act",
@@ -65,20 +66,3 @@ describe("test helper fixtures", () => {
     expect(typeof handle.completion.then).toBe("function");
   });
 });
-
-function createRecorder(): RunRecorder {
-  return {
-    recordEvent: async () => {},
-    recordTurnComplete: async () => {},
-    loadCompletedEvents: async () => [],
-    loadRawEvents: async () => [],
-    getLastCompletedTurn: async () => null,
-    dropLastCompletedTurn: async () => ({
-      dropped: false,
-      removedEvents: 0,
-      reason: "no-completed-turn",
-    }),
-    deleteSessionEvents: async () => {},
-    deleteAllSessionEvents: async () => {},
-  } as any;
-}

@@ -3,22 +3,34 @@ import type {
   DropLastCompletedTurnResult,
   LastCompletedTurn,
 } from "./ports.js";
+import {
+  formatStorageTimestamp,
+  systemStorageTimeIdPolicy,
+} from "./timeIdPolicy.js";
 
 export const TURN_COMPLETE = "turn-complete";
+
+export interface CreateTurnCompleteEventOptions {
+  createEventId?: () => string;
+  now?: () => Date | string;
+}
 
 export function createTurnCompleteEvent(
   runId: string,
   sequence: number,
+  options: CreateTurnCompleteEventOptions = {},
 ): AnyAgentEvent {
   return {
-    id: `evt_chk_${Math.random().toString(36).substring(2, 11)}`,
+    id: options.createEventId?.() ?? systemStorageTimeIdPolicy.createId("evt_chk"),
     runId,
     sequence,
     type: TURN_COMPLETE,
     version: 1,
     causationId: "",
     correlationId: runId,
-    timestamp: new Date().toISOString(),
+    timestamp: options.now
+      ? formatStorageTimestamp(options.now())
+      : systemStorageTimeIdPolicy.nowIso(),
     data: { runId },
   };
 }

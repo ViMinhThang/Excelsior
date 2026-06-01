@@ -2,12 +2,14 @@ import {
   parsePendingFileChangePreview,
 } from "./fileChangePreview.js";
 import {
-  genericSummary,
   normalizeToolText,
-  parseArgs,
   previewContent,
   toneFor,
 } from "./toolText.js";
+import {
+  genericToolArgsSummary,
+  parseToolArgs,
+} from "./toolArgs.js";
 import { toolDisplayRegistry } from "./toolDisplayRegistry.js";
 import type {
   ToolDisplay,
@@ -48,7 +50,7 @@ export function createToolDisplay({
   diff,
 }: ToolDisplayInput): ToolDisplay {
   const name = toolName || "Tool";
-  const args = parseArgs(toolArgs);
+  const args = parseToolArgs(toolArgs);
   const normalizedContent = normalizeToolText(content);
   const preview = previewContent(normalizedContent);
   const tone = toneFor(status, normalizedContent);
@@ -74,7 +76,7 @@ export function createToolDisplay({
     return {
       command,
       label: name,
-      summary: genericSummary(args, toolArgs),
+      summary: genericToolArgsSummary(args, toolArgs),
       summaryLine,
       tone,
       ...result,
@@ -85,7 +87,7 @@ export function createToolDisplay({
   return {
     command,
     label: name,
-    summary: genericSummary(args, toolArgs),
+    summary: genericToolArgsSummary(args, toolArgs),
     summaryLine,
     fileChangePreview: pendingFileChangePreview,
     detail: normalizedContent && normalizedContent.length < 140 ? normalizedContent : undefined,

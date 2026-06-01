@@ -5,6 +5,8 @@ import { tmpdir } from "os";
 import {
   TurnTransactionCoordinator,
   AgentStateStore,
+  ProjectionPolicy,
+  type AgentSessionStorage,
   type TurnTransactionRun,
 } from "@excelsior/agent-host/testing/application";
 import {
@@ -13,6 +15,7 @@ import {
   type AnyAgentEvent,
   type RunRecorder,
 } from "@excelsior/agent-host/testing/runtime";
+import { createFakeRunRecorder } from "./helpers/agentApplication.js";
 
 describe("TurnTransactionCoordinator", () => {
   let workspaceRoot: string;
@@ -194,13 +197,13 @@ describe("TurnTransactionCoordinator", () => {
           rootPath: workspaceRoot,
         },
       },
-      new (class {} as any)(),
+      new ProjectionPolicy(),
     );
     state.setLoading(true);
 
-    const sessionStorage = {
+    const sessionStorage = createSessionStorage({
       getCurrentSessionId: () => "ses_1",
-    } as any;
+    });
 
     await expect(transactions.revertLastTurn(state, sessionStorage)).resolves.toMatchObject({
       message: "Cannot revert while a run is active. Cancel it first.",
@@ -220,14 +223,14 @@ describe("TurnTransactionCoordinator", () => {
           rootPath: workspaceRoot,
         },
       },
-      new (class {} as any)(),
+      new ProjectionPolicy(),
     );
     
     const events: AnyAgentEvent[] = [];
-    const sessionStorage = {
+    const sessionStorage = createSessionStorage({
       getCurrentSessionId: () => "ses_1",
       loadCurrentSessionEvents: vi.fn(async () => events),
-    } as any;
+    });
 
     const revert = transactions.beginTurn("ses_1", "run_1");
     await revert.captureBeforeWrite("demo.txt", fullPath);
@@ -255,12 +258,12 @@ describe("TurnTransactionCoordinator", () => {
           rootPath: workspaceRoot,
         },
       },
-      new (class {} as any)(),
+      new ProjectionPolicy(),
     );
     
-    const sessionStorage = {
+    const sessionStorage = createSessionStorage({
       getCurrentSessionId: () => "ses_1",
-    } as any;
+    });
 
     const revert = transactions.beginTurn("ses_1", "run_1");
     await revert.captureBeforeWrite("demo.txt", fullPath);
@@ -291,7 +294,7 @@ function createRecorder(options?: {
   dropResult?: Awaited<ReturnType<RunRecorder["dropLastCompletedTurn"]>>;
   recordTurnComplete?: RunRecorder["recordTurnComplete"];
 }): RunRecorder {
-  return {
+  return createFakeRunRecorder({
     recordEvent: vi.fn(async () => {}),
     recordTurnComplete: vi.fn(options?.recordTurnComplete ?? (async () => {})),
     loadCompletedEvents: vi.fn(async () => []),
@@ -310,5 +313,37 @@ function createRecorder(options?: {
     ),
     deleteSessionEvents: vi.fn(async () => {}),
     deleteAllSessionEvents: vi.fn(async () => {}),
-  } as any;
+  });
+}
+
+function createSessionStorage(
+  overrides: Partial<AgentSessionStorage> = {},
+): AgentSessionStorage {
+  return {
+    getCurrentSessionId: () => null,
+    getWorkspaceId: () => "ws_test",
+    getWorkspace: () => ({
+      id: "ws_test",
+      name: "Test workspace",
+      rootPath: "/tmp/workspace",
+    }),
+    ensureSession: () => "ses_1",
+    createSession: () => ({
+      id: "ses_1",
+      startedAt: "",
+      updatedAt: "",
+      metadata: { userInput: "" },
+      workspaceId: "ws_test",
+    }),
+    switchSession: () => {},
+    deleteSession: async () => {},
+    deleteAllSessions: async () => {},
+    renameSession: () => {},
+    listSessions: () => [],
+    loadCurrentSessionEvents: async () => [],
+    getLastCompletedTurn: async () => null,
+    trimLastCompletedTurn: async () => ({ dropped: false, removedEvents: 0 }),
+    recordTurnComplete: async () => {},
+    ...overrides,
+  };
 }

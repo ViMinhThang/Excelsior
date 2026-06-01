@@ -10,8 +10,9 @@ import {
 import {
   makeEvent,
   type AnyAgentEvent,
-  type RunRecorder,
+  type RunContext,
 } from "@excelsior/agent-host/testing/runtime";
+import { createFakeRunRecorder } from "./helpers/agentApplication.js";
 
 function createState(): AgentStateStore {
   return new AgentStateStore(
@@ -24,23 +25,6 @@ function createState(): AgentStateStore {
     },
     new ProjectionPolicy(),
   );
-}
-
-function createRecorder(): RunRecorder {
-  return {
-    recordEvent: async () => {},
-    recordTurnComplete: async () => {},
-    loadCompletedEvents: async () => [],
-    loadRawEvents: async () => [],
-    getLastCompletedTurn: async () => null,
-    dropLastCompletedTurn: async () => ({
-      dropped: false,
-      removedEvents: 0,
-      reason: "no-completed-turn",
-    }),
-    deleteSessionEvents: async () => {},
-    deleteAllSessionEvents: async () => {},
-  } as any;
 }
 
 function createSessionStorage(): AgentSessionStorage {
@@ -84,9 +68,9 @@ describe("TurnLifecycle context assembly", () => {
       emit: vi.fn(),
       on: vi.fn(() => () => {}),
     };
-    const recorder = createRecorder();
+    const recorder = createFakeRunRecorder();
     let seenMessages: AgentMessage[] = [];
-    let seenRunContext: any = undefined;
+    let seenRunContext: RunContext | undefined;
     const agentFactory: AgentFactory = {
       create: vi.fn((input) => {
         seenRunContext = input.runContext;

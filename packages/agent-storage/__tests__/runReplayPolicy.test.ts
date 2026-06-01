@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   completedReplayEvents,
+  createTurnCompleteEvent,
   dropLastCompletedTurnFromEvents,
   findLastCompletedTurn,
   TURN_COMPLETE,
@@ -80,5 +81,19 @@ describe("run replay policy", () => {
       removedEvents: 3,
     });
     expect(result.remainingEvents.map((entry) => entry.runId)).toEqual(["run_1", "run_1"]);
+  });
+
+  it("creates turn-complete checkpoints through injectable time and id policy", () => {
+    expect(createTurnCompleteEvent("run_1", 4, {
+      createEventId: () => "evt_chk_fixed",
+      now: () => "2026-05-18T12:00:00.000Z",
+    })).toMatchObject({
+      id: "evt_chk_fixed",
+      runId: "run_1",
+      sequence: 4,
+      type: TURN_COMPLETE,
+      timestamp: "2026-05-18T12:00:00.000Z",
+      data: { runId: "run_1" },
+    });
   });
 });

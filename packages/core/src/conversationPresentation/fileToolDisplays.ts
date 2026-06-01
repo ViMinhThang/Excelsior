@@ -1,7 +1,7 @@
 import {
   parseFileChangePreview,
 } from "./fileChangePreview.js";
-import { asString } from "./toolText.js";
+import { stringifyToolArgValue } from "./toolArgs.js";
 import type {
   ToolDisplayConfig,
   ToolFormatterContext,
@@ -11,7 +11,7 @@ function formatFileChangeTool(
   label: "Write" | "Edit",
   { args, normalizedContent, tone, status }: ToolFormatterContext,
 ) {
-  const filePath = asString(args?.filePath);
+  const filePath = stringifyToolArgValue(args?.filePath);
   if (status === "pending") {
     return {
       label,
@@ -57,7 +57,7 @@ function formatFileChangeSummary(
   const added = diffLines.filter((line) => line.startsWith("+") && !line.startsWith("+++")).length;
   const removed = diffLines.filter((line) => line.startsWith("-") && !line.startsWith("---")).length;
   if (added + removed > 0) {
-    return `${asString(args?.filePath)} (+${added} -${removed} lines changed)`;
+    return `${stringifyToolArgValue(args?.filePath)} (+${added} -${removed} lines changed)`;
   }
   return lines[0] || "Completed";
 }
@@ -67,7 +67,7 @@ function formatFileChangeCommand(
   args: Record<string, unknown> | null,
   filePath?: string,
 ): string {
-  const target = filePath ?? asString(args?.filePath || args?.path);
+  const target = filePath ?? stringifyToolArgValue(args?.filePath || args?.path);
   return target ? `${action} ${target}` : action;
 }
 
