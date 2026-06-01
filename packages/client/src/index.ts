@@ -1,5 +1,4 @@
 export * from "./hostActions.js";
-export type { IntentHandler, IntentMiddleware } from "./intentHandler.js";
 export type {
   AgentHost,
   AgentHostCatalog,
@@ -8,6 +7,8 @@ export type {
   AgentHostDispatcher,
   AgentHostIntent,
   AgentHostStateReader,
+  IntentHandler,
+  IntentMiddleware,
 } from "./hostContract.js";
 export type {
   AgentClientState,

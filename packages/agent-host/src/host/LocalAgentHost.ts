@@ -6,7 +6,7 @@ import type {
   AgentHostIntent,
 } from "@excelsior/client";
 import { AgentApplication } from "../application/AgentApplication.js";
-import { AgentCommandExecutor } from "../commands.js";
+import { AgentCommandExecutor } from "../commands/executor.js";
 import { createAgentClientState } from "./clientState.js";
 import { HostBlockingPromptController } from "./BlockingPromptController.js";
 import { SettingsStore, type StorageEngine, type RunRecorder } from "@excelsior/agent-storage";

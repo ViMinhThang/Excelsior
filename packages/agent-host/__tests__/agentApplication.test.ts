@@ -6,9 +6,7 @@ import {
   AgentApplication,
   type AgentSessionStorage,
 } from "@excelsior/agent-host/testing/application";
-import {
-  JsonlRunRecorder,
-} from "@excelsior/agent-host/testing/persistence";
+import { JsonlRunRecorder } from "@excelsior/agent-storage";
 import type { RevertCapability } from "@excelsior/agent-host/testing/tools";
 import {
   createFakeSessionStorage,

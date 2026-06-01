@@ -2,9 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import {
-  JsonlRunRecorder,
-} from "@excelsior/agent-host/testing/persistence";
+import { JsonlRunRecorder } from "@excelsior/agent-storage";
 import {
   makeEvent,
   TURN_COMPLETE,

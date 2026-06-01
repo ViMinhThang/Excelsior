@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { AgentMessage } from "@excelsior/core";
+import type { AgentMessage, Session } from "@excelsior/core";
 import type {
   AgentFactory,
   AgentSessionStorage,
@@ -10,7 +10,6 @@ import {
   type AgentEventDataMap,
   type RunContext,
 } from "@excelsior/agent-host/testing/runtime";
-import type { Session } from "@excelsior/agent-host/testing/session";
 import type { RunHandle } from "@excelsior/run-runtime";
 import { JsonlRunRecorder, type RunRecorder } from "@excelsior/agent-storage";
 

@@ -1,6 +1,6 @@
 import {
   parseFileChangePreview,
-} from "./fileChangePreview.js";
+} from "./fileChangePreviewParser.js";
 import { stringifyToolArgValue } from "./toolArgs.js";
 import type {
   ToolDisplayConfig,

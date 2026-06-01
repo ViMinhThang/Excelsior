@@ -7,7 +7,7 @@ import type {
 import type { AgentApplication } from "../application/AgentApplication.js";
 import type { SettingsStore } from "@excelsior/agent-storage";
 import type { AskQuestionResponse } from "@excelsior/core";
-import type { AgentCommandExecutor } from "../commands.js";
+import type { AgentCommandExecutor } from "../commands/executor.js";
 import { IntentRegistry } from "./intentRegistry.js";
 
 type DispatchApplication = Pick<

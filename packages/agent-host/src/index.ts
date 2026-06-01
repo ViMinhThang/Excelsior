@@ -1,3 +1,5 @@
+import { initDb, logError } from "@excelsior/agent-storage";
+
 export type {
   AgentClientState,
   AgentMode,
@@ -18,10 +20,6 @@ export type {
 } from "@excelsior/client";
 export { AgentApplication } from "./application/AgentApplication.js";
 export type { AgentApplicationOptions } from "./application/AgentApplication.js";
-export {
-  initializeAgentHostRuntime,
-  logAgentHostError,
-} from "./host/bootstrap.js";
 export { LocalAgentHost } from "./host/LocalAgentHost.js";
 export {
   createIntentDispatcher,
@@ -37,3 +35,11 @@ export {
   storageEngine,
   type StorageEngine,
 } from "@excelsior/agent-storage";
+
+export function initializeAgentHostRuntime(): void {
+  initDb();
+}
+
+export function logAgentHostError(message: string, stack?: string): void {
+  logError(message, stack);
+}
