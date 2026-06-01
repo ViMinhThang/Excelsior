@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
-import type { AppSettings } from "@excelsior/core";
-import { KeyRound, Palette, X } from "lucide-react";
-import type { DesktopTheme } from "../themeTypes.ts";
+import {
+  DEFAULT_AGENT_TOOL_LOOP_STEPS,
+  normalizeAgentToolLoopSteps,
+  type AppSettings,
+} from "@excelsior/core";
+import { Gauge, KeyRound, Palette, X } from "lucide-react";
 import { AppearanceTab } from "./settingsDialog/AppearanceTab.js";
 import { CredentialsTab } from "./settingsDialog/CredentialsTab.js";
+import { RuntimeTab } from "./settingsDialog/RuntimeTab.js";
 import {
   defaultThemeForMode,
   isThemeDark,
+  type DesktopTheme,
 } from "./settingsDialog/themeOptions.js";
 
 type SettingsDialogProps = {
@@ -17,7 +22,21 @@ type SettingsDialogProps = {
   onThemeChange: (theme: DesktopTheme) => void;
 };
 
-type SettingsTab = "credentials" | "appearance";
+type SettingsTab = "credentials" | "runtime" | "appearance";
+
+const DEFAULT_FINITE_TOOL_LOOP_STEPS = "200";
+
+function getFiniteToolLoopSteps(value: string | undefined): string {
+  const normalized = normalizeAgentToolLoopSteps(value);
+  if (normalized !== DEFAULT_AGENT_TOOL_LOOP_STEPS) {
+    return normalized;
+  }
+  return DEFAULT_FINITE_TOOL_LOOP_STEPS;
+}
+
+function isUnlimitedToolLoopSetting(value: string | undefined): boolean {
+  return normalizeAgentToolLoopSteps(value) === DEFAULT_AGENT_TOOL_LOOP_STEPS;
+}
 
 export function SettingsDialog({
   settings,
@@ -29,12 +48,20 @@ export function SettingsDialog({
   const [activeTab, setActiveTab] = useState<SettingsTab>("credentials");
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [githubTokenInput, setGithubTokenInput] = useState("");
+  const [toolLoopUnlimited, setToolLoopUnlimited] = useState(true);
+  const [toolLoopStepInput, setToolLoopStepInput] = useState(
+    DEFAULT_FINITE_TOOL_LOOP_STEPS,
+  );
   const [themeInput, setThemeInput] = useState<DesktopTheme>(theme);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => isThemeDark(theme));
 
   useEffect(() => {
+    const toolLoopSteps = settings?.agentToolLoopSteps;
+
     setApiKeyInput(settings?.deepseekApiKey ?? "");
     setGithubTokenInput(settings?.githubToken ?? "");
+    setToolLoopUnlimited(isUnlimitedToolLoopSetting(toolLoopSteps));
+    setToolLoopStepInput(getFiniteToolLoopSteps(toolLoopSteps));
     setThemeInput(theme);
     setIsDarkMode(isThemeDark(theme));
   }, [settings, theme]);
@@ -67,6 +94,18 @@ export function SettingsDialog({
             >
               <KeyRound className="settings-tab-icon" />
               Credentials
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("runtime")}
+              className={`settings-tab transition-snappy-colors ${
+                activeTab === "runtime"
+                  ? "settings-tab-active"
+                  : "text-brand-text-muted hover:text-brand-text-light"
+              }`}
+            >
+              <Gauge className="settings-tab-icon" />
+              Runtime
             </button>
             <button
               type="button"
@@ -106,6 +145,15 @@ export function SettingsDialog({
               />
             )}
 
+            {activeTab === "runtime" && (
+              <RuntimeTab
+                toolLoopUnlimited={toolLoopUnlimited}
+                toolLoopStepInput={toolLoopStepInput}
+                onToolLoopUnlimitedChange={setToolLoopUnlimited}
+                onToolLoopStepInputChange={setToolLoopStepInput}
+              />
+            )}
+
             {activeTab === "appearance" && (
               <AppearanceTab
                 isDarkMode={isDarkMode}
@@ -131,6 +179,9 @@ export function SettingsDialog({
                   {
                     deepseekApiKey: apiKeyInput,
                     githubToken: githubTokenInput,
+                    agentToolLoopSteps: toolLoopUnlimited
+                      ? DEFAULT_AGENT_TOOL_LOOP_STEPS
+                      : getFiniteToolLoopSteps(toolLoopStepInput),
                   },
                   themeInput,
                 )

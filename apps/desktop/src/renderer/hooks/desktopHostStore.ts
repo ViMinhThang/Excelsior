@@ -20,6 +20,7 @@ const emptyState: AgentClientState = {
 const emptySettings: AppSettings = {
   deepseekApiKey: "",
   githubToken: "",
+  agentToolLoopSteps: "unlimited",
 };
 
 export interface IpcStateStore {

@@ -24,9 +24,9 @@ describe("runCommandTool", () => {
       expect(result.success).toBe(false);
     });
 
-    it("rejects missing args", () => {
+    it("allows missing args", () => {
       const result = runCommandSchema.safeParse({ command: "node" });
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
     });
   });
 

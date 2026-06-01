@@ -1,6 +1,6 @@
-import { projectEvents, ProjectionRegistry, type ReadModel } from "@excelsior/projection";
 import type { AnyAgentEvent } from "../../runtime/events.js";
 import type { ProjectedBlock } from "@excelsior/core";
+import { projectEvents, ProjectionRegistry, type ReadModel } from "../readModel.js";
 import { flushAll, finalizeChatTranscriptProjection } from "./flush.js";
 import {
   handleChildRunAttached,

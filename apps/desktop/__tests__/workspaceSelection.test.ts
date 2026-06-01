@@ -30,7 +30,11 @@ function apiWithFolder(folderPath: string | null, tree: WorkspaceTreeNode[]): {
       getState: async () => state(),
       getCatalog: async () => ({
         commands: [],
-        settings: { deepseekApiKey: "", githubToken: "" },
+        settings: {
+          deepseekApiKey: "",
+          githubToken: "",
+          agentToolLoopSteps: "unlimited",
+        },
       }),
       dispatch: async (_intent: AgentHostIntent) => ({ type: "none" }),
       selectWorkspaceFolder: async () => folderPath,

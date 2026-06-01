@@ -218,15 +218,80 @@ describe("filesystem tool workspace bounds", () => {
     expect(result).toContain("outside the workspace");
   });
 
-  it("validates write paths before requesting confirmation", async () => {
+  it("does not prompt for reads outside the workspace", async () => {
     const request = vi.fn(async () => true);
-    const result = await executeTool(createWriteTool({
+    const result = await executeTool(createViewTool({
       ...ctx(),
       confirm: { getListenerCount: () => 1, request },
-    }), { filePath: "../escape.txt", content: "x" });
+    }), {
+      filePath: join(outsideRoot, "secret.txt"),
+    });
 
     expect(result).toContain("outside the workspace");
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it("prompts before writing outside the workspace", async () => {
+    const request = vi.fn(async () => false);
+    const result = await executeTool(createWriteTool({
+      ...ctx(),
+      mode: "act",
+      confirm: { getListenerCount: () => 1, request },
+    }), { filePath: join(outsideRoot, "created.txt"), content: "x" });
+
+    expect(result).toBe("Denied by user.");
+    expect(request).toHaveBeenCalledWith(
+      "writeFile",
+      JSON.stringify({
+        filePath: join(outsideRoot, "created.txt"),
+        outsideWorkspace: true,
+      }),
+      expect.objectContaining({
+        action: "warning",
+        filePath: join(outsideRoot, "created.txt"),
+      }),
+    );
+  });
+
+  it("checks write policy before prompting for outside-workspace paths", async () => {
+    const request = vi.fn(async () => true);
+    const result = await executeTool(createWriteTool({
+      ...ctx(),
+      mode: "plan",
+      confirm: { getListenerCount: () => 1, request },
+    }), { filePath: join(outsideRoot, "created.txt"), content: "x" });
+
+    expect(result).toBe(PLAN_MODE_BLOCKED_MESSAGE);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it("applies approved writes outside the workspace", async () => {
+    const request = vi.fn(async () => true);
+    const targetPath = join(outsideRoot, "created.txt");
+    const result = await executeTool(createWriteTool({
+      ...ctx(),
+      mode: "act",
+      confirm: { getListenerCount: () => 1, request },
+    }), { filePath: targetPath, content: "outside\n" });
+
+    expect(result).toContain("Successfully wrote");
+    await expect(readFile(targetPath, "utf-8")).resolves.toBe("outside\n");
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      "writeFile",
+      JSON.stringify({ filePath: targetPath, outsideWorkspace: true }),
+      expect.objectContaining({ action: "warning", filePath: targetPath }),
+    );
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      "writeFile",
+      JSON.stringify({ filePath: targetPath }),
+      expect.objectContaining({
+        action: "create",
+        filePath: targetPath,
+        diff: expect.stringContaining("+outside"),
+      }),
+    );
   });
 
   it("blocks write and edit in plan mode", async () => {

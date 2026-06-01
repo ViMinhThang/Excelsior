@@ -6,12 +6,14 @@ import type {
 } from "@excelsior/core";
 import {
   buildChatModeKeymapContext,
-  type ChatMode,
-  type ChatModeKeymapContext,
-  type CommandSuggestionState,
-  type InputModeKeymapContext,
-  type SubAgentBlock,
-} from "../chatModes/index.js";
+} from "../chatModes/keymapContext.js";
+import type {
+  ChatMode,
+  ChatModeKeymapContext,
+  CommandSuggestionState,
+  InputModeKeymapContext,
+  SubAgentBlock,
+} from "../chatModes/types.js";
 import type { FooterBarProps } from "../components/chat/FooterBar.js";
 import { buildFooterModel } from "./chatScreenModelBuilders.js";
 

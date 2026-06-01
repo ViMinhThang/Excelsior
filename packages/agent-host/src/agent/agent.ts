@@ -1,11 +1,21 @@
-import { ToolLoopAgent, type ModelMessage } from "ai";
+import {
+  isLoopFinished,
+  stepCountIs,
+  ToolLoopAgent,
+  type ModelMessage,
+} from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createFileTools } from "./tools/index.js";
 import { getSetting } from "@excelsior/agent-storage";
 import { buildSystemPrompt } from "./prompt.js";
 import type { ToolContext } from "./tools/core/context.js";
 import type { StreamCapableAgent, AgentEventEmitter } from "../runtime/events.js";
-import type { AgentMessage } from "@excelsior/core";
+import {
+  AGENT_TOOL_LOOP_STEPS_SETTING,
+  DEFAULT_AGENT_TOOL_LOOP_STEPS,
+  normalizeAgentToolLoopSteps,
+  type AgentMessage,
+} from "@excelsior/core";
 import { withRetry, isTransientError } from "../runtime/retry.js";
 import {
   RUN_START,
@@ -25,7 +35,10 @@ interface Streamable {
 }
 
 export class ExcelsiorAgent implements StreamCapableAgent {
-  constructor(private readonly agent: Streamable) {}
+  constructor(
+    private readonly agent: Streamable,
+    private readonly options: { toolLoopStepLimit?: number } = {},
+  ) {}
 
   async stream(input: {
     messages: AgentMessage[];
@@ -59,6 +72,7 @@ export class ExcelsiorAgent implements StreamCapableAgent {
         fullStream: stream.fullStream,
         signal,
         emit,
+        toolLoopStepLimit: this.options.toolLoopStepLimit,
       });
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -95,10 +109,21 @@ export function createAgent(
     : systemPrompt;
 
   const skillAdapter = createSkillToolAdapter(ctx?.workspaceRoot);
+  const normalizedToolLoopSteps = normalizeAgentToolLoopSteps(
+    getSetting(AGENT_TOOL_LOOP_STEPS_SETTING),
+  );
+  const toolLoopStepLimit =
+    normalizedToolLoopSteps === DEFAULT_AGENT_TOOL_LOOP_STEPS
+      ? undefined
+      : Number(normalizedToolLoopSteps);
 
   const agent = new ToolLoopAgent({
     model,
     instructions: `${finalInstructions}${skillAdapter.instructions}`,
+    stopWhen:
+      toolLoopStepLimit === undefined
+        ? isLoopFinished()
+        : stepCountIs(toolLoopStepLimit),
     tools: {
       ...createFileTools(ctx),
       ...skillAdapter.tools,
@@ -106,5 +131,7 @@ export function createAgent(
     },
   });
 
-  return new ExcelsiorAgent(agent);
+  return new ExcelsiorAgent(agent, {
+    toolLoopStepLimit,
+  });
 }

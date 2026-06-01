@@ -1,6 +1,6 @@
 import { AnyAgentEvent } from "../runtime/events.js";
-import { projectEvents, ProjectionRegistry, compose, assign, type ReadModel } from "@excelsior/projection";
 import type { AgentMessage } from "@excelsior/core";
+import { projectEvents, ProjectionRegistry, type ReadModel } from "./readModel.js";
 
 export interface AIHistoryProjectionState {
   messages: AgentMessage[];
@@ -49,41 +49,31 @@ export const AI_HISTORY_MODEL: ReadModel<AIHistoryProjectionState, AnyAgentEvent
   AnyAgentEvent
 >()
   .initialState(createAIHistoryProjectionState)
-  .on(
-    "user-input",
-    compose(
-      flushPendingAssistant,
-      (state, event) => appendMessage(state, { role: "user", content: event.data.content }),
-    ),
+  .on("user-input", (state, event) =>
+    appendMessage(flushPendingAssistant(state), {
+      role: "user",
+      content: event.data.content,
+    }),
   )
-  .on(
-    "text-delta",
-    assign(
-      "pendingAssistant",
-      (state, event) => state.pendingAssistant + event.data.delta,
-    ),
-  )
-  .on(
-    "tool-call-end",
-    compose(
-      flushPendingAssistant,
-      (state, event) => {
-        const { result, toolName, toolArgs, status } = event.data;
-        const isError = status === "error" || result?.startsWith("[Error]");
-        const label = isError ? "[Error]" : "[Completed]";
-        return appendMessage(state, {
-          role: "assistant",
-          content: `[Tool: ${toolName}(${toolArgs})] ${label}\n${result ?? ""}`,
-        });
-      },
-    ),
-  )
-  .on(
-    "error",
-    compose(
-      flushPendingAssistant,
-      (state, event) => appendMessage(state, { role: "assistant", content: `[Error] ${event.data.message}` }),
-    ),
+  .on("text-delta", (state, event) => ({
+    ...state,
+    pendingAssistant: state.pendingAssistant + event.data.delta,
+  }))
+  .on("tool-call-end", (state, event) => {
+    const { result, toolName, toolArgs, status } = event.data;
+    const isError = status === "error" || result?.startsWith("[Error]");
+    const label = isError ? "[Error]" : "[Completed]";
+
+    return appendMessage(flushPendingAssistant(state), {
+      role: "assistant",
+      content: `[Tool: ${toolName}(${toolArgs})] ${label}\n${result ?? ""}`,
+    });
+  })
+  .on("error", (state, event) =>
+    appendMessage(flushPendingAssistant(state), {
+      role: "assistant",
+      content: `[Error] ${event.data.message}`,
+    }),
   )
   .on("history-compacted", (_state, event) => ({
     messages: [

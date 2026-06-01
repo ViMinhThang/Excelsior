@@ -12,7 +12,7 @@ import {
   buildPendingActionModel,
   buildPendingQuestionModel,
   buildSuggestionsModel,
-} from "../src/hooks/useChatScreenModel.js";
+} from "../src/hooks/chatScreenModelBuilders.js";
 import {
   buildChatControlPlane,
   countVisibleCommands,
@@ -118,7 +118,7 @@ describe("chat screen model builders", () => {
   it("keeps pending file change preview behind the tool display model", () => {
     const model = buildPendingActionModel(pendingFileChangeRequest());
 
-    expect(model?.display.command).toBe("edit demo.ts");
+    expect(model?.display.command).toBe("edit(demo.ts)");
     expect(model?.display.fileChangePreview).toMatchObject({
       filePath: "demo.ts",
       action: "edit",
@@ -199,6 +199,7 @@ describe("chat screen model builders", () => {
       commandCount: 3,
       commandsExpanded: true,
       workspaceRootPath: "C:/repo",
+      totalTokens: undefined,
     });
   });
 

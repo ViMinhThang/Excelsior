@@ -1,6 +1,6 @@
-import { projectEvents, ProjectionRegistry, compose, accumulate, assign, type ReadModel } from "@excelsior/projection";
 import type { AnyAgentEvent } from "../../runtime/events.js";
 import type { ProjectedBlock, ProjectedSubAgent } from "@excelsior/core";
+import { projectEvents, ProjectionRegistry, type ReadModel } from "../readModel.js";
 import {
   handleToolCallEnd,
   handleToolCallStart,
@@ -19,22 +19,20 @@ export const SUB_AGENT_MODEL: ReadModel<SubAgentProjectionState, AnyAgentEvent> 
   AnyAgentEvent
 >()
   .initialState(createSubAgentProjectionState)
-  // Clean middleware to track start and end timestamps automatically!
-  .use((state, event, _context, next) => {
-    const timedState = rememberTimestamp(state, event);
-    return next(timedState);
-  })
-  .on(
-    "text-delta",
-    compose(
-      assign("fullOutput", (state, event) => state.fullOutput + event.data.delta),
-      accumulate((state, event) => ({ parts: appendTextPart(state.parts, event.data.delta) })),
-    ),
-  )
+  .on("text-delta", (state, event) => ({
+    ...state,
+    fullOutput: state.fullOutput + event.data.delta,
+    parts: appendTextPart(state.parts, event.data.delta),
+  }))
   .on("tool-call-start", handleToolCallStart)
   .on("tool-call-end", handleToolCallEnd)
   .build();
 
+
+const TIMED_SUB_AGENT_MODEL: ReadModel<SubAgentProjectionState, AnyAgentEvent> = {
+  initialState: SUB_AGENT_MODEL.initialState,
+  apply: (state, event) => SUB_AGENT_MODEL.apply(rememberTimestamp(state, event), event),
+};
 
 export function projectSubAgentEvents(
   childEvents: readonly AnyAgentEvent[],
@@ -42,7 +40,7 @@ export function projectSubAgentEvents(
   fallbackTimestamp?: string,
 ): ProjectedSubAgent {
   return finalizeSubAgentProjection(
-    projectEvents(SUB_AGENT_MODEL, childEvents),
+    projectEvents(TIMED_SUB_AGENT_MODEL, childEvents),
     status,
     fallbackTimestamp,
   );

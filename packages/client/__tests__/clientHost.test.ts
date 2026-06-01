@@ -21,7 +21,11 @@ function createHost(result: AgentHostDispatchResult): AgentHost {
     subscribe: () => () => {},
     getCatalog: () => ({
       commands: [{ name: "help", description: "List commands" }],
-      settings: { deepseekApiKey: "", githubToken: "" },
+      settings: {
+        deepseekApiKey: "",
+        githubToken: "",
+        agentToolLoopSteps: "unlimited",
+      },
     }),
     dispatch: vi.fn(async () => result),
     dispose: () => {},
@@ -40,6 +44,7 @@ describe("@excelsior/client AgentHostClient", () => {
     expect(client.getSettings()).toEqual({
       deepseekApiKey: "",
       githubToken: "",
+      agentToolLoopSteps: "unlimited",
     });
   });
 

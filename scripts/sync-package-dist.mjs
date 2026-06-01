@@ -10,10 +10,6 @@ const packages = [
     target: "packages/core/dist",
   },
   {
-    source: "dist/packages/projection/src",
-    target: "packages/projection/dist",
-  },
-  {
     source: "dist/packages/run-runtime/src",
     target: "packages/run-runtime/dist",
   },

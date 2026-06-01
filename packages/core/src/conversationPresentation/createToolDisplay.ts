@@ -26,6 +26,10 @@ function createCommand(
   if (config?.formatCommand) {
     return config.formatCommand(args, argsStr, filePath);
   }
+  if (!name.toLowerCase().includes("subagent")) {
+    const formattedArgs = argsStr ? argsStr.replace(/^{|}$/g, "").trim() : "";
+    return `${name}(${formattedArgs})`;
+  }
   return `${name} ${argsStr ? argsStr.replace(/^{|}$/g, "").trim() : ""}`;
 }
 

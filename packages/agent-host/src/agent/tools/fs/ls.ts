@@ -15,7 +15,7 @@ export const createLsTool = defineTool({
   modePolicy: "read",
   errorAction: "listing directory",
   execute: async ({ directoryPath }, ctx) => {
-    const targetDir = resolveWorkspacePath(directoryPath || ".", ctx);
+    const targetDir = await resolveWorkspacePath(directoryPath || ".", ctx);
     const entries = await fs.readdir(targetDir, { withFileTypes: true });
   
     const names = entries.map((entry) => {

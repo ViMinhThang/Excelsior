@@ -1,4 +1,4 @@
-export type BusHandler = (data: unknown) => void;
+type BusHandler = (data: unknown) => void;
 export type Unsubscribe = () => void;
 
 export interface Bus<TEvents extends Record<string, unknown>> {
@@ -41,5 +41,3 @@ export function createBus<TEvents extends Record<string, unknown>>(): Bus<TEvent
     },
   };
 }
-
-export { createBus as createChannelBus };

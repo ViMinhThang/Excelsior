@@ -4,21 +4,16 @@ import { ChatPanel } from "./components/ChatPanel.tsx";
 import { SettingsDialog } from "./components/SettingsDialog.tsx";
 import { WorkspaceGate } from "./components/WorkspaceGate.tsx";
 import { WorkspaceSidebar } from "./components/WorkspaceSidebar.tsx";
-import type { DesktopTheme } from "./themeTypes.ts";
+import {
+  defaultThemeForMode,
+  isDesktopTheme,
+  type DesktopTheme,
+} from "./components/settingsDialog/themeOptions.js";
 import { useAgentHost } from "./hooks/useAgentHost.ts";
 
 function getStoredTheme(): DesktopTheme {
-  const storedTheme = localStorage.getItem("excelsior-theme") as DesktopTheme;
-
-  if (
-    storedTheme === "one-dark-pro" ||
-    storedTheme === "tokyo-night" ||
-    storedTheme === "gruvbox" ||
-    storedTheme === "tokyo-night-light"
-  ) {
-    return storedTheme;
-  }
-  return "one-dark-pro";
+  const storedTheme = localStorage.getItem("excelsior-theme");
+  return isDesktopTheme(storedTheme) ? storedTheme : defaultThemeForMode(true);
 }
 
 export default function App() {

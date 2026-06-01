@@ -34,7 +34,7 @@ describe("ToolMessage command formatting", () => {
     expect(commandFor(
       "ls",
       { directoryPath },
-    )).toBe(`Listfiles ${directoryPath}`);
+    )).toBe(`Listfiles(${directoryPath})`);
   });
 
   it("renders expanded edit output as old and new panes", () => {
@@ -56,7 +56,7 @@ describe("ToolMessage command formatting", () => {
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("edit demo.ts");
+    expect(frame).toContain("edit(demo.ts)");
     expect(frame).toContain("completed edit: demo.ts");
     expect(frame).toContain("(+1)");
     expect(frame).toContain("(-1)");
@@ -83,7 +83,7 @@ describe("ToolMessage command formatting", () => {
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("edit demo.ts");
+    expect(frame).toContain("edit(demo.ts)");
     expect(frame).toContain("completed edit: demo.ts");
     expect(frame).toContain("(+1)");
     expect(frame).toContain("(-1)");
