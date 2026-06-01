@@ -1,4 +1,4 @@
-import { createChannelBus } from "./bus.js";
+import { createBus } from "./bus.js";
 import type { Bus } from "./bus.js";
 import { DisposableScope } from "./disposable.js";
 import { AnyRunEvent, makeRunEvent, RunEventOverrides } from "./events.js";
@@ -62,7 +62,7 @@ function generateRunId(prefix: string): string {
 export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
   readonly id: string;
   readonly sessionId: string;
-  readonly bus: Bus<RunEventMap<TEvents>> = createChannelBus<RunEventMap<TEvents>>();
+  readonly bus: Bus<RunEventMap<TEvents>> = createBus<RunEventMap<TEvents>>();
   readonly parentEventId?: string;
   readonly correlationId: string;
 

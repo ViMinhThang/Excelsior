@@ -41,7 +41,11 @@ function apiWithState(initialState: AgentClientState): {
       getState: async () => initialState,
       getCatalog: async () => ({
         commands: [],
-        settings: { deepseekApiKey: "", githubToken: "" },
+        settings: {
+          deepseekApiKey: "",
+          githubToken: "",
+          agentToolLoopSteps: "unlimited",
+        },
       }),
       dispatch: async (_intent: AgentHostIntent) => ({ type: "none" }),
       selectWorkspaceFolder: async () => null,
@@ -79,7 +83,11 @@ describe("desktop host store", () => {
       api,
       commands: [],
       getStore: () => store,
-      settings: { deepseekApiKey: "key", githubToken: "token" },
+      settings: {
+        deepseekApiKey: "key",
+        githubToken: "token",
+        agentToolLoopSteps: "200",
+      },
     });
 
     await expect(host.dispatch({ type: "cancel" })).resolves.toEqual({ type: "none" });

@@ -1,8 +1,8 @@
 import type { FC } from "react";
 import { Box, Text } from "ink";
 import { theme } from "../../theme.js";
-import { getChatModeHint } from "../../chatModes/index.js";
-import type { ChatMode } from "../../chatModes/index.js";
+import { getChatModeHint } from "../../chatModes/registry.js";
+import type { ChatMode } from "../../chatModes/types.js";
 
 export interface FooterBarProps {
   chatMode: ChatMode;
@@ -14,6 +14,7 @@ export interface FooterBarProps {
   commandCount: number;
   commandsExpanded: boolean;
   workspaceRootPath: string;
+  totalTokens?: number;
 }
 
 const FooterBar: FC<FooterBarProps> = ({
@@ -26,6 +27,7 @@ const FooterBar: FC<FooterBarProps> = ({
   commandCount,
   commandsExpanded,
   workspaceRootPath,
+  totalTokens,
 }) => {
   const footerHint = getChatModeHint({
     chatMode,
@@ -43,6 +45,14 @@ const FooterBar: FC<FooterBarProps> = ({
       <Text color={theme.colors.muted} dimColor wrap="truncate-end">
         {footerHint}
       </Text>
+      {totalTokens !== undefined && (
+        <>
+          <Text color={theme.colors.border}> </Text>
+          <Text color={theme.colors.muted} dimColor>
+            | {(totalTokens / 1000).toFixed(1)} tok |
+          </Text>
+        </>
+      )}
       <Text color={theme.colors.border}>{theme.glyphs.separator}</Text>
       <Text color={theme.colors.muted} dimColor wrap="truncate-start">
         {workspaceRootPath}

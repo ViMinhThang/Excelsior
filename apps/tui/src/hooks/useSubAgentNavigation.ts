@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import type { ProjectedBlock } from "@excelsior/core";
-import type { ChatMode } from "../chatModes/index.js";
-export type { ChatMode } from "../chatModes/index.js";
+import type { ChatMode } from "../chatModes/types.js";
 
 type SubAgentBlock = ProjectedBlock & { type: "sub-agent" };
 

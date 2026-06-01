@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import {
-  createChannelBus,
+  createBus,
   type Bus,
 } from "@excelsior/run-runtime";
 import type {
@@ -40,7 +40,7 @@ export function createBlockingPromptBus<
   TRequest extends BlockingPromptRequest,
   TResponse extends BlockingPromptResponse,
 >(): BlockingPromptBus<TRequest, TResponse> {
-  return createChannelBus<BlockingPromptEvents<TRequest, TResponse>>();
+  return createBus<BlockingPromptEvents<TRequest, TResponse>>();
 }
 
 export function requestBlockingPrompt<

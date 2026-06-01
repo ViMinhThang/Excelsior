@@ -1,4 +1,9 @@
-import type { AppSettings } from "@excelsior/core";
+import {
+  AGENT_TOOL_LOOP_STEPS_SETTING,
+  DEFAULT_AGENT_TOOL_LOOP_STEPS,
+  normalizeAgentToolLoopSteps,
+  type AppSettings,
+} from "@excelsior/core";
 import { getSetting, setSetting } from "./db.js";
 
 /**
@@ -9,6 +14,10 @@ export class SettingsStore {
     return {
       deepseekApiKey: getSetting("DEEPSEEK_API_KEY") || "",
       githubToken: getSetting("GITHUB_TOKEN") || "",
+      agentToolLoopSteps: normalizeAgentToolLoopSteps(
+        getSetting(AGENT_TOOL_LOOP_STEPS_SETTING) ||
+          DEFAULT_AGENT_TOOL_LOOP_STEPS,
+      ),
     };
   }
 
@@ -18,6 +27,12 @@ export class SettingsStore {
     }
     if (settings.githubToken !== undefined) {
       setSetting("GITHUB_TOKEN", settings.githubToken);
+    }
+    if (settings.agentToolLoopSteps !== undefined) {
+      setSetting(
+        AGENT_TOOL_LOOP_STEPS_SETTING,
+        normalizeAgentToolLoopSteps(settings.agentToolLoopSteps),
+      );
     }
   }
 }

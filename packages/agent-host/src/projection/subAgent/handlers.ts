@@ -80,5 +80,3 @@ export function handleToolCallEnd(
   const status = event.data.status === "error" ? "error" : "completed";
   return updateToolCallStatus(state, callId, status);
 }
-
-// TimedState tracking is now handled by the ProjectionRegistry middleware.

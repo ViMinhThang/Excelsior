@@ -17,7 +17,7 @@ export const createViewTool = defineTool({
   modePolicy: "read",
   errorAction: "reading file",
   execute: async ({ filePath, lineStart, lineEnd }, ctx) => {
-    const fullPath = resolveWorkspacePath(filePath, ctx);
+    const fullPath = await resolveWorkspacePath(filePath, ctx);
     const content = await fs.readFile(fullPath, "utf-8");
     const lines = content.split(/\r?\n/);
   

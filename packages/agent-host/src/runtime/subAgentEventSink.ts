@@ -1,4 +1,4 @@
-import { createChannelBus, type Bus } from "@excelsior/run-runtime";
+import { createBus, type Bus } from "@excelsior/run-runtime";
 import type { SubAgentProjectionPart, ToolCallInfo } from "@excelsior/core";
 
 export type SubAgentEvents = {
@@ -16,5 +16,5 @@ export type SubAgentEvents = {
 export type SubAgentEventSink = Pick<Bus<SubAgentEvents>, "emit" | "on">;
 
 export function createSubAgentEventSink(): SubAgentEventSink {
-  return createChannelBus<SubAgentEvents>();
+  return createBus<SubAgentEvents>();
 }

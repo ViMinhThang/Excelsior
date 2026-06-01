@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { projectEvents, type ReadModel } from "@excelsior/projection";
+import {
+  projectEvents,
+  type ReadModel,
+} from "../src/projection/readModel.js";
 
 type CounterEvent =
   | { type: "add"; value: number }
   | { type: "multiply"; value: number };
 
-describe("@excelsior/projection", () => {
+describe("read model projection", () => {
   it("returns the initial state for an empty event list", () => {
     const model: ReadModel<number, CounterEvent> = {
       initialState: () => 10,

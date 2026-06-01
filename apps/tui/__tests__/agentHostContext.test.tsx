@@ -26,7 +26,11 @@ function createMockHost(): AgentHost {
     subscribe: () => () => {},
     getCatalog: () => ({
       commands: [{ name: "help", description: "List commands" }],
-      settings: { deepseekApiKey: "", githubToken: "" },
+      settings: {
+        deepseekApiKey: "",
+        githubToken: "",
+        agentToolLoopSteps: "unlimited",
+      },
     }),
     dispatch: async (intent) => {
       if (intent.type === "execute-command") {

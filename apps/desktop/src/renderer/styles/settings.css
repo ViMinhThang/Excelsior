@@ -272,6 +272,11 @@
   box-shadow: 0 0 14px var(--gold-glow);
 }
 
+.settings-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .settings-select-wrap {
   position: relative;
   width: 100%;

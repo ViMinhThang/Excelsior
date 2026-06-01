@@ -10,7 +10,7 @@ import { defineTool } from "../core/toolBuilder.js";
 
 export const runCommandSchema = z.object({
   command: z.string().describe('The executable to run (e.g., "npm", "git", "node", "ls", "cat")'),
-  args: z.array(z.string()).describe('The arguments for the command'),
+  args: z.array(z.string()).optional().describe('The arguments for the command'),
 });
 
 const MAX_OUTPUT_LENGTH = 100_000;
@@ -63,6 +63,25 @@ function findWindowsScriptShim(command: string, cwd: string): string | null {
   return null;
 }
 
+const WINDOWS_SHELL_BUILTINS = new Set([
+  "echo",
+  "dir",
+  "copy",
+  "del",
+  "mkdir",
+  "md",
+  "rmdir",
+  "rd",
+  "type",
+  "cls",
+  "set",
+  "path",
+  "ver",
+  "vol",
+  "cd",
+  "pwd",
+]);
+
 function windowsShellCompatibility(
   command: string,
   args: string[],
@@ -85,7 +104,11 @@ function windowsShellCompatibility(
   }
 
   if (!SAFE_WINDOWS_COMMAND_NAME.test(command)) return null;
-  if (!findWindowsScriptShim(command, getWorkspaceRoot(ctx))) return null;
+
+  const isBuiltin = WINDOWS_SHELL_BUILTINS.has(command.toLowerCase());
+  const isShim = findWindowsScriptShim(command, getWorkspaceRoot(ctx));
+
+  if (!isBuiltin && !isShim) return null;
 
   return {
     command: process.env.ComSpec || "cmd.exe",
@@ -113,10 +136,22 @@ function runProcess(command: string, args: string[], ctx?: ToolContext): Promise
       resolve(result);
     };
 
-    const child = spawn(command, args, {
-      cwd: getWorkspaceRoot(ctx),
-      shell: false,
-    });
+    let child;
+    if (isWindows) {
+      const escapePowerShellArg = (arg: string) => `'${arg.replace(/'/g, "''")}'`;
+      const escapedArgs = args.map(escapePowerShellArg).join(" ");
+      const pshCmd = `& { & ${escapePowerShellArg(command)} ${escapedArgs} }`;
+
+      child = spawn("powershell.exe", ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", pshCmd], {
+        cwd: getWorkspaceRoot(ctx),
+        shell: false,
+      });
+    } else {
+      child = spawn(command, args, {
+        cwd: getWorkspaceRoot(ctx),
+        shell: false,
+      });
+    }
 
     let timeoutTimer: ReturnType<typeof setTimeout>;
 
@@ -179,8 +214,15 @@ export const createRunCommandTool = defineTool({
   inputSchema: runCommandSchema,
   errorAction: "executing command",
   execute: async ({ command, args }, ctx) => {
-    const normalizedArgs = args || [];
-    const classification = classifyCommandRisk(command, normalizedArgs);
+    let execCommand = command;
+    let normalizedArgs = args || [];
+    if (normalizedArgs.length === 0 && command.includes(" ")) {
+      const parts = command.split(/\s+/);
+      execCommand = parts[0];
+      normalizedArgs = parts.slice(1);
+    }
+
+    const classification = classifyCommandRisk(execCommand, normalizedArgs);
     if (classification.blockedMessage) return classification.blockedMessage;
     if (ctx?.abortSignal?.aborted) return "Command cancelled.";
 
@@ -192,16 +234,16 @@ export const createRunCommandTool = defineTool({
       confirmation: classification.kind === "write"
         ? {
             toolName: "runCommand",
-            args: JSON.stringify({ command, args }),
+            args: JSON.stringify({ command: execCommand, args: normalizedArgs }),
           }
         : undefined,
     });
     if (!authorization.allowed) return authorization.message;
 
-    const result = await runProcess(command, normalizedArgs, ctx);
+    const result = await runProcess(execCommand, normalizedArgs, ctx);
     if (!result.notFound) return result.output;
 
-    const compatibleCommand = windowsShellCompatibility(command, normalizedArgs, ctx);
+    const compatibleCommand = windowsShellCompatibility(execCommand, normalizedArgs, ctx);
     if (!compatibleCommand) return result.output;
 
     return (await runProcess(compatibleCommand.command, compatibleCommand.args, ctx)).output;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from "react";
-import { getCommandInputWithSelection } from "../chatModes/index.js";
+import { getCommandInputWithSelection } from "../chatModes/inputMode.js";
 import {
   buildModeViewContext,
   buildPaletteModel,
@@ -184,6 +184,29 @@ export function useChatInteractionController(): ChatScreenModel {
     cancel: agent.cancel,
   });
 
+  const totalTokens = useMemo(() => {
+    let text = "";
+    for (const block of derivedDisplayBlocks) {
+      if (block.type === "user" || block.type === "assistant") {
+        text += block.content;
+      } else if (block.type === "tool-call") {
+        text += block.toolName + block.toolArgs + block.content;
+      } else if (block.type === "sub-agent") {
+        text += block.role + block.state.fullOutput;
+      }
+    }
+    let tokens = 0;
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      if (code >= 0x4e00 && code <= 0x9fff) {
+        tokens += 0.6;
+      } else {
+        tokens += 0.3;
+      }
+    }
+    return Math.ceil(tokens);
+  }, [derivedDisplayBlocks]);
+
   return {
     modeView: buildModeViewContext({
       chatMode: subAgentNav.chatMode,
@@ -218,6 +241,9 @@ export function useChatInteractionController(): ChatScreenModel {
     }),
     suggestions: buildSuggestionsModel(suggestion, palette.isOpen),
     palette: buildPaletteModel(palette),
-    footer: controlPlane.footer,
+    footer: {
+      ...controlPlane.footer,
+      totalTokens,
+    },
   };
 }

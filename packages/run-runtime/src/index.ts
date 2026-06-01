@@ -1,6 +1,5 @@
-export type { Bus, BusHandler, Unsubscribe } from "./bus.js";
-export { createBus, createChannelBus } from "./bus.js";
-export { DisposableScope } from "./disposable.js";
+export type { Bus, Unsubscribe } from "./bus.js";
+export { createBus } from "./bus.js";
 export type {
   AnyRunEvent,
   MakeRunEventOptions,
@@ -11,7 +10,6 @@ export type {
 export { makeRunEvent } from "./events.js";
 export type { EventfulRunOptions, RunEventMap } from "./eventfulRun.js";
 export { EventfulRun } from "./eventfulRun.js";
-export { RunRunner } from "./runRunner.js";
 export type {
   RunConfig,
   RunCompletion,

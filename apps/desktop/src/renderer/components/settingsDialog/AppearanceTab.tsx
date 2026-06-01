@@ -1,8 +1,8 @@
 import { ChevronDown, Moon, Sun } from "lucide-react";
-import type { DesktopTheme } from "../../themeTypes.ts";
 import {
   getThemeOption,
   themeOptionsForMode,
+  type DesktopTheme,
 } from "./themeOptions.js";
 
 type AppearanceTabProps = {

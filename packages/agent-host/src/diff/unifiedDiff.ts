@@ -1,4 +1,4 @@
-export type DiffAction = "create" | "overwrite" | "edit";
+export type DiffAction = "create" | "overwrite" | "edit" | "warning";
 
 function normalizeLines(content: string): string[] {
   if (content.length === 0) return [];
