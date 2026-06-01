@@ -1,14 +1,11 @@
+import { CommandBuilder } from "./commandBuilder.js";
 import type { AgentCommand } from "./types.js";
 
 export function createCompactCommand(): AgentCommand {
-  return {
-    definition: {
-      name: "compact",
-      category: "core",
-      description: "Manually summarize and compact the conversation history to free up context",
-      usage: "/compact",
-    },
-    execute: async (_args, application) => {
+  return new CommandBuilder("compact")
+    .category("core")
+    .description("Manually summarize and compact the conversation history to free up context")
+    .default(async (_args, application) => {
       try {
         await application.compactCurrentSession("manual");
         return {
@@ -24,6 +21,6 @@ export function createCompactCommand(): AgentCommand {
           clearInput: true,
         };
       }
-    },
-  };
+    })
+    .build();
 }

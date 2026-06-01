@@ -1,62 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { getChatModeHint } from "../src/lib/modeHints.js";
+import { getChatModeHint } from "../src/chatModes/index.js";
 import { chatModeRegistry } from "../src/chatModes/index.js";
 
 describe("chat mode hints", () => {
-  it("shows Ctrl+O only when commands or sub-agents exist", () => {
-    expect(getChatModeHint({
-      chatMode: "input",
-      isLoading: false,
-      hasPending: false,
-      activePanelId: null,
-      subAgentCount: 0,
-      commandCount: 0,
-      commandsExpanded: false,
-    })).not.toContain("Ctrl+O");
-    expect(getChatModeHint({
-      chatMode: "input",
-      isLoading: false,
-      hasPending: false,
-      activePanelId: null,
-      subAgentCount: 0,
-      commandCount: 0,
-      commandsExpanded: false,
-    })).toContain("Ctrl+K");
-
-    expect(getChatModeHint({
+  it("shows Ctrl+K for command palette and never Ctrl+O", () => {
+    const hint = getChatModeHint({
       chatMode: "input",
       isLoading: false,
       hasPending: false,
       activePanelId: null,
       subAgentCount: 1,
-      commandCount: 0,
-      commandsExpanded: false,
-    })).toContain("commands");
-  });
-
-  it("uses Ctrl+O for command expansion instead of Ctrl+T", () => {
-    const collapsed = getChatModeHint({
-      chatMode: "input",
-      isLoading: false,
-      hasPending: false,
-      activePanelId: null,
-      subAgentCount: 0,
       commandCount: 1,
       commandsExpanded: false,
     });
-
-    expect(collapsed).toContain("Ctrl+O commands");
-    expect(collapsed).not.toContain("Ctrl+T");
-
-    expect(getChatModeHint({
-      chatMode: "input",
-      isLoading: false,
-      hasPending: false,
-      activePanelId: null,
-      subAgentCount: 0,
-      commandCount: 1,
-      commandsExpanded: true,
-    })).toContain("Ctrl+O hide commands");
+    expect(hint).toContain("Ctrl+K");
+    expect(hint).not.toContain("Ctrl+O");
   });
 
   it("uses panel and sub-agent mode hints", () => {
@@ -78,7 +36,7 @@ describe("chat mode hints", () => {
       subAgentCount: 1,
       commandCount: 1,
       commandsExpanded: false,
-    })).toContain("Ctrl+O commands");
+    })).toBe("Enter view detail | \u2191\u2193 navigate | Esc close");
 
     expect(getChatModeHint({
       chatMode: "subagent-detail",
@@ -88,7 +46,7 @@ describe("chat mode hints", () => {
       subAgentCount: 1,
       commandCount: 1,
       commandsExpanded: true,
-    })).toBe("Esc back to list | Ctrl+O hide commands");
+    })).toBe("Esc back to list");
   });
 
   it("delegates mode-specific hints through the chat mode registry", () => {

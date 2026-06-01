@@ -4,7 +4,7 @@ import {
   getFileChangePreviewNavigation,
   parseFileChangePreview,
   parsePendingFileChangePreview,
-} from "../src/lib/fileChangePreview.js";
+} from "@excelsior/core";
 
 describe("file change preview parser", () => {
   it("parses completed edit output into aligned old and new panes", () => {

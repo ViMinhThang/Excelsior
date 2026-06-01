@@ -1,6 +1,5 @@
 import type { AnyAgentEvent } from "../../runtime/events.js";
 import {
-  TEXT_DELTA,
   TOOL_CALL_END,
   TOOL_CALL_START,
 } from "../../runtime/eventNames.js";
@@ -11,7 +10,7 @@ import type {
   SubAgentToolStatus,
 } from "./state.js";
 
-function rememberTimestamp(
+export function rememberTimestamp(
   state: SubAgentProjectionState,
   event: AnyAgentEvent,
 ): SubAgentProjectionState {
@@ -22,7 +21,7 @@ function rememberTimestamp(
   };
 }
 
-function appendTextPart(
+export function appendTextPart(
   parts: readonly SubAgentProjectionPart[],
   text: string,
 ): SubAgentProjectionPart[] {
@@ -52,18 +51,8 @@ function updateToolCallStatus(
   };
 }
 
-function handleTextDelta(
-  state: SubAgentProjectionState,
-  event: SubAgentProjectionEvent<typeof TEXT_DELTA>,
-): SubAgentProjectionState {
-  return {
-    ...state,
-    fullOutput: state.fullOutput + event.data.delta,
-    parts: appendTextPart(state.parts, event.data.delta),
-  };
-}
 
-function handleToolCallStart(
+export function handleToolCallStart(
   state: SubAgentProjectionState,
   event: SubAgentProjectionEvent<typeof TOOL_CALL_START>,
 ): SubAgentProjectionState {
@@ -83,7 +72,7 @@ function handleToolCallStart(
   };
 }
 
-function handleToolCallEnd(
+export function handleToolCallEnd(
   state: SubAgentProjectionState,
   event: SubAgentProjectionEvent<typeof TOOL_CALL_END>,
 ): SubAgentProjectionState {
@@ -92,20 +81,4 @@ function handleToolCallEnd(
   return updateToolCallStatus(state, callId, status);
 }
 
-export function reduceSubAgentEvent(
-  state: SubAgentProjectionState,
-  event: AnyAgentEvent,
-): SubAgentProjectionState {
-  const timedState = rememberTimestamp(state, event);
-
-  switch (event.type) {
-    case TEXT_DELTA:
-      return handleTextDelta(timedState, event);
-    case TOOL_CALL_START:
-      return handleToolCallStart(timedState, event);
-    case TOOL_CALL_END:
-      return handleToolCallEnd(timedState, event);
-    default:
-      return timedState;
-  }
-}
+// TimedState tracking is now handled by the ProjectionRegistry middleware.

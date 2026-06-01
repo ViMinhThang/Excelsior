@@ -6,7 +6,7 @@ import { join } from "path";
 import {
   createDb,
   resetDb,
-} from "@excelsior/agent-host/testing/persistence";
+} from "@excelsior/agent-storage";
 import { createStorageEngine } from "@excelsior/agent-host/testing/application";
 import Database from "better-sqlite3";
 
@@ -101,6 +101,29 @@ describe("Database", () => {
         .loadByWorkspace("ws_default")
         .find((session) => session.id === "ses_title_preserve");
       expect(saved?.title).toBe("first prompt");
+    });
+
+    it("uses injected time and id policy for workspace metadata", () => {
+      const metadataStore = createStorageEngine(db, {
+        createId: () => "ws_fixed",
+        nowIso: () => "2026-05-18T12:00:00.000Z",
+      });
+
+      const workspace = metadataStore.workspaces.create("fixed", "/tmp/fixed");
+
+      expect(workspace).toEqual({
+        id: "ws_fixed",
+        name: "fixed",
+        rootPath: "/tmp/fixed",
+      });
+
+      const row = db
+        .prepare("SELECT created_at, updated_at FROM workspaces WHERE id = ?")
+        .get("ws_fixed") as { created_at: string; updated_at: string };
+      expect(row).toEqual({
+        created_at: "2026-05-18T12:00:00.000Z",
+        updated_at: "2026-05-18T12:00:00.000Z",
+      });
     });
   });
 });

@@ -1,61 +1,31 @@
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 import type { ProjectedBlock } from "@excelsior/core";
-
-type MarkdownPart =
-  | { type: "code"; language: string; content: string }
-  | { type: "text"; content: string };
-
-function parseMarkdown(text: string): MarkdownPart[] {
-  const parts: MarkdownPart[] = [];
-  const regex = /```(\w*)\n([\s\S]*?)```/g;
-  let lastIndex = 0;
-  let match;
-
-  while ((match = regex.exec(text)) !== null) {
-    const textBefore = text.slice(lastIndex, match.index);
-    if (textBefore) {
-      parts.push({ type: "text", content: textBefore });
-    }
-    parts.push({
-      type: "code",
-      language: match[1] || "plaintext",
-      content: match[2].trimEnd(),
-    });
-    lastIndex = regex.lastIndex;
-  }
-
-  const textRemaining = text.slice(lastIndex);
-  if (textRemaining) {
-    parts.push({ type: "text", content: textRemaining });
-  }
-
-  return parts;
-}
+import {
+  parseInlineMarkdown,
+  parseMarkdown,
+} from "./markdownMessage/markdownModel.js";
 
 function renderInlineMarkdown(text: string): React.ReactNode {
-  const regex = /(\*\*.*?\*\*|`.*?`)/g;
-  const parts = text.split(regex);
-
-  return parts.map((part, index) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
+  return parseInlineMarkdown(text).map((part, index) => {
+    if (part.type === "strong") {
       return (
         <strong key={index} className="font-semibold text-brand-text-strong">
-          {part.slice(2, -2)}
+          {part.content}
         </strong>
       );
     }
-    if (part.startsWith("`") && part.endsWith("`")) {
+    if (part.type === "code") {
       return (
         <code
           key={index}
           className="px-1.5 py-0.5 rounded border border-brand-border bg-brand-surface font-mono text-[12px] text-brand-accent select-all"
         >
-          {part.slice(1, -1)}
+          {part.content}
         </code>
       );
     }
-    return part;
+    return part.content;
   });
 }
 

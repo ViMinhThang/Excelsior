@@ -9,29 +9,12 @@ import {
 } from "@excelsior/agent-host/testing/application";
 import {
   AgentRun,
-  type RunRecorder,
 } from "@excelsior/agent-host/testing/runtime";
+import { createFakeRunRecorder } from "./helpers/agentApplication.js";
 
 interface ControlledAgentStream {
   run: AgentRun;
   resolve(): void;
-}
-
-function createRecorder(): RunRecorder {
-  return {
-    recordEvent: async () => {},
-    recordTurnComplete: async () => {},
-    loadCompletedEvents: async () => [],
-    loadRawEvents: async () => [],
-    getLastCompletedTurn: async () => null,
-    dropLastCompletedTurn: async () => ({
-      dropped: false,
-      removedEvents: 0,
-      reason: "no-completed-turn",
-    }),
-    deleteSessionEvents: async () => {},
-    deleteAllSessionEvents: async () => {},
-  } as any;
 }
 
 function createState() {
@@ -114,7 +97,7 @@ function createLifecycle(input: {
   state: AgentStateStore;
   appendFinalEvents?: (events: readonly unknown[]) => void;
 }) {
-  const recorder = createRecorder();
+  const recorder = createFakeRunRecorder();
   const controls = createControlledAgentFactory();
   const lifecycle = new TurnLifecycle({
     state: input.state,
@@ -135,7 +118,7 @@ describe("TurnLifecycle", () => {
     const state = createState();
     const { lifecycle } = createLifecycle({ state });
 
-    lifecycle.startUserTurn({
+    await lifecycle.startUserTurn({
       content: "hello",
       mode: "act",
       sessionId: "ses_1",
@@ -161,7 +144,7 @@ describe("TurnLifecycle", () => {
       appendFinalEvents,
     });
 
-    lifecycle.startUserTurn({
+    await lifecycle.startUserTurn({
       content: "hello",
       mode: "act",
       sessionId: "ses_1",
@@ -186,7 +169,7 @@ describe("TurnLifecycle", () => {
       appendFinalEvents,
     });
 
-    lifecycle.startUserTurn({
+    await lifecycle.startUserTurn({
       content: "hello",
       mode: "act",
       sessionId: "ses_1",

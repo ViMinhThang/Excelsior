@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  AgentHostIntentDispatcher,
+  createIntentDispatcher,
   type AgentHostIntentDispatcherOptions,
 } from "../src/host/dispatcher.js";
 
@@ -44,10 +44,10 @@ function createMockOptions(): AgentHostIntentDispatcherOptions {
   };
 }
 
-describe("AgentHostIntentDispatcher", () => {
+describe("createIntentDispatcher", () => {
   it("routes turn intents to the application", async () => {
     const options = createMockOptions();
-    const dispatcher = new AgentHostIntentDispatcher(options);
+    const dispatcher = createIntentDispatcher(options);
 
     // Test send
     let result = await dispatcher.dispatch({ type: "send", content: "hello", options: { silent: true } });
@@ -75,7 +75,7 @@ describe("AgentHostIntentDispatcher", () => {
 
   it("routes command intents to the command executor", async () => {
     const options = createMockOptions();
-    const dispatcher = new AgentHostIntentDispatcher(options);
+    const dispatcher = createIntentDispatcher(options);
 
     const result = await dispatcher.dispatch({ type: "execute-command", input: "/mode act" });
     expect(result).toEqual({
@@ -87,7 +87,7 @@ describe("AgentHostIntentDispatcher", () => {
 
   it("routes session intents to the application", async () => {
     const options = createMockOptions();
-    const dispatcher = new AgentHostIntentDispatcher(options);
+    const dispatcher = createIntentDispatcher(options);
 
     // Create session
     let result = await dispatcher.dispatch({ type: "create-session", title: "My Session" });
@@ -120,7 +120,7 @@ describe("AgentHostIntentDispatcher", () => {
 
   it("routes settings intents to the application and settings store", async () => {
     const options = createMockOptions();
-    const dispatcher = new AgentHostIntentDispatcher(options);
+    const dispatcher = createIntentDispatcher(options);
 
     // Set mode
     let result = await dispatcher.dispatch({ type: "set-mode", mode: "plan" });
@@ -140,7 +140,7 @@ describe("AgentHostIntentDispatcher", () => {
 
   it("routes confirmation and question intents to their controllers", async () => {
     const options = createMockOptions();
-    const dispatcher = new AgentHostIntentDispatcher(options);
+    const dispatcher = createIntentDispatcher(options);
 
     // Respond to confirmation
     let result = await dispatcher.dispatch({ type: "respond-to-confirmation", callId: "c_1", approved: true });

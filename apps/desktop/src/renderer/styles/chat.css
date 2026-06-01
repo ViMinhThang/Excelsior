@@ -1,0 +1,142 @@
+/* ============================
+   USER MESSAGE BUBBLE
+   ============================ */
+.user-message-bubble {
+  background: var(--brand-user-bubble);
+  border: 1px solid color-mix(in srgb, var(--brand-user-bubble) 60%, var(--brand-accent));
+  border-radius: 12px;
+  box-shadow: 0 4px 20px color-mix(in srgb, var(--brand-sidebar-footer) 30%, transparent), 0 0 40px var(--gold-glow);
+  color: var(--brand-text-strong);
+  display: inline-block;
+  font-size: 14px;
+  line-height: 24px;
+  max-width: min(48rem, 100%);
+  min-height: 44px;
+  min-width: 48px;
+  overflow-wrap: anywhere;
+  padding: 12px 20px;
+  user-select: text;
+  white-space: pre-wrap;
+}
+
+/* ============================
+   CHAT CONTENT RAIL
+   ============================ */
+.chat-content-rail {
+  margin-inline: auto;
+  width: min(720px, 100%);
+}
+
+.chat-floating-layer,
+.chat-empty-layer {
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 64px));
+}
+
+@media (max-width: 720px) {
+
+  .chat-floating-layer,
+  .chat-empty-layer {
+    width: calc(100% - 32px);
+  }
+}
+
+/* ============================
+   GLASS PANEL
+   ============================ */
+.glass-panel {
+  background: color-mix(in srgb, var(--brand-surface) 70%, transparent) !important;
+  backdrop-filter: blur(18px) saturate(110%);
+  -webkit-backdrop-filter: blur(18px) saturate(110%);
+  border: 1px solid color-mix(in srgb, var(--brand-border) 40%, transparent) !important;
+  box-shadow: 0 8px 32px color-mix(in srgb, var(--brand-sidebar-footer) 40%, transparent), 0 0 30px var(--gold-glow) !important;
+}
+
+/* ============================
+   COMPOSER PANEL
+   ============================ */
+.composer-panel {
+  background: color-mix(in srgb, var(--brand-surface) 72%, transparent);
+  backdrop-filter: blur(20px) saturate(110%);
+  -webkit-backdrop-filter: blur(20px) saturate(110%);
+  border: 1px solid color-mix(in srgb, var(--brand-border) 35%, transparent);
+  box-shadow: 0 10px 36px color-mix(in srgb, var(--brand-sidebar-footer) 45%, transparent), 0 0 20px var(--gold-glow);
+  padding: 6px 12px 6px 12px !important;
+  /* Premium ultra-compact low-profile padding */
+  transition: border-color var(--transition-snappy) var(--ease-snappy),
+    box-shadow var(--transition-snappy) var(--ease-snappy),
+    background-color var(--transition-snappy) var(--ease-snappy);
+}
+
+.composer-panel:focus-within {
+  border-color: color-mix(in srgb, var(--brand-accent) 60%, transparent) !important;
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--brand-sidebar-footer) 50%, transparent), 0 0 32px var(--gold-glow-strong) !important;
+  background: color-mix(in srgb, var(--brand-surface) 78%, transparent) !important;
+}
+
+
+.glass-overlay {
+  background: color-mix(in srgb, var(--brand-bg) 65%, transparent) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* ============================
+   STARTER PROMPT CARDS & HEADER
+   ============================ */
+.starter-header-icon {
+  align-items: center;
+  background-color: var(--brand-surface);
+  border: 1px solid color-mix(in srgb, var(--brand-border) 60%, transparent);
+  border-radius: 16px !important;
+  color: var(--brand-accent);
+  display: flex;
+  flex: 0 0 auto;
+  height: 56px;
+  justify-content: center;
+  width: 56px;
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--brand-sidebar-footer) 30%, transparent), 0 0 15px var(--gold-glow);
+}
+
+.starter-prompt-card {
+  background: color-mix(in srgb, var(--brand-surface) 40%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-border) 40%, transparent);
+  border-radius: 16px !important;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 28px 24px 36px 24px !important;
+  /* Premium airy padding to give them more room */
+  width: 100%;
+  position: relative;
+  cursor: pointer;
+}
+
+.starter-prompt-icon-wrapper {
+  display: flex;
+  height: 44px;
+  width: 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-accent) 10%, transparent);
+  color: var(--brand-accent);
+  margin-bottom: 22px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--brand-sidebar-footer) 15%, transparent);
+}
+
+.starter-prompt-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--brand-text-strong);
+}
+
+.starter-prompt-description {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--brand-text-light);
+  margin-top: 10px;
+}

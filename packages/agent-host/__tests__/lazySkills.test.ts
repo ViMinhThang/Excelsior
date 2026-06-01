@@ -3,10 +3,9 @@ import { mkdtemp, rm } from "fs/promises";
 import * as fs from "node:fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import * as os from "node:os";
 import { SkillsManager } from "../src/agent/skills/SkillsManager.js";
 import { createAgent } from "../src/agent/agent.js";
-import type { ToolContext } from "../src/tooling/context.js";
+import { executeTool, type ToolContext } from "../src/testing/tools.js";
 import { AgentCommandExecutor } from "../src/commands/executor.js";
 
 describe("SkillsManager & lazy load skills", () => {
@@ -14,41 +13,10 @@ describe("SkillsManager & lazy load skills", () => {
   let tempHome: string;
   let tempSystem: string;
 
-  const originalExistsSync = fs.existsSync;
-  const originalReaddirSync = fs.readdirSync;
-  const originalReadFileSync = fs.readFileSync;
-
   beforeEach(async () => {
     tempWorkspace = await mkdtemp(join(tmpdir(), "excelsior-ws-"));
     tempHome = await mkdtemp(join(tmpdir(), "excelsior-home-"));
     tempSystem = await mkdtemp(join(tmpdir(), "excelsior-system-"));
-
-    vi.spyOn(os, "homedir").mockReturnValue(tempHome);
-
-    const mapPath = (p: string): string => {
-      const normalized = p.replace(/\\/g, "/");
-      if (normalized.includes("/etc/agents")) {
-        const parts = normalized.split("/etc/agents");
-        return join(tempSystem, parts[parts.length - 1]);
-      }
-      if (normalized.includes("/ProgramData/agents") || normalized.includes("ProgramData/agents")) {
-        const parts = normalized.split("agents");
-        return join(tempSystem, parts[parts.length - 1]);
-      }
-      return p;
-    };
-
-    vi.spyOn(fs, "existsSync").mockImplementation(((p: any) => {
-      return originalExistsSync(mapPath(p));
-    }) as any);
-
-    vi.spyOn(fs, "readdirSync").mockImplementation(((p: any, options: any) => {
-      return originalReaddirSync(mapPath(p), options);
-    }) as any);
-
-    vi.spyOn(fs, "readFileSync").mockImplementation(((p: any, options: any) => {
-      return originalReadFileSync(mapPath(p), options);
-    }) as any);
   });
 
   afterEach(async () => {
@@ -87,7 +55,10 @@ description: User-level skill description
 
     // Test priority override: Repo > User > System
     // First, let's discover without Repo (should pick User)
-    const managerNoRepo = new SkillsManager();
+    const managerNoRepo = new SkillsManager(undefined, {
+      homeDir: tempHome,
+      systemDir: tempSystem,
+    });
     managerNoRepo.discoverSkills();
     const skillsNoRepo = managerNoRepo.getSkills();
 
@@ -105,7 +76,7 @@ description: User-level skill description
     );
 
     // Second, let's add Repo skill and verify Repo overrides User
-    const repoSkillsDir = join(tempWorkspace, ".agents", "my-skill");
+    const repoSkillsDir = join(tempWorkspace, ".agents", "skills", "my-skill");
     await fs.promises.mkdir(repoSkillsDir, { recursive: true });
     await fs.promises.writeFile(
       join(repoSkillsDir, "SKILL.md"),
@@ -117,7 +88,10 @@ description: Repo-level skill description
       "utf-8",
     );
 
-    const managerWithRepo = new SkillsManager(tempWorkspace);
+    const managerWithRepo = new SkillsManager(tempWorkspace, {
+      homeDir: tempHome,
+      systemDir: tempSystem,
+    });
     managerWithRepo.discoverSkills();
     const skillsWithRepo = managerWithRepo.getSkills();
 
@@ -136,7 +110,7 @@ description: Repo-level skill description
   });
 
   it("should ignore disabled skills", async () => {
-    const repoSkillsDir = join(tempWorkspace, ".agents", "disabled-skill");
+    const repoSkillsDir = join(tempWorkspace, ".agents", "skills", "disabled-skill");
     await fs.promises.mkdir(repoSkillsDir, { recursive: true });
     await fs.promises.writeFile(
       join(repoSkillsDir, "SKILL.md"),
@@ -149,7 +123,10 @@ enabled: false
       "utf-8",
     );
 
-    const manager = new SkillsManager(tempWorkspace);
+    const manager = new SkillsManager(tempWorkspace, {
+      homeDir: tempHome,
+      systemDir: tempSystem,
+    });
     manager.discoverSkills();
     const skills = manager.getSkills();
 
@@ -159,7 +136,7 @@ enabled: false
 
   it("should integrate dynamic tools and instructions into createAgent", async () => {
     // Setup a skill in Repo scope
-    const repoSkillsDir = join(tempWorkspace, ".agents", "code-reviewer");
+    const repoSkillsDir = join(tempWorkspace, ".agents", "skills", "code-reviewer");
     await fs.promises.mkdir(repoSkillsDir, { recursive: true });
     await fs.promises.writeFile(
       join(repoSkillsDir, "SKILL.md"),
@@ -178,15 +155,16 @@ description: Automated code review skill
     };
 
     const agent = createAgent("custom instructions", {}, ctx);
-    const excelsiorAgent = agent as any;
-    const toolLoopAgent = excelsiorAgent.agent;
+    const toolLoopAgent = Reflect.get(agent, "agent") as {
+      tools: Record<string, { execute?: unknown }>;
+    };
 
     // Check that the Dynamic Skill tool is registered under the correct sanitized name
-    expect(toolLoopAgent.tools).toHaveProperty("skill_code_reviewer");
+    expect(toolLoopAgent.tools).toHaveProperty("skill_code-reviewer");
 
     // Execute the tool and verify XML context injection
-    const skillTool = toolLoopAgent.tools.skill_code_reviewer;
-    const result = await skillTool.execute({}, { toolCallId: "test_call" } as any);
+    const skillTool = toolLoopAgent.tools["skill_code-reviewer"];
+    const result = await executeTool(skillTool, {}, { toolCallId: "test_call" });
     expect(result).toBe(
       `<skill>\n  <name>code-reviewer</name>\n  <instructions>\n# Review rules\n  </instructions>\n</skill>`,
     );
@@ -194,7 +172,7 @@ description: Automated code review skill
 
   it("should dynamically register and execute discovered skills as slash commands", async () => {
     // Setup a skill in Repo scope
-    const repoSkillsDir = join(tempWorkspace, ".agents", "grill-me");
+    const repoSkillsDir = join(tempWorkspace, ".agents", "skills", "grill-me");
     await fs.promises.mkdir(repoSkillsDir, { recursive: true });
     await fs.promises.writeFile(
       join(repoSkillsDir, "SKILL.md"),
@@ -225,10 +203,10 @@ description: Dynamic grilling skill
 
     // Verify /help formats the dynamic skill under "Skills"
     const help = executor.getHelpText();
-    expect(help).toContain("Skills\n/grill_me - Dynamic grilling skill.\n  usage: /grill_me");
+    expect(help).toContain("Skills\n/grill-me - Dynamic grilling skill.\n  usage: /grill-me");
 
     // Execute the slash command
-    const result = await executor.execute("/grill_me");
+    const result = await executor.execute("/grill-me");
     expect(result).toEqual({
       handled: true,
       message: "Starting skill: grill-me...",

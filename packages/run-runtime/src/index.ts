@@ -11,6 +11,7 @@ export type {
 export { makeRunEvent } from "./events.js";
 export type { EventfulRunOptions, RunEventMap } from "./eventfulRun.js";
 export { EventfulRun } from "./eventfulRun.js";
+export { RunRunner } from "./runRunner.js";
 export type {
   RunConfig,
   RunCompletion,
@@ -19,5 +20,7 @@ export type {
   RunHandle,
   RunPersistenceConfig,
 } from "./eventfulRun.js";
-
-export { generateId } from "./id.js";
+export {
+  createRunPersistenceTracker,
+  type RunPersistenceTracker,
+} from "./runPersistence.js";

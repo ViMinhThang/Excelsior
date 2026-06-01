@@ -227,5 +227,85 @@ describe("runCommandTool", () => {
       expect(result).toContain("rm -rf foo");
       expect(result).not.toContain("Blocked");
     });
+
+    it("blocks nested shell executing dangerous commands", async () => {
+      const result = await executeTool(runCommandTool, {
+        command: "cmd.exe",
+        args: ["/c", "echo safe && rm -rf /"]
+      });
+      expect(result).toContain("Blocked dangerous command");
+    });
+
+    it("allows safe nested shell commands", async () => {
+      const result = await executeTool(runCommandTool, {
+        command: "cmd.exe",
+        args: ["/c", "echo hello nested"]
+      });
+      expect(result).toContain("hello nested");
+      expect(result).not.toContain("Blocked");
+    });
+
+    it("blocks powershell UTF-16LE base64 encoded dangerous commands", async () => {
+      const dangerousCmd = "rmdir /s \\";
+      const base64Utf16 = Buffer.from(dangerousCmd, "utf16le").toString("base64");
+      const result = await executeTool(runCommandTool, {
+        command: "powershell.exe",
+        args: ["-EncodedCommand", base64Utf16]
+      });
+      expect(result).toContain("Blocked dangerous command");
+    });
+
+    it("blocks powershell UTF-8 base64 encoded dangerous commands", async () => {
+      const dangerousCmd = "rmdir /s \\";
+      const base64Utf8 = Buffer.from(dangerousCmd, "utf8").toString("base64");
+      const result = await executeTool(runCommandTool, {
+        command: "powershell.exe",
+        args: ["-enc", base64Utf8]
+      });
+      expect(result).toContain("Blocked dangerous command");
+    });
+
+    it("blocks powershell standard flag dangerous commands", async () => {
+      const result = await executeTool(runCommandTool, {
+        command: "powershell",
+        args: ["-Command", "rmdir /s \\"]
+      });
+      expect(result).toContain("Blocked dangerous command");
+    });
+
+    it("blocks dangerous node inline script", async () => {
+      const result = await executeTool(runCommandTool, {
+        command: "node",
+        args: ["-e", "require('child_process').execSync('rm -rf /')"]
+      });
+      expect(result).toContain("Blocked dangerous inline script");
+    });
+
+    it("blocks dangerous python inline script", async () => {
+      const result = await executeTool(runCommandTool, {
+        command: "python3",
+        args: ["-c", "import os; os.system('rm -rf /')"]
+      });
+      expect(result).toContain("Blocked dangerous inline script");
+    });
+
+    it("allows safe node inline scripts", async () => {
+      const result = await executeTool(runCommandTool, {
+        command: "node",
+        args: ["-e", "console.log('safe inline js')"]
+      });
+      expect(result).toContain("safe inline js");
+      expect(result).not.toContain("Blocked");
+    });
+
+    it("classifies safe python inline scripts without requiring python to be installed", () => {
+      const result = classifyCommandRisk("python", ["-c", "print('safe inline py')"]);
+
+      expect(result).toMatchObject({
+        kind: "read",
+        risk: "low",
+      });
+      expect(result.blockedMessage).toBeUndefined();
+    });
   });
 });

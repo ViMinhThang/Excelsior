@@ -1,10 +1,8 @@
-import { tool } from "ai";
 import { z } from "zod";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { ToolContext } from "../../../tooling/context.js";
-import { authorizeToolAction } from "../../../tooling/policy.js";
-import { getWorkspaceRoot, validateWorkspacePattern } from "../../../tooling/workspace.js";
+import { defineTool } from "../core/toolBuilder.js";
+import { getWorkspaceRoot, validateWorkspacePattern } from "../core/workspace.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -38,53 +36,48 @@ function missingRipgrepMessage(): string {
   ].join("\n");
 }
 
-export function createRipgrepTool(ctx?: ToolContext) {
-  return tool({
-    description: "Search across workspace files with ripgrep, ignoring node_modules, .git, and dist by default.",
-    inputSchema: ripgrepSchema,
-    execute: async ({ query, pathPattern }) => {
-      const authorization = await authorizeToolAction(ctx, {
-        toolName: "ripgrep",
-        capability: "fs:read",
-        modePolicy: "read",
+export const createRipgrepTool = defineTool({
+  name: "ripgrep",
+  description: "Search across workspace files with ripgrep, ignoring node_modules, .git, and dist by default.",
+  inputSchema: ripgrepSchema,
+  capability: "fs:read",
+  modePolicy: "read",
+  errorAction: "running ripgrep",
+  execute: async ({ query, pathPattern }, ctx) => {
+    const workspaceRoot = getWorkspaceRoot(ctx);
+    if (pathPattern) validateWorkspacePattern(pathPattern);
+
+    const args = [
+      "--line-number",
+      "--no-heading",
+      "--color",
+      "never",
+      "--max-filesize",
+      "1M",
+      "--glob",
+      "!node_modules/**",
+      "--glob",
+      "!.git/**",
+      "--glob",
+      "!dist/**",
+    ];
+
+    if (pathPattern) args.push("--glob", pathPattern);
+    args.push("--", query, ".");
+
+    try {
+      const { stdout } = await execFileAsync(getRipgrepCommand(), args, {
+        cwd: workspaceRoot,
+        windowsHide: true,
+        maxBuffer: 1_000_000,
       });
-      if (!authorization.allowed) return authorization.message;
 
-      try {
-        const workspaceRoot = getWorkspaceRoot(ctx);
-        if (pathPattern) validateWorkspacePattern(pathPattern);
-
-        const args = [
-          "--line-number",
-          "--no-heading",
-          "--color",
-          "never",
-          "--max-filesize",
-          "1M",
-          "--glob",
-          "!node_modules/**",
-          "--glob",
-          "!.git/**",
-          "--glob",
-          "!dist/**",
-        ];
-
-        if (pathPattern) args.push("--glob", pathPattern);
-        args.push("--", query, ".");
-
-        const { stdout } = await execFileAsync(getRipgrepCommand(), args, {
-          cwd: workspaceRoot,
-          windowsHide: true,
-          maxBuffer: 1_000_000,
-        });
-
-        return formatRipgrepOutput(stdout);
-      } catch (error: unknown) {
-        const err = error as RipgrepError;
-        if (err.code === 1) return "No matches found.";
-        if (err.code === "ENOENT") return missingRipgrepMessage();
-        return `Error running ripgrep: ${err.stderr?.trim() || err.message || String(error)}`;
-      }
-    },
-  });
-}
+      return formatRipgrepOutput(stdout);
+    } catch (error: unknown) {
+      const err = error as RipgrepError;
+      if (err.code === 1) return "No matches found.";
+      if (err.code === "ENOENT") return missingRipgrepMessage();
+      throw error;
+    }
+  },
+});

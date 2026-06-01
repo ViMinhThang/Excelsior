@@ -1,8 +1,11 @@
 import { createChannelBus } from "./bus.js";
-import type { Bus, Unsubscribe } from "./bus.js";
+import type { Bus } from "./bus.js";
 import { DisposableScope } from "./disposable.js";
 import { AnyRunEvent, makeRunEvent, RunEventOverrides } from "./events.js";
-import { generateId } from "./id.js";
+import type { RunPersistenceConfig } from "./runPersistence.js";
+import { RunRunner } from "./runRunner.js";
+
+export type { RunPersistenceConfig };
 
 export type RunEventMap<TEvents extends { [K in keyof TEvents]: unknown }> = {
   event: AnyRunEvent<TEvents>;
@@ -45,17 +48,15 @@ export interface RunExecutionContext<TEvents extends { [K in keyof TEvents]: unk
   ): void;
 }
 
-export interface RunPersistenceConfig<TEvents extends { [K in keyof TEvents]: unknown }> {
-  filter?: (event: AnyRunEvent<TEvents>) => boolean;
-  write?: (event: AnyRunEvent<TEvents>) => Promise<void> | void;
-  onError?: (error: unknown, event: AnyRunEvent<TEvents>) => void;
-}
-
 export interface RunConfig<TEvents extends { [K in keyof TEvents]: unknown }> {
   execute(context: RunExecutionContext<TEvents>): Promise<void> | void;
   persist?: RunPersistenceConfig<TEvents>;
   onError?: (error: unknown) => void;
   isAbortError?: (error: unknown) => boolean;
+}
+
+function generateRunId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
 export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
@@ -81,7 +82,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
 
   constructor(options?: EventfulRunOptions<TEvents>) {
     const idPrefix = options?.idPrefix ?? "run";
-    this.id = options?.createRunId?.() ?? generateId(idPrefix);
+    this.id = options?.createRunId?.() ?? generateRunId(idPrefix);
     this.sessionId = options?.sessionId ?? this.id;
     this.parentEventId = options?.parentEventId;
     this.correlationId = options?.correlationId ?? this.id;
@@ -157,109 +158,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
   }
 
   start(config: RunConfig<TEvents>): RunHandle<TEvents> {
-    const shouldRecordEvent = config.persist?.filter ?? (() => true);
-    const allEvents = this.getSnapshot().filter(shouldRecordEvent);
-    let recordFailed = false;
-    let writeQueue: Promise<void> = Promise.resolve();
-
-    const emit: RunExecutionContext<TEvents>["emit"] = (type, data, overrides) => {
-      this.emit(type, data, overrides);
-    };
-
-    const notifyPersistError = (error: unknown, event: AnyRunEvent<TEvents>): void => {
-      if (recordFailed) return;
-      recordFailed = true;
-      try {
-        config.persist?.onError?.(error, event);
-      } catch {
-      }
-    };
-
-    const trackWrite = (event: AnyRunEvent<TEvents>): void => {
-      if (!config.persist?.write) return;
-      const write = config.persist.write;
-      writeQueue = writeQueue.then(async () => {
-        try {
-          await write(event);
-        } catch (error: unknown) {
-          notifyPersistError(error, event);
-        }
-      });
-    };
-
-    const waitForPendingWrites = async (): Promise<void> => {
-      let observedQueue: Promise<void>;
-      do {
-        observedQueue = writeQueue;
-        await observedQueue;
-      } while (observedQueue !== writeQueue);
-    };
-
-    let unsub: Unsubscribe | null = this.bus.on("event", (event) => {
-      if (shouldRecordEvent(event)) {
-        allEvents.push(event);
-        trackWrite(event);
-      }
-    });
-
-    const cleanup = (): void => {
-      unsub?.();
-      unsub = null;
-    };
-
-    const finish = async (
-      completion: RunCompletion<TEvents>,
-    ): Promise<RunCompletion<TEvents>> => {
-      await waitForPendingWrites();
-      cleanup();
-      return completion;
-    };
-
-    const getCancelReason = (fallback?: unknown): unknown => {
-      return this.abortSignal.aborted ? this.abortSignal.reason : fallback;
-    };
-
-    const cancelledCompletion = (fallback?: unknown): RunCompletion<TEvents> => {
-      const cancelReason = getCancelReason(fallback);
-      return cancelReason === undefined
-        ? { status: "cancelled", events: allEvents }
-        : { status: "cancelled", events: allEvents, cancelReason };
-    };
-
-    const isAbortError = (error: unknown): boolean =>
-      config.isAbortError?.(error) ??
-      (error instanceof Error &&
-        (error.name === "AbortError" || error.message.includes("abort")));
-
-    const completion = Promise.resolve()
-      .then(() => config.execute({ run: this, signal: this.abortSignal, emit }))
-      .then(async () => {
-        return finish(
-          this.isCancelled
-            ? cancelledCompletion()
-            : { status: "completed", events: allEvents },
-        );
-      })
-      .catch(async (error: unknown) => {
-        if (isAbortError(error)) {
-          return finish(cancelledCompletion(error));
-        }
-
-        try {
-          config.onError?.(error);
-        } catch (handlerError: unknown) {
-          return finish({ status: "failed", events: allEvents, error: handlerError });
-        }
-
-        return finish({ status: "failed", events: allEvents, error });
-      });
-
-    return {
-      cancel: (reason?: unknown) => {
-        this.cancel(reason);
-      },
-      completion,
-    };
+    return RunRunner.run(this, config);
   }
 
   private _clearNotifyTimer(): boolean {

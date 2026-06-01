@@ -2,6 +2,10 @@ import Database from "better-sqlite3";
 import type { Session, Workspace } from "@excelsior/core";
 import { getDb } from "./db.js";
 import type { WorkspaceRepository, SessionRepository, StorageEngine } from "./ports.js";
+import {
+  systemStorageTimeIdPolicy,
+  type StorageTimeIdPolicy,
+} from "./timeIdPolicy.js";
 
 // Private database rows
 interface WorkspaceDbRow {
@@ -79,12 +83,15 @@ const DELETE_PARENT_SESSIONS = `
 `;
 
 export class SqliteWorkspaceRepository implements WorkspaceRepository {
-  constructor(private readonly getStoreDb: () => Database.Database = getDb) {}
+  constructor(
+    private readonly getStoreDb: () => Database.Database = getDb,
+    private readonly timeIds: StorageTimeIdPolicy = systemStorageTimeIdPolicy,
+  ) {}
 
   create(name: string, rootPath: string): Workspace {
     const storeDb = this.getStoreDb();
-    const id = `ws_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    const now = new Date().toISOString();
+    const id = this.timeIds.createId("ws");
+    const now = this.timeIds.nowIso();
     storeDb
       .prepare(
         "INSERT OR IGNORE INTO workspaces (id, name, root_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
@@ -131,7 +138,7 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
     const id = "ws_default";
     const name = "default";
     const rootPath = process.cwd();
-    const now = new Date().toISOString();
+    const now = this.timeIds.nowIso();
     storeDb
       .prepare(
         "INSERT OR IGNORE INTO workspaces (id, name, root_path, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
@@ -142,7 +149,10 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
 }
 
 export class SqliteSessionRepository implements SessionRepository {
-  constructor(private readonly getStoreDb: () => Database.Database = getDb) {}
+  constructor(
+    private readonly getStoreDb: () => Database.Database = getDb,
+    private readonly timeIds: StorageTimeIdPolicy = systemStorageTimeIdPolicy,
+  ) {}
 
   persist(session: Session): void {
     const storeDb = this.getStoreDb();
@@ -172,7 +182,7 @@ export class SqliteSessionRepository implements SessionRepository {
   updateTitle(sessionId: string, title: string): void {
     this.getStoreDb()
       .prepare(UPDATE_SESSION_TITLE)
-      .run(title, new Date().toISOString(), sessionId);
+      .run(title, this.timeIds.nowIso(), sessionId);
   }
 
   delete(sessionId: string): void {
@@ -188,11 +198,14 @@ export class SqliteSessionRepository implements SessionRepository {
   }
 }
 
-export function createStorageEngine(db?: Database.Database): StorageEngine {
+export function createStorageEngine(
+  db?: Database.Database,
+  timeIds: StorageTimeIdPolicy = systemStorageTimeIdPolicy,
+): StorageEngine {
   const getStoreDb = () => db ?? getDb();
   return {
-    workspaces: new SqliteWorkspaceRepository(getStoreDb),
-    sessions: new SqliteSessionRepository(getStoreDb),
+    workspaces: new SqliteWorkspaceRepository(getStoreDb, timeIds),
+    sessions: new SqliteSessionRepository(getStoreDb, timeIds),
   };
 }
 

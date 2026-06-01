@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@excelsior/core";
 import type { AnyAgentEvent } from "../../runtime/events.js";
 import { projectEventsToAIMessages } from "../../projection/aiHistoryProjection.js";
-import { projectEventsToDisplayBlocks } from "../../projection/chatTranscriptProjection.js";
+import { projectEventsToDisplayBlocks } from "../../projection/chatTranscript/model.js";
 import type { ProjectedBlock } from "@excelsior/core";
 import type { ProjectionInputState } from "../types.js";
 

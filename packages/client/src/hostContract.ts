@@ -38,6 +38,16 @@ export type AgentHostDispatchResult =
   | { type: "session"; session: Session }
   | { type: "mode"; mode: AgentMode };
 
+export interface IntentHandler<T extends AgentHostIntent["type"] = AgentHostIntent["type"]> {
+  readonly type: T;
+  handle(intent: Extract<AgentHostIntent, { type: T }>): Promise<AgentHostDispatchResult> | AgentHostDispatchResult;
+}
+
+export type IntentMiddleware = (
+  intent: AgentHostIntent,
+  next: () => Promise<AgentHostDispatchResult>,
+) => Promise<AgentHostDispatchResult>;
+
 export interface AgentHost {
   getState(): AgentClientState;
   subscribe(listener: () => void): () => void;

@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import type { ConfirmRequest } from "@excelsior/core";
-import { getFileChangePreviewNavigation } from "../lib/fileChangePreview.js";
-import { createToolDisplay } from "../lib/toolDisplay.js";
+import {
+  createToolDisplay,
+  getFileChangePreviewNavigation,
+  type ConfirmRequest,
+} from "@excelsior/core";
 
 export function useToolConfirmation(
   pending: ConfirmRequest | null,

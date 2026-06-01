@@ -2,6 +2,7 @@ export * from "./agent.js";
 export * from "./clientState.js";
 export * from "./commands.js";
 export * from "./confirmation.js";
+export * from "./conversationPresentation.js";
 export * from "./projection.js";
 export * from "./question.js";
 export * from "./session.js";

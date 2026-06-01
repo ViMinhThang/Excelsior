@@ -15,8 +15,8 @@ interface SubAgentRowProps {
 }
 
 const statusMark: Record<ProjectedSubAgent["status"], string> = {
-  running: "~",
-  done: "-",
+  running: "",
+  done: "",
   error: "!",
 };
 
@@ -38,7 +38,7 @@ const SubAgentRow: FC<SubAgentRowProps> = ({ agent, role, isSelected }) => {
 
   const duration = getSubAgentDuration(agent, now);
   const activity = getSubAgentActivity(agent);
-  const roleColor = isSelected ? theme.colors.highlightSelected : theme.colors.text;
+  const roleColor = isSelected ? theme.colors.highlightSelected : statusColor[agent.status];
 
   return (
     <Box flexDirection="column" marginTop={1} paddingLeft={1}>

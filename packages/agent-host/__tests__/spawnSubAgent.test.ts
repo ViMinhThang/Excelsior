@@ -6,7 +6,6 @@ import {
   AgentRun,
   createSubAgentEventSink,
   type AnyAgentEvent,
-  type RunRecorder,
   type StreamCapableAgent,
 } from "@excelsior/agent-host/testing/runtime";
 import {
@@ -17,6 +16,7 @@ import {
   executeTool,
   type ToolContext,
 } from "@excelsior/agent-host/testing/tools";
+import { createFakeRunRecorder } from "./helpers/agentApplication.js";
 
 const captured = {
   ctx: undefined as ToolContext | undefined,
@@ -57,26 +57,17 @@ describe("spawnSubAgent tool safety context", () => {
 
   function fakeRecorder() {
     const events: AnyAgentEvent[] = [];
-    const recorder: RunRecorder = {
+    const recorder = createFakeRunRecorder({
       async recordEvent(_sessionId: string, event: AnyAgentEvent) {
         events.push(event);
       },
-      async recordTurnComplete() {},
       async loadCompletedEvents() {
         return events;
       },
       async loadRawEvents() {
         return events;
       },
-      async getLastCompletedTurn() {
-        return null;
-      },
-      async dropLastCompletedTurn() {
-        return { dropped: false, removedEvents: 0, reason: "no-completed-turn" };
-      },
-      async deleteSessionEvents() {},
-      async deleteAllSessionEvents() {},
-    } as any;
+    });
     return { recorder, events };
   }
 
