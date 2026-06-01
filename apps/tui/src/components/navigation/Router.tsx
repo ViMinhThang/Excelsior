@@ -1,7 +1,6 @@
 import { memo } from 'react';
 import { Box, useApp } from 'ink';
-import { Screen } from '../../lib/navigationTypes.js';
-import { useNavigation } from '../../context/NavigationContext.js';
+import { useNavigation, type Screen } from '../../context/NavigationContext.js';
 import { useEvent } from '../../hooks/useEvent.js';
 import { useKeymap } from '../../hooks/useKeymap.js';
 import ChatScreen from '../../screens/ChatScreen.js';

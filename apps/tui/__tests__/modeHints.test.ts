@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getChatModeHint } from "../src/lib/modeHints.js";
+import { getChatModeHint } from "../src/chatModes/index.js";
 import { chatModeRegistry } from "../src/chatModes/index.js";
 
 describe("chat mode hints", () => {

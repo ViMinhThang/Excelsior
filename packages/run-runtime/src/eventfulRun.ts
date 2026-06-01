@@ -2,7 +2,6 @@ import { createChannelBus } from "./bus.js";
 import type { Bus } from "./bus.js";
 import { DisposableScope } from "./disposable.js";
 import { AnyRunEvent, makeRunEvent, RunEventOverrides } from "./events.js";
-import { generateId } from "./id.js";
 import type { RunPersistenceConfig } from "./runPersistence.js";
 import { RunRunner } from "./runRunner.js";
 
@@ -56,6 +55,10 @@ export interface RunConfig<TEvents extends { [K in keyof TEvents]: unknown }> {
   isAbortError?: (error: unknown) => boolean;
 }
 
+function generateRunId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
   readonly id: string;
   readonly sessionId: string;
@@ -79,7 +82,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
 
   constructor(options?: EventfulRunOptions<TEvents>) {
     const idPrefix = options?.idPrefix ?? "run";
-    this.id = options?.createRunId?.() ?? generateId(idPrefix);
+    this.id = options?.createRunId?.() ?? generateRunId(idPrefix);
     this.sessionId = options?.sessionId ?? this.id;
     this.parentEventId = options?.parentEventId;
     this.correlationId = options?.correlationId ?? this.id;

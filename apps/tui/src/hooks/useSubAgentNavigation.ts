@@ -1,15 +1,16 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import type { ProjectedBlock } from "@excelsior/core";
-import { selectSubAgentBlocks } from "../selectors/chatSelectors.js";
 import type { ChatMode } from "../chatModes/index.js";
 export type { ChatMode } from "../chatModes/index.js";
+
+type SubAgentBlock = ProjectedBlock & { type: "sub-agent" };
 
 export function useSubAgentNavigation(displayBlocks: ProjectedBlock[]) {
   const [chatMode, setChatMode] = useState<ChatMode>("input");
   const [subAgentIndex, setSubAgentIndex] = useState(0);
 
   const subAgentBlocks = useMemo(
-    () => selectSubAgentBlocks(displayBlocks),
+    () => displayBlocks.filter((block): block is SubAgentBlock => block.type === "sub-agent"),
     [displayBlocks],
   );
 

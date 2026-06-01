@@ -4,7 +4,7 @@ import {
   parseToolArgs,
   type ProjectedBlock,
 } from "@excelsior/core";
-import { buildSubAgentBlock } from "../subAgentProjection.js";
+import { buildSubAgentBlock } from "../subAgent/model.js";
 import type {
   ChatTranscriptProjectionContext,
   ChatTranscriptProjectionState,
