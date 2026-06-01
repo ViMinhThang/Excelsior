@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { Screen } from '../lib/navigationTypes.js';
+
+export type Screen = "chat" | "settings";
 
 interface NavigationContextType {
   currentScreen: Screen;

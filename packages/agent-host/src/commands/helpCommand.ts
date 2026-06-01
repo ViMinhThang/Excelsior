@@ -1,4 +1,5 @@
 import type { CommandDefinition } from "@excelsior/core";
+import { CommandBuilder } from "./commandBuilder.js";
 import type { AgentCommand } from "./types.js";
 
 const HELP_GROUPS = [
@@ -48,17 +49,13 @@ export function formatHelpText(commands: CommandDefinition[]): string {
 }
 
 export function createHelpCommand(getDefinitions: () => CommandDefinition[]): AgentCommand {
-  return {
-    definition: {
-      name: "help",
-      category: "core",
-      description: "List all available commands",
-      usage: "/help",
-    },
-    execute: () => ({
+  return new CommandBuilder("help")
+    .category("core")
+    .description("List all available commands")
+    .default(() => ({
       handled: true,
       message: formatHelpText(getDefinitions()),
       clearInput: true,
-    }),
-  };
+    }))
+    .build();
 }

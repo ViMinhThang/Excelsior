@@ -3,11 +3,11 @@ import { z } from "zod";
 import { createAgent as defaultCreateAgent } from "../agent.js";
 import { AgentRun } from "../../runtime/agentRun.js";
 import { AnyAgentEvent } from "../../runtime/events.js";
-import { projectSubAgentEvents } from "../../projection/subAgentProjection.js";
+import { projectSubAgentEvents } from "../../projection/subAgent/model.js";
 import type { RunRecorder } from "@excelsior/agent-storage";
 import type { SubAgentEventSink } from "../../runtime/subAgentEventSink.js";
 import { CHILD_RUN_ATTACHED } from "../../runtime/eventNames.js";
-import type { ToolContext } from "../../tooling/context.js";
+import type { ToolContext } from "../tools/core/context.js";
 
 export interface SpawnSubAgentToolDependencies {
   createAgent?: typeof defaultCreateAgent;

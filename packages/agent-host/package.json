@@ -10,19 +10,14 @@
       "default": "./dist/index.js"
     },
     "./commands": {
-      "types": "./src/commands.ts",
-      "development": "./src/commands.ts",
-      "default": "./dist/commands.js"
+      "types": "./src/commands/executor.ts",
+      "development": "./src/commands/executor.ts",
+      "default": "./dist/commands/executor.js"
     },
     "./testing/application": {
       "types": "./src/testing/application.ts",
       "development": "./src/testing/application.ts",
       "default": "./dist/testing/application.js"
-    },
-    "./testing/persistence": {
-      "types": "./src/testing/persistence.ts",
-      "development": "./src/testing/persistence.ts",
-      "default": "./dist/testing/persistence.js"
     },
     "./testing/runtime": {
       "types": "./src/testing/runtime.ts",
@@ -30,9 +25,9 @@
       "default": "./dist/testing/runtime.js"
     },
     "./testing/session": {
-      "types": "./src/testing/session.ts",
-      "development": "./src/testing/session.ts",
-      "default": "./dist/testing/session.js"
+      "types": "./src/sessionManager.ts",
+      "development": "./src/sessionManager.ts",
+      "default": "./dist/sessionManager.js"
     },
     "./testing/tools": {
       "types": "./src/testing/tools.ts",

@@ -6,9 +6,7 @@ import {
   AgentApplication,
   type AgentSessionStorage,
 } from "@excelsior/agent-host/testing/application";
-import {
-  JsonlRunRecorder,
-} from "@excelsior/agent-host/testing/persistence";
+import { JsonlRunRecorder } from "@excelsior/agent-storage";
 import type { RevertCapability } from "@excelsior/agent-host/testing/tools";
 import {
   createFakeSessionStorage,
@@ -83,7 +81,7 @@ describe("AgentApplication session ownership", () => {
       turnLifecycle,
     });
 
-    manager.send("  review the project architecture  ");
+    await manager.send("  review the project architecture  ");
     const stream = await waitForFakeAgentStream(turnLifecycle);
 
     expect(manager.getSnapshot().sessions[0].title).toBe("review the project architecture");
@@ -105,7 +103,7 @@ describe("AgentApplication session ownership", () => {
       turnLifecycle,
     });
 
-    manager.send("hello");
+    await manager.send("hello");
     expect(manager.getSnapshot().isLoading).toBe(true);
 
     const stream = await waitForFakeAgentStream(turnLifecycle);
@@ -127,7 +125,7 @@ describe("AgentApplication session ownership", () => {
       turnLifecycle,
     });
 
-    manager.send("hello");
+    await manager.send("hello");
     const stream = await waitForFakeAgentStream(turnLifecycle);
     stream.reject(new Error("model exploded"));
     await waitForIdle(manager);
@@ -148,7 +146,7 @@ describe("AgentApplication session ownership", () => {
       turnLifecycle,
     });
 
-    manager.send("hello");
+    await manager.send("hello");
     expect(manager.getSnapshot().displayBlocks).toHaveLength(1);
 
     const stream = await waitForFakeAgentStream(turnLifecycle);
@@ -169,7 +167,7 @@ describe("AgentApplication session ownership", () => {
       turnLifecycle,
     });
 
-    manager.send("hello");
+    await manager.send("hello");
     const stream = await waitForFakeAgentStream(turnLifecycle);
     expect(manager.getSnapshot().isLoading).toBe(true);
 
@@ -187,7 +185,7 @@ describe("AgentApplication session ownership", () => {
       turnLifecycle,
     });
 
-    manager.send("hello");
+    await manager.send("hello");
     const stream = await waitForFakeAgentStream(turnLifecycle);
     manager.cancel();
     stream.resolve();
@@ -204,10 +202,10 @@ describe("AgentApplication session ownership", () => {
       turnLifecycle,
     });
 
-    manager.send("first");
+    await manager.send("first");
     const first = await waitForFakeAgentStream(turnLifecycle, 0);
     manager.cancel();
-    manager.send("second");
+    await manager.send("second");
     const second = await waitForFakeAgentStream(turnLifecycle, 1);
 
     first.resolve();
@@ -230,7 +228,7 @@ describe("AgentApplication session ownership", () => {
       turnLifecycle,
     });
 
-    manager.send("hello");
+    await manager.send("hello");
     const stream = await waitForFakeAgentStream(turnLifecycle);
     stream.resolve();
     await waitForIdle(manager);
@@ -253,7 +251,7 @@ describe("AgentApplication session ownership", () => {
     const listener = vi.fn();
     manager.subscribe(listener);
 
-    manager.send("hello");
+    await manager.send("hello");
     const stream = await waitForFakeAgentStream(turnLifecycle);
     const callsAfterSend = listener.mock.calls.length;
     stream.runContext.subAgentEvents.emit("spawned", {
@@ -290,7 +288,7 @@ describe("AgentApplication revert", () => {
       recorder,
     });
 
-    manager.send("change file");
+    await manager.send("change file");
 
     await expect(manager.revertLastTurn()).resolves.toMatchObject({
       message: "Cannot revert while a run is active. Cancel it first.",
@@ -309,7 +307,7 @@ describe("AgentApplication revert", () => {
       recorder,
     });
 
-    manager.send("change file");
+    await manager.send("change file");
     const stream = await controller.waitForStream();
     const revert = controller.getRevertCapability(stream);
     await revert.captureBeforeWrite(filePath, fullPath);
@@ -338,7 +336,7 @@ describe("AgentApplication revert", () => {
       recorder,
     });
 
-    manager.send("change file");
+    await manager.send("change file");
     const stream = await controller.waitForStream();
     const revert = controller.getRevertCapability(stream);
     await revert.captureBeforeWrite(filePath, fullPath);

@@ -5,7 +5,7 @@ import type {
   AgentEventDataMap,
   AnyAgentEvent,
 } from "../../runtime/events.js";
-import type { RevertCapability } from "../../tooling/context.js";
+import type { RevertCapability } from "../../agent/tools/core/context.js";
 import type { AgentSessionStorage } from "../../sessionManager.js";
 import type { AgentStateStore } from "../state/AgentStateStore.js";
 import type { CommandResult } from "@excelsior/core";

@@ -3,7 +3,7 @@ import {
   LocalAgentHost,
   resetDefaultAgentHost,
 } from "@excelsior/agent-host";
-import { resetDb } from "@excelsior/agent-host/testing/persistence";
+import { resetDb } from "@excelsior/agent-storage";
 import { createBlockingPromptBus } from "@excelsior/agent-host/testing/runtime";
 import type { AskQuestionRequest, AskQuestionResponse, ConfirmRequest, ConfirmResponse } from "@excelsior/core";
 

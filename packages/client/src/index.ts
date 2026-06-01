@@ -7,6 +7,8 @@ export type {
   AgentHostDispatcher,
   AgentHostIntent,
   AgentHostStateReader,
+  IntentHandler,
+  IntentMiddleware,
 } from "./hostContract.js";
 export type {
   AgentClientState,

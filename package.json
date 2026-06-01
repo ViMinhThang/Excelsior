@@ -12,7 +12,7 @@
     "dev:tui": "tsx --env-file=.env --conditions=development apps/tui/src/index.ts",
     "dev:desktop": "npm run --workspace=apps/desktop dev",
     "start": "node dist/apps/tui/src/index.js",
-    "build": "node -e \"const fs = require('fs'); const path = require('path'); const target = path.resolve('packages/agent-storage'); const link = path.resolve('node_modules/@excelsior/agent-storage'); try { fs.symlinkSync(target, link, 'junction'); } catch (e) { if (e.code !== 'EEXIST') throw e; } fs.rmSync('dist', { recursive: true, force: true });\" && tsc && node scripts/sync-package-dist.mjs",
+    "build": "node scripts/build.mjs",
     "build:desktop": "npm run --workspace=apps/desktop build",
     "check": "npm run typecheck && npm run typecheck:test && npm run check:unused && npm run check:test-unused && npm test && npm run build",
     "typecheck": "tsc --noEmit",

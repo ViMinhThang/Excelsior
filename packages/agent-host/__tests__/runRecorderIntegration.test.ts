@@ -3,9 +3,9 @@ import {
   PERSISTENCE_ERROR,
   type AgentEventEmitter,
   type AnyAgentEvent,
-  type RunRecorder,
   type StreamCapableAgent,
 } from "@excelsior/agent-host/testing/runtime";
+import { createFakeRunRecorder } from "./helpers/agentApplication.js";
 
 const streamTextDelta = async ({ emit }: { emit: AgentEventEmitter }) => {
   emit("text-delta", { delta: "hello" });
@@ -14,7 +14,7 @@ const streamTextDelta = async ({ emit }: { emit: AgentEventEmitter }) => {
 function fakeRecorder() {
   const events: AnyAgentEvent[] = [];
   const checkpoints: Array<{ sessionId: string; runId: string; sequence: number }> = [];
-  const recorder: RunRecorder = {
+  const recorder = createFakeRunRecorder({
     async recordEvent(_sessionId: string, event: AnyAgentEvent) {
       events.push(event);
     },
@@ -27,15 +27,7 @@ function fakeRecorder() {
     async loadRawEvents() {
       return events;
     },
-    async getLastCompletedTurn() {
-      return null;
-    },
-    async dropLastCompletedTurn() {
-      return { dropped: false, removedEvents: 0, reason: "no-completed-turn" };
-    },
-    async deleteSessionEvents() {},
-    async deleteAllSessionEvents() {},
-  } as any;
+  });
   return { recorder, events, checkpoints };
 }
 
@@ -92,27 +84,13 @@ describe("run recorder integration", () => {
   it("surfaces recorder failures as non-recorded persistence errors", async () => {
     const { createRunSession } = await import("@excelsior/agent-host/testing/runtime");
     let recordAttempts = 0;
-    const recorder: RunRecorder = {
+    const recorder = createFakeRunRecorder({
       async recordEvent() {
         recordAttempts++;
         throw new Error("disk full");
       },
       async recordTurnComplete() {},
-      async loadCompletedEvents() {
-        return [];
-      },
-      async loadRawEvents() {
-        return [];
-      },
-      async getLastCompletedTurn() {
-        return null;
-      },
-      async dropLastCompletedTurn() {
-        return { dropped: false, removedEvents: 0, reason: "no-completed-turn" };
-      },
-      async deleteSessionEvents() {},
-      async deleteAllSessionEvents() {},
-    } as any;
+    });
 
     const result = createRunSession({
       sessionId: "ses_test",

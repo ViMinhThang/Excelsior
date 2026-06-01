@@ -1,53 +1,37 @@
-import type { CommandResult } from "@excelsior/core";
 import { SESSION_PICKER_PANEL_ID } from "@excelsior/core";
-import type { AgentCommand, AgentCommandApplication } from "./types.js";
-
-const SESSION_USAGE =
-  "/session | /session new <title> | /session open <id> | /session rename <id> <title> | /session delete <id>";
+import type { AgentCommand } from "./types.js";
+import { CommandBuilder } from "./commandBuilder.js";
 
 export function createSessionCommand(): AgentCommand {
-  return {
-    definition: {
-      name: "session",
-      category: "session",
-      description: "Open the session picker",
-      usage: SESSION_USAGE,
-    },
-    execute: executeSessionCommand,
-  };
-}
-
-async function executeSessionCommand(
-  args: string[],
-  application: AgentCommandApplication,
-): Promise<CommandResult> {
-  const sub = args[0]?.toLowerCase();
-  switch (sub) {
-    case undefined:
-    case "":
-    case "list":
+  return new CommandBuilder("session")
+    .category("session")
+    .description("Open the session picker")
+    .default(() => ({
+      handled: true,
+      openPanelId: SESSION_PICKER_PANEL_ID,
+      clearInput: true,
+    }))
+    .subCommand(["list", ""], "", () => ({
+      handled: true,
+      openPanelId: SESSION_PICKER_PANEL_ID,
+      clearInput: true,
+    }))
+    .subCommand("new", "[title...]", ({ title }, application) => {
+      const finalTitle = typeof title === "string" && title.length > 0
+        ? title
+        : "Untitled";
+      application.createSession(finalTitle);
       return {
         handled: true,
-        openPanelId: SESSION_PICKER_PANEL_ID,
+        message: `Created session: "${finalTitle}".`,
         clearInput: true,
       };
-
-    case "new": {
-      const title = args.slice(1).join(" ") || "Untitled";
-      application.createSession(title);
-      return {
-        handled: true,
-        message: `Created session: "${title}".`,
-        clearInput: true,
-      };
-    }
-
-    case "open": {
-      const id = args[1];
-      if (!id) {
+    })
+    .subCommand("open", "<id>", async ({ id }, application) => {
+      if (typeof id !== "string") {
         return {
           handled: true,
-          message: "Usage: /session open <session-id>",
+          message: "Usage: /session open <id>",
           clearInput: true,
         };
       }
@@ -57,15 +41,12 @@ async function executeSessionCommand(
         message: `Switched to session ${id.slice(0, 8)}...`,
         clearInput: true,
       };
-    }
-
-    case "rename": {
-      const id = args[1];
-      const title = args.slice(2).join(" ");
-      if (!id || !title) {
+    })
+    .subCommand("rename", "<id> <title...>", ({ id, title }, application) => {
+      if (typeof id !== "string" || typeof title !== "string") {
         return {
           handled: true,
-          message: "Usage: /session rename <session-id> <title>",
+          message: "Usage: /session rename <id> <title...>",
           clearInput: true,
         };
       }
@@ -75,14 +56,12 @@ async function executeSessionCommand(
         message: `Renamed session to "${title}".`,
         clearInput: true,
       };
-    }
-
-    case "delete": {
-      const id = args[1];
-      if (!id) {
+    })
+    .subCommand("delete", "<id>", async ({ id }, application) => {
+      if (typeof id !== "string") {
         return {
           handled: true,
-          message: "Usage: /session delete <session-id>",
+          message: "Usage: /session delete <id>",
           clearInput: true,
         };
       }
@@ -92,13 +71,6 @@ async function executeSessionCommand(
         message: `Deleted session ${id.slice(0, 8)}...`,
         clearInput: true,
       };
-    }
-
-    default:
-      return {
-        handled: true,
-        message: `Usage: ${SESSION_USAGE}`,
-        clearInput: true,
-      };
-  }
+    })
+    .build();
 }

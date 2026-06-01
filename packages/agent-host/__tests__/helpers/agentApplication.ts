@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { AgentMessage } from "@excelsior/core";
+import type { AgentMessage, Session } from "@excelsior/core";
 import type {
   AgentFactory,
   AgentSessionStorage,
@@ -10,9 +10,8 @@ import {
   type AgentEventDataMap,
   type RunContext,
 } from "@excelsior/agent-host/testing/runtime";
-import type { Session } from "@excelsior/agent-host/testing/session";
 import type { RunHandle } from "@excelsior/run-runtime";
-import { JsonlRunRecorder } from "@excelsior/agent-storage";
+import { JsonlRunRecorder, type RunRecorder } from "@excelsior/agent-storage";
 
 export function makeSession(id: string, title: string): Session {
   return {
@@ -87,6 +86,31 @@ export function createFakeSessionStorage(
     getLastCompletedTurn: (sessionId) => recorder.getLastCompletedTurn(sessionId),
     trimLastCompletedTurn: (sessionId, expectedRunId) => recorder.dropLastCompletedTurn(sessionId, expectedRunId),
     recordTurnComplete: (sessionId, runId, sequence) => recorder.recordTurnComplete(sessionId, runId, sequence),
+  };
+}
+
+export function createFakeRunRecorder(
+  overrides: Partial<RunRecorder> = {},
+): RunRecorder {
+  return {
+    append: vi.fn(async () => {}),
+    completeTurn: vi.fn(async () => {}),
+    load: vi.fn(async () => []),
+    delete: vi.fn(async () => {}),
+    deleteAll: vi.fn(async () => {}),
+    loadCompletedEvents: vi.fn(async () => []),
+    deleteSessionEvents: vi.fn(async () => {}),
+    deleteAllSessionEvents: vi.fn(async () => {}),
+    recordEvent: vi.fn(async () => {}),
+    recordTurnComplete: vi.fn(async () => {}),
+    loadRawEvents: vi.fn(async () => []),
+    getLastCompletedTurn: vi.fn(async () => null),
+    dropLastCompletedTurn: vi.fn(async () => ({
+      dropped: false,
+      removedEvents: 0,
+      reason: "no-completed-turn" as const,
+    })),
+    ...overrides,
   };
 }
 

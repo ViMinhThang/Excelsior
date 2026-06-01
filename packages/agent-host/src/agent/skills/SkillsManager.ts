@@ -11,6 +11,12 @@ export interface SkillMetadata {
   enabled: boolean;
 }
 
+export interface SkillsManagerOptions {
+  homeDir?: string;
+  systemDir?: string;
+  programDataDir?: string;
+}
+
 export function truncateDescription(desc: string, maxLen = 80): string {
   if (!desc) return "";
   const firstSentence = desc.split(".")[0].trim();
@@ -88,7 +94,10 @@ export class SkillsManager {
   private readonly workspaceRoot: string | null;
   private readonly registry = new Map<string, { metadata: SkillMetadata; body: string }>();
 
-  constructor(workspaceRoot?: string) {
+  constructor(
+    workspaceRoot?: string,
+    private readonly options: SkillsManagerOptions = {},
+  ) {
     this.workspaceRoot = workspaceRoot ? path.resolve(workspaceRoot) : null;
   }
 
@@ -99,14 +108,18 @@ export class SkillsManager {
     const pathsToScan: Array<{ dir: string; scope: "Repo" | "User" | "System" | "Admin" }> = [];
 
     // 1. System path
-    const systemDir =
+    const systemDir = this.options.systemDir ?? (
       process.platform === "win32"
-        ? path.join(process.env.PROGRAMDATA || "C:\\ProgramData", "agents")
-        : "/etc/agents";
+        ? path.join(
+            this.options.programDataDir ?? process.env.PROGRAMDATA ?? "C:\\ProgramData",
+            "agents",
+          )
+        : "/etc/agents"
+    );
     pathsToScan.push({ dir: systemDir, scope: "System" });
 
     // 2. User path
-    const userDir = path.join(os.homedir(), ".agents");
+    const userDir = path.join(this.options.homeDir ?? os.homedir(), ".agents");
     pathsToScan.push({ dir: userDir, scope: "User" });
 
     // 3. Repo path

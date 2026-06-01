@@ -2,27 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdtemp, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
-import { resetDb, storageEngine } from "@excelsior/agent-host/testing/persistence";
+import { resetDb, storageEngine } from "@excelsior/agent-storage";
 import { SessionManager } from "@excelsior/agent-host/testing/session";
-import { makeEvent, type RunRecorder } from "@excelsior/agent-host/testing/runtime";
-
-function createRecorder(overrides: Partial<RunRecorder> = {}): RunRecorder {
-  return {
-    recordEvent: vi.fn(async () => {}),
-    recordTurnComplete: vi.fn(async () => {}),
-    loadCompletedEvents: vi.fn(async () => []),
-    loadRawEvents: vi.fn(async () => []),
-    getLastCompletedTurn: vi.fn(async () => null),
-    dropLastCompletedTurn: vi.fn(async () => ({
-      dropped: false,
-      removedEvents: 0,
-      reason: "no-completed-turn" as const,
-    })),
-    deleteSessionEvents: vi.fn(async () => {}),
-    deleteAllSessionEvents: vi.fn(async () => {}),
-    ...overrides,
-  } as any;
-}
+import { makeEvent } from "@excelsior/agent-host/testing/runtime";
+import { createFakeRunRecorder } from "./helpers/agentApplication.js";
 
 describe("SessionManager", () => {
   let tempDir: string;
@@ -45,7 +28,7 @@ describe("SessionManager", () => {
   });
 
   it("retitles an empty current session from its first user prompt", () => {
-    const manager = new SessionManager(undefined, storageEngine, createRecorder());
+    const manager = new SessionManager(undefined, storageEngine, createFakeRunRecorder());
     const created = manager.createSession();
 
     manager.ensureSession("first real prompt");
@@ -54,10 +37,29 @@ describe("SessionManager", () => {
     expect(saved?.title).toBe("first real prompt");
   });
 
+  it("creates sessions through injected time and id policy", () => {
+    const manager = new SessionManager(
+      undefined,
+      storageEngine,
+      createFakeRunRecorder(),
+      {
+        createSessionId: () => "ses_fixed",
+        nowIso: () => "2026-05-18T12:00:00.000Z",
+      },
+    );
+
+    expect(manager.createSession("fixed")).toMatchObject({
+      id: "ses_fixed",
+      startedAt: "2026-05-18T12:00:00.000Z",
+      updatedAt: "2026-05-18T12:00:00.000Z",
+      title: "fixed",
+    });
+  });
+
   it("loads events for the current session", async () => {
     const event = makeEvent("run_1", "user-input", { content: "hello" }, 0);
     const loadCompletedEvents = vi.fn(async () => [event]);
-    const recorder = createRecorder({
+    const recorder = createFakeRunRecorder({
       loadCompletedEvents,
     });
     const manager = new SessionManager(undefined, storageEngine, recorder);
@@ -68,7 +70,7 @@ describe("SessionManager", () => {
   });
 
   it("returns no events when there is no current session", async () => {
-    const recorder = createRecorder();
+    const recorder = createFakeRunRecorder();
     const manager = new SessionManager(undefined, storageEngine, recorder);
 
     await expect(manager.loadCurrentSessionEvents()).resolves.toEqual([]);
@@ -77,7 +79,7 @@ describe("SessionManager", () => {
 
   it("deletes session metadata and its run events through one interface", async () => {
     const deleteSessionEvents = vi.fn(async () => {});
-    const recorder = createRecorder({ deleteSessionEvents });
+    const recorder = createFakeRunRecorder({ deleteSessionEvents });
     const manager = new SessionManager(undefined, storageEngine, recorder);
     
     const created = manager.createSession();
@@ -89,7 +91,7 @@ describe("SessionManager", () => {
 
   it("deletes all session metadata and all run events through one interface", async () => {
     const deleteAllSessionEvents = vi.fn(async () => {});
-    const recorder = createRecorder({ deleteAllSessionEvents });
+    const recorder = createFakeRunRecorder({ deleteAllSessionEvents });
     const manager = new SessionManager(undefined, storageEngine, recorder);
     
     manager.createSession();
@@ -112,7 +114,7 @@ describe("SessionManager", () => {
     }));
     const recordTurnComplete = vi.fn(async () => {});
     
-    const recorder = createRecorder({
+    const recorder = createFakeRunRecorder({
       getLastCompletedTurn,
       dropLastCompletedTurn,
       recordTurnComplete,

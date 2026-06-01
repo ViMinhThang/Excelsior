@@ -1,3 +1,4 @@
+import { createToolDisplay } from "@excelsior/core";
 import type {
   AgentMode,
   AskQuestionRequest,
@@ -11,7 +12,6 @@ import type { PendingQuestionPanelProps } from "../components/chat/PendingQuesti
 import type { CommandSuggestionsProps } from "../components/chat/CommandSuggestions.js";
 import type { CommandPaletteProps } from "../components/palette/CommandPalette.js";
 import type { TuiPanelContext, TuiPanelDefinition } from "../lib/panels.js";
-import { createToolDisplay } from "../lib/toolDisplay.js";
 import type {
   ChatMode,
   ChatModeRenderContext,

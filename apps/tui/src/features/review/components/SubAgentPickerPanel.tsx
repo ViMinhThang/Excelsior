@@ -16,8 +16,8 @@ interface SubAgentPickerPanelProps {
 }
 
 const statusMark: Record<ProjectedSubAgent["status"], string> = {
-  running: "~",
-  done: "-",
+  running: "",
+  done: "",
   error: "!",
 };
 
@@ -75,6 +75,7 @@ const SubAgentPickerPanel: FC<SubAgentPickerPanelProps> = ({
       {subAgents.map((block, index) => {
         const agent = block.state;
         const isSelected = index === selectedIndex;
+        const roleColor = isSelected ? theme.colors.highlightSelected : statusColor[agent.status];
         const displayedTools = showToolCalls ? agent.toolCalls.slice(-2) : [];
         const hiddenToolsCount = agent.toolCalls.length - displayedTools.length;
 
@@ -86,7 +87,7 @@ const SubAgentPickerPanel: FC<SubAgentPickerPanelProps> = ({
               </Text>
               <Text color={statusColor[agent.status]}>{statusMark[agent.status]}</Text>
               <Text
-                color={isSelected ? theme.colors.highlightSelected : theme.colors.text}
+                color={roleColor}
                 bold={isSelected}
               >
                 {cleanSubAgentRole(block.role)}

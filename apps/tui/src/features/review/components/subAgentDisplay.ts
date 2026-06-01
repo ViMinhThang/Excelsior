@@ -1,4 +1,8 @@
-import type { ProjectedSubAgent, ToolCallInfo } from "@excelsior/core";
+import {
+  summarizeKnownToolArgs,
+  type ProjectedSubAgent,
+  type ToolCallInfo,
+} from "@excelsior/core";
 
 export function cleanSubAgentRole(role: string): string {
   return (role || "Sub-agent")
@@ -23,7 +27,7 @@ export function getSubAgentDuration(agent: ProjectedSubAgent, now: number): stri
 }
 
 export function formatToolCallSummary(toolCall: ToolCallInfo): string {
-  const detail = summarizeToolArgs(toolCall.toolArgs);
+  const detail = summarizeKnownToolArgs(toolCall.toolArgs);
   return detail ? `${toolCall.toolName} ${detail}` : toolCall.toolName;
 }
 
@@ -38,36 +42,6 @@ export function getSubAgentActivity(agent: ProjectedSubAgent): string {
 
   const toolCount = agent.toolCalls.length;
   return `${toolCount} ${toolCount === 1 ? "tool" : "tools"}`;
-}
-
-function summarizeToolArgs(rawArgs: string): string {
-  if (!rawArgs) return "";
-
-  try {
-    const parsed = JSON.parse(rawArgs) as Record<string, unknown>;
-    const parts = [
-      valueText(parsed.command),
-      arrayText(parsed.args),
-      valueText(parsed.filePath),
-      valueText(parsed.pattern),
-    ].filter(Boolean);
-
-    if (parts.length > 0) return compact(parts.join(" "), 64);
-  } catch {
-    // Fall through to compact raw args.
-  }
-
-  return compact(rawArgs.replace(/\s+/g, " "), 64);
-}
-
-function valueText(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function arrayText(value: unknown): string {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string").join(" ")
-    : "";
 }
 
 function compact(value: string, maxLength: number): string {

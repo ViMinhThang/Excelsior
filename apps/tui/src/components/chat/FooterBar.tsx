@@ -1,7 +1,7 @@
 import type { FC } from "react";
 import { Box, Text } from "ink";
 import { theme } from "../../theme.js";
-import { getChatModeHint } from "../../lib/modeHints.js";
+import { getChatModeHint } from "../../chatModes/index.js";
 import type { ChatMode } from "../../chatModes/index.js";
 
 export interface FooterBarProps {

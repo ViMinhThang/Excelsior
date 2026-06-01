@@ -3,12 +3,23 @@ import { Box, Text, useStdout } from "ink";
 import type {
   FileChangePreview,
   FileChangeRow,
-} from "../../lib/toolDisplayTypes.js";
+  InlineDiffRow,
+} from "@excelsior/core";
 import {
   buildFileChangePreviewFrame,
-  type InlineDiffRow,
-} from "../../lib/fileChangePreview.js";
+} from "@excelsior/core";
 import { theme } from "../../theme.js";
+
+const glyphs = {
+  pendingStatus: "\u25cf",
+  completedStatus: "\u2714",
+  scrollUp: "\u25b2",
+  scrollThumb: "\u2588",
+  scrollTrack: "\u2591",
+  scrollDown: "\u25bc",
+  cappedPrefix: "\u21b3",
+  separator: "\u00b7",
+};
 
 const FileChangeInlineView: FC<{
   rows: InlineDiffRow[];
@@ -150,7 +161,7 @@ export const FileChangePreviewView: FC<{
     <Box flexDirection="column" marginTop={1} width={frame.previewWidth}>
       <Box flexDirection="row" gap={1} marginBottom={0} width={frame.previewWidth}>
         <Text color={pending ? theme.colors.highlightAction : theme.colors.success} bold>
-          {pending ? "â—" : "âœ”"}
+          {pending ? glyphs.pendingStatus : glyphs.completedStatus}
         </Text>
         <Text color={theme.colors.text} bold>{actionText}:</Text>
         <Text color={theme.colors.accent} bold>{preview.filePath}</Text>
@@ -186,16 +197,16 @@ export const FileChangePreviewView: FC<{
 
         {frame.showScrollbar && (
           <Box flexDirection="column" marginLeft={1} marginTop={1}>
-            <Text color={theme.colors.border}>â–²</Text>
+            <Text color={theme.colors.border}>{glyphs.scrollUp}</Text>
             {Array.from({ length: frame.scrollbarInnerHeight }).map((_, idx) => {
               const isThumb = idx === frame.thumbPosition;
               return (
                 <Text key={idx} color={isThumb ? theme.colors.accent : theme.colors.border}>
-                  {isThumb ? "â–ˆ" : "â–‘"}
+                  {isThumb ? glyphs.scrollThumb : glyphs.scrollTrack}
                 </Text>
               );
             })}
-            <Text color={theme.colors.border}>â–¼</Text>
+            <Text color={theme.colors.border}>{glyphs.scrollDown}</Text>
           </Box>
         )}
       </Box>
@@ -203,7 +214,7 @@ export const FileChangePreviewView: FC<{
       {frame.isCapped && (
         <Box marginTop={1} paddingLeft={1}>
           <Text color={theme.colors.muted} dimColor>
-            {`â†³ +${preview.added} -${preview.removed} lines changed Â· Press Ctrl+O to inspect commands`}
+            {`${glyphs.cappedPrefix} +${preview.added} -${preview.removed} lines changed ${glyphs.separator} Press Ctrl+O to inspect commands`}
           </Text>
         </Box>
       )}
