@@ -9,7 +9,17 @@ import {
   buildFileChangePreviewFrame,
 } from "@excelsior/core";
 import { theme } from "../../theme.js";
-import { unicodeFileChangePreviewGlyphs as glyphs } from "./fileChangePreviewGlyphs.js";
+
+const glyphs = {
+  pendingStatus: "\u25cf",
+  completedStatus: "\u2714",
+  scrollUp: "\u25b2",
+  scrollThumb: "\u2588",
+  scrollTrack: "\u2591",
+  scrollDown: "\u25bc",
+  cappedPrefix: "\u21b3",
+  separator: "\u00b7",
+};
 
 const FileChangeInlineView: FC<{
   rows: InlineDiffRow[];
