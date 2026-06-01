@@ -1,6 +1,6 @@
+import { genericToolArgsSummary } from "./toolArgs.js";
 import {
   countLines,
-  genericSummary,
   plural,
 } from "./toolText.js";
 import type {
@@ -18,7 +18,7 @@ export const gitDiffDisplayConfig: ToolDisplayConfig = {
   formatter: ({ args, rawArgs, normalizedContent, preview, tone }: ToolFormatterContext) => {
     return {
       label: "Git diff",
-      summary: genericSummary(args, rawArgs) || "working tree diff",
+      summary: genericToolArgsSummary(args, rawArgs) || "working tree diff",
       detail: normalizedContent ? `${plural(countLines(normalizedContent), "line")} of diff output` : undefined,
       resultPreview: preview.lines,
       omittedResultLines: preview.omitted,

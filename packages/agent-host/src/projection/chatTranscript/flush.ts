@@ -1,4 +1,9 @@
-import type { ProjectedBlock } from "@excelsior/core";
+import {
+  getStringToolArg,
+  normalizeSubAgentToolArgs,
+  parseToolArgs,
+  type ProjectedBlock,
+} from "@excelsior/core";
 import { buildSubAgentBlock } from "../subAgentProjection.js";
 import type {
   ChatTranscriptProjectionContext,
@@ -57,11 +62,7 @@ function resolveSubAgentRole(
   tool: PendingTool,
   childInfo: { childRunId: string; role: string } | undefined,
 ): string {
-  let role = "SubAgent";
-  try {
-    const parsed = JSON.parse(tool.toolArgs) as { role?: string };
-    role = parsed.role || role;
-  } catch {}
+  const role = getStringToolArg(parseToolArgs(tool.toolArgs), "role") || "SubAgent";
   return childInfo?.role || role;
 }
 
@@ -182,10 +183,5 @@ export function finalizeChatTranscriptProjection(
 }
 
 export function extractSubAgentRole(toolArgs: string): string {
-  try {
-    const parsed = JSON.parse(toolArgs) as { role?: string };
-    return JSON.stringify({ role: parsed.role ?? toolArgs });
-  } catch {
-    return toolArgs;
-  }
+  return normalizeSubAgentToolArgs(toolArgs);
 }

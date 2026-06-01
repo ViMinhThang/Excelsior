@@ -25,6 +25,16 @@ export interface AgentSessionStorage {
   recordTurnComplete(sessionId: string, runId: string, sequence: number): Promise<void>;
 }
 
+export interface SessionManagerTimeIdPolicy {
+  createSessionId(): string;
+  nowIso(): string;
+}
+
+export const systemSessionManagerTimeIdPolicy: SessionManagerTimeIdPolicy = {
+  createSessionId: () => generateId("ses"),
+  nowIso: () => new Date().toISOString(),
+};
+
 export class SessionManager implements AgentSessionStorage {
   private _workspace: Workspace;
   private _currentSessionId: string | null = null;
@@ -34,6 +44,7 @@ export class SessionManager implements AgentSessionStorage {
     workspaceId: string | undefined,
     private readonly storage: StorageEngine,
     private readonly recorder: RunRecorder,
+    private readonly timeIds: SessionManagerTimeIdPolicy = systemSessionManagerTimeIdPolicy,
   ) {
     const ws = workspaceId
       ? this.storage.workspaces.load(workspaceId) ?? this.storage.workspaces.getOrCreateDefault()
@@ -78,10 +89,11 @@ export class SessionManager implements AgentSessionStorage {
     this._currentSessionId = id;
     this._reloadSessions();
     const session = this._sessions.find((s) => s.id === id);
+    const now = this.timeIds.nowIso();
     return session ?? {
       id,
-      startedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      startedAt: now,
+      updatedAt: now,
       metadata: { userInput: "" },
       workspaceId: this._workspace.id,
       title: resolvedTitle,
@@ -149,7 +161,7 @@ export class SessionManager implements AgentSessionStorage {
     if (session.metadata.userInput || (session.title && session.title !== "Untitled")) return;
     this.storage.sessions.persist({
       ...session,
-      updatedAt: new Date().toISOString(),
+      updatedAt: this.timeIds.nowIso(),
       metadata: { ...session.metadata, userInput: nextInput },
       title: this._normalizeTitle(nextTitle),
     });
@@ -157,11 +169,11 @@ export class SessionManager implements AgentSessionStorage {
   }
 
   private _makeSessionId(): string {
-    return generateId("ses");
+    return this.timeIds.createSessionId();
   }
 
   private _createAndPersist(title: string, userInput = ""): string {
-    const now = new Date().toISOString();
+    const now = this.timeIds.nowIso();
     const id = this._makeSessionId();
     this.storage.sessions.persist({
       id,

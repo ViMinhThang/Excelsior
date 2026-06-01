@@ -1,5 +1,5 @@
+import { stringifyToolArgValue } from "./toolArgs.js";
 import {
-  asString,
   countLines,
   getCommandRisk,
 } from "./toolText.js";
@@ -32,7 +32,7 @@ function formatRunCommandDisplay({
   tone,
   status,
 }: ToolFormatterContext): Partial<ToolDisplay> {
-  const command = asString(args?.command);
+  const command = stringifyToolArgValue(args?.command);
   return {
     label: "Run command",
     summary: command || "shell command",

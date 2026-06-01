@@ -107,11 +107,12 @@ describe("composable mutators", () => {
     count: number;
     log: string[];
   }
+  type DummyEvent = { type: string };
 
   it("compose runs mutators in left-to-right order", () => {
     const fn1 = (s: DummyState) => ({ ...s, count: s.count + 1 });
     const fn2 = (s: DummyState) => ({ ...s, log: [...s.log, `count is ${s.count}`] });
-    const composed = compose<DummyState, any>(fn1, fn2);
+    const composed = compose<DummyState, DummyEvent>(fn1, fn2);
 
     const state = composed({ count: 0, log: [] }, { type: "test" });
     expect(state).toEqual({

@@ -7,23 +7,6 @@ import type {
 const MAX_PREVIEW_LINES = 3;
 const MAX_PREVIEW_LINE_LENGTH = 120;
 
-export function parseArgs(args?: string): Record<string, unknown> | null {
-  if (!args) return null;
-  try {
-    const parsed = JSON.parse(args);
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-export function asString(value: unknown): string {
-  if (value === undefined || value === null) return "";
-  return typeof value === "string" ? value : JSON.stringify(value);
-}
-
 export function normalizeToolText(text?: string): string {
   if (!text) return "";
   const trimmed = text.trim();
@@ -63,20 +46,6 @@ export function previewContent(content?: string): { lines?: string[]; omitted: n
     lines: lines.length ? lines : undefined,
     omitted: Math.max(0, allLines.length - lines.length),
   };
-}
-
-export function genericSummary(
-  args: Record<string, unknown> | null,
-  rawArgs?: string,
-): string {
-  if (!args) return rawArgs?.replace(/^{|}$/g, "").trim() || "no arguments";
-
-  const pairs = Object.entries(args).slice(0, 3).map(([key, value]) => {
-    const display = asString(value);
-    return `${key}: ${truncateLine(display)}`;
-  });
-
-  return pairs.length ? pairs.join(", ") : "no arguments";
 }
 
 export function getCommandRisk(command: string): ToolRisk {
