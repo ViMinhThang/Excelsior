@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
+import { z } from "zod";
+import { SkillCatalog } from "./skills/SkillCatalog.js";
 import type {
   AgentMode,
   AskQuestionRequest,
@@ -68,7 +70,11 @@ class HarnessStore implements AgentHarness {
   private activeTurnId: string | null = null;
   private activeSessionId: string | null = null;
   private sequence = 0;
+  private lastEventId?: string;
+  private snapshot!: HarnessSnapshot;
   private pendingConfirmation: ConfirmRequest | null = null;
+  private skillCatalog!: SkillCatalog;
+  private skillsList?: string;
   private pendingQuestion: AskQuestionRequest | null = null;
   private confirmationResolvers = new Map<string, (response: ConfirmResponse) => void>();
   private questionResolvers = new Map<string, (response: AskQuestionResponse) => void>();
@@ -84,7 +90,61 @@ class HarnessStore implements AgentHarness {
 
     this.providers.register(createDeepSeekProvider());
     for (const tool of createBuiltInTools()) this.tools.register(tool);
+
+    // Discover and register skills
+    this.skillCatalog = SkillCatalog.discover(this.workspace.rootPath);
+    const skills = this.skillCatalog.getSkills();
+    if (skills.length > 0) {
+      this.skillsList = skills.map((s) => `- ${s.name}: ${s.description}`).join("\n");
+      for (const entry of this.skillCatalog.getEntries()) {
+        this.tools.register({
+          name: entry.toolName,
+          description: entry.skill.description,
+          inputSchema: z.object({}),
+          capabilities: [],
+          execute: async () => {
+            const body = this.skillCatalog.getSkillBody(entry.skill.name);
+            return { content: body || `Skill ${entry.skill.name} not found.` };
+          },
+        });
+      }
+    }
+
     for (const command of this.createCommands(config)) this.commands.register(command);
+
+    // Register skill commands
+    if (skills.length > 0) {
+      for (const entry of this.skillCatalog.getEntries()) {
+        this.commands.register({
+          definition: {
+            name: entry.commandName,
+            description: entry.skill.shortDescription,
+            category: "skills",
+          },
+          execute: async () => {
+            const body = this.skillCatalog.getSkillBody(entry.skill.name);
+            if (!body) {
+              return {
+                handled: true,
+                message: `Skill ${entry.skill.name} not found.`,
+                clearInput: true,
+              };
+            }
+            await this.send({
+              content: body,
+              mode: this.mode,
+              displayContent: `Running skill: ${entry.skill.name}`,
+            });
+            return {
+              handled: true,
+              message: `Starting skill: ${entry.skill.name}...`,
+              clearInput: true,
+            };
+          },
+        });
+      }
+    }
+
     this.extensions.load(config.extensions ?? []);
 
     this.refreshSessions();
@@ -92,20 +152,13 @@ class HarnessStore implements AgentHarness {
       this.currentSessionId = this.sessions[0].id;
       this.events = this.storage.loadEvents(this.workspace.id, this.currentSessionId);
       this.sequence = this.events.at(-1)?.sequence ?? 0;
+      this.lastEventId = this.events.at(-1)?.id;
     }
+    this.updateSnapshot();
   }
 
   getSnapshot(): HarnessSnapshot {
-    return projectHarnessState({
-      events: this.events,
-      isLoading: this.abortController !== null,
-      sessions: this.sessions,
-      currentSessionId: this.currentSessionId,
-      workspace: this.workspace,
-      mode: this.mode,
-      pendingConfirmation: this.pendingConfirmation,
-      pendingQuestion: this.pendingQuestion,
-    });
+    return this.snapshot;
   }
 
   getCatalog(): HarnessCatalog {
@@ -161,6 +214,7 @@ class HarnessStore implements AgentHarness {
         toolContext: this.createToolContext(),
         signal: abortController.signal,
         emit: this.createEmitter(runId, session.id, turnId),
+        skillsList: this.skillsList,
       });
     } finally {
       if (this.abortController === abortController) {
@@ -186,6 +240,7 @@ class HarnessStore implements AgentHarness {
     if (!session) return;
     this.events = [];
     this.sequence = 0;
+    this.lastEventId = undefined;
     this.storage.replaceEvents(this.workspace.id, session, []);
     this.notify();
   }
@@ -196,6 +251,7 @@ class HarnessStore implements AgentHarness {
     this.currentSessionId = session.id;
     this.events = [];
     this.sequence = 0;
+    this.lastEventId = undefined;
     this.refreshSessions();
     this.emitSystemEvent(SESSION_CHANGED, {
       sessionId: session.id,
@@ -211,6 +267,7 @@ class HarnessStore implements AgentHarness {
     this.currentSessionId = sessionId;
     this.events = loaded.events ?? [];
     this.sequence = this.events.at(-1)?.sequence ?? 0;
+    this.lastEventId = this.events.at(-1)?.id;
     this.refreshSessions();
     this.emitSystemEvent(SESSION_CHANGED, {
       sessionId,
@@ -228,6 +285,7 @@ class HarnessStore implements AgentHarness {
         ? this.storage.loadEvents(this.workspace.id, this.currentSessionId)
         : [];
       this.sequence = this.events.at(-1)?.sequence ?? 0;
+      this.lastEventId = this.events.at(-1)?.id;
     }
     if (this.currentSessionId) {
       this.emitSystemEvent(SESSION_CHANGED, {
@@ -305,6 +363,7 @@ class HarnessStore implements AgentHarness {
 
     this.events = this.events.slice(0, turnStartIndex);
     this.sequence = this.events.at(-1)?.sequence ?? 0;
+    this.lastEventId = this.events.at(-1)?.id;
     this.storage.replaceEvents(this.workspace.id, session, this.events);
     this.refreshSessions();
     this.notify();
@@ -324,6 +383,7 @@ class HarnessStore implements AgentHarness {
 
     this.events = [];
     this.sequence = 0;
+    this.lastEventId = undefined;
     this.storage.replaceEvents(this.workspace.id, session, []);
 
     const runId = `run_${randomUUID()}`;
@@ -445,12 +505,16 @@ class HarnessStore implements AgentHarness {
       turnId?: string;
       relatedToolCallId?: string;
       parentEventId?: string;
+      causationId?: string;
+      correlationId?: string;
     },
   ) {
     const session = options?.sessionId
       ? this.sessions.find((item) => item.id === options.sessionId)
       : this.currentSession();
     const targetSession = session ?? this.ensureSession("Untitled");
+    const causationId = options?.causationId ?? this.lastEventId ?? "";
+    const correlationId = options?.correlationId ?? runId;
     const event = makeHarnessEvent({
       workspaceId: this.workspace.id,
       sessionId: options?.sessionId ?? targetSession.id,
@@ -461,8 +525,11 @@ class HarnessStore implements AgentHarness {
       data,
       relatedToolCallId: options?.relatedToolCallId,
       parentEventId: options?.parentEventId,
+      causationId,
+      correlationId,
     });
     const storedEvent = event as AnyHarnessEvent;
+    this.lastEventId = event.id;
     if (targetSession.id === this.currentSessionId) {
       this.events = [...this.events, storedEvent];
     }
@@ -567,7 +634,21 @@ class HarnessStore implements AgentHarness {
     this.sessions = this.storage.listSessions(this.workspace.id);
   }
 
+  private updateSnapshot(): void {
+    this.snapshot = projectHarnessState({
+      events: this.events,
+      isLoading: this.abortController !== null,
+      sessions: this.sessions,
+      currentSessionId: this.currentSessionId,
+      workspace: this.workspace,
+      mode: this.mode,
+      pendingConfirmation: this.pendingConfirmation,
+      pendingQuestion: this.pendingQuestion,
+    });
+  }
+
   private notify(): void {
+    this.updateSnapshot();
     for (const listener of this.listeners) listener();
   }
 }

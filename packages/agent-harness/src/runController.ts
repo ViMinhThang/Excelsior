@@ -44,6 +44,7 @@ export class RunController {
     toolContext: ToolExecutionContext;
     signal: AbortSignal;
     emit: HarnessEventEmitter;
+    skillsList?: string;
   }): Promise<void> {
     input.emit(AGENT_START, {});
     input.emit(TURN_START, {});
@@ -60,7 +61,7 @@ export class RunController {
       const model = input.providers.get().createModel(input.settings);
       const result = streamText({
         model,
-        system: buildSystemPrompt(input.mode),
+        system: buildSystemPrompt(input.mode, input.skillsList),
         messages: toModelMessages(input.messages),
         tools: input.tools.toToolSet(input.toolContext),
         stopWhen: toolLoopBudget.stopWhen,

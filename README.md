@@ -121,9 +121,8 @@ npm start
 packages/
 |- core/           # shared domain and view contracts
 |- client/         # host client contract and client-side helpers
-|- projection/     # deterministic projection/read-model primitives
-|- run-runtime/    # run lifecycle, event, subscription, orchestration
-`- agent-host/     # local backend, persistence, tools, commands
+|- agent-harness/  # execution, events, settings, sessions, and projections
+`- agent-host/     # local backend adapter host for the client
 
 apps/
 |- tui/            # app terminal bằng Ink
