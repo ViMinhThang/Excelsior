@@ -21,6 +21,7 @@ export type {
 export { AgentApplication } from "./application/AgentApplication.js";
 export type { AgentApplicationOptions } from "./application/AgentApplication.js";
 export { LocalAgentHost } from "./host/LocalAgentHost.js";
+export { HarnessAgentHost } from "./host/HarnessAgentHost.js";
 export {
   createIntentDispatcher,
   type AgentHostIntentDispatcherOptions,

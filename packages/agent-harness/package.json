@@ -1,0 +1,20 @@
+{
+  "name": "@excelsior/agent-harness",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "development": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@ai-sdk/deepseek": "^2.0.32",
+    "@excelsior/core": "1.0.0",
+    "@octokit/rest": "^22.0.1",
+    "ai": "^6.0.175",
+    "zod": "^4.4.3"
+  }
+}
