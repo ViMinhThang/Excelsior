@@ -76,4 +76,28 @@ describe("AgentHarness", () => {
     expect(runResult?.content).toBe(PLAN_MODE_BLOCKED_MESSAGE);
     expect(confirm).not.toHaveBeenCalled();
   });
+
+  it("propagates causationId and correlationId correctly through events", async () => {
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+
+    // Create session to generate events
+    harness.createSession("Causal Test");
+
+    const events = (harness as any).events;
+    expect(events.length).toBeGreaterThan(0);
+
+    // First event should have empty causationId and correlationId matching runId
+    const firstEvent = events[0];
+    expect(firstEvent.causationId).toBe("");
+    expect(firstEvent.correlationId).toBe(firstEvent.runId);
+
+    // Subsequent events should have causationId chained to the preceding event's ID
+    if (events.length > 1) {
+      const secondEvent = events[1];
+      expect(secondEvent.causationId).toBe(firstEvent.id);
+      expect(secondEvent.correlationId).toBe(secondEvent.runId);
+    }
+  });
 });

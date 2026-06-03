@@ -91,6 +91,8 @@ export interface HarnessEvent<T extends HarnessEventType = HarnessEventType> {
   data: HarnessEventDataMap[T];
   parentEventId?: string;
   relatedToolCallId?: string;
+  causationId?: string;
+  correlationId?: string;
 }
 
 export type AnyHarnessEvent = {
@@ -104,6 +106,8 @@ export type HarnessEventEmitter = <T extends HarnessEventType>(
     turnId?: string;
     relatedToolCallId?: string;
     parentEventId?: string;
+    causationId?: string;
+    correlationId?: string;
   },
 ) => HarnessEvent<T>;
 
@@ -117,6 +121,8 @@ export function makeHarnessEvent<T extends HarnessEventType>(input: {
   data: HarnessEventDataMap[T];
   relatedToolCallId?: string;
   parentEventId?: string;
+  causationId?: string;
+  correlationId?: string;
 }): HarnessEvent<T> {
   return {
     id: `evt_${randomUUID()}`,
@@ -131,5 +137,7 @@ export function makeHarnessEvent<T extends HarnessEventType>(input: {
     data: input.data,
     ...(input.parentEventId ? { parentEventId: input.parentEventId } : {}),
     ...(input.relatedToolCallId ? { relatedToolCallId: input.relatedToolCallId } : {}),
+    ...(input.causationId !== undefined ? { causationId: input.causationId } : {}),
+    ...(input.correlationId !== undefined ? { correlationId: input.correlationId } : {}),
   };
 }
