@@ -32,7 +32,8 @@ export function createRunPersistenceTracker<TEvents extends { [K in keyof TEvent
     } catch {
     }
   };
-
+  // make sure all the event all sequential
+  // runRecorder handle this , but to make sure this not rely on runRecorder
   const trackWrite = (event: AnyRunEvent<TEvents>): void => {
     if (!persist?.write) return;
     const write = persist.write;

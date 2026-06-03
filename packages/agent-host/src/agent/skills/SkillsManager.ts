@@ -161,7 +161,6 @@ export class SkillsManager {
     const item = this.registry.get(name);
     if (!item || !item.metadata.enabled) return null;
 
-    // Lazily read SKILL.md to ensure we get any live changes!
     try {
       const parsed = parseSkillFile(item.metadata.path, item.metadata.scope);
       if (parsed) {

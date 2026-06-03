@@ -37,14 +37,6 @@ export const CHAT_TRANSCRIPT_MODEL: ReadModel<
   .on("run-end", (state, _event, context) => flushAll(state, context))
   .build();
 
-export function reduceChatTranscriptEvent(
-  state: ChatTranscriptProjectionState,
-  event: AnyAgentEvent,
-  context?: ChatTranscriptProjectionContext,
-): ChatTranscriptProjectionState {
-  return CHAT_TRANSCRIPT_MODEL.apply(state, event, context);
-}
-
 export function projectEventsToDisplayBlocks(
   events: readonly AnyAgentEvent[],
   context?: ChatTranscriptProjectionContext,

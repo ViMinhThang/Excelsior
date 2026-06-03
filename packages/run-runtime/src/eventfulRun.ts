@@ -3,7 +3,7 @@ import type { Bus } from "./bus.js";
 import { DisposableScope } from "./disposable.js";
 import { AnyRunEvent, makeRunEvent, RunEventOverrides } from "./events.js";
 import type { RunPersistenceConfig } from "./runPersistence.js";
-import { RunRunner } from "./runRunner.js";
+import { runEventfulRun } from "./runRunner.js";
 
 export type { RunPersistenceConfig };
 
@@ -158,7 +158,7 @@ export class EventfulRun<TEvents extends { [K in keyof TEvents]: unknown }> {
   }
 
   start(config: RunConfig<TEvents>): RunHandle<TEvents> {
-    return RunRunner.run(this, config);
+    return runEventfulRun(this, config);
   }
 
   private _clearNotifyTimer(): boolean {

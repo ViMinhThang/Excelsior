@@ -37,6 +37,8 @@ export class ProjectionPolicy {
   }
 }
 
+// RunRecorder already make sure events are in sequential order
+// This is defensive programming just in case
 function sortEventsByRunSequence(
   events: readonly AnyAgentEvent[],
 ): AnyAgentEvent[] {
