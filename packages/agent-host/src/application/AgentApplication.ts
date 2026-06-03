@@ -86,7 +86,6 @@ export class AgentApplication {
     const trimmed = content.trim();
     if (!trimmed) return;
 
-    // set the session name as the user's first prompt of the session
     const displayContent = options?.displayContent ?? trimmed;
     const sessionId = this.ensureSession(trimmed, displayContent);
 
@@ -100,6 +99,7 @@ export class AgentApplication {
     });
   }
 
+  // set the session name as the user's first prompt of the session
   ensureSession(title?: string, userInput?: string): string {
     const sessionId = this.sessions.ensureSession(title, userInput);
     this.refreshSessions();

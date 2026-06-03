@@ -1,9 +1,4 @@
-import {
-  isLoopFinished,
-  stepCountIs,
-  ToolLoopAgent,
-  type ModelMessage,
-} from "ai";
+import { ToolLoopAgent, type ModelMessage } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createFileTools } from "./tools/index.js";
 import { getSetting } from "@excelsior/agent-storage";
@@ -12,8 +7,6 @@ import type { ToolContext } from "./tools/core/context.js";
 import type { StreamCapableAgent, AgentEventEmitter } from "../runtime/events.js";
 import {
   AGENT_TOOL_LOOP_STEPS_SETTING,
-  DEFAULT_AGENT_TOOL_LOOP_STEPS,
-  normalizeAgentToolLoopSteps,
   type AgentMessage,
 } from "@excelsior/core";
 import { withRetry, isTransientError } from "../runtime/retry.js";
@@ -26,6 +19,7 @@ import {
 import { toModelMessages } from "./modelMessageAdapter.js";
 import { createSkillToolAdapter } from "./skillToolAdapter.js";
 import { emitStreamEvents } from "./streamEventMapper.js";
+import { resolveAgentToolLoopBudget } from "./toolLoopBudget.js";
 
 interface Streamable {
   stream(input: {
@@ -109,21 +103,14 @@ export function createAgent(
     : systemPrompt;
 
   const skillAdapter = createSkillToolAdapter(ctx?.workspaceRoot);
-  const normalizedToolLoopSteps = normalizeAgentToolLoopSteps(
+  const toolLoopBudget = resolveAgentToolLoopBudget(
     getSetting(AGENT_TOOL_LOOP_STEPS_SETTING),
   );
-  const toolLoopStepLimit =
-    normalizedToolLoopSteps === DEFAULT_AGENT_TOOL_LOOP_STEPS
-      ? undefined
-      : Number(normalizedToolLoopSteps);
 
   const agent = new ToolLoopAgent({
     model,
     instructions: `${finalInstructions}${skillAdapter.instructions}`,
-    stopWhen:
-      toolLoopStepLimit === undefined
-        ? isLoopFinished()
-        : stepCountIs(toolLoopStepLimit),
+    stopWhen: toolLoopBudget.stopWhen,
     tools: {
       ...createFileTools(ctx),
       ...skillAdapter.tools,
@@ -132,6 +119,6 @@ export function createAgent(
   });
 
   return new ExcelsiorAgent(agent, {
-    toolLoopStepLimit,
+    toolLoopStepLimit: toolLoopBudget.stepLimit,
   });
 }
