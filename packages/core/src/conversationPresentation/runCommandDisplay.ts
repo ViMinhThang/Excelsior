@@ -11,8 +11,14 @@ import type {
 
 function formatRunCommand(args: Record<string, unknown> | null): string {
   const command = String(args?.command || args?.CommandLine || "");
+  const cmdArgs = args?.args;
+  let fullCommand = command;
+  if (Array.isArray(cmdArgs) && cmdArgs.length > 0) {
+    fullCommand += " " + cmdArgs.join(" ");
+  }
   const cwd = String(args?.cwd || args?.Cwd || "");
-  return cwd ? `PS ${cwd}> ${command}` : command;
+  const target = cwd ? `${cwd} > ${fullCommand}` : fullCommand;
+  return `runCommand(${target})`;
 }
 
 function formatRunCommandSummary(

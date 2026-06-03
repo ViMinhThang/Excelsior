@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   defaultThemeForMode,
   getThemeOption,
+  isDesktopTheme,
   isThemeDark,
   themeOptionsForMode,
 } from "../src/renderer/components/settingsDialog/themeOptions.js";
@@ -25,6 +26,12 @@ describe("settings theme options", () => {
       "gruvbox",
       "tokyo-night-light",
     ]);
+  });
+
+  it("validates stored theme ids from the theme option list", () => {
+    expect(isDesktopTheme("one-dark-pro")).toBe(true);
+    expect(isDesktopTheme("missing-theme")).toBe(false);
+    expect(isDesktopTheme(null)).toBe(false);
   });
 
   it("exposes color metadata for selected swatches", () => {

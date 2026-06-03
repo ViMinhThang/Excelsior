@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
   buildChatModeKeymapContext,
-  chatModeIds,
   ChatModeView,
   chatModeRegistry,
   getChatModeHint,
   getChatModeKeymaps,
   getChatModeSelection,
   type BuildChatModeKeymapContextInput,
+} from "../src/chatModes/registry.js";
+import {
+  chatModeIds,
   type ChatMode,
   type ChatModeKeymapContext,
   type ChatModeRenderContext,
-} from "../src/chatModes/index.js";
-import { buildModeViewContext } from "../src/hooks/useChatScreenModel.js";
+} from "../src/chatModes/types.js";
+import { buildModeViewContext } from "../src/hooks/chatScreenModelBuilders.js";
 
 function makeKeymapContext(chatMode: ChatMode): ChatModeKeymapContext {
   const noop = () => {};

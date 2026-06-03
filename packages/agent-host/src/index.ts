@@ -1,5 +1,3 @@
-import { initDb, logError } from "@excelsior/agent-storage";
-
 export type {
   AgentClientState,
   AgentMode,
@@ -18,28 +16,16 @@ export type {
   AgentHostDispatchResult,
   AgentHostIntent,
 } from "@excelsior/client";
-export { AgentApplication } from "./application/AgentApplication.js";
-export type { AgentApplicationOptions } from "./application/AgentApplication.js";
-export { LocalAgentHost } from "./host/LocalAgentHost.js";
-export {
-  createIntentDispatcher,
-  type AgentHostIntentDispatcherOptions,
-} from "./host/dispatcher.js";
-export { IntentRegistry } from "./host/intentRegistry.js";
+export { HarnessAgentHost } from "./host/HarnessAgentHost.js";
 export {
   getDefaultAgentHost,
   resetDefaultAgentHost,
 } from "./host/defaultHost.js";
-export {
-  createStorageEngine,
-  storageEngine,
-  type StorageEngine,
-} from "@excelsior/agent-storage";
 
 export function initializeAgentHostRuntime(): void {
-  initDb();
+  // Harness storage is initialized lazily by HarnessAgentHost.
 }
 
 export function logAgentHostError(message: string, stack?: string): void {
-  logError(message, stack);
+  console.error(stack ? `${message}\n${stack}` : message);
 }

@@ -1,4 +1,4 @@
-export type DiffAction = "create" | "overwrite" | "edit";
+export type DiffAction = "create" | "overwrite" | "edit" | "warning";
 
 export type ConfirmRequest = {
   callId: string;

@@ -13,7 +13,7 @@ function commandFor(toolName: string, args: Record<string, unknown>): string {
 
 describe("ToolMessage command formatting", () => {
   it("shows view calls with the full path", () => {
-    const filePath = ["packages", "run-runtime", "src", "runOrchestrator.ts"].join("/");
+    const filePath = ["packages", "agent-harness", "src", "runController.ts"].join("/");
     expect(commandFor(
       "view",
       { filePath },
@@ -21,7 +21,7 @@ describe("ToolMessage command formatting", () => {
   });
 
   it("does not show quoted JSON args for view calls", () => {
-    const filePath = ["packages", "agent-host", "src", "host", "LocalAgentHost.ts"].join("/");
+    const filePath = ["packages", "agent-host", "src", "host", "HarnessAgentHost.ts"].join("/");
     expect(commandFor(
       "view",
       { filePath },
@@ -34,7 +34,7 @@ describe("ToolMessage command formatting", () => {
     expect(commandFor(
       "ls",
       { directoryPath },
-    )).toBe(`Listfiles ${directoryPath}`);
+    )).toBe(`Listfiles(${directoryPath})`);
   });
 
   it("renders expanded edit output as old and new panes", () => {
@@ -56,7 +56,7 @@ describe("ToolMessage command formatting", () => {
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("edit demo.ts");
+    expect(frame).toContain("edit(demo.ts)");
     expect(frame).toContain("completed edit: demo.ts");
     expect(frame).toContain("(+1)");
     expect(frame).toContain("(-1)");
@@ -83,7 +83,7 @@ describe("ToolMessage command formatting", () => {
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("edit demo.ts");
+    expect(frame).toContain("edit(demo.ts)");
     expect(frame).toContain("completed edit: demo.ts");
     expect(frame).toContain("(+1)");
     expect(frame).toContain("(-1)");

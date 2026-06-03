@@ -6,8 +6,8 @@ import PendingQuestionPanel from '../components/chat/PendingQuestionPanel.js';
 import FooterBar from '../components/chat/FooterBar.js';
 import { CommandSuggestions } from '../components/chat/CommandSuggestions.js';
 import CommandPalette from '../components/palette/CommandPalette.js';
-import { useChatScreenModel } from '../hooks/useChatScreenModel.js';
-import { ChatModeView } from '../chatModes/index.js';
+import { useChatInteractionController } from '../hooks/useChatInteractionController.js';
+import { ChatModeView } from '../chatModes/registry.js';
 
 const ChatScreen = () => {
   const [headerItems, setHeaderItems] = useState<string[]>([]);
@@ -16,7 +16,7 @@ const ChatScreen = () => {
     setHeaderItems(['app-header']);
   }, []);
 
-  const screen = useChatScreenModel();
+  const screen = useChatInteractionController();
 
   return (
     <Box flexDirection="column">

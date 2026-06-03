@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { getChatModeHint } from "../src/chatModes/index.js";
-import { chatModeRegistry } from "../src/chatModes/index.js";
+import {
+  chatModeRegistry,
+  getChatModeHint,
+} from "../src/chatModes/registry.js";
 
 describe("chat mode hints", () => {
   it("shows Ctrl+K for command palette and never Ctrl+O", () => {

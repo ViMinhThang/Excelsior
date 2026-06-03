@@ -34,7 +34,7 @@ const ThinkingIndicator = () => {
 
   return (
     <Box flexDirection="column" gap={0} paddingX={1} marginTop={1}>
-      <Text color={theme.colors.activity}>
+      <Text color={theme.colors.muted} dimColor italic>
         Thinking {frames[frame]}
       </Text>
       <Text color={theme.colors.muted} dimColor>
