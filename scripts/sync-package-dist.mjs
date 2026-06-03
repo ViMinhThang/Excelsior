@@ -18,6 +18,10 @@ const packages = [
     target: "packages/agent-host/dist",
   },
   {
+    source: "dist/packages/agent-harness/src",
+    target: "packages/agent-harness/dist",
+  },
+  {
     source: "dist/packages/agent-storage/src",
     target: "packages/agent-storage/dist",
   },

@@ -1,13 +1,11 @@
-import { SettingsStore } from "@excelsior/agent-storage";
-import { LocalAgentHost } from "./LocalAgentHost.js";
+import type { AgentHost } from "@excelsior/client";
+import { HarnessAgentHost } from "./HarnessAgentHost.js";
 
-let defaultHost: LocalAgentHost | null = null;
+let defaultHost: AgentHost | null = null;
 
-export function getDefaultAgentHost(): LocalAgentHost {
+export function getDefaultAgentHost(): AgentHost {
   if (!defaultHost) {
-    defaultHost = new LocalAgentHost({
-      settingsStore: new SettingsStore(),
-    });
+    defaultHost = new HarnessAgentHost();
   }
   return defaultHost;
 }
