@@ -5,8 +5,7 @@
   "type": "module",
   "main": "dist/main.cjs",
   "scripts": {
-    "rebuild:native": "node scripts/rebuild-native.js",
-    "dev": "npm run rebuild:native && node scripts/dev.js",
+    "dev": "node scripts/dev.js",
     "build": "vite build && vite build --config vite.main.config.ts",
     "start": "electron ."
   },

@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import type { AppSettings, Session, Workspace } from "@excelsior/core";
 import {
   AGENT_TOOL_LOOP_STEPS_SETTING,
   DEFAULT_AGENT_TOOL_LOOP_STEPS,
   normalizeAgentToolLoopSteps,
 } from "@excelsior/core";
-import type { AnyHarnessEvent } from "./events.js";
+import { MESSAGE_END, type AnyHarnessEvent } from "./events.js";
 import type { HarnessSettings, StoredSessionFile } from "./types.js";
 
 const DEFAULT_SETTINGS: HarnessSettings = {
@@ -62,8 +62,8 @@ export class FileHarnessStorage {
     if (byRoot) return byRoot;
 
     const workspace: Workspace = {
-      id: input?.id ?? "ws_default",
-      name: input?.name ?? "default",
+      id: input?.id ?? `ws_${randomUUID()}`,
+      name: input?.name ?? (basename(rootPath) || "Excelsior Workspace"),
       rootPath,
     };
     const existingIndex = workspaces.findIndex((item) => item.id === workspace.id);
@@ -123,8 +123,8 @@ export class FileHarnessStorage {
 
   appendEvent(workspaceId: string, session: Session, event: AnyHarnessEvent): Session {
     const events = this.loadEvents(workspaceId, session.id);
-    const userInput = event.type === "user-input"
-      ? event.data.content
+    const userInput = event.type === MESSAGE_END && event.data.message.role === "user"
+      ? event.data.message.content
       : session.metadata.userInput;
     const updated: Session = {
       ...session,

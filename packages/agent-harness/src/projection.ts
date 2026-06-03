@@ -1,27 +1,39 @@
 import type { AgentMessage, ProjectedBlock, ProjectedSubAgent, Session, Workspace } from "@excelsior/core";
-import type { AnyHarnessEvent } from "./events.js";
 import {
   ERROR,
-  TEXT_DELTA,
-  TOOL_CALL_END,
-  TOOL_CALL_START,
-  USER_INPUT,
+  HISTORY_COMPACTED,
+  MESSAGE_END,
+  MESSAGE_START,
+  MESSAGE_UPDATE,
+  TOOL_EXECUTION_END,
+  TOOL_EXECUTION_START,
+  TOOL_EXECUTION_UPDATE,
+  type AnyHarnessEvent,
+  type HarnessMessage,
 } from "./events.js";
 import type { HarnessSnapshot } from "./types.js";
 
-interface PendingAssistant {
-  id: string;
-  text: string;
-  timestamp: string;
+interface CanonicalReadModel {
+  displayBlocks: ProjectedBlock[];
+  aiHistory: AgentMessage[];
 }
 
-interface PendingTool {
+interface AssistantDraft {
+  id: string;
+  content: string;
+  timestamp: string;
+  frozen: boolean;
+}
+
+interface ToolDraft {
   id: string;
   toolName: string;
   toolArgs: string;
   status: "pending" | "completed" | "error";
   result: string;
   timestamp: string;
+  startTimestamp: string;
+  endTimestamp?: string;
 }
 
 export function projectHarnessState(input: {
@@ -34,8 +46,9 @@ export function projectHarnessState(input: {
   pendingConfirmation: HarnessSnapshot["pendingConfirmation"];
   pendingQuestion: HarnessSnapshot["pendingQuestion"];
 }): HarnessSnapshot {
+  const readModel = projectEvents(input.events);
   return {
-    displayBlocks: projectEventsToDisplayBlocks(input.events),
+    displayBlocks: readModel.displayBlocks,
     isLoading: input.isLoading,
     sessions: input.sessions,
     currentSessionId: input.currentSessionId,
@@ -47,153 +60,178 @@ export function projectHarnessState(input: {
 }
 
 export function projectEventsToMessages(events: readonly AnyHarnessEvent[]): AgentMessage[] {
-  const messages: AgentMessage[] = [];
-  let assistantText = "";
-
-  const flushAssistant = () => {
-    const text = assistantText.trim();
-    if (text) messages.push({ role: "assistant", content: text });
-    assistantText = "";
-  };
-
-  for (const event of events) {
-    if (event.type === USER_INPUT) {
-      flushAssistant();
-      messages.push({ role: "user", content: event.data.content });
-    } else if (event.type === TEXT_DELTA) {
-      assistantText += event.data.delta;
-    } else if (event.type === TOOL_CALL_END) {
-      flushAssistant();
-      messages.push({
-        role: "user",
-        content: `[Tool result: ${event.data.toolName}]\n${event.data.result}`,
-      });
-    } else if (event.type === ERROR) {
-      flushAssistant();
-      messages.push({ role: "assistant", content: `Error: ${event.data.message}` });
-    }
-  }
-
-  flushAssistant();
-  return messages;
+  return projectEvents(events).aiHistory;
 }
 
 export function projectEventsToDisplayBlocks(events: readonly AnyHarnessEvent[]): ProjectedBlock[] {
-  const blocks: ProjectedBlock[] = [];
-  let pendingAssistant: PendingAssistant | null = null;
-  let pendingTool: PendingTool | null = null;
+  return projectEvents(events).displayBlocks;
+}
 
-  const flushAssistant = (frozen: boolean) => {
-    if (!pendingAssistant) return;
-    blocks.push({
+export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalReadModel {
+  const displayBlocks: ProjectedBlock[] = [];
+  const aiHistory: AgentMessage[] = [];
+  let assistant: AssistantDraft | null = null;
+  let tool: ToolDraft | null = null;
+
+  const flushAssistant = (forceFrozen?: boolean) => {
+    if (!assistant) return;
+    displayBlocks.push({
       type: "assistant",
-      id: pendingAssistant.id,
-      content: pendingAssistant.text,
-      timestamp: pendingAssistant.timestamp,
-      ...(frozen ? { isFrozen: true as const } : {}),
+      id: assistant.id,
+      content: assistant.content,
+      timestamp: assistant.timestamp,
+      ...(forceFrozen || assistant.frozen ? { isFrozen: true as const } : {}),
     });
-    pendingAssistant = null;
+    assistant = null;
   };
 
-  const flushTool = (frozen: boolean) => {
-    if (!pendingTool) return;
-    if (pendingTool.toolName === "spawnSubAgent") {
-      blocks.push({
+  const flushTool = (forceFrozen?: boolean) => {
+    if (!tool) return;
+    if (tool.toolName === "spawnSubAgent") {
+      displayBlocks.push({
         type: "sub-agent",
-        id: pendingTool.id,
-        role: readRoleFromToolArgs(pendingTool.toolArgs),
-        state: buildSubAgentState(pendingTool),
-        timestamp: pendingTool.timestamp,
-        ...(frozen || pendingTool.status !== "pending" ? { isFrozen: true as const } : {}),
+        id: tool.id,
+        role: readRoleFromToolArgs(tool.toolArgs),
+        state: buildSubAgentState(tool),
+        timestamp: tool.timestamp,
+        ...(forceFrozen || tool.status !== "pending" ? { isFrozen: true as const } : {}),
       });
     } else {
-      blocks.push({
+      displayBlocks.push({
         type: "tool-call",
-        id: pendingTool.id,
-        toolName: pendingTool.toolName,
-        toolArgs: pendingTool.toolArgs,
-        status: pendingTool.status,
-        content: pendingTool.result,
-        timestamp: pendingTool.timestamp,
-        ...(frozen || pendingTool.status !== "pending" ? { isFrozen: true as const } : {}),
+        id: tool.id,
+        toolName: tool.toolName,
+        toolArgs: tool.toolArgs,
+        status: tool.status,
+        content: tool.result,
+        timestamp: tool.timestamp,
+        ...(forceFrozen || tool.status !== "pending" ? { isFrozen: true as const } : {}),
       });
     }
-    pendingTool = null;
+    tool = null;
   };
 
-  const flushAll = (frozen: boolean) => {
-    flushAssistant(frozen);
-    flushTool(frozen);
+  const flushAll = (forceFrozen?: boolean) => {
+    flushAssistant(forceFrozen);
+    flushTool(forceFrozen);
   };
 
   for (const event of events) {
-    if (event.type === USER_INPUT) {
-      flushAll(true);
-      blocks.push({
-        type: "user",
-        id: event.id,
+    if (event.type === MESSAGE_START) {
+      const message = event.data.message;
+      if (message.role === "assistant") {
+        flushTool(true);
+        assistant = {
+          id: message.id,
+          content: message.content,
+          timestamp: event.timestamp,
+          frozen: false,
+        };
+      }
+    } else if (event.type === MESSAGE_UPDATE) {
+      flushTool(true);
+      assistant = {
+        id: event.data.messageId,
         content: event.data.content,
         timestamp: event.timestamp,
-        isFrozen: true,
-      });
-    } else if (event.type === TEXT_DELTA) {
+        frozen: false,
+      };
+    } else if (event.type === MESSAGE_END) {
+      const message = event.data.message;
+      if (message.role === "user") {
+        flushAll(true);
+        displayBlocks.push({
+          type: "user",
+          id: message.id,
+          content: message.content,
+          timestamp: event.timestamp,
+          isFrozen: true,
+        });
+        aiHistory.push(toAgentMessage(message));
+      } else if (message.role === "assistant") {
+        flushTool(true);
+        assistant = {
+          id: message.id,
+          content: message.content,
+          timestamp: event.timestamp,
+          frozen: true,
+        };
+        flushAssistant(true);
+        if (message.content.trim()) aiHistory.push(toAgentMessage(message));
+      } else if (message.role === "tool") {
+        aiHistory.push(toAgentMessage(message));
+      }
+    } else if (event.type === TOOL_EXECUTION_START) {
+      flushAssistant(true);
       flushTool(true);
-      const currentAssistant = pendingAssistant as PendingAssistant | null;
-      pendingAssistant = currentAssistant
-        ? {
-            id: currentAssistant.id,
-            text: currentAssistant.text + event.data.delta,
-            timestamp: event.timestamp,
-          }
-        : { id: event.id, text: event.data.delta, timestamp: event.timestamp };
-    } else if (event.type === TOOL_CALL_START) {
-      flushAll(true);
-      pendingTool = {
+      tool = {
         id: event.data.toolCallId,
         toolName: event.data.toolName,
         toolArgs: event.data.toolArgs,
         status: "pending",
         result: "",
         timestamp: event.timestamp,
+        startTimestamp: event.timestamp,
       };
-    } else if (event.type === TOOL_CALL_END) {
-      const status = event.data.status === "error" ? "error" : "completed";
-      const currentTool = pendingTool as PendingTool | null;
+    } else if (event.type === TOOL_EXECUTION_UPDATE) {
+      const currentTool = tool as ToolDraft | null;
       if (currentTool && currentTool.id === event.data.toolCallId) {
-        pendingTool = {
+        tool = {
           id: currentTool.id,
           toolName: currentTool.toolName,
-          toolArgs: currentTool.toolArgs,
-          status,
-          result: event.data.result,
+          status: currentTool.status,
+          result: currentTool.result,
+          startTimestamp: currentTool.startTimestamp,
+          endTimestamp: currentTool.endTimestamp,
+          toolArgs: `${currentTool.toolArgs}${event.data.delta}`,
           timestamp: event.timestamp,
         };
-        flushTool(true);
-      } else {
-        pendingTool = {
-          id: event.data.toolCallId,
-          toolName: event.data.toolName,
-          toolArgs: event.data.toolArgs,
-          status,
-          result: event.data.result,
-          timestamp: event.timestamp,
-        };
-        flushTool(true);
       }
+    } else if (event.type === TOOL_EXECUTION_END) {
+      const status = event.data.isError ? "error" : "completed";
+      const previousTool = tool as ToolDraft | null;
+      tool = {
+        id: event.data.toolCallId,
+        toolName: event.data.toolName,
+        toolArgs: event.data.toolArgs,
+        status,
+        result: event.data.result,
+        timestamp: event.timestamp,
+        startTimestamp: previousTool?.id === event.data.toolCallId
+          ? previousTool.startTimestamp
+          : event.timestamp,
+        endTimestamp: event.timestamp,
+      };
+      flushTool(true);
+    } else if (event.type === HISTORY_COMPACTED) {
+      flushAll(true);
+      aiHistory.push({
+        role: "system",
+        content: `Previous conversation summary:\n${event.data.summary}`,
+      });
     } else if (event.type === ERROR) {
       flushAll(true);
-      blocks.push({
+      displayBlocks.push({
         type: "assistant",
         id: event.id,
         content: `Error: ${event.data.message}`,
         timestamp: event.timestamp,
         isFrozen: true,
       });
+      aiHistory.push({ role: "assistant", content: `Error: ${event.data.message}` });
     }
   }
 
   flushAll(false);
-  return blocks;
+  return { displayBlocks, aiHistory };
+}
+
+function toAgentMessage(message: HarnessMessage): AgentMessage {
+  return {
+    role: message.role,
+    content: message.modelContent ?? message.content,
+    ...(message.toolCallId ? { tool_call_id: message.toolCallId } : {}),
+  };
 }
 
 function readRoleFromToolArgs(rawArgs: string): string {
@@ -207,7 +245,7 @@ function readRoleFromToolArgs(rawArgs: string): string {
   }
 }
 
-function buildSubAgentState(tool: PendingTool): ProjectedSubAgent {
+function buildSubAgentState(tool: ToolDraft): ProjectedSubAgent {
   const lines = tool.result.split(/\r?\n/).filter(Boolean);
   return {
     status: tool.status === "error" ? "error" : tool.status === "completed" ? "done" : "running",
@@ -215,7 +253,9 @@ function buildSubAgentState(tool: PendingTool): ProjectedSubAgent {
     fullOutput: tool.result,
     toolCalls: [],
     parts: tool.result ? [{ type: "text", text: tool.result }] : [],
-    startTime: tool.timestamp ? new Date(tool.timestamp).getTime() : undefined,
-    endTime: tool.status === "pending" ? undefined : Date.now(),
+    startTime: new Date(tool.startTimestamp).getTime(),
+    endTime: tool.status === "pending" || !tool.endTimestamp
+      ? undefined
+      : new Date(tool.endTimestamp).getTime(),
   };
 }

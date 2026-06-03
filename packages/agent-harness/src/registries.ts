@@ -51,6 +51,9 @@ export class ToolRegistry {
         execute: async (input) => {
           const parsed = harnessTool.inputSchema.parse(input);
           const output = await harnessTool.execute(parsed, ctx);
+          if (output.isError) {
+            throw new Error(output.content);
+          }
           return output.content;
         },
       });
