@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { FileHarnessStorage } from "@excelsior/agent-harness";
-import { makeHarnessEvent, TEXT_DELTA, USER_INPUT } from "../src/events.js";
+import { MESSAGE_END, MESSAGE_START, makeHarnessEvent } from "../src/events.js";
 
 const tempDirs: string[] = [];
 
@@ -29,28 +29,36 @@ describe("FileHarnessStorage", () => {
       name: "Test",
     });
 
-    const session = storage.createSession(workspace.id, "Storage Test", "first prompt");
-    const userInput = makeHarnessEvent({
+    const session = storage.createSession(workspace.id, "Storage Test");
+    const userMessage = {
+      id: "msg_user",
+      role: "user" as const,
+      content: "hello",
+    };
+    const userStart = makeHarnessEvent({
+      workspaceId: workspace.id,
       runId: "run_test",
       sessionId: session.id,
       sequence: 1,
-      type: USER_INPUT,
-      data: { content: "hello" },
+      type: MESSAGE_START,
+      data: { message: userMessage },
     });
-    const assistantText = makeHarnessEvent({
+    const userEnd = makeHarnessEvent({
+      workspaceId: workspace.id,
       runId: "run_test",
       sessionId: session.id,
       sequence: 2,
-      type: TEXT_DELTA,
-      data: { delta: "world" },
+      type: MESSAGE_END,
+      data: { message: userMessage },
     });
 
-    const updated = storage.appendEvent(workspace.id, session, userInput);
-    storage.appendEvent(workspace.id, updated, assistantText);
+    const updated = storage.appendEvent(workspace.id, session, userStart);
+    storage.appendEvent(workspace.id, updated, userEnd);
 
     const loaded = storage.loadSessionFile(workspace.id, session.id);
     expect(loaded.session?.title).toBe("Storage Test");
-    expect(loaded.events?.map((event) => event.type)).toEqual([USER_INPUT, TEXT_DELTA]);
+    expect(loaded.session?.metadata.userInput).toBe("hello");
+    expect(loaded.events?.map((event) => event.type)).toEqual([MESSAGE_START, MESSAGE_END]);
   });
 
   it("renames and deletes sessions in the JSONL schema", async () => {

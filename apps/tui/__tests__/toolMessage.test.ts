@@ -13,7 +13,7 @@ function commandFor(toolName: string, args: Record<string, unknown>): string {
 
 describe("ToolMessage command formatting", () => {
   it("shows view calls with the full path", () => {
-    const filePath = ["packages", "run-runtime", "src", "runOrchestrator.ts"].join("/");
+    const filePath = ["packages", "agent-harness", "src", "runController.ts"].join("/");
     expect(commandFor(
       "view",
       { filePath },
@@ -21,7 +21,7 @@ describe("ToolMessage command formatting", () => {
   });
 
   it("does not show quoted JSON args for view calls", () => {
-    const filePath = ["packages", "agent-host", "src", "host", "LocalAgentHost.ts"].join("/");
+    const filePath = ["packages", "agent-host", "src", "host", "HarnessAgentHost.ts"].join("/");
     expect(commandFor(
       "view",
       { filePath },

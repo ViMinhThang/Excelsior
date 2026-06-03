@@ -1,6 +1,7 @@
 export { createAgentHarness } from "./harness.js";
 export { FileHarnessStorage } from "./storage.js";
 export { ProviderRegistry, ToolRegistry, CommandRegistry } from "./registries.js";
+export { RunController } from "./runController.js";
 export { createDeepSeekProvider } from "./provider.js";
 export { createBuiltInTools } from "./tools.js";
 export { createBuiltInCommands } from "./commands.js";

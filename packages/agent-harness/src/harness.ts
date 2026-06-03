@@ -11,21 +11,28 @@ import type {
   Workspace,
 } from "@excelsior/core";
 import {
+  CONFIRMATION_ANSWERED,
+  CONFIRMATION_REQUESTED,
   HISTORY_COMPACTED,
-  TEXT_DELTA,
-  USER_INPUT,
+  MESSAGE_END,
+  MESSAGE_START,
+  MESSAGE_UPDATE,
+  QUESTION_ANSWERED,
+  QUESTION_REQUESTED,
+  SESSION_CHANGED,
+  TURN_END,
   makeHarnessEvent,
   type AnyHarnessEvent,
   type HarnessEventDataMap,
   type HarnessEventEmitter,
   type HarnessEventType,
 } from "./events.js";
-import { runHarnessAgent } from "./agent.js";
 import { createBuiltInCommands } from "./commands.js";
 import { GitHubReviewService } from "./github.js";
 import { createDeepSeekProvider } from "./provider.js";
 import { projectEventsToMessages, projectHarnessState } from "./projection.js";
 import { CommandRegistry, ExtensionRegistry, ProviderRegistry, ToolRegistry } from "./registries.js";
+import { RunController } from "./runController.js";
 import { FileHarnessStorage } from "./storage.js";
 import { createBuiltInTools } from "./tools.js";
 import type {
@@ -39,14 +46,15 @@ import type {
 } from "./types.js";
 
 export function createAgentHarness(config: HarnessConfig = {}): AgentHarness {
-  return new FileBackedAgentHarness(config);
+  return new HarnessStore(config);
 }
 
-class FileBackedAgentHarness implements AgentHarness {
+class HarnessStore implements AgentHarness {
   private readonly storage: FileHarnessStorage;
   private readonly providers = new ProviderRegistry();
   private readonly tools = new ToolRegistry();
   private readonly commands = new CommandRegistry();
+  private readonly runController = new RunController();
   private readonly extensions: ExtensionRegistry;
   private readonly listeners = new Set<() => void>();
   private readonly workspace: Workspace;
@@ -56,6 +64,9 @@ class FileBackedAgentHarness implements AgentHarness {
   private events: AnyHarnessEvent[] = [];
   private mode: AgentMode = "act";
   private abortController: AbortController | null = null;
+  private activeRunId: string | null = null;
+  private activeTurnId: string | null = null;
+  private activeSessionId: string | null = null;
   private sequence = 0;
   private pendingConfirmation: ConfirmRequest | null = null;
   private pendingQuestion: AskQuestionRequest | null = null;
@@ -114,60 +125,82 @@ class FileBackedAgentHarness implements AgentHarness {
     const content = input.content.trim();
     if (!content) return;
     if (input.sessionId) await this.switchSession(input.sessionId);
-    const session = this.ensureSession(content);
-    this.mode = input.mode;
 
-    this.abortController = new AbortController();
-    const runId = `run_${randomUUID()}`;
+    const session = this.ensureSession(content);
     const priorMessages = projectEventsToMessages(this.events);
+    const runId = `run_${randomUUID()}`;
+    const turnId = `turn_${randomUUID()}`;
+    const abortController = new AbortController();
+
+    this.mode = input.mode;
+    this.abortController = abortController;
+    this.activeRunId = runId;
+    this.activeTurnId = turnId;
+    this.activeSessionId = session.id;
 
     if (!input.silent) {
-      this.emit(runId, USER_INPUT, { content: input.displayContent ?? content });
+      this.emitUserMessage({
+        runId,
+        turnId,
+        sessionId: session.id,
+        content,
+        displayContent: input.displayContent ?? content,
+      });
     }
 
-    const messages = [
-      ...priorMessages,
-      { role: "user" as const, content },
-    ];
-
-    await runHarnessAgent({
-      messages,
-      mode: this.mode,
-      settings: this.settings,
-      providers: this.providers,
-      tools: this.tools,
-      toolContext: this.createToolContext(),
-      signal: this.abortController.signal,
-      emit: this.createEmitter(runId, session.id),
-    });
-
-    this.abortController = null;
-    this.refreshSessions();
-    this.notify();
+    try {
+      await this.runController.run({
+        messages: [
+          ...priorMessages,
+          { role: "user", content },
+        ],
+        mode: this.mode,
+        settings: this.settings,
+        providers: this.providers,
+        tools: this.tools,
+        toolContext: this.createToolContext(),
+        signal: abortController.signal,
+        emit: this.createEmitter(runId, session.id, turnId),
+      });
+    } finally {
+      if (this.abortController === abortController) {
+        this.abortController = null;
+      }
+      this.activeRunId = null;
+      this.activeTurnId = null;
+      this.activeSessionId = null;
+      this.refreshSessions();
+      this.notify();
+    }
   }
 
   cancel(): void {
-    this.abortController?.abort();
-    this.abortController = null;
+    if (!this.abortController) return;
+    this.abortController.abort();
+    this.cancelPendingInteractions();
     this.notify();
   }
 
   clear(): void {
     const session = this.currentSession();
-    if (session) {
-      this.events = [];
-      this.storage.replaceEvents(this.workspace.id, session, []);
-    }
+    if (!session) return;
+    this.events = [];
+    this.sequence = 0;
+    this.storage.replaceEvents(this.workspace.id, session, []);
     this.notify();
   }
 
   createSession(title = "Untitled"): Session {
+    this.cancel();
     const session = this.storage.createSession(this.workspace.id, title);
     this.currentSessionId = session.id;
     this.events = [];
     this.sequence = 0;
     this.refreshSessions();
-    this.notify();
+    this.emitSystemEvent(SESSION_CHANGED, {
+      sessionId: session.id,
+      reason: "created",
+    });
     return session;
   }
 
@@ -179,20 +212,35 @@ class FileBackedAgentHarness implements AgentHarness {
     this.events = loaded.events ?? [];
     this.sequence = this.events.at(-1)?.sequence ?? 0;
     this.refreshSessions();
-    this.notify();
+    this.emitSystemEvent(SESSION_CHANGED, {
+      sessionId,
+      reason: "switched",
+    });
   }
 
   async deleteSession(sessionId: string): Promise<void> {
+    this.cancel();
     this.storage.deleteSession(this.workspace.id, sessionId);
     this.refreshSessions();
     if (this.currentSessionId === sessionId) {
       this.currentSessionId = this.sessions[0]?.id ?? null;
-      this.events = this.currentSessionId ? this.storage.loadEvents(this.workspace.id, this.currentSessionId) : [];
+      this.events = this.currentSessionId
+        ? this.storage.loadEvents(this.workspace.id, this.currentSessionId)
+        : [];
+      this.sequence = this.events.at(-1)?.sequence ?? 0;
     }
-    this.notify();
+    if (this.currentSessionId) {
+      this.emitSystemEvent(SESSION_CHANGED, {
+        sessionId: this.currentSessionId,
+        reason: "deleted",
+      });
+    } else {
+      this.notify();
+    }
   }
 
   async deleteAllSessions(): Promise<void> {
+    this.cancel();
     this.storage.deleteAllSessions(this.workspace.id);
     this.currentSessionId = null;
     this.events = [];
@@ -204,7 +252,14 @@ class FileBackedAgentHarness implements AgentHarness {
   renameSession(sessionId: string, title: string): void {
     this.storage.renameSession(this.workspace.id, sessionId, title);
     this.refreshSessions();
-    this.notify();
+    if (this.currentSessionId === sessionId) {
+      this.emitSystemEvent(SESSION_CHANGED, {
+        sessionId,
+        reason: "renamed",
+      });
+    } else {
+      this.notify();
+    }
   }
 
   async executeCommand(input: string): Promise<CommandResult> {
@@ -237,11 +292,21 @@ class FileBackedAgentHarness implements AgentHarness {
   async revertLastTurn(): Promise<CommandResult> {
     const session = this.currentSession();
     if (!session) return { handled: true, message: "No active session.", clearInput: true };
-    const lastUserIndex = findLastUserInputIndex(this.events);
-    if (lastUserIndex === -1) return { handled: true, message: "No completed turn to revert.", clearInput: true };
-    this.events = this.events.slice(0, lastUserIndex);
+
+    const lastTurnEnd = findLastCompletedTurnEnd(this.events);
+    if (!lastTurnEnd?.turnId) {
+      return { handled: true, message: "No completed turn to revert.", clearInput: true };
+    }
+
+    const turnStartIndex = this.events.findIndex((event) => event.turnId === lastTurnEnd.turnId);
+    if (turnStartIndex === -1) {
+      return { handled: true, message: "No completed turn to revert.", clearInput: true };
+    }
+
+    this.events = this.events.slice(0, turnStartIndex);
     this.sequence = this.events.at(-1)?.sequence ?? 0;
     this.storage.replaceEvents(this.workspace.id, session, this.events);
+    this.refreshSessions();
     this.notify();
     return { handled: true, message: "Reverted last turn.", clearInput: true };
   }
@@ -251,19 +316,24 @@ class FileBackedAgentHarness implements AgentHarness {
     if (!session) return;
     const compactedEventCount = this.events.length;
     if (compactedEventCount === 0) return;
+
     const summary = projectEventsToMessages(this.events)
       .map((message) => `${message.role.toUpperCase()}: ${typeof message.content === "string" ? message.content : ""}`)
       .join("\n")
       .slice(-4000);
+
     this.events = [];
     this.sequence = 0;
     this.storage.replaceEvents(this.workspace.id, session, []);
-    const event = this.emit(`run_${randomUUID()}`, HISTORY_COMPACTED, {
+
+    const runId = `run_${randomUUID()}`;
+    const turnId = `turn_${randomUUID()}`;
+    this.emit(runId, HISTORY_COMPACTED, {
       summary,
       compactedEventCount,
       triggerMode,
-    });
-    this.emit(event.runId, TEXT_DELTA, { delta: `Previous conversation compacted:\n${summary}` });
+    }, { sessionId: session.id, turnId });
+    this.emitAssistantMessage(runId, turnId, session.id, `Previous conversation compacted:\n${summary}`);
   }
 
   setMode(mode: AgentMode): void {
@@ -304,11 +374,65 @@ class FileBackedAgentHarness implements AgentHarness {
     }));
   }
 
-  private createEmitter(runId: string, sessionId: string): HarnessEventEmitter {
+  private createEmitter(runId: string, sessionId: string, turnId: string): HarnessEventEmitter {
     return (type, data, options) => this.emit(runId, type, data, {
       sessionId,
+      turnId: options?.turnId ?? turnId,
       relatedToolCallId: options?.relatedToolCallId,
       parentEventId: options?.parentEventId,
+    });
+  }
+
+  private emitUserMessage(input: {
+    runId: string;
+    turnId: string;
+    sessionId: string;
+    content: string;
+    displayContent: string;
+  }): void {
+    const message = {
+      id: `msg_${randomUUID()}`,
+      role: "user" as const,
+      content: input.displayContent,
+      modelContent: input.content,
+    };
+    this.emit(input.runId, MESSAGE_START, { message }, {
+      sessionId: input.sessionId,
+      turnId: input.turnId,
+    });
+    this.emit(input.runId, MESSAGE_END, { message }, {
+      sessionId: input.sessionId,
+      turnId: input.turnId,
+    });
+  }
+
+  private emitAssistantMessage(runId: string, turnId: string, sessionId: string, content: string): void {
+    const message = {
+      id: `msg_${randomUUID()}`,
+      role: "assistant" as const,
+      content,
+    };
+    this.emit(runId, MESSAGE_START, { message }, { sessionId, turnId });
+    this.emit(runId, MESSAGE_UPDATE, {
+      messageId: message.id,
+      role: "assistant",
+      delta: content,
+      content,
+    }, { sessionId, turnId });
+    this.emit(runId, MESSAGE_END, { message }, { sessionId, turnId });
+  }
+
+  private emitSystemEvent<T extends HarnessEventType>(
+    type: T,
+    data: HarnessEventDataMap[T],
+  ): void {
+    const session = this.currentSession();
+    if (!session) {
+      this.notify();
+      return;
+    }
+    this.emit(`run_${randomUUID()}`, type, data, {
+      sessionId: session.id,
     });
   }
 
@@ -316,13 +440,22 @@ class FileBackedAgentHarness implements AgentHarness {
     runId: string,
     type: T,
     data: HarnessEventDataMap[T],
-    options?: { sessionId?: string; relatedToolCallId?: string; parentEventId?: string },
+    options?: {
+      sessionId?: string;
+      turnId?: string;
+      relatedToolCallId?: string;
+      parentEventId?: string;
+    },
   ) {
-    const session = this.currentSession() ?? this.ensureSession("Untitled");
-    const sessionId = options?.sessionId ?? session.id;
+    const session = options?.sessionId
+      ? this.sessions.find((item) => item.id === options.sessionId)
+      : this.currentSession();
+    const targetSession = session ?? this.ensureSession("Untitled");
     const event = makeHarnessEvent({
+      workspaceId: this.workspace.id,
+      sessionId: options?.sessionId ?? targetSession.id,
       runId,
-      sessionId,
+      turnId: options?.turnId,
       sequence: ++this.sequence,
       type,
       data,
@@ -330,11 +463,11 @@ class FileBackedAgentHarness implements AgentHarness {
       parentEventId: options?.parentEventId,
     });
     const storedEvent = event as AnyHarnessEvent;
-    this.events = [...this.events, storedEvent];
-    if (session) {
-      const updated = this.storage.appendEvent(this.workspace.id, session, storedEvent);
-      this.sessions = this.sessions.map((item) => item.id === updated.id ? updated : item);
+    if (targetSession.id === this.currentSessionId) {
+      this.events = [...this.events, storedEvent];
     }
+    const updated = this.storage.appendEvent(this.workspace.id, targetSession, storedEvent);
+    this.sessions = this.sessions.map((item) => item.id === updated.id ? updated : item);
     this.extensions.emit(storedEvent);
     this.notify();
     return event;
@@ -357,13 +490,23 @@ class FileBackedAgentHarness implements AgentHarness {
   private requestConfirmation(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse> {
     return new Promise((resolveResponse) => {
       const callId = randomUUID();
-      this.pendingConfirmation = { callId, ...request };
+      const runId = this.activeRunId ?? `run_${randomUUID()}`;
+      const turnId = this.activeTurnId ?? undefined;
+      const sessionId = this.activeSessionId ?? this.currentSession()?.id;
+      const confirmRequest = { callId, ...request };
+      this.pendingConfirmation = confirmRequest;
       this.confirmationResolvers.set(callId, (response) => {
         this.confirmationResolvers.delete(callId);
         this.pendingConfirmation = null;
-        this.notify();
+        if (sessionId) {
+          this.emit(runId, CONFIRMATION_ANSWERED, { response }, { sessionId, turnId });
+        }
         resolveResponse(response);
+        this.notify();
       });
+      if (sessionId) {
+        this.emit(runId, CONFIRMATION_REQUESTED, { request: confirmRequest }, { sessionId, turnId });
+      }
       this.notify();
     });
   }
@@ -371,15 +514,41 @@ class FileBackedAgentHarness implements AgentHarness {
   private requestQuestion(input: Omit<AskQuestionRequest, "callId">): Promise<AskQuestionResponse> {
     return new Promise((resolveResponse) => {
       const callId = randomUUID();
-      this.pendingQuestion = { callId, ...input };
+      const runId = this.activeRunId ?? `run_${randomUUID()}`;
+      const turnId = this.activeTurnId ?? undefined;
+      const sessionId = this.activeSessionId ?? this.currentSession()?.id;
+      const request = { callId, ...input };
+      this.pendingQuestion = request;
       this.questionResolvers.set(callId, (response) => {
         this.questionResolvers.delete(callId);
         this.pendingQuestion = null;
-        this.notify();
+        if (sessionId) {
+          this.emit(runId, QUESTION_ANSWERED, { response }, { sessionId, turnId });
+        }
         resolveResponse(response);
+        this.notify();
       });
+      if (sessionId) {
+        this.emit(runId, QUESTION_REQUESTED, { request }, { sessionId, turnId });
+      }
       this.notify();
     });
+  }
+
+  private cancelPendingInteractions(): void {
+    if (this.pendingConfirmation) {
+      const request = this.pendingConfirmation;
+      this.respondToConfirmation(request.callId, false);
+    }
+    if (this.pendingQuestion) {
+      const request = this.pendingQuestion;
+      this.respondToQuestion({
+        callId: request.callId,
+        answer: "",
+        isManual: true,
+        cancelled: true,
+      });
+    }
   }
 
   private ensureSession(firstInput: string): Session {
@@ -411,9 +580,10 @@ function parseCommandInput(input: string): { name: string; args: string[] } | nu
   return { name: name.toLowerCase(), args };
 }
 
-function findLastUserInputIndex(events: readonly AnyHarnessEvent[]): number {
+function findLastCompletedTurnEnd(events: readonly AnyHarnessEvent[]): AnyHarnessEvent | null {
   for (let index = events.length - 1; index >= 0; index--) {
-    if (events[index].type === USER_INPUT) return index;
+    const event = events[index];
+    if (event.type === TURN_END && !event.data.cancelled) return event;
   }
-  return -1;
+  return null;
 }

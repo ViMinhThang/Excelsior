@@ -10,20 +10,12 @@ const packages = [
     target: "packages/core/dist",
   },
   {
-    source: "dist/packages/run-runtime/src",
-    target: "packages/run-runtime/dist",
-  },
-  {
     source: "dist/packages/agent-host/src",
     target: "packages/agent-host/dist",
   },
   {
     source: "dist/packages/agent-harness/src",
     target: "packages/agent-harness/dist",
-  },
-  {
-    source: "dist/packages/agent-storage/src",
-    target: "packages/agent-storage/dist",
   },
   {
     source: "dist/apps/tui/src",
