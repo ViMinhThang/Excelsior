@@ -20,7 +20,6 @@ export default defineConfig({
       },
       external: [
         "electron",
-        "better-sqlite3",
         ...builtinModules,
         ...builtinModules.map((m) => `node:${m}`),
       ],

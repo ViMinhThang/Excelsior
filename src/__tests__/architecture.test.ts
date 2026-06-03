@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 
@@ -75,55 +75,25 @@ describe("package architecture boundaries", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("keeps @excelsior/projection independent from app and host code", () => {
-    const forbiddenImportPatterns = [
-      "@excelsior/agent-host",
-      "@excelsior/core",
-      "react",
-      "ink",
-      "better-sqlite3",
-      "@ai-sdk/",
-      "ai",
-      "@octokit/rest",
-      "apps/",
-      "../agent-host",
-      "../core",
-    ];
-    const importPattern = /(?:import|export)\s+(?:[^"']+\s+from\s+)?["']([^"']+)["']/g;
-
-    const offenders = sourceFiles("packages/projection")
-      .map((file) => ({
-        file,
-        text: readFileSync(file, "utf-8"),
-      }))
-      .filter(({ text }) => {
-        const imports = [...text.matchAll(importPattern)].map((match) => match[1]);
-        return imports.some((source) =>
-          forbiddenImportPatterns.some((pattern) => source.includes(pattern)),
-        );
-      })
-      .map(({ file }) => file);
-
-    expect(offenders).toEqual([]);
+  it("keeps removed legacy runtime and storage packages out of the workspace", () => {
+    expect(existsSync("packages/run-runtime")).toBe(false);
+    expect(existsSync("packages/agent-storage")).toBe(false);
   });
 
-  it("keeps @excelsior/run-runtime independent from app and host code", () => {
+  it("does not import removed legacy runtime or storage packages", () => {
     const forbiddenImportPatterns = [
-      "@excelsior/agent-host",
-      "@excelsior/core",
-      "react",
-      "ink",
+      "@excelsior/run-runtime",
+      "@excelsior/agent-storage",
       "better-sqlite3",
-      "@ai-sdk/",
-      "ai",
-      "@octokit/rest",
-      "apps/",
-      "../agent-host",
-      "../core",
+      "AgentApplication",
+      "LocalAgentHost",
+      "storageEngine",
     ];
     const importPattern = /(?:import|export)\s+(?:[^"']+\s+from\s+)?["']([^"']+)["']/g;
 
-    const offenders = sourceFiles("packages/run-runtime")
+    const sourceTextPattern = /\b(AgentApplication|LocalAgentHost|storageEngine)\b/;
+    const offenders = sourceFiles("packages")
+      .concat(sourceFiles("apps"))
       .map((file) => ({
         file,
         text: readFileSync(file, "utf-8"),
@@ -132,7 +102,7 @@ describe("package architecture boundaries", () => {
         const imports = [...text.matchAll(importPattern)].map((match) => match[1]);
         return imports.some((source) =>
           forbiddenImportPatterns.some((pattern) => source.includes(pattern)),
-        );
+        ) || sourceTextPattern.test(text);
       })
       .map(({ file }) => file);
 

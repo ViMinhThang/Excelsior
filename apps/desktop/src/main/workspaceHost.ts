@@ -1,12 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { AgentClientState } from "@excelsior/client";
-import {
-  AgentApplication,
-  storageEngine,
-  LocalAgentHost,
-} from "@excelsior/agent-host";
-import type { Workspace } from "@excelsior/core";
+import { HarnessAgentHost } from "@excelsior/agent-host";
 
 export type WorkspaceTreeNode = {
   name: string;
@@ -60,7 +55,7 @@ export function buildWorkspaceTree(
 }
 
 export class DesktopWorkspaceHost {
-  private agentHost: LocalAgentHost | null = null;
+  private agentHost: HarnessAgentHost | null = null;
   private stateChangeUnsubscribe: (() => void) | null = null;
   private currentWorkspaceRoot: string | null = null;
 
@@ -71,19 +66,8 @@ export class DesktopWorkspaceHost {
   initializeWorkspace(rootPath: string): AgentClientState {
     this.disposeHost();
 
-    const workspaces = storageEngine.workspaces.loadAll();
-    let workspace: Workspace | undefined = workspaces.find((item: Workspace) =>
-      path.resolve(item.rootPath) === path.resolve(rootPath)
-    );
-
-    if (!workspace) {
-      const workspaceName = path.basename(rootPath) || "Excelsior Workspace";
-      workspace = storageEngine.workspaces.create(workspaceName, rootPath);
-    }
-
     this.currentWorkspaceRoot = rootPath;
-    const application = new AgentApplication(workspace!.id);
-    this.agentHost = new LocalAgentHost({ application });
+    this.agentHost = new HarnessAgentHost({ workspaceRoot: rootPath });
     this.stateChangeUnsubscribe = this.agentHost.subscribe(() => {
       if (this.agentHost) {
         this.onStateChanged(this.agentHost.getState());
@@ -99,7 +83,7 @@ export class DesktopWorkspaceHost {
       : [];
   }
 
-  requireHost(): LocalAgentHost {
+  requireHost(): HarnessAgentHost {
     if (!this.agentHost) {
       throw new Error("Excelsior Agent Host is not yet initialized. Please select a workspace.");
     }

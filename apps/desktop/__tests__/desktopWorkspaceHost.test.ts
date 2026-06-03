@@ -8,40 +8,40 @@ import {
 } from "../src/main/workspaceHost.js";
 
 const agentHostMock = vi.hoisted(() => ({
-  applications: [] as Array<{ workspaceId?: string }>,
   hosts: [] as Array<{
     disposed: boolean;
     unsubscribed: boolean;
     listener: (() => void) | null;
-    state: { workspaceId: string };
+    workspaceRoot?: string;
+    state: ReturnType<typeof createState>;
     emitState(): void;
   }>,
-  workspaces: [] as Array<{
-    id: string;
-    name: string;
-    rootPath: string;
-    createdAt: string;
-    updatedAt: string;
-  }>,
-  createdWorkspaces: [] as Array<{ name: string; rootPath: string }>,
 }));
 
-vi.mock("@excelsior/agent-host", () => {
-  class AgentApplication {
-    constructor(readonly workspaceId?: string) {
-      agentHostMock.applications.push({ workspaceId });
-    }
-  }
+function createState(rootPath = "") {
+  return {
+    displayBlocks: [],
+    isLoading: false,
+    sessions: [],
+    currentSessionId: null,
+    workspace: { id: "ws_harness", name: "Harness", rootPath },
+    mode: "act" as const,
+    pendingConfirmation: null,
+    pendingQuestion: null,
+  };
+}
 
-  class LocalAgentHost {
+vi.mock("@excelsior/agent-host", () => {
+  class HarnessAgentHost {
     disposed = false;
     unsubscribed = false;
     listener: (() => void) | null = null;
-    state: { workspaceId: string };
+    workspaceRoot?: string;
+    state = createState();
 
-    constructor(options: { application?: AgentApplication } = {}) {
-      const application = options.application ?? new AgentApplication();
-      this.state = { workspaceId: application.workspaceId ?? "ws_unknown" };
+    constructor(options: { workspaceRoot?: string } = {}) {
+      this.workspaceRoot = options.workspaceRoot;
+      this.state = createState(options.workspaceRoot);
       agentHostMock.hosts.push(this);
     }
 
@@ -65,28 +65,8 @@ vi.mock("@excelsior/agent-host", () => {
     }
   }
 
-  const storageEngine = {
-    workspaces: {
-      loadAll: () => [...agentHostMock.workspaces],
-      create: (name: string, rootPath: string) => {
-        agentHostMock.createdWorkspaces.push({ name, rootPath });
-        const workspace = {
-          id: `ws_created_${agentHostMock.createdWorkspaces.length}`,
-          name,
-          rootPath,
-          createdAt: "",
-          updatedAt: "",
-        };
-        agentHostMock.workspaces.unshift(workspace);
-        return workspace;
-      },
-    },
-  };
-
   return {
-    AgentApplication,
-    LocalAgentHost,
-    storageEngine,
+    HarnessAgentHost,
   };
 });
 
@@ -94,10 +74,7 @@ describe("desktop workspace host", () => {
   let workspaceRoot: string;
 
   beforeEach(async () => {
-    agentHostMock.applications.length = 0;
     agentHostMock.hosts.length = 0;
-    agentHostMock.workspaces.length = 0;
-    agentHostMock.createdWorkspaces.length = 0;
     workspaceRoot = await mkdtemp(join(tmpdir(), "excelsior-workspace-tree-"));
   });
 
@@ -127,7 +104,7 @@ describe("desktop workspace host", () => {
     });
   });
 
-  it("keeps host lifecycle behind a requireHost seam", () => {
+  it("keeps host lifecycle behind requireHost", () => {
     const workspaceHost = new DesktopWorkspaceHost(vi.fn());
 
     expect(() => workspaceHost.requireHost()).toThrow(
@@ -135,26 +112,19 @@ describe("desktop workspace host", () => {
     );
   });
 
-  it("initializes an existing workspace host and forwards state changes", () => {
-    agentHostMock.workspaces.push({
-      id: "ws_existing",
-      name: "Existing",
-      rootPath: workspaceRoot,
-      createdAt: "",
-      updatedAt: "",
-    });
+  it("initializes a harness-backed workspace host and forwards state changes", () => {
     const onStateChanged = vi.fn();
     const workspaceHost = new DesktopWorkspaceHost(onStateChanged);
 
     const state = workspaceHost.initializeWorkspace(workspaceRoot);
     agentHostMock.hosts[0].emitState();
 
-    expect(agentHostMock.applications).toEqual([{ workspaceId: "ws_existing" }]);
-    expect(state).toEqual({ workspaceId: "ws_existing" });
-    expect(onStateChanged).toHaveBeenCalledWith({ workspaceId: "ws_existing" });
+    expect(agentHostMock.hosts[0].workspaceRoot).toBe(workspaceRoot);
+    expect(state.workspace.rootPath).toBe(workspaceRoot);
+    expect(onStateChanged).toHaveBeenCalledWith(state);
   });
 
-  it("creates missing workspaces and disposes the previous host on replacement", async () => {
+  it("disposes the previous harness host on replacement", async () => {
     const nextRoot = await mkdtemp(join(tmpdir(), "excelsior-workspace-next-"));
     const workspaceHost = new DesktopWorkspaceHost(vi.fn());
 
@@ -164,13 +134,10 @@ describe("desktop workspace host", () => {
 
       workspaceHost.initializeWorkspace(nextRoot);
 
-      expect(agentHostMock.createdWorkspaces).toEqual([
-        { name: workspaceRoot.split(/[\\/]/).at(-1), rootPath: workspaceRoot },
-        { name: nextRoot.split(/[\\/]/).at(-1), rootPath: nextRoot },
-      ]);
       expect(firstHost.disposed).toBe(true);
       expect(firstHost.unsubscribed).toBe(true);
       expect(agentHostMock.hosts[1].disposed).toBe(false);
+      expect(agentHostMock.hosts[1].workspaceRoot).toBe(nextRoot);
     } finally {
       await rm(nextRoot, { recursive: true, force: true });
     }

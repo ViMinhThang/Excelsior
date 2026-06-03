@@ -7,14 +7,18 @@ import {
   shouldEnableModalKeymap,
 } from "../src/hooks/useChatKeymaps.js";
 import {
-  buildChatModeKeymapContext,
-  getChatModeKeymaps,
-  getCommandInputWithSelection,
   type BuildChatModeKeymapContextInput,
-  type ChatMode,
-  type InputModeKeymapContext,
-  type ChatModeKeymapContext,
-} from "../src/chatModes/index.js";
+  buildChatModeKeymapContext,
+} from "../src/chatModes/keymapContext.js";
+import {
+  getChatModeKeymaps,
+} from "../src/chatModes/registry.js";
+import { getCommandInputWithSelection } from "../src/chatModes/inputMode.js";
+import type {
+  ChatMode,
+  InputModeKeymapContext,
+  ChatModeKeymapContext,
+} from "../src/chatModes/types.js";
 
 function makeKeymapContext(
   chatMode: ChatMode,

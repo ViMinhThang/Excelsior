@@ -1,12 +1,10 @@
 import type {
   ChatMode,
   ChatModeKeymapContext,
-} from "../chatModes/index.js";
-import {
-  shouldEnableInputModeKeymap,
-  shouldEnableModalModeKeymap,
-  useChatModeKeymaps,
-} from "../chatModes/index.js";
+} from "../chatModes/types.js";
+import { shouldEnableInputModeKeymap } from "../chatModes/inputMode.js";
+import { shouldEnableModalModeKeymap } from "../chatModes/modalKeymaps.js";
+import { useChatModeKeymaps } from "../chatModes/useChatModeKeymaps.js";
 import { useKeymap } from "./useKeymap.js";
 
 type UseChatKeymapsOptions = ChatModeKeymapContext & {

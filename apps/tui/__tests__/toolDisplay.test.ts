@@ -154,7 +154,7 @@ describe("tool display model", () => {
     });
 
     expect(display.label).toBe("Edit");
-    expect(display.command).toBe("edit demo.ts");
+    expect(display.command).toBe("edit(demo.ts)");
     expect(display.fileChangePreview).toMatchObject({
       action: "edit",
       oldLines: ["old"],

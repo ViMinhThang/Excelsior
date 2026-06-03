@@ -68,7 +68,7 @@ function formatFileChangeCommand(
   filePath?: string,
 ): string {
   const target = filePath ?? stringifyToolArgValue(args?.filePath || args?.path);
-  return target ? `${action} ${target}` : action;
+  return target ? `${action}(${target})` : action;
 }
 
 export const writeDisplayConfig: ToolDisplayConfig = {

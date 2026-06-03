@@ -20,11 +20,11 @@
     "check:unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
     "check:test-unused": "tsc -p tsconfig.test.json --noEmit --noUnusedLocals --noUnusedParameters",
     "test": "vitest run",
-    "test:agent-host": "vitest run packages/agent-host/__tests__/agentHost.test.ts packages/agent-host/__tests__/agentApplication.test.ts packages/agent-host/__tests__/agentCommands.test.ts",
+    "test:agent-host": "vitest run packages/agent-host/__tests__/harnessAgentHost.test.ts",
     "test:arch": "vitest run src/__tests__/architecture.test.ts",
-    "test:projection": "vitest run packages/projection/__tests__/projectionFramework.test.ts packages/agent-host/__tests__/chatTranscriptProjection.test.ts packages/agent-host/__tests__/aiHistoryProjection.test.ts packages/agent-host/__tests__/subAgentProjection.test.ts packages/agent-host/__tests__/projectionPolicy.test.ts",
-    "test:runtime": "vitest run packages/run-runtime/__tests__/runRuntimeFramework.test.ts packages/run-runtime/__tests__/run.test.ts packages/agent-host/__tests__/runRecorderIntegration.test.ts",
-    "test:tools": "vitest run packages/agent-host/__tests__/fsTools.test.ts packages/agent-host/__tests__/tools/runCommand.test.ts packages/agent-host/__tests__/spawnSubAgent.test.ts",
+    "test:projection": "vitest run packages/agent-harness/__tests__/projection.test.ts",
+    "test:runtime": "vitest run packages/agent-harness/__tests__/runController.test.ts packages/agent-harness/__tests__/harness.test.ts",
+    "test:tools": "vitest run packages/agent-harness/__tests__/tools.test.ts",
     "test:watch": "vitest"
   },
   "keywords": [],
@@ -34,7 +34,6 @@
     "@ai-sdk/deepseek": "^2.0.32",
     "@octokit/rest": "^22.0.1",
     "ai": "^6.0.175",
-    "better-sqlite3": "^12.9.0",
     "chalk": "^5.6.2",
     "cli-highlight": "^2.1.11",
     "ink": "^7.0.1",
@@ -44,7 +43,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "ink-testing-library": "^4.0.0",

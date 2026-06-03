@@ -1,0 +1,126 @@
+import type { LanguageModel } from "ai";
+import type { z } from "zod";
+import type {
+  AgentClientState,
+  AgentMode,
+  AppSettings,
+  AskQuestionResponse,
+  CommandDefinition,
+  CommandResult,
+  ConfirmRequest,
+  ConfirmResponse,
+  SendOptions,
+  Session,
+} from "@excelsior/core";
+import type { AnyHarnessEvent, HarnessEvent } from "./events.js";
+
+export type HarnessSettings = AppSettings;
+export type HarnessSnapshot = AgentClientState;
+
+export type ToolCapability =
+  | "fs:read"
+  | "fs:write"
+  | "shell"
+  | "network"
+  | "git"
+  | "sub-agent";
+
+export interface HarnessProvider {
+  id: string;
+  displayName: string;
+  createModel(settings: HarnessSettings): LanguageModel;
+}
+
+export interface ToolResult {
+  content: string;
+  isError?: boolean;
+}
+
+export interface ToolExecutionContext {
+  workspaceRoot: string;
+  mode: AgentMode;
+  abortSignal?: AbortSignal;
+  confirm(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse>;
+  askQuestion(input: {
+    question: string;
+    options: Array<{ id: string; label: string; description?: string }>;
+    allowManual: boolean;
+  }): Promise<AskQuestionResponse>;
+  sendSubAgent(input: { role: string; prompt: string }): Promise<string>;
+}
+
+export interface HarnessTool<TInput = unknown> {
+  name: string;
+  description: string;
+  inputSchema: z.ZodType<TInput>;
+  capabilities: ToolCapability[];
+  execute(input: TInput, ctx: ToolExecutionContext): Promise<ToolResult>;
+}
+
+export type HarnessCommandHandler = (
+  args: string[],
+  harness: AgentHarness,
+) => CommandResult | Promise<CommandResult>;
+
+export interface HarnessCommand {
+  definition: CommandDefinition;
+  execute: HarnessCommandHandler;
+}
+
+export interface HarnessExtensionApi {
+  registerTool(tool: HarnessTool): void;
+  registerCommand(command: HarnessCommand): void;
+  registerProvider(provider: HarnessProvider): void;
+  onEvent(handler: (event: HarnessEvent) => void): void;
+}
+
+export interface HarnessExtension {
+  name: string;
+  register(api: HarnessExtensionApi): void;
+}
+
+export interface ReviewCommandServices {
+  fetchPRDiff(prNumber: number): Promise<string>;
+  postPRComment(prNumber: number, body: string): Promise<string>;
+}
+
+export interface HarnessConfig {
+  workspaceRoot?: string;
+  workspaceId?: string;
+  dataDir?: string;
+  extensions?: HarnessExtension[];
+  reviewServices?: ReviewCommandServices;
+}
+
+export interface HarnessCatalog {
+  commands: CommandDefinition[];
+  settings: HarnessSettings;
+}
+
+export interface AgentHarness {
+  getSnapshot(): HarnessSnapshot;
+  getCatalog(): HarnessCatalog;
+  subscribe(listener: () => void): () => void;
+  send(input: { content: string; mode: AgentMode; sessionId?: string } & SendOptions): Promise<void>;
+  cancel(): void;
+  clear(): void;
+  createSession(title?: string): Session;
+  switchSession(sessionId: string): Promise<void>;
+  deleteSession(sessionId: string): Promise<void>;
+  deleteAllSessions(): Promise<void>;
+  renameSession(sessionId: string, title: string): void;
+  executeCommand(input: string): Promise<CommandResult>;
+  saveSettings(settings: Partial<HarnessSettings>): void;
+  respondToConfirmation(callId: string, approved: boolean): void;
+  respondToQuestion(response: AskQuestionResponse): void;
+  revertLastTurn(): Promise<CommandResult>;
+  compactCurrentSession(triggerMode?: "manual" | "auto"): Promise<void>;
+  setMode(mode: AgentMode): void;
+  toggleMode(): AgentMode;
+  dispose(): void;
+}
+
+export interface StoredSessionFile {
+  session: Session;
+  events: AnyHarnessEvent[];
+}

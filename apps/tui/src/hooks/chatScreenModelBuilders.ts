@@ -17,7 +17,7 @@ import type {
   ChatModeRenderContext,
   CommandSuggestionState,
   SubAgentBlock,
-} from "../chatModes/index.js";
+} from "../chatModes/types.js";
 
 export interface VisibilityModel<TProps> {
   visible: boolean;
@@ -219,6 +219,7 @@ export function buildFooterModel(input: {
   commandCount: number;
   commandsExpanded: boolean;
   workspaceRootPath: string;
+  totalTokens?: number;
 }): FooterBarProps {
   const footer: FooterBarProps = {
     chatMode: input.chatMode,
@@ -229,6 +230,7 @@ export function buildFooterModel(input: {
     commandCount: input.commandCount,
     commandsExpanded: input.commandsExpanded,
     workspaceRootPath: input.workspaceRootPath,
+    totalTokens: input.totalTokens,
   };
   if (input.pendingKind) footer.pendingKind = input.pendingKind;
   return footer;

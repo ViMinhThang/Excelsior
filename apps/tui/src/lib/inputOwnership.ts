@@ -1,4 +1,4 @@
-import type { ChatMode } from "../chatModes/index.js";
+import type { ChatMode } from "../chatModes/types.js";
 
 export type TuiInputOwner =
   | "command-palette"

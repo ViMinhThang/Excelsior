@@ -38,7 +38,7 @@ export const viewDisplayConfig: ToolDisplayConfig = {
 export const lsDisplayConfig: ToolDisplayConfig = {
   formatCommand: (args: Record<string, unknown> | null) => {
     const directoryPath = String(args?.directoryPath || args?.path || ".");
-    return `Listfiles ${directoryPath}`;
+    return `Listfiles(${directoryPath})`;
   },
   formatSummaryLine: (_args: Record<string, unknown> | null, content: string) => {
     const trimmed = content.trim();

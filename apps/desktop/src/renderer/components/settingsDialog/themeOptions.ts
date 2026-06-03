@@ -1,5 +1,3 @@
-import type { DesktopTheme } from "../../themeTypes.ts";
-
 export const DARK_THEMES = [
   {
     id: "one-dark-pro" as const,
@@ -31,6 +29,12 @@ export const LIGHT_THEMES = [
 ] as const;
 
 export const ALL_THEMES = [...DARK_THEMES, ...LIGHT_THEMES] as const;
+
+export type DesktopTheme = (typeof ALL_THEMES)[number]["id"];
+
+export function isDesktopTheme(theme: string | null): theme is DesktopTheme {
+  return ALL_THEMES.some((option) => option.id === theme);
+}
 
 export function isThemeDark(theme: DesktopTheme): boolean {
   return theme === "one-dark-pro" || theme === "tokyo-night";
