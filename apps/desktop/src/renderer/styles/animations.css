@@ -16,13 +16,6 @@
   transition: transform var(--transition-snappy) var(--ease-snappy);
 }
 
-.scale-snappy:hover {
-  transform: scale(1.015);
-}
-
-.scale-snappy:active {
-  transform: scale(0.98);
-}
 
 @keyframes fade-in-snappy {
   from {

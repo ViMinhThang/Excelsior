@@ -17,9 +17,11 @@ import {
 type SettingsDialogProps = {
   settings: AppSettings | null;
   theme: DesktopTheme;
+  font: string;
   onClose: () => void;
-  onSave: (settings: Partial<AppSettings>, theme: DesktopTheme) => void;
+  onSave: (settings: Partial<AppSettings>, theme: DesktopTheme, font: string) => void;
   onThemeChange: (theme: DesktopTheme) => void;
+  onFontChange: (font: string) => void;
 };
 
 type SettingsTab = "credentials" | "runtime" | "appearance";
@@ -41,9 +43,11 @@ function isUnlimitedToolLoopSetting(value: string | undefined): boolean {
 export function SettingsDialog({
   settings,
   theme,
+  font,
   onClose,
   onSave,
   onThemeChange,
+  onFontChange,
 }: SettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("credentials");
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -54,6 +58,7 @@ export function SettingsDialog({
   );
   const [themeInput, setThemeInput] = useState<DesktopTheme>(theme);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => isThemeDark(theme));
+  const [fontInput, setFontInput] = useState(font);
 
   useEffect(() => {
     const toolLoopSteps = settings?.agentToolLoopSteps;
@@ -64,7 +69,8 @@ export function SettingsDialog({
     setToolLoopStepInput(getFiniteToolLoopSteps(toolLoopSteps));
     setThemeInput(theme);
     setIsDarkMode(isThemeDark(theme));
-  }, [settings, theme]);
+    setFontInput(font);
+  }, [settings, theme, font]);
 
   const handleModeToggle = (nextDark: boolean) => {
     setIsDarkMode(nextDark);
@@ -158,8 +164,13 @@ export function SettingsDialog({
               <AppearanceTab
                 isDarkMode={isDarkMode}
                 themeInput={themeInput}
+                fontInput={fontInput}
                 onModeToggle={handleModeToggle}
                 onThemeChange={handleThemeChange}
+                onFontChange={(nextFont) => {
+                  setFontInput(nextFont);
+                  onFontChange(nextFont);
+                }}
               />
             )}
           </div>
@@ -184,6 +195,7 @@ export function SettingsDialog({
                       : getFiniteToolLoopSteps(toolLoopStepInput),
                   },
                   themeInput,
+                  fontInput,
                 )
               }
               className="settings-action settings-action-primary scale-snappy transition-snappy-colors"

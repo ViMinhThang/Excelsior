@@ -81,6 +81,37 @@
 }
 
 /* ============================
+   THEME: Nordic Blue (Dark)
+   ============================ */
+:root[data-theme="nordic-blue"] {
+  --brand-bg: #2e3440;
+  --brand-surface: #242933;
+  --brand-panel: #3b4252;
+  --brand-border: #434c5e;
+  --brand-accent: #88c0d0;
+  --brand-accent-hover: #81a1c1;
+  --brand-accent-contrast: #2e3440;
+  --brand-text-muted: #647280;
+  --brand-text-light: #d8dee9;
+  --brand-text-strong: #eceff4;
+  --brand-sidebar-footer: #1d212a;
+  --brand-user-bubble: #3b4252;
+  --brand-composer: rgba(36, 41, 51, 0.92);
+
+  --titlebar-bg: #242933;
+  --titlebar-text: #4c566a;
+  --scrollbar-track: #2e3440;
+  --scrollbar-thumb: #434c5e;
+  --scrollbar-thumb-hover: #4c566a;
+  --codeblock-bg: #242933;
+  --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-snappy: 160ms;
+  --gold-glow: rgba(136, 192, 208, 0.12);
+  --gold-glow-strong: rgba(136, 192, 208, 0.25);
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* ============================
    THEME: Gruvbox Light
    ============================ */
 :root[data-theme="gruvbox"] {
