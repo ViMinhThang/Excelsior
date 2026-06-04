@@ -21,6 +21,7 @@ import {
   TOOL_EXECUTION_UPDATE,
   TURN_END,
   TURN_START,
+  REASONING_END,
   type HarnessEventEmitter,
 } from "./events.js";
 import { toModelMessages, AssistantStateMachine } from "./context/index.js";
@@ -78,6 +79,8 @@ export class RunController {
     let activeMessages = [...input.messages];
     let stepCount = 0;
     let failureMessage: string | undefined;
+    let stepReasoning = "";
+    let reasoningId = "";
 
     try {
       while (true) {
@@ -99,6 +102,8 @@ export class RunController {
 
         let stepHasToolCalls = false;
         let stepText = "";
+        stepReasoning = "";
+        reasoningId = "";
         const stepToolCalls: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }> = [];
         const stepToolResults: StepToolResult[] = [];
 
@@ -118,6 +123,20 @@ export class RunController {
               break;
             case "text-end":
               state.endMessage(`msg_${runPrefix}_${part.id}`);
+              break;
+            case "reasoning-start":
+              reasoningId = part.id;
+              state.startReasoning(part.id);
+              break;
+            case "reasoning-delta":
+              stepReasoning += part.text;
+              state.updateReasoning(part.id, part.text);
+              break;
+            case "reasoning-end":
+              state.endReasoning();
+              if (stepReasoning) {
+                input.emit(REASONING_END, { messageId: part.id, content: stepReasoning });
+              }
               break;
             case "tool-input-start":
               state.startTool(part.id, part.toolName);
@@ -239,6 +258,9 @@ export class RunController {
             ? "Tool execution was cancelled before the tool input completed."
             : `Tool input failed before execution.${failureMessage ? ` ${failureMessage}` : ""}`,
         );
+        if (stepReasoning && reasoningId) {
+          input.emit(REASONING_END, { messageId: reasoningId, content: stepReasoning });
+        }
       }
       const endState = { cancelled: cancelled || failed };
       input.emit(TURN_END, endState);
