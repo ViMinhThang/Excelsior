@@ -87,6 +87,42 @@ export function useChatInteractionController(): ChatScreenModel {
   const inputHistory = useInputHistory(derivedDisplayBlocks);
   const subAgentNav = useSubAgentNavigation(derivedDisplayBlocks);
   const [commandsExpanded, setCommandsExpanded] = useState(false);
+  const [historyRemountKey, setHistoryRemountKey] = useState(0);
+
+  const lastUserIndex = useMemo(() => {
+    for (let i = derivedDisplayBlocks.length - 1; i >= 0; i--) {
+      if (derivedDisplayBlocks[i].type === "user") {
+        return i;
+      }
+    }
+    return -1;
+  }, [derivedDisplayBlocks]);
+
+  const prevLastUserIndexRef = useRef(lastUserIndex);
+  const prevSessionIdRef = useRef(currentSessionId);
+
+  useEffect(() => {
+    let shouldRemount = false;
+    if (currentSessionId !== prevSessionIdRef.current) {
+      prevSessionIdRef.current = currentSessionId;
+      prevLastUserIndexRef.current = lastUserIndex;
+      shouldRemount = true;
+    } else if (lastUserIndex !== prevLastUserIndexRef.current) {
+      prevLastUserIndexRef.current = lastUserIndex;
+      shouldRemount = true;
+    }
+
+    if (shouldRemount) {
+      setHistoryRemountKey((k) => k + 1);
+    }
+  }, [lastUserIndex, currentSessionId]);
+
+  useEffect(() => {
+    if (historyRemountKey > 0) {
+      process.stdout.write("\u001b[2J\u001b[3J\u001b[H");
+    }
+  }, [historyRemountKey]);
+
   const command = useCommandResult(inputHistory.input);
   const confirmation = useToolConfirmation(
     pendingConfirmation,
@@ -248,6 +284,7 @@ export function useChatInteractionController(): ChatScreenModel {
       subAgents: subAgentNav.subAgentBlocks,
       subAgentIndex: subAgentNav.subAgentIndex,
       commandsExpanded,
+      historyRemountKey,
     }),
     pendingAction: buildPendingActionModel(
       confirmation.pending,

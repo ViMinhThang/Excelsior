@@ -97,7 +97,6 @@ export class AssistantStateMachine {
         messageId: this.assistant?.id ?? id,
         role: "assistant",
         delta,
-        content: (this.assistant?.content ?? "") + delta,
       },
     });
 
@@ -407,9 +406,12 @@ export class AssistantStateMachine {
       }
     } else if (event.type === MESSAGE_UPDATE) {
       this.flushTool(true);
+      const previousContent = this.assistant?.id === event.data.messageId
+        ? this.assistant.content
+        : "";
       this.assistant = {
         id: event.data.messageId,
-        content: event.data.content,
+        content: `${previousContent}${event.data.delta}`,
         timestamp: event.timestamp || new Date().toISOString(),
         frozen: false,
       };
@@ -542,11 +544,47 @@ export class AssistantStateMachine {
   }
 
   getCanonicalReadModel() {
-    this.flushAll(false);
     return {
-      displayBlocks: this.displayBlocks,
-      aiHistory: this.aiHistory,
+      displayBlocks: this.materializeDisplayBlocks(),
+      aiHistory: [...this.aiHistory],
     };
+  }
+
+  private materializeDisplayBlocks(): ProjectedBlock[] {
+    let blocks = [...this.displayBlocks];
+    if (this.assistant) {
+      blocks = upsertSnapshotBlock(blocks, {
+        type: "assistant",
+        id: this.snapshotBlockId(this.assistant.id, blocks),
+        content: this.assistant.content,
+        timestamp: this.assistant.timestamp,
+        ...(this.assistant.frozen ? { isFrozen: true as const } : {}),
+      });
+    }
+    if (this.reasoning) {
+      blocks = upsertSnapshotBlock(blocks, {
+        type: "reasoning",
+        id: this.snapshotBlockId(this.reasoning.id, blocks),
+        content: this.reasoning.content,
+        timestamp: this.reasoning.timestamp,
+        ...(this.reasoning.frozen ? { isFrozen: true as const } : {}),
+      });
+    }
+    if (this.tool) {
+      blocks = upsertSnapshotBlock(blocks, toolBlockFromDraft(
+        this.tool,
+        false,
+        this.subAgentStates.get(this.tool.id),
+      ));
+    }
+    return blocks;
+  }
+
+  private snapshotBlockId(id: string, blocks: readonly ProjectedBlock[]): string {
+    if (!blocks.some((block) => block.id === id)) return id;
+    let suffix = 2;
+    while (blocks.some((block) => block.id === `${id}:${suffix}`)) suffix++;
+    return `${id}:${suffix}`;
   }
 
   private nextDisplayBlockId(id: string): string {
@@ -713,16 +751,17 @@ function updateSubAgentState(
 
   if (event.type === "tool_end") {
     const status = event.isError ? "error" as const : "completed" as const;
+    const content = event.result ?? "";
     return {
       ...base,
       toolCalls: base.toolCalls.map((call) =>
         call.toolCallId === event.toolCallId
-          ? { ...call, toolName: event.toolName, toolArgs: event.toolArgs, status }
+          ? { ...call, toolName: event.toolName, toolArgs: event.toolArgs, status, content }
           : call
       ),
       parts: base.parts.map((part) =>
         part.type === "tool-call" && part.toolCallId === event.toolCallId
-          ? { ...part, toolName: event.toolName, toolArgs: event.toolArgs, status }
+          ? { ...part, toolName: event.toolName, toolArgs: event.toolArgs, status, content }
           : part
       ),
     };
@@ -763,23 +802,18 @@ function latestLine(text: string): string {
   return text.split(/\r?\n/).filter(Boolean).at(-1) ?? "";
 }
 
+function upsertSnapshotBlock(blocks: ProjectedBlock[], block: ProjectedBlock): ProjectedBlock[] {
+  const existingIndex = blocks.findIndex((item) => item.id === block.id);
+  if (existingIndex === -1) return [...blocks, block];
+  const next = [...blocks];
+  next[existingIndex] = block;
+  return next;
+}
+
 function stringifyToolArgs(value: unknown): string {
   if (typeof value === "string") return value;
   try {
     return JSON.stringify(value ?? {});
-  } catch {
-    return String(value);
-  }
-}
-
-function stringifyToolResult(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object" && "value" in value) {
-    const maybeValue = value as { value?: unknown };
-    if (typeof maybeValue.value === "string") return maybeValue.value;
-  }
-  try {
-    return JSON.stringify(value ?? "");
   } catch {
     return String(value);
   }

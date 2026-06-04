@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ERROR,
   MESSAGE_END,
@@ -13,7 +13,12 @@ import {
   type HarnessEventDataMap,
   type HarnessEventType,
 } from "../src/events.js";
-import { projectEventsToDisplayBlocks, projectEventsToMessages } from "../src/projection.js";
+import { AssistantStateMachine } from "../src/context/AssistantStateMachine.js";
+import {
+  ProjectionCache,
+  projectEventsToDisplayBlocks,
+  projectEventsToMessages,
+} from "../src/projection.js";
 
 function event<T extends HarnessEventType>(
   sequence: number,
@@ -45,7 +50,6 @@ describe("harness projector", () => {
         messageId: "msg_assistant",
         role: "assistant",
         delta: "hello",
-        content: "hello",
       }),
       event(4, MESSAGE_END, {
         message: { id: "msg_assistant", role: "assistant", content: "hello" },
@@ -123,6 +127,7 @@ describe("harness projector", () => {
           toolCallId: "call_child",
           toolName: "view",
           toolArgs: "{\"filePath\":\"package.json\"}",
+          result: "1: {\"name\":\"excelsior\"}",
           isError: false,
         },
       }),
@@ -148,10 +153,19 @@ describe("harness projector", () => {
           status: "done",
           latestLine: "done",
           fullOutput: "done",
-          toolCalls: [{ toolName: "view", status: "completed" }],
+          toolCalls: [{
+            toolName: "view",
+            status: "completed",
+            content: "1: {\"name\":\"excelsior\"}",
+          }],
           parts: [
             { type: "text", text: "reading\n" },
-            { type: "tool-call", toolName: "view", status: "completed" },
+            {
+              type: "tool-call",
+              toolName: "view",
+              status: "completed",
+              content: "1: {\"name\":\"excelsior\"}",
+            },
           ],
         },
       },
@@ -297,7 +311,6 @@ describe("harness projector", () => {
         messageId: "msg_step_txt-0",
         role: "assistant",
         delta: "first",
-        content: "first",
       }),
       event(3, MESSAGE_END, {
         message: { id: "msg_step_txt-0", role: "assistant", content: "first" },
@@ -309,7 +322,6 @@ describe("harness projector", () => {
         messageId: "msg_step_txt-0",
         role: "assistant",
         delta: "second",
-        content: "second",
       }),
       event(6, MESSAGE_END, {
         message: { id: "msg_step_txt-0", role: "assistant", content: "second" },
@@ -342,5 +354,65 @@ describe("harness projector", () => {
       { type: "reasoning", content: "I should check the folder structure first.", isFrozen: true },
       { type: "assistant", content: "Hello!", isFrozen: true },
     ]);
+  });
+
+  it("incrementally projects appended events without duplicating active drafts", () => {
+    const cache = new ProjectionCache();
+    const events = [
+      event(1, MESSAGE_START, {
+        message: { id: "msg_stream", role: "assistant", content: "" },
+      }),
+      event(2, MESSAGE_UPDATE, {
+        messageId: "msg_stream",
+        role: "assistant",
+        delta: "hel",
+      }),
+    ];
+
+    expect(cache.project(events).displayBlocks).toMatchObject([
+      { type: "assistant", id: "msg_stream", content: "hel" },
+    ]);
+    expect(cache.project(events).displayBlocks).toMatchObject([
+      { type: "assistant", id: "msg_stream", content: "hel" },
+    ]);
+
+    events.push(event(3, MESSAGE_UPDATE, {
+      messageId: "msg_stream",
+      role: "assistant",
+      delta: "lo",
+    }));
+
+    const blocks = cache.project(events).displayBlocks;
+    expect(blocks).toHaveLength(1);
+    expect(blocks).toMatchObject([
+      { type: "assistant", id: "msg_stream", content: "hello" },
+    ]);
+  });
+
+  it("only applies newly appended events after the first cached projection", () => {
+    const cache = new ProjectionCache();
+    const applyEvent = vi.spyOn(AssistantStateMachine.prototype, "applyEvent");
+    const events = [
+      event(1, MESSAGE_START, {
+        message: { id: "msg_stream", role: "assistant", content: "" },
+      }),
+      event(2, MESSAGE_UPDATE, {
+        messageId: "msg_stream",
+        role: "assistant",
+        delta: "hel",
+      }),
+    ];
+
+    cache.project(events);
+    expect(applyEvent).toHaveBeenCalledTimes(2);
+
+    events.push(event(3, MESSAGE_UPDATE, {
+      messageId: "msg_stream",
+      role: "assistant",
+      delta: "lo",
+    }));
+
+    cache.project(events);
+    expect(applyEvent).toHaveBeenCalledTimes(3);
   });
 });

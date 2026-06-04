@@ -33,7 +33,7 @@ export function findIncompleteEvents(events: readonly AnyHarnessEvent[], runId: 
       if (message) {
         openAssistantMessages.set(event.data.messageId, {
           id: message.id,
-          content: event.data.content,
+          content: `${message.content}${event.data.delta}`,
         });
       }
     } else if (event.type === MESSAGE_END && event.data.message.role === "assistant") {

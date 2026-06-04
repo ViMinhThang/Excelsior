@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { z } from "zod";
 import { SkillCatalog } from "./skills/SkillCatalog.js";
 import type {
   AgentMode,
@@ -19,7 +18,6 @@ import {
   QUESTION_ANSWERED,
   QUESTION_REQUESTED,
   SESSION_CHANGED,
-  type HarnessEventEmitter,
 } from "./events.js";
 import { EventBus } from "./EventBus.js";
 import { registerSkills } from "./skills/register.js";
@@ -35,7 +33,7 @@ import { revertLastCompletedTurn } from "./history/revert.js";
 import { findIncompleteEvents, emitRunFinalization } from "./history/runFinalizer.js";
 import { copyHarnessEvents, replayHarnessEvents } from "./inspector.js";
 import { createDeepSeekProvider } from "./provider.js";
-import { projectHarnessState } from "./projection.js";
+import { projectHarnessState, ProjectionCache } from "./projection.js";
 import { CommandRegistry, ExtensionRegistry, ProviderRegistry, ToolRegistry } from "./registries.js";
 import { RunController } from "./runController.js";
 import { FileHarnessStorage } from "./storage.js";
@@ -86,6 +84,8 @@ class HarnessStore implements AgentHarness {
   private steeringQueue: string[] = [];
   private readonly finalizedRunIds = new Set<string>();
   private readonly eventBus: EventBus;
+  private notifyTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly projectionCache = new ProjectionCache();
 
   constructor(config: HarnessConfig) {
     this.storage = new FileHarnessStorage(config.dataDir);
@@ -139,6 +139,7 @@ class HarnessStore implements AgentHarness {
   }
 
   getSnapshot(): HarnessSnapshot {
+    this.flushPendingSnapshot();
     return this.snapshot;
   }
 
@@ -411,6 +412,10 @@ class HarnessStore implements AgentHarness {
 
   dispose(): void {
     this.cancel();
+    if (this.notifyTimer) {
+      clearTimeout(this.notifyTimer);
+      this.notifyTimer = null;
+    }
     this.listeners.clear();
   }
 
@@ -524,6 +529,7 @@ class HarnessStore implements AgentHarness {
   private updateSnapshot(): void {
     this.snapshot = projectHarnessState({
       events: this.eventStore.events,
+      readModel: this.projectionCache.project(this.eventStore.events),
       isLoading: this.abortController !== null,
       sessions: this.sessionManager.sessions,
       currentSessionId: this.sessionManager.currentSessionId,
@@ -535,6 +541,21 @@ class HarnessStore implements AgentHarness {
   }
 
   private notify(): void {
+    if (this.notifyTimer) return;
+    this.notifyTimer = setTimeout(() => {
+      this.notifyTimer = null;
+      this.flushNotify();
+    }, 33);
+  }
+
+  private flushPendingSnapshot(): void {
+    if (!this.notifyTimer) return;
+    clearTimeout(this.notifyTimer);
+    this.notifyTimer = null;
+    this.updateSnapshot();
+  }
+
+  private flushNotify(): void {
     this.updateSnapshot();
     for (const listener of this.listeners) listener();
   }
