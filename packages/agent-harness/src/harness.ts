@@ -22,7 +22,6 @@ import {
   QUESTION_ANSWERED,
   QUESTION_REQUESTED,
   SESSION_CHANGED,
-  TURN_END,
   makeHarnessEvent,
   type AnyHarnessEvent,
   type HarnessEventDataMap,
@@ -30,18 +29,28 @@ import {
   type HarnessEventType,
 } from "./events.js";
 import { createBuiltInCommands } from "./commands.js";
+import {
+  buildCompactionNotice,
+  buildCompactionSummary,
+  buildRunContext,
+  loadProjectInstructions,
+} from "./context/index.js";
 import { GitHubReviewService } from "./github.js";
+import { revertLastCompletedTurn } from "./history/revert.js";
+import { copyHarnessEvents, replayHarnessEvents } from "./inspector.js";
 import { createDeepSeekProvider } from "./provider.js";
-import { projectEventsToMessages, projectHarnessState } from "./projection.js";
+import { projectHarnessState } from "./projection.js";
 import { CommandRegistry, ExtensionRegistry, ProviderRegistry, ToolRegistry } from "./registries.js";
 import { RunController } from "./runController.js";
 import { FileHarnessStorage } from "./storage.js";
-import { createBuiltInTools } from "./tools.js";
+import { createBuiltInTools } from "./tools/index.js";
 import type {
   AgentHarness,
   HarnessCatalog,
   HarnessCommand,
   HarnessConfig,
+  HarnessInspectionSnapshot,
+  HarnessReplayReport,
   HarnessSettings,
   HarnessSnapshot,
   ToolExecutionContext,
@@ -78,6 +87,7 @@ class HarnessStore implements AgentHarness {
   private pendingQuestion: AskQuestionRequest | null = null;
   private confirmationResolvers = new Map<string, (response: ConfirmResponse) => void>();
   private questionResolvers = new Map<string, (response: AskQuestionResponse) => void>();
+  private steeringQueue: string[] = [];
 
   constructor(config: HarnessConfig) {
     this.storage = new FileHarnessStorage(config.dataDir);
@@ -168,19 +178,55 @@ class HarnessStore implements AgentHarness {
     };
   }
 
+  inspectCurrentSession(): HarnessInspectionSnapshot {
+    const session = this.currentSession();
+    return {
+      session: session ? { ...session, metadata: { ...session.metadata } } : null,
+      events: copyHarnessEvents(this.events),
+      snapshot: this.getSnapshot(),
+    };
+  }
+
+  replayCurrentSession(): HarnessReplayReport {
+    return replayHarnessEvents(this.inspectCurrentSession());
+  }
+
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
 
   async send(input: { content: string; mode: AgentMode; sessionId?: string; displayContent?: string; silent?: boolean }): Promise<void> {
-    if (this.abortController) return;
+    if (this.abortController) {
+      const content = input.content.trim();
+      if (!content) return;
+      if (input.sessionId && input.sessionId !== this.activeSessionId) return;
+      if (!this.activeRunId || !this.activeTurnId || !this.activeSessionId) return;
+
+      this.emitUserMessage({
+        runId: this.activeRunId,
+        turnId: this.activeTurnId,
+        sessionId: this.activeSessionId,
+        content,
+        displayContent: input.displayContent ?? content,
+      });
+
+      this.steeringQueue.push(content);
+      return;
+    }
     const content = input.content.trim();
     if (!content) return;
     if (input.sessionId) await this.switchSession(input.sessionId);
 
     const session = this.ensureSession(content);
-    const priorMessages = projectEventsToMessages(this.events);
+    const projectInstructions = loadProjectInstructions(this.workspace.rootPath);
+    const runContext = buildRunContext({
+      events: this.events,
+      userContent: content,
+      mode: this.mode,
+      skillsList: this.skillsList,
+      projectInstructions: projectInstructions?.content,
+    });
     const runId = `run_${randomUUID()}`;
     const turnId = `turn_${randomUUID()}`;
     const abortController = new AbortController();
@@ -190,6 +236,7 @@ class HarnessStore implements AgentHarness {
     this.activeRunId = runId;
     this.activeTurnId = turnId;
     this.activeSessionId = session.id;
+    this.steeringQueue = [];
 
     if (!input.silent) {
       this.emitUserMessage({
@@ -203,18 +250,19 @@ class HarnessStore implements AgentHarness {
 
     try {
       await this.runController.run({
-        messages: [
-          ...priorMessages,
-          { role: "user", content },
-        ],
-        mode: this.mode,
+        messages: runContext.messages,
+        systemPrompt: runContext.systemPrompt,
         settings: this.settings,
         providers: this.providers,
         tools: this.tools,
         toolContext: this.createToolContext(),
         signal: abortController.signal,
         emit: this.createEmitter(runId, session.id, turnId),
-        skillsList: this.skillsList,
+        getSteeringMessages: () => {
+          const msgs = [...this.steeringQueue];
+          this.steeringQueue = [];
+          return msgs;
+        },
       });
     } finally {
       if (this.abortController === abortController) {
@@ -351,17 +399,12 @@ class HarnessStore implements AgentHarness {
     const session = this.currentSession();
     if (!session) return { handled: true, message: "No active session.", clearInput: true };
 
-    const lastTurnEnd = findLastCompletedTurnEnd(this.events);
-    if (!lastTurnEnd?.turnId) {
+    const result = revertLastCompletedTurn(this.events);
+    if (!result) {
       return { handled: true, message: "No completed turn to revert.", clearInput: true };
     }
 
-    const turnStartIndex = this.events.findIndex((event) => event.turnId === lastTurnEnd.turnId);
-    if (turnStartIndex === -1) {
-      return { handled: true, message: "No completed turn to revert.", clearInput: true };
-    }
-
-    this.events = this.events.slice(0, turnStartIndex);
+    this.events = result.events;
     this.sequence = this.events.at(-1)?.sequence ?? 0;
     this.lastEventId = this.events.at(-1)?.id;
     this.storage.replaceEvents(this.workspace.id, session, this.events);
@@ -376,10 +419,7 @@ class HarnessStore implements AgentHarness {
     const compactedEventCount = this.events.length;
     if (compactedEventCount === 0) return;
 
-    const summary = projectEventsToMessages(this.events)
-      .map((message) => `${message.role.toUpperCase()}: ${typeof message.content === "string" ? message.content : ""}`)
-      .join("\n")
-      .slice(-4000);
+    const summary = buildCompactionSummary(this.events);
 
     this.events = [];
     this.sequence = 0;
@@ -393,7 +433,7 @@ class HarnessStore implements AgentHarness {
       compactedEventCount,
       triggerMode,
     }, { sessionId: session.id, turnId });
-    this.emitAssistantMessage(runId, turnId, session.id, `Previous conversation compacted:\n${summary}`);
+    this.emitAssistantMessage(runId, turnId, session.id, buildCompactionNotice(summary));
   }
 
   setMode(mode: AgentMode): void {
@@ -661,10 +701,3 @@ function parseCommandInput(input: string): { name: string; args: string[] } | nu
   return { name: name.toLowerCase(), args };
 }
 
-function findLastCompletedTurnEnd(events: readonly AnyHarnessEvent[]): AnyHarnessEvent | null {
-  for (let index = events.length - 1; index >= 0; index--) {
-    const event = events[index];
-    if (event.type === TURN_END && !event.data.cancelled) return event;
-  }
-  return null;
-}

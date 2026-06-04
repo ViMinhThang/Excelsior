@@ -1,15 +1,12 @@
 import { randomUUID } from "node:crypto";
 import {
-  isLoopFinished,
   stepCountIs,
   streamText,
-  type StopCondition,
   type TextStreamPart,
   type ToolSet,
 } from "ai";
-import type { AgentMessage, AgentMode } from "@excelsior/core";
+import type { AgentMessage } from "@excelsior/core";
 import {
-  DEFAULT_AGENT_TOOL_LOOP_STEPS,
   normalizeAgentToolLoopSteps,
 } from "@excelsior/core";
 import {
@@ -26,228 +23,249 @@ import {
   TURN_START,
   type HarnessEventEmitter,
 } from "./events.js";
-import { toModelMessages } from "./modelMessages.js";
-import { buildSystemPrompt } from "./prompt.js";
+import { toModelMessages } from "./context/index.js";
 import type { ProviderRegistry, ToolRegistry } from "./registries.js";
 import type {
   HarnessSettings,
   ToolExecutionContext,
 } from "./types.js";
 
+type StepToolResult = {
+  toolCallId: string;
+  toolName: string;
+  content: string;
+};
+
 export class RunController {
   async run(input: {
     messages: readonly AgentMessage[];
-    mode: AgentMode;
+    systemPrompt: string;
     settings: HarnessSettings;
     providers: ProviderRegistry;
     tools: ToolRegistry;
     toolContext: ToolExecutionContext;
     signal: AbortSignal;
     emit: HarnessEventEmitter;
-    skillsList?: string;
+    getSteeringMessages?: () => string[];
   }): Promise<void> {
     input.emit(AGENT_START, {});
     input.emit(TURN_START, {});
 
     let cancelled = false;
     let failed = false;
+    const runPrefix = randomUUID().slice(0, 8);
     const assistant = new AssistantMessageBuilder(input.emit);
     const toolInputs = new Map<string, { toolName: string; toolArgs: string }>();
     const startedTools = new Set<string>();
-    const toolLoopBudget = resolveToolLoopBudget(input.settings.agentToolLoopSteps);
-    let endedAfterToolResult = false;
+    let stepLimit: number | undefined;
+    const rawSteps = input.settings.agentToolLoopSteps;
+    const normalizedSteps = normalizeAgentToolLoopSteps(rawSteps);
+    if (normalizedSteps !== "unlimited") {
+      const parsed = Number(normalizedSteps);
+      if (!isNaN(parsed)) {
+        stepLimit = parsed;
+      }
+    }
+
+    let activeMessages = [...input.messages];
+    let stepCount = 0;
 
     try {
-      const model = input.providers.get().createModel(input.settings);
-      const result = streamText({
-        model,
-        system: buildSystemPrompt(input.mode, input.skillsList),
-        messages: toModelMessages(input.messages),
-        tools: input.tools.toToolSet(input.toolContext),
-        stopWhen: toolLoopBudget.stopWhen,
-        abortSignal: input.signal,
-        maxRetries: 3,
-      });
-
-      for await (const part of result.fullStream as AsyncIterable<TextStreamPart<ToolSet>>) {
+      while (true) {
         if (input.signal.aborted) {
           cancelled = true;
           break;
         }
 
-        switch (part.type) {
-          case "text-start":
-            assistant.start(`msg_${part.id}`);
-            endedAfterToolResult = false;
+        const model = input.providers.get().createModel(input.settings);
+        const result = streamText({
+          model,
+          system: input.systemPrompt,
+          messages: toModelMessages(activeMessages),
+          tools: input.tools.toToolSet(input.toolContext),
+          stopWhen: stepCountIs(1),
+          abortSignal: input.signal,
+          maxRetries: 3,
+        });
+
+        let stepHasToolCalls = false;
+        let stepText = "";
+        const stepToolCalls: Array<{ id: string; type: "function"; function: { name: string; arguments: string } }> = [];
+        const stepToolResults: StepToolResult[] = [];
+
+        for await (const part of result.fullStream as AsyncIterable<TextStreamPart<ToolSet>>) {
+          if (input.signal.aborted) {
+            cancelled = true;
             break;
-          case "text-delta":
-            assistant.update(`msg_${part.id}`, part.text);
-            endedAfterToolResult = false;
-            break;
-          case "text-end":
-            assistant.end(`msg_${part.id}`);
-            break;
-          case "tool-input-start":
-            toolInputs.set(part.id, { toolName: part.toolName, toolArgs: "" });
-            assistant.end();
-            startedTools.add(part.id);
-            input.emit(
-              TOOL_EXECUTION_START,
-              {
-                toolCallId: part.id,
-                toolName: part.toolName,
-                toolArgs: "",
-              },
-              { relatedToolCallId: part.id },
-            );
-            break;
-          case "tool-input-delta": {
-            const current = toolInputs.get(part.id);
-            if (current) {
-              toolInputs.set(part.id, {
-                ...current,
-                toolArgs: `${current.toolArgs}${part.delta}`,
-              });
+          }
+
+          switch (part.type) {
+            case "text-start":
+              assistant.start(`msg_${runPrefix}_${part.id}`);
+              break;
+            case "text-delta":
+              assistant.update(`msg_${runPrefix}_${part.id}`, part.text);
+              stepText += part.text;
+              break;
+            case "text-end":
+              assistant.end(`msg_${runPrefix}_${part.id}`);
+              break;
+            case "tool-input-start":
+              toolInputs.set(part.id, { toolName: part.toolName, toolArgs: "" });
+              assistant.end();
+              startedTools.add(part.id);
               input.emit(
-                TOOL_EXECUTION_UPDATE,
+                TOOL_EXECUTION_START,
                 {
                   toolCallId: part.id,
-                  toolName: current.toolName,
-                  delta: part.delta,
+                  toolName: part.toolName,
+                  toolArgs: "",
                 },
                 { relatedToolCallId: part.id },
               );
+              break;
+            case "tool-input-delta": {
+              const current = toolInputs.get(part.id);
+              if (current) {
+                toolInputs.set(part.id, {
+                  ...current,
+                  toolArgs: `${current.toolArgs}${part.delta}`,
+                });
+                input.emit(
+                  TOOL_EXECUTION_UPDATE,
+                  {
+                    toolCallId: part.id,
+                    toolName: current.toolName,
+                    delta: part.delta,
+                  },
+                  { relatedToolCallId: part.id },
+                );
+              }
+              break;
             }
-            break;
-          }
-          case "tool-call": {
-            assistant.end();
-            const toolInput = toolInputs.get(part.toolCallId);
-            const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
-            toolInputs.set(part.toolCallId, {
-              toolName: part.toolName,
-              toolArgs,
-            });
-            if (!startedTools.has(part.toolCallId)) {
-              startedTools.add(part.toolCallId);
-              input.emit(
-                TOOL_EXECUTION_START,
-                {
-                  toolCallId: part.toolCallId,
-                  toolName: part.toolName,
-                  toolArgs,
-                },
-                { relatedToolCallId: part.toolCallId },
-              );
+            case "tool-call": {
+              assistant.end();
+              const toolInput = toolInputs.get(part.toolCallId);
+              const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
+              toolInputs.set(part.toolCallId, {
+                toolName: part.toolName,
+                toolArgs,
+              });
+              if (!startedTools.has(part.toolCallId)) {
+                startedTools.add(part.toolCallId);
+                input.emit(
+                  TOOL_EXECUTION_START,
+                  {
+                    toolCallId: part.toolCallId,
+                    toolName: part.toolName,
+                    toolArgs,
+                  },
+                  { relatedToolCallId: part.toolCallId },
+                );
+              }
+              stepHasToolCalls = true;
+              stepToolCalls.push({
+                id: part.toolCallId,
+                type: "function",
+                function: { name: part.toolName, arguments: toolArgs },
+              });
+              break;
             }
-            endedAfterToolResult = false;
-            break;
-          }
-          case "tool-result": {
-            const toolInput = toolInputs.get(part.toolCallId);
-            const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
-            const resultText = stringifyToolResult(part.output);
-            if (!startedTools.has(part.toolCallId)) {
-              input.emit(
-                TOOL_EXECUTION_START,
-                {
-                  toolCallId: part.toolCallId,
-                  toolName: part.toolName,
-                  toolArgs,
-                },
-                { relatedToolCallId: part.toolCallId },
-              );
-            }
-            input.emit(
-              TOOL_EXECUTION_END,
-              {
+            case "tool-result": {
+              const toolInput = toolInputs.get(part.toolCallId);
+              const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
+              completeToolExecution({
+                emit: input.emit,
+                startedTools,
+                stepToolResults,
                 toolCallId: part.toolCallId,
                 toolName: part.toolName,
                 toolArgs,
-                result: resultText,
+                resultText: stringifyToolResult(part.output),
                 isError: false,
-              },
-              { relatedToolCallId: part.toolCallId },
-            );
-            emitToolMessage(input.emit, part.toolCallId, part.toolName, toolArgs, resultText);
-            endedAfterToolResult = true;
-            break;
-          }
-          case "tool-error": {
-            const toolInput = toolInputs.get(part.toolCallId);
-            const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
-            const resultText = stringifyError(part.error);
-            if (!startedTools.has(part.toolCallId)) {
-              input.emit(
-                TOOL_EXECUTION_START,
-                {
-                  toolCallId: part.toolCallId,
-                  toolName: part.toolName,
-                  toolArgs,
-                },
-                { relatedToolCallId: part.toolCallId },
-              );
+              });
+              break;
             }
-            input.emit(
-              TOOL_EXECUTION_END,
-              {
+            case "tool-error": {
+              const toolInput = toolInputs.get(part.toolCallId);
+              const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
+              completeToolExecution({
+                emit: input.emit,
+                startedTools,
+                stepToolResults,
                 toolCallId: part.toolCallId,
                 toolName: part.toolName,
                 toolArgs,
-                result: resultText,
+                resultText: stringifyError(part.error),
                 isError: true,
-              },
-              { relatedToolCallId: part.toolCallId },
-            );
-            emitToolMessage(input.emit, part.toolCallId, part.toolName, toolArgs, resultText, true);
-            endedAfterToolResult = true;
-            break;
-          }
-          case "tool-output-denied": {
-            const toolArgs = "{}";
-            const resultText = "Tool output denied.";
-            if (!startedTools.has(part.toolCallId)) {
-              input.emit(
-                TOOL_EXECUTION_START,
-                {
-                  toolCallId: part.toolCallId,
-                  toolName: part.toolName,
-                  toolArgs,
-                },
-                { relatedToolCallId: part.toolCallId },
-              );
+              });
+              break;
             }
-            input.emit(
-              TOOL_EXECUTION_END,
-              {
+            case "tool-output-denied": {
+              completeToolExecution({
+                emit: input.emit,
+                startedTools,
+                stepToolResults,
                 toolCallId: part.toolCallId,
                 toolName: part.toolName,
-                toolArgs,
-                result: resultText,
+                toolArgs: "{}",
+                resultText: "Tool output denied.",
                 isError: true,
-              },
-              { relatedToolCallId: part.toolCallId },
-            );
-            emitToolMessage(input.emit, part.toolCallId, part.toolName, toolArgs, resultText, true);
-            endedAfterToolResult = true;
-            break;
+              });
+              break;
+            }
+            case "abort":
+              cancelled = true;
+              break;
+            case "error":
+              failed = true;
+              input.emit(ERROR, { message: stringifyError(part.error) });
+              break;
           }
-          case "abort":
-            cancelled = true;
-            break;
-          case "error":
-            failed = true;
-            input.emit(ERROR, { message: stringifyError(part.error) });
-            break;
         }
-      }
 
-      assistant.end();
-      if (!cancelled && !failed && toolLoopBudget.stepLimit !== undefined && endedAfterToolResult) {
-        emitAssistantNotice(
-          input.emit,
-          `Agent stopped after reaching the configured ${toolLoopBudget.stepLimit}-step tool-loop limit.`,
-        );
+        if (cancelled || failed) break;
+
+        assistant.end();
+
+        if (stepText.trim() || stepToolCalls.length > 0) {
+          activeMessages.push({
+            role: "assistant",
+            content: stepText,
+            tool_calls: stepToolCalls.length > 0 ? stepToolCalls : undefined,
+          });
+        }
+
+        for (const res of stepToolResults) {
+          activeMessages.push({
+            role: "tool",
+            content: res.content,
+            tool_call_id: res.toolCallId,
+          });
+        }
+
+        if (input.getSteeringMessages) {
+          const steeringMsgs = input.getSteeringMessages();
+          for (const steeringText of steeringMsgs) {
+            activeMessages.push({
+              role: "user",
+              content: steeringText,
+            });
+          }
+        }
+
+        if (!stepHasToolCalls) {
+          break;
+        }
+
+        stepCount++;
+        if (stepLimit !== undefined && stepCount >= stepLimit) {
+          emitAssistantNotice(
+            input.emit,
+            `Agent stopped after reaching the configured ${stepLimit}-step tool-loop limit.`,
+          );
+          break;
+        }
       }
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -358,16 +376,45 @@ function emitToolMessage(
   emit(MESSAGE_END, { message }, { relatedToolCallId: toolCallId });
 }
 
-function resolveToolLoopBudget(value: string | null | undefined): {
-  stopWhen: StopCondition<ToolSet>;
-  stepLimit?: number;
-} {
-  const normalized = normalizeAgentToolLoopSteps(value);
-  if (normalized === DEFAULT_AGENT_TOOL_LOOP_STEPS) {
-    return { stopWhen: isLoopFinished() };
+function completeToolExecution(input: {
+  emit: HarnessEventEmitter;
+  startedTools: Set<string>;
+  stepToolResults: StepToolResult[];
+  toolCallId: string;
+  toolName: string;
+  toolArgs: string;
+  resultText: string;
+  isError: boolean;
+}): void {
+  if (!input.startedTools.has(input.toolCallId)) {
+    input.startedTools.add(input.toolCallId);
+    input.emit(
+      TOOL_EXECUTION_START,
+      {
+        toolCallId: input.toolCallId,
+        toolName: input.toolName,
+        toolArgs: input.toolArgs,
+      },
+      { relatedToolCallId: input.toolCallId },
+    );
   }
-  const stepLimit = Number(normalized);
-  return { stopWhen: stepCountIs(stepLimit), stepLimit };
+  input.emit(
+    TOOL_EXECUTION_END,
+    {
+      toolCallId: input.toolCallId,
+      toolName: input.toolName,
+      toolArgs: input.toolArgs,
+      result: input.resultText,
+      isError: input.isError,
+    },
+    { relatedToolCallId: input.toolCallId },
+  );
+  emitToolMessage(input.emit, input.toolCallId, input.toolName, input.toolArgs, input.resultText, input.isError);
+  input.stepToolResults.push({
+    toolCallId: input.toolCallId,
+    toolName: input.toolName,
+    content: input.resultText,
+  });
 }
 
 function stringifyToolArgs(value: unknown): string {
