@@ -75,7 +75,7 @@ export class AssistantStateMachine {
           content: "",
         },
       },
-    }) as AnyHarnessEvent;
+    });
 
     if (this.emit) {
       this.emit(MESSAGE_START, event.data);
@@ -97,7 +97,7 @@ export class AssistantStateMachine {
         delta,
         content: (this.assistant?.content ?? "") + delta,
       },
-    }) as AnyHarnessEvent;
+    });
 
     if (this.emit) {
       this.emit(MESSAGE_UPDATE, event.data);
@@ -124,7 +124,7 @@ export class AssistantStateMachine {
           content,
         },
       },
-    }) as AnyHarnessEvent;
+    });
 
     if (this.emit) {
       this.emit(MESSAGE_END, event.data);
@@ -146,7 +146,7 @@ export class AssistantStateMachine {
         toolName,
         toolArgs: "",
       },
-    }) as AnyHarnessEvent;
+    });
 
     if (this.emit) {
       this.emit(TOOL_EXECUTION_START, event.data, { relatedToolCallId: callId });
@@ -197,7 +197,7 @@ export class AssistantStateMachine {
         toolName: buffer.toolName,
         delta: buffer.delta,
       },
-    }) as AnyHarnessEvent;
+    });
 
     if (this.emit) {
       this.emit(TOOL_EXECUTION_UPDATE, event.data, { relatedToolCallId: callId });
@@ -239,7 +239,7 @@ export class AssistantStateMachine {
           toolName,
           toolArgs,
         },
-      }) as AnyHarnessEvent;
+      });
 
       if (this.emit) {
         this.emit(TOOL_EXECUTION_START, startEvent.data, { relatedToolCallId: callId });
@@ -267,7 +267,7 @@ export class AssistantStateMachine {
           toolName,
           toolArgs,
         },
-      }) as AnyHarnessEvent;
+      });
       if (this.emit) {
         this.emit(TOOL_EXECUTION_START, startEvent.data, { relatedToolCallId: callId });
       }
@@ -287,7 +287,7 @@ export class AssistantStateMachine {
         result: resultText,
         isError,
       },
-    }) as AnyHarnessEvent;
+    });
 
     if (this.emit) {
       this.emit(TOOL_EXECUTION_END, endEvent.data, { relatedToolCallId: callId });
@@ -317,7 +317,7 @@ export class AssistantStateMachine {
           result: resultText,
           isError: true,
         },
-      }) as AnyHarnessEvent;
+      });
 
       if (this.emit) {
         this.emit(TOOL_EXECUTION_END, event.data, { relatedToolCallId: toolCallId });
