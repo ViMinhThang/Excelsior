@@ -15,6 +15,7 @@
   --font-brand: var(--font-mono);
   --font-display: "DM Serif Display", serif;
   --font-mono: "JetBrains Mono", monospace;
+  --font-caskaydia: "Caskaydia Cove", "Cascadia Code", "Cascadia Mono", monospace;
 }
 
 /* ============================
@@ -81,6 +82,68 @@
 }
 
 /* ============================
+   THEME: Nordic Blue (Dark)
+   ============================ */
+:root[data-theme="nordic-blue"] {
+  --brand-bg: #2e3440;
+  --brand-surface: #242933;
+  --brand-panel: #3b4252;
+  --brand-border: #434c5e;
+  --brand-accent: #88c0d0;
+  --brand-accent-hover: #81a1c1;
+  --brand-accent-contrast: #2e3440;
+  --brand-text-muted: #647280;
+  --brand-text-light: #d8dee9;
+  --brand-text-strong: #eceff4;
+  --brand-sidebar-footer: #1d212a;
+  --brand-user-bubble: #3b4252;
+  --brand-composer: rgba(36, 41, 51, 0.92);
+
+  --titlebar-bg: #242933;
+  --titlebar-text: #4c566a;
+  --scrollbar-track: #2e3440;
+  --scrollbar-thumb: #434c5e;
+  --scrollbar-thumb-hover: #4c566a;
+  --codeblock-bg: #242933;
+  --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-snappy: 160ms;
+  --gold-glow: rgba(136, 192, 208, 0.12);
+  --gold-glow-strong: rgba(136, 192, 208, 0.25);
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* ============================
+   THEME: Rosé Pine Dark
+   ============================ */
+:root[data-theme="rose-pine-dark"] {
+  --brand-bg: #191724;
+  --brand-surface: #1f1d2e;
+  --brand-panel: #26233a;
+  --brand-border: #403d52;
+  --brand-accent: #ebbcba;
+  --brand-accent-hover: #31748f;
+  --brand-accent-contrast: #191724;
+  --brand-text-muted: #6e6a86;
+  --brand-text-light: #e0def4;
+  --brand-text-strong: #e0def4;
+  --brand-sidebar-footer: #171520;
+  --brand-user-bubble: #26233a;
+  --brand-composer: rgba(31, 29, 46, 0.92);
+
+  --titlebar-bg: #171520;
+  --titlebar-text: #6e6a86;
+  --scrollbar-track: #191724;
+  --scrollbar-thumb: #403d52;
+  --scrollbar-thumb-hover: #6e6a86;
+  --codeblock-bg: #1f1d2e;
+  --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-snappy: 160ms;
+  --gold-glow: rgba(235, 188, 186, 0.12);
+  --gold-glow-strong: rgba(235, 188, 186, 0.25);
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+/* ============================
    THEME: Gruvbox Light
    ============================ */
 :root[data-theme="gruvbox"] {
@@ -141,3 +204,35 @@
   --gold-glow-strong: rgba(56, 90, 246, 0.2);
   --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
 }
+
+/* ============================
+   THEME: Rosé Pine Light
+   ============================ */
+:root[data-theme="rose-pine-light"] {
+  --brand-bg: #faf4ed;
+  --brand-surface: #fffaf3;
+  --brand-panel: #f2e9e1;
+  --brand-border: #dfdad9;
+  --brand-accent: #d7827e;
+  --brand-accent-hover: #286983;
+  --brand-accent-contrast: #faf4ed;
+  --brand-text-muted: #9893a5;
+  --brand-text-light: #575279;
+  --brand-text-strong: #575279;
+  --brand-sidebar-footer: #f2e9e1;
+  --brand-user-bubble: #f2e9e1;
+  --brand-composer: rgba(255, 250, 243, 0.92);
+
+  --titlebar-bg: #f2e9e1;
+  --titlebar-text: #9893a5;
+  --scrollbar-track: #faf4ed;
+  --scrollbar-thumb: #dfdad9;
+  --scrollbar-thumb-hover: #c5c1c0;
+  --codeblock-bg: #fffaf3;
+  --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-snappy: 160ms;
+  --gold-glow: rgba(215, 130, 126, 0.1);
+  --gold-glow-strong: rgba(215, 130, 126, 0.2);
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.02'/%3E%3C/svg%3E");
+}
+

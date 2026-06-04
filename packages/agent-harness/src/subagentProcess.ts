@@ -42,6 +42,10 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
       cwd: input.ctx.workspaceRoot,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+      },
     });
 
     const finish = (content: string, isError = false) => {
@@ -166,13 +170,27 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
 }
 
 function resolveChildRunner(workspaceRoot: string): { command: string; args: string[] } {
+  const workspaceBuiltRunner = join(workspaceRoot, "packages/agent-harness/dist/subagentChildRunner.js");
+  const workspaceSourceRunner = join(workspaceRoot, "packages/agent-harness/src/subagentChildRunner.ts");
+  
+  const isElectron = process.versions.electron !== undefined;
+  const nodeCommand = isElectron ? "node" : process.execPath;
+
+  if (existsSync(workspaceBuiltRunner)) {
+    return { command: nodeCommand, args: [workspaceBuiltRunner] };
+  }
+  if (existsSync(workspaceSourceRunner)) {
+    const tsxCli = join(workspaceRoot, "node_modules", "tsx", "dist", "cli.mjs");
+    return { command: nodeCommand, args: [tsxCli, workspaceSourceRunner] };
+  }
+
   const currentDir = dirname(fileURLToPath(import.meta.url));
   const builtRunner = join(currentDir, "subagentChildRunner.js");
   if (existsSync(builtRunner)) {
-    return { command: process.execPath, args: [builtRunner] };
+    return { command: nodeCommand, args: [builtRunner] };
   }
 
   const sourceRunner = join(currentDir, "subagentChildRunner.ts");
   const tsxCli = join(workspaceRoot, "node_modules", "tsx", "dist", "cli.mjs");
-  return { command: process.execPath, args: [tsxCli, sourceRunner] };
+  return { command: nodeCommand, args: [tsxCli, sourceRunner] };
 }
