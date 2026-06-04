@@ -30,6 +30,7 @@ export function renderConversation(
         <ChatHistory
           blocks={ctx.transcript.blocks}
           commandsExpanded={ctx.transcript.commandsExpanded}
+          historyRemountKey={ctx.transcript.historyRemountKey}
         />
       </Box>
 
