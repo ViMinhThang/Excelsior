@@ -40,11 +40,21 @@ describe("HarnessAgentHost", () => {
     await host.dispatch({ type: "set-mode", mode: "plan" });
     const commandResult = await host.dispatch({ type: "execute-command", input: "/help" });
     await host.dispatch({ type: "send", content: "hello" });
+    const traceResult = await host.dispatch({ type: "execute-command", input: "/trace" });
+    const replayResult = await host.dispatch({ type: "execute-command", input: "/replay" });
 
     const state = host.getState();
 
     expect(sessionResult.type).toBe("session");
     expect(commandResult.type).toBe("command-result");
+    expect(traceResult).toMatchObject({
+      type: "command-result",
+      result: { message: expect.stringContaining("Trace:") },
+    });
+    expect(replayResult).toMatchObject({
+      type: "command-result",
+      result: { message: expect.stringContaining("Replay:") },
+    });
     expect(state.mode).toBe("plan");
     expect(state.displayBlocks).toEqual(
       expect.arrayContaining([

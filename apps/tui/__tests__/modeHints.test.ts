@@ -77,4 +77,16 @@ describe("chat mode hints", () => {
       commandsExpanded: false,
     })).toBe("Enter answer | type option number or custom answer | Esc cancel");
   });
+
+  it("shows double Escape cancellation while a turn is running", () => {
+    expect(getChatModeHint({
+      chatMode: "input",
+      isLoading: true,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      commandCount: 0,
+      commandsExpanded: false,
+    })).toBe("Esc twice cancel");
+  });
 });

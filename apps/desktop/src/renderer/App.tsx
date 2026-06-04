@@ -38,6 +38,7 @@ export default function App() {
   } = useAgentHost();
 
   const [inputValue, setInputValue] = useState("");
+  const [commandResult, setCommandResult] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [openToolCalls, setOpenToolCalls] = useState<Record<string, boolean>>({});
   const [theme, setTheme] = useState<DesktopTheme>(getStoredTheme);
@@ -59,12 +60,20 @@ export default function App() {
     if (!trimmed) return;
 
     if (trimmed.startsWith("/")) {
-      void executeCommand(trimmed);
+      void executeCommand(trimmed).then((result) => {
+        setCommandResult(result.message ?? null);
+      });
     } else {
+      setCommandResult(null);
       send(trimmed);
     }
 
     setInputValue("");
+  };
+
+  const handleInputChange = (value: string) => {
+    if (commandResult) setCommandResult(null);
+    setInputValue(value);
   };
 
   const handleSaveSettings = (nextSettings: Partial<AppSettings>, nextTheme: DesktopTheme) => {
@@ -118,10 +127,11 @@ export default function App() {
 
         <ChatPanel
           inputValue={inputValue}
+          commandResult={commandResult}
           openToolCalls={openToolCalls}
           state={state}
           onCancel={cancel}
-          onInputChange={setInputValue}
+          onInputChange={handleInputChange}
           onModeChange={(mode) => {
             void setMode(mode);
           }}

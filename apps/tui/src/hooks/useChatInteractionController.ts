@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createDoubleEscapeCancelState,
+  handleDoubleEscapeCancel,
+  resetDoubleEscapeCancel,
+} from "@excelsior/core";
 import { getCommandInputWithSelection } from "../chatModes/inputMode.js";
 import {
   buildModeViewContext,
@@ -29,6 +34,9 @@ import {
   buildOptimisticTranscript,
   shouldClearOptimisticMessage,
 } from "./optimisticTranscript.js";
+
+const TOKEN_ESTIMATE_TEXT_SCAN_LIMIT = 50_000;
+const PENDING_TOOL_TOKEN_SCAN_LIMIT = 4_000;
 
 export function useChatInteractionController(): ChatScreenModel {
   const { navigate } = useNavigation();
@@ -109,6 +117,20 @@ export function useChatInteractionController(): ChatScreenModel {
     setCommandsExpanded((expanded) => !expanded);
   }, []);
 
+  const escapeCancelState = useRef(createDoubleEscapeCancelState());
+  const requestTurnCancel = useCallback(() => {
+    handleDoubleEscapeCancel({
+      state: escapeCancelState.current,
+      isLoading,
+      now: Date.now(),
+      cancel: agent.cancel,
+    });
+  }, [agent.cancel, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) resetDoubleEscapeCancel(escapeCancelState.current);
+  }, [isLoading]);
+
   const setChatMode = useCallback((nextMode: typeof subAgentNav.chatMode) => {
     subAgentNav.setChatMode(nextMode);
     if (shouldCollapseCommandsForChatMode(nextMode)) setCommandsExpanded(false);
@@ -182,26 +204,27 @@ export function useChatInteractionController(): ChatScreenModel {
     nextHunk: confirmation.nextHunk,
     prevHunk: confirmation.prevHunk,
     cancel: agent.cancel,
+    requestTurnCancel,
   });
 
   const totalTokens = useMemo(() => {
-    let text = "";
+    let tokens = 0;
+    const addText = (text: string, scanLimit = TOKEN_ESTIMATE_TEXT_SCAN_LIMIT) => {
+      tokens += estimateTokens(text, scanLimit);
+    };
     for (const block of derivedDisplayBlocks) {
       if (block.type === "user" || block.type === "assistant") {
-        text += block.content;
+        addText(block.content);
       } else if (block.type === "tool-call") {
-        text += block.toolName + block.toolArgs + block.content;
+        addText(block.toolName);
+        addText(
+          block.toolArgs,
+          block.status === "pending" ? PENDING_TOOL_TOKEN_SCAN_LIMIT : TOKEN_ESTIMATE_TEXT_SCAN_LIMIT,
+        );
+        addText(block.content);
       } else if (block.type === "sub-agent") {
-        text += block.role + block.state.fullOutput;
-      }
-    }
-    let tokens = 0;
-    for (let i = 0; i < text.length; i++) {
-      const code = text.charCodeAt(i);
-      if (code >= 0x4e00 && code <= 0x9fff) {
-        tokens += 0.6;
-      } else {
-        tokens += 0.3;
+        addText(block.role);
+        addText(block.state.fullOutput);
       }
     }
     return Math.ceil(tokens);
@@ -246,4 +269,17 @@ export function useChatInteractionController(): ChatScreenModel {
       totalTokens,
     },
   };
+}
+
+function estimateTokens(text: string, scanLimit: number): number {
+  const scannedLength = Math.min(text.length, scanLimit);
+  let tokens = 0;
+  for (let i = 0; i < scannedLength; i++) {
+    const code = text.charCodeAt(i);
+    tokens += code >= 0x4e00 && code <= 0x9fff ? 0.6 : 0.3;
+  }
+  if (text.length > scanLimit) {
+    tokens += (text.length - scanLimit) * 0.3;
+  }
+  return tokens;
 }

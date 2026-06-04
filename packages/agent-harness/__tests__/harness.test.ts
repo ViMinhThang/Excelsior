@@ -8,8 +8,14 @@ import {
   createBuiltInTools,
   type ToolExecutionContext,
 } from "@excelsior/agent-harness";
+import {
+  AGENT_START,
+  TOOL_EXECUTION_START,
+  TURN_START,
+} from "../src/events.js";
 
 const tempDirs: string[] = [];
+const originalDeepSeekApiKey = process.env.DEEPSEEK_API_KEY;
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "excelsior-harness-"));
@@ -18,6 +24,11 @@ async function makeTempDir() {
 }
 
 afterEach(async () => {
+  if (originalDeepSeekApiKey === undefined) {
+    delete process.env.DEEPSEEK_API_KEY;
+  } else {
+    process.env.DEEPSEEK_API_KEY = originalDeepSeekApiKey;
+  }
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) await rm(dir, { recursive: true, force: true });
@@ -25,6 +36,26 @@ afterEach(async () => {
 });
 
 describe("AgentHarness", () => {
+  it("starts a fresh session for each harness run in the same workspace", async () => {
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
+
+    const firstHarness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    const firstSessionId = firstHarness.getSnapshot().currentSessionId;
+    firstHarness.dispose();
+
+    const secondHarness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    const secondState = secondHarness.getSnapshot();
+    const secondSessionId = secondState.currentSessionId;
+
+    expect(firstSessionId).toBeTruthy();
+    expect(secondSessionId).toBeTruthy();
+    expect(secondSessionId).not.toBe(firstSessionId);
+    expect(secondState.sessions.map((session) => session.id)).toEqual(
+      expect.arrayContaining([firstSessionId, secondSessionId]),
+    );
+  });
+
   it("executes core commands and projects session state", async () => {
     const dataDir = await makeTempDir();
     const workspaceRoot = await makeTempDir();
@@ -41,6 +72,55 @@ describe("AgentHarness", () => {
 
     const help = await harness.executeCommand("/help");
     expect(help.message).toContain("/session");
+  });
+
+  it("finalizes an active partial tool call immediately on cancel", async () => {
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    const sessionId = harness.getSnapshot().currentSessionId;
+    expect(sessionId).toBeTruthy();
+
+    const store = harness as any;
+    const runId = "run_cancel";
+    const turnId = "turn_cancel";
+    store.activeRunId = runId;
+    store.activeTurnId = turnId;
+    store.activeSessionId = sessionId;
+    store.abortController = new AbortController();
+    store.emit(runId, AGENT_START, {}, { sessionId, turnId });
+    store.emit(runId, TURN_START, {}, { sessionId, turnId });
+    store.emit(runId, TOOL_EXECUTION_START, {
+      toolCallId: "call_write",
+      toolName: "write",
+      toolArgs: "{\"filePath\":\"report.html\",\"content\":\"<html>",
+    }, { sessionId, turnId, relatedToolCallId: "call_write" });
+
+    harness.cancel();
+
+    const snapshot = harness.getSnapshot();
+    const events = harness.inspectCurrentSession().events;
+    const replay = harness.replayCurrentSession();
+
+    expect(snapshot.isLoading).toBe(false);
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "tool_execution_end",
+        data: expect.objectContaining({
+          toolCallId: "call_write",
+          isError: true,
+        }),
+      }),
+      expect.objectContaining({
+        type: "turn_end",
+        data: { cancelled: true },
+      }),
+      expect.objectContaining({
+        type: "agent_end",
+        data: { cancelled: true },
+      }),
+    ]));
+    expect(replay.ok).toBe(true);
   });
 
   it("blocks write-like built-in tools in Plan mode before confirmation", async () => {
@@ -99,5 +179,29 @@ describe("AgentHarness", () => {
       expect(secondEvent.causationId).toBe(firstEvent.id);
       expect(secondEvent.correlationId).toBe(secondEvent.runId);
     }
+  });
+
+  it("executes trace and replay commands without mutating events", async () => {
+    delete process.env.DEEPSEEK_API_KEY;
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+
+    await harness.send({ content: "inspect this", mode: "act" });
+    const before = harness.inspectCurrentSession().events;
+    const turnId = before.find((event) => event.turnId)?.turnId;
+
+    const trace = await harness.executeCommand("/trace");
+    const traceAll = await harness.executeCommand("/trace all");
+    const traceTurn = await harness.executeCommand(`/trace ${turnId?.slice(0, 12) ?? ""}`);
+    const replay = await harness.executeCommand("/replay");
+    const after = harness.inspectCurrentSession().events;
+
+    expect(trace.message).toContain("Trace:");
+    expect(trace.message).toContain("Turn");
+    expect(traceAll.message).toContain("events=");
+    expect(traceTurn.message).toContain(turnId);
+    expect(replay.message).toContain("Replay: OK");
+    expect(after).toEqual(before);
   });
 });

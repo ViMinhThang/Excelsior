@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Box, useApp } from 'ink';
 import { useNavigation, type Screen } from '../../context/NavigationContext.js';
+import { useAgentHost } from '../../context/AgentHostContext.js';
 import { useEvent } from '../../hooks/useEvent.js';
 import { useKeymap } from '../../hooks/useKeymap.js';
 import ChatScreen from '../../screens/ChatScreen.js';
@@ -36,10 +37,16 @@ const ScreenDispatcher = memo(function ScreenDispatcher({ screen }: ScreenDispat
 const Router = () => {
   const { currentScreen, navigate, goBack } = useNavigation();
   const { exit } = useApp();
+  const host = useAgentHost();
 
   const onNavigate = useEvent(navigate);
   const onGoBack = useEvent(goBack);
-  const onExit = useEvent(exit);
+  const onExit = useEvent(() => {
+    host.dispose();
+    exit();
+    const timer = setTimeout(() => process.exit(0), 50);
+    timer.unref?.();
+  });
 
   const runNavigationAction = useEvent((action: "exit" | "back" | "settings" | null) => {
     if (action === "exit") onExit();

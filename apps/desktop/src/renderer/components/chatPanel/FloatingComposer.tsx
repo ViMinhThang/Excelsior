@@ -1,5 +1,10 @@
 import { useEffect, useRef, type KeyboardEvent } from "react";
 import type { AgentMode } from "@excelsior/core";
+import {
+  createDoubleEscapeCancelState,
+  handleDoubleEscapeCancel,
+  resetDoubleEscapeCancel,
+} from "@excelsior/core";
 import { Send, Square } from "lucide-react";
 
 type FloatingComposerProps = {
@@ -54,10 +59,24 @@ export function FloatingComposer({
   onModeChange,
   onSend,
 }: FloatingComposerProps) {
+  const escapeCancelState = useRef(createDoubleEscapeCancelState());
+
+  useEffect(() => {
+    if (!isLoading) resetDoubleEscapeCancel(escapeCancelState.current);
+  }, [isLoading]);
+
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       onSend();
+    } else if (event.key === "Escape" && isLoading) {
+      event.preventDefault();
+      handleDoubleEscapeCancel({
+        state: escapeCancelState.current,
+        isLoading,
+        now: Date.now(),
+        cancel: onCancel,
+      });
     }
   };
 
