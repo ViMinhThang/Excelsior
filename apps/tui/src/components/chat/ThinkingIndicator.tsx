@@ -1,17 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../../theme.js';
-
-function formatDuration(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  const parts: string[] = [];
-  if (h > 0) parts.push(`${h}h`);
-  if (m > 0) parts.push(`${m}m`);
-  parts.push(`${s}s`);
-  return parts.join(' ');
-}
+import { formatElapsedSeconds } from '../../lib/timeFormat.js';
 
 const ThinkingIndicator = () => {
   const [frame, setFrame] = useState(0);
@@ -38,7 +28,7 @@ const ThinkingIndicator = () => {
         Thinking {frames[frame]}
       </Text>
       <Text color={theme.colors.muted} dimColor>
-        Worked for {formatDuration(elapsed)}
+        Worked for {formatElapsedSeconds(elapsed)}
       </Text>
     </Box>
   );

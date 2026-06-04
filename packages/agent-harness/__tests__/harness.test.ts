@@ -10,6 +10,7 @@ import {
 } from "@excelsior/agent-harness";
 
 const tempDirs: string[] = [];
+const originalDeepSeekApiKey = process.env.DEEPSEEK_API_KEY;
 
 async function makeTempDir() {
   const dir = await mkdtemp(join(tmpdir(), "excelsior-harness-"));
@@ -18,6 +19,11 @@ async function makeTempDir() {
 }
 
 afterEach(async () => {
+  if (originalDeepSeekApiKey === undefined) {
+    delete process.env.DEEPSEEK_API_KEY;
+  } else {
+    process.env.DEEPSEEK_API_KEY = originalDeepSeekApiKey;
+  }
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) await rm(dir, { recursive: true, force: true });
@@ -99,5 +105,29 @@ describe("AgentHarness", () => {
       expect(secondEvent.causationId).toBe(firstEvent.id);
       expect(secondEvent.correlationId).toBe(secondEvent.runId);
     }
+  });
+
+  it("executes trace and replay commands without mutating events", async () => {
+    delete process.env.DEEPSEEK_API_KEY;
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+
+    await harness.send({ content: "inspect this", mode: "act" });
+    const before = harness.inspectCurrentSession().events;
+    const turnId = before.find((event) => event.turnId)?.turnId;
+
+    const trace = await harness.executeCommand("/trace");
+    const traceAll = await harness.executeCommand("/trace all");
+    const traceTurn = await harness.executeCommand(`/trace ${turnId?.slice(0, 12) ?? ""}`);
+    const replay = await harness.executeCommand("/replay");
+    const after = harness.inspectCurrentSession().events;
+
+    expect(trace.message).toContain("Trace:");
+    expect(trace.message).toContain("Turn");
+    expect(traceAll.message).toContain("events=");
+    expect(traceTurn.message).toContain(turnId);
+    expect(replay.message).toContain("Replay: OK");
+    expect(after).toEqual(before);
   });
 });

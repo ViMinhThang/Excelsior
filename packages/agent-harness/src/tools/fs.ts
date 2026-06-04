@@ -1,33 +1,20 @@
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
-import type { HarnessTool, ToolExecutionContext, ToolResult } from "./types.js";
+import type { HarnessTool, ToolExecutionContext, ToolResult } from "../types.js";
+import { runProcess } from "./system.js";
 
-const MAX_OUTPUT_LENGTH = 100_000;
-const DEFAULT_TIMEOUT = 30_000;
-
-export function createBuiltInTools(): HarnessTool[] {
-  return [
-    createLsTool(),
-    createViewTool(),
-    createGlobTool(),
-    createRipgrepTool(),
-    createWriteTool(),
-    createEditTool(),
-    createRunCommandTool(),
-    createAskQuestionTool(),
-    createSpawnSubAgentTool(),
-  ];
+export function text(content: string, isError?: boolean): ToolResult {
+  return { content, isError };
 }
 
 const lsSchema = z.object({
   directoryPath: z.string().optional(),
 });
 
-function createLsTool(): HarnessTool<z.infer<typeof lsSchema>> {
+export function createLsTool(): HarnessTool<z.infer<typeof lsSchema>> {
   return {
     name: "ls",
     description: "List directory contents.",
@@ -48,7 +35,7 @@ const viewSchema = z.object({
   lineEnd: z.number().optional(),
 });
 
-function createViewTool(): HarnessTool<z.infer<typeof viewSchema>> {
+export function createViewTool(): HarnessTool<z.infer<typeof viewSchema>> {
   return {
     name: "view",
     description: "Read file contents with optional 1-based line range.",
@@ -74,7 +61,7 @@ const globSchema = z.object({
   pattern: z.string(),
 });
 
-function createGlobTool(): HarnessTool<z.infer<typeof globSchema>> {
+export function createGlobTool(): HarnessTool<z.infer<typeof globSchema>> {
   return {
     name: "glob",
     description: "Find files by a simple glob pattern under the workspace.",
@@ -95,7 +82,7 @@ const ripgrepSchema = z.object({
   path: z.string().optional(),
 });
 
-function createRipgrepTool(): HarnessTool<z.infer<typeof ripgrepSchema>> {
+export function createRipgrepTool(): HarnessTool<z.infer<typeof ripgrepSchema>> {
   return {
     name: "ripgrep",
     description: "Search file contents with ripgrep.",
@@ -113,7 +100,7 @@ const writeSchema = z.object({
   content: z.string(),
 });
 
-function createWriteTool(): HarnessTool<z.infer<typeof writeSchema>> {
+export function createWriteTool(): HarnessTool<z.infer<typeof writeSchema>> {
   return {
     name: "writeFile",
     description: "Create or overwrite an entire file.",
@@ -137,7 +124,7 @@ const editSchema = z.object({
   newText: z.string(),
 });
 
-function createEditTool(): HarnessTool<z.infer<typeof editSchema>> {
+export function createEditTool(): HarnessTool<z.infer<typeof editSchema>> {
   return {
     name: "editFile",
     description: "Replace one exact text block in a file.",
@@ -156,84 +143,6 @@ function createEditTool(): HarnessTool<z.infer<typeof editSchema>> {
       return text(`Successfully replaced the block in ${filePath}.`);
     },
   };
-}
-
-const runCommandSchema = z.object({
-  command: z.string(),
-  args: z.array(z.string()).optional(),
-});
-
-function createRunCommandTool(): HarnessTool<z.infer<typeof runCommandSchema>> {
-  return {
-    name: "runCommand",
-    description: "Run an executable with distinct arguments in the workspace.",
-    inputSchema: runCommandSchema,
-    capabilities: ["shell"],
-    async execute({ command, args }, ctx) {
-      const normalizedArgs = args ?? [];
-      const risk = classifyCommandRisk(command, normalizedArgs);
-      if (risk.blocked) return text(risk.message, true);
-      if (ctx.mode === "plan" && risk.writeLike) return text(PLAN_MODE_BLOCKED_MESSAGE, true);
-      if (risk.writeLike) {
-        const response = await ctx.confirm({
-          toolName: "runCommand",
-          args: JSON.stringify({ command, args: normalizedArgs }),
-          action: "warning",
-        });
-        if (!response.approved) return text("Denied by user.");
-      }
-      return text(await runProcess(command, normalizedArgs, ctx));
-    },
-  };
-}
-
-const askQuestionSchema = z.object({
-  question: z.string(),
-  options: z.array(z.object({
-    id: z.string(),
-    label: z.string(),
-    description: z.string().optional(),
-  })).optional(),
-  allowManual: z.boolean().optional(),
-});
-
-function createAskQuestionTool(): HarnessTool<z.infer<typeof askQuestionSchema>> {
-  return {
-    name: "askQuestion",
-    description: "Ask the user a blocking question when a decision is required.",
-    inputSchema: askQuestionSchema,
-    capabilities: [],
-    async execute({ question, options, allowManual }, ctx) {
-      const response = await ctx.askQuestion({
-        question,
-        options: options ?? [],
-        allowManual: allowManual ?? true,
-      });
-      if (response.cancelled) return text("Question cancelled.");
-      return text(response.selectedOptionLabel ?? response.answer);
-    },
-  };
-}
-
-const spawnSubAgentSchema = z.object({
-  role: z.string(),
-  prompt: z.string(),
-});
-
-function createSpawnSubAgentTool(): HarnessTool<z.infer<typeof spawnSubAgentSchema>> {
-  return {
-    name: "spawnSubAgent",
-    description: "Run a focused sub-agent for specialized analysis.",
-    inputSchema: spawnSubAgentSchema,
-    capabilities: ["sub-agent"],
-    async execute(input, ctx) {
-      return text(await ctx.sendSubAgent(input));
-    },
-  };
-}
-
-function text(content: string, isError?: boolean): ToolResult {
-  return { content, isError };
 }
 
 async function authorizeWrite(ctx: ToolExecutionContext, toolName: string, filePath: string): Promise<boolean> {
@@ -287,85 +196,4 @@ function globToRegex(pattern: string): RegExp {
     .replace(/\*/g, "[^/]*")
     .replace(/<<<GLOBSTAR>>>/g, ".*");
   return new RegExp(`^${escaped}$`);
-}
-
-function runProcess(command: string, args: string[], ctx: ToolExecutionContext): Promise<string> {
-  return new Promise((resolveProcess) => {
-    let stdout = "";
-    let stderr = "";
-    let totalLength = 0;
-    let settled = false;
-
-    const child = spawn(command, args, {
-      cwd: ctx.workspaceRoot,
-      shell: false,
-    });
-
-    const finish = (output: string) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeoutTimer);
-      ctx.abortSignal?.removeEventListener("abort", abort);
-      resolveProcess(output);
-    };
-
-    const abort = () => {
-      try {
-        child.kill();
-      } catch {
-        // ignore kill failures
-      }
-      finish("Command cancelled.");
-    };
-
-    const timeoutTimer = setTimeout(() => {
-      try {
-        child.kill();
-      } catch {
-        // ignore kill failures
-      }
-      finish("Command timed out.");
-    }, DEFAULT_TIMEOUT);
-
-    ctx.abortSignal?.addEventListener("abort", abort, { once: true });
-
-    child.stdout?.on("data", (data) => {
-      const chunk = String(data);
-      if (totalLength < MAX_OUTPUT_LENGTH) {
-        stdout += chunk;
-        totalLength += chunk.length;
-      }
-    });
-    child.stderr?.on("data", (data) => {
-      const chunk = String(data);
-      if (totalLength < MAX_OUTPUT_LENGTH) {
-        stderr += chunk;
-        totalLength += chunk.length;
-      }
-    });
-    child.on("error", (error: NodeJS.ErrnoException) => {
-      finish(error.code === "ENOENT" ? `Error: Executable not found: ${command}` : `Error executing command: ${error.message}`);
-    });
-    child.on("close", (code) => {
-      const output = stdout || stderr || (code === 0 ? "Command executed successfully (no output)" : `Command failed with exit code ${code}`);
-      finish(totalLength >= MAX_OUTPUT_LENGTH ? `${output.slice(0, MAX_OUTPUT_LENGTH)}\n[Output truncated]` : output);
-    });
-  });
-}
-
-function classifyCommandRisk(command: string, args: string[]): { blocked: boolean; writeLike: boolean; message: string } {
-  const textCommand = [command, ...args].join(" ").toLowerCase();
-  const dangerous = [
-    /rm\s+-rf\s+\/$/,
-    /rm\s+-rf\s+\/\*/,
-    /mkfs/,
-    /shutdown/,
-    /reboot/,
-    /:\(\)\{\s*:\|:&\s*\};:/,
-  ];
-  if (dangerous.some((pattern) => pattern.test(textCommand))) {
-    return { blocked: true, writeLike: false, message: "Blocked dangerous command." };
-  }
-  const writeLike = /\b(rm|del|move|mv|cp|copy|npm\s+install|git\s+checkout|git\s+reset|git\s+clean|mkdir|rmdir)\b/.test(textCommand);
-  return { blocked: false, writeLike, message: "" };
 }

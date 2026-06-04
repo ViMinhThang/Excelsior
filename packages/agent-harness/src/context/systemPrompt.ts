@@ -1,8 +1,14 @@
 import { formatAgentMode, type AgentMode } from "@excelsior/core";
 
-export function buildSystemPrompt(mode: AgentMode, skillsList?: string): string {
+export interface SystemPromptInput {
+  mode: AgentMode;
+  skillsList?: string;
+  projectInstructions?: string;
+}
+
+export function buildSystemPrompt(input: SystemPromptInput): string {
   let prompt = `
-CURRENT MODE: ${formatAgentMode(mode)}
+CURRENT MODE: ${formatAgentMode(input.mode)}
 - Plan mode: inspect, reason, and draft plans only. Do not write files or run write-like commands.
 - Act mode: you may apply edits after the normal confirmation flow.
 - If a task is unclear or a high-impact decision is missing, ask the user before continuing.
@@ -18,8 +24,12 @@ TOOL RULES:
 - Use spawnSubAgent for focused analysis tasks.
 `;
 
-  if (skillsList) {
-    prompt += `\n## Available Agent Skills\nYou have access to the following specialized engineering and productivity skills. To load the detailed instructions for a skill, execute its corresponding tool \`skill_<name>\` (e.g. \`skill_diagnose\`).\n\n${skillsList}\n`;
+  if (input.projectInstructions?.trim()) {
+    prompt += `\n## Project Instructions\n${input.projectInstructions.trim()}\n`;
+  }
+
+  if (input.skillsList) {
+    prompt += `\n## Available Agent Skills\nYou have access to the following specialized engineering and productivity skills. To load the detailed instructions for a skill, execute its corresponding tool \`skill_<name>\` (e.g. \`skill_diagnose\`).\n\n${input.skillsList}\n`;
   }
   return prompt;
 }

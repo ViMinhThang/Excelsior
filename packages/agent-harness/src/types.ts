@@ -97,9 +97,27 @@ export interface HarnessCatalog {
   settings: HarnessSettings;
 }
 
+export interface HarnessInspectionSnapshot {
+  session: Session | null;
+  events: AnyHarnessEvent[];
+  snapshot: HarnessSnapshot;
+}
+
+export interface HarnessReplayReport {
+  ok: boolean;
+  partial: boolean;
+  eventCount: number;
+  turnCount: number;
+  blockCount: number;
+  historyCount: number;
+  issues: string[];
+}
+
 export interface AgentHarness {
   getSnapshot(): HarnessSnapshot;
   getCatalog(): HarnessCatalog;
+  inspectCurrentSession(): HarnessInspectionSnapshot;
+  replayCurrentSession(): HarnessReplayReport;
   subscribe(listener: () => void): () => void;
   send(input: { content: string; mode: AgentMode; sessionId?: string } & SendOptions): Promise<void>;
   cancel(): void;
