@@ -41,19 +41,27 @@ describe("built-in harness tools", () => {
     };
     const tools = createBuiltInTools();
     const writeFile = tools.find((tool) => tool.name === "writeFile");
+    const write = tools.find((tool) => tool.name === "write");
     const editFile = tools.find((tool) => tool.name === "editFile");
+    const edit = tools.find((tool) => tool.name === "edit");
     const runCommand = tools.find((tool) => tool.name === "runCommand");
 
     expect(writeFile).toBeDefined();
+    expect(write).toBeDefined();
     expect(editFile).toBeDefined();
+    expect(edit).toBeDefined();
     expect(runCommand).toBeDefined();
 
     const writeResult = await writeFile?.execute({ filePath: "new.txt", content: "x" }, ctx);
+    const writeAliasResult = await write?.execute({ filePath: "alias.txt", content: "x" }, ctx);
     const editResult = await editFile?.execute({ filePath: "new.txt", oldText: "x", newText: "y" }, ctx);
+    const editAliasResult = await edit?.execute({ filePath: "new.txt", oldText: "x", newText: "y" }, ctx);
     const runResult = await runCommand?.execute({ command: "mkdir", args: ["new-dir"] }, ctx);
 
     expect(writeResult?.content).toBe(PLAN_MODE_BLOCKED_MESSAGE);
+    expect(writeAliasResult?.content).toBe(PLAN_MODE_BLOCKED_MESSAGE);
     expect(editResult?.content).toBe(PLAN_MODE_BLOCKED_MESSAGE);
+    expect(editAliasResult?.content).toBe(PLAN_MODE_BLOCKED_MESSAGE);
     expect(runResult?.content).toBe(PLAN_MODE_BLOCKED_MESSAGE);
     expect(confirm).not.toHaveBeenCalled();
   });

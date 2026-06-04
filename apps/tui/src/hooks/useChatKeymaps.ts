@@ -12,6 +12,7 @@ type UseChatKeymapsOptions = ChatModeKeymapContext & {
   confirmationPending?: unknown;
   questionPending?: unknown;
   cancel: () => void;
+  requestTurnCancel?: () => void;
   approve: () => void;
   approveAll: () => void;
   deny: () => void;
@@ -44,6 +45,7 @@ export function useChatKeymaps(options: UseChatKeymapsOptions) {
     approveAll,
     deny,
     cancel,
+    requestTurnCancel,
     cancelQuestion,
     isPaletteOpen,
     scrollUp,
@@ -81,5 +83,8 @@ export function useChatKeymaps(options: UseChatKeymapsOptions) {
     { enabled: !!questionPending && modalKeymapsEnabled, priority: 100 },
   );
 
-  useChatModeKeymaps(options);
+  const chatModeOptions = options.chatMode === "input"
+    ? { ...options, cancel: requestTurnCancel ?? cancel }
+    : options;
+  useChatModeKeymaps(chatModeOptions);
 }

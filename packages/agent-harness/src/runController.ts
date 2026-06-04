@@ -69,6 +69,8 @@ export class RunController {
 
     let activeMessages = [...input.messages];
     let stepCount = 0;
+    const completedTools = new Set<string>();
+    let failureMessage: string | undefined;
 
     try {
       while (true) {
@@ -177,6 +179,7 @@ export class RunController {
               completeToolExecution({
                 emit: input.emit,
                 startedTools,
+                completedTools,
                 stepToolResults,
                 toolCallId: part.toolCallId,
                 toolName: part.toolName,
@@ -192,6 +195,7 @@ export class RunController {
               completeToolExecution({
                 emit: input.emit,
                 startedTools,
+                completedTools,
                 stepToolResults,
                 toolCallId: part.toolCallId,
                 toolName: part.toolName,
@@ -205,6 +209,7 @@ export class RunController {
               completeToolExecution({
                 emit: input.emit,
                 startedTools,
+                completedTools,
                 stepToolResults,
                 toolCallId: part.toolCallId,
                 toolName: part.toolName,
@@ -219,7 +224,8 @@ export class RunController {
               break;
             case "error":
               failed = true;
-              input.emit(ERROR, { message: stringifyError(part.error) });
+              failureMessage = stringifyError(part.error);
+              input.emit(ERROR, { message: failureMessage });
               break;
           }
         }
@@ -273,9 +279,21 @@ export class RunController {
         cancelled = true;
       } else {
         failed = true;
-        input.emit(ERROR, { message: err.message });
+        failureMessage = err.message;
+        input.emit(ERROR, { message: failureMessage });
       }
     } finally {
+      if (cancelled || failed) {
+        finalizeIncompleteToolExecutions({
+          emit: input.emit,
+          startedTools,
+          completedTools,
+          toolInputs,
+          resultText: cancelled
+            ? "Tool execution was cancelled before the tool input completed."
+            : `Tool input failed before execution.${failureMessage ? ` ${failureMessage}` : ""}`,
+        });
+      }
       const endState = { cancelled: cancelled || failed };
       input.emit(TURN_END, endState);
       input.emit(AGENT_END, endState);
@@ -379,6 +397,7 @@ function emitToolMessage(
 function completeToolExecution(input: {
   emit: HarnessEventEmitter;
   startedTools: Set<string>;
+  completedTools: Set<string>;
   stepToolResults: StepToolResult[];
   toolCallId: string;
   toolName: string;
@@ -410,11 +429,40 @@ function completeToolExecution(input: {
     { relatedToolCallId: input.toolCallId },
   );
   emitToolMessage(input.emit, input.toolCallId, input.toolName, input.toolArgs, input.resultText, input.isError);
+  input.completedTools.add(input.toolCallId);
   input.stepToolResults.push({
     toolCallId: input.toolCallId,
     toolName: input.toolName,
     content: input.resultText,
   });
+}
+
+function finalizeIncompleteToolExecutions(input: {
+  emit: HarnessEventEmitter;
+  startedTools: Set<string>;
+  completedTools: Set<string>;
+  toolInputs: Map<string, { toolName: string; toolArgs: string }>;
+  resultText: string;
+}): void {
+  for (const toolCallId of input.startedTools) {
+    if (input.completedTools.has(toolCallId)) continue;
+    const toolInput = input.toolInputs.get(toolCallId);
+    const toolName = toolInput?.toolName ?? "tool";
+    const toolArgs = toolInput?.toolArgs ?? "{}";
+    input.emit(
+      TOOL_EXECUTION_END,
+      {
+        toolCallId,
+        toolName,
+        toolArgs,
+        result: input.resultText,
+        isError: true,
+      },
+      { relatedToolCallId: toolCallId },
+    );
+    emitToolMessage(input.emit, toolCallId, toolName, toolArgs, input.resultText, true);
+    input.completedTools.add(toolCallId);
+  }
 }
 
 function stringifyToolArgs(value: unknown): string {

@@ -13,6 +13,11 @@ import {
 } from "./events.js";
 import type { HarnessSnapshot } from "./types.js";
 
+type ToolExecutionEvent = Extract<
+  AnyHarnessEvent,
+  { type: typeof TOOL_EXECUTION_START | typeof TOOL_EXECUTION_UPDATE | typeof TOOL_EXECUTION_END }
+>;
+
 interface CanonicalReadModel {
   displayBlocks: ProjectedBlock[];
   aiHistory: AgentMessage[];
@@ -70,6 +75,7 @@ export function projectEventsToDisplayBlocks(events: readonly AnyHarnessEvent[])
 export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalReadModel {
   const displayBlocks: ProjectedBlock[] = [];
   const aiHistory: AgentMessage[] = [];
+  const displayIdCounts = new Map<string, number>();
   let assistant: AssistantDraft | null = null;
   let tool: ToolDraft | null = null;
 
@@ -77,7 +83,7 @@ export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalRead
     if (!assistant) return;
     displayBlocks.push({
       type: "assistant",
-      id: assistant.id,
+      id: nextDisplayBlockId(assistant.id),
       content: assistant.content,
       timestamp: assistant.timestamp,
       ...(forceFrozen || assistant.frozen ? { isFrozen: true as const } : {}),
@@ -87,28 +93,24 @@ export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalRead
 
   const flushTool = (forceFrozen?: boolean) => {
     if (!tool) return;
-    if (tool.toolName === "spawnSubAgent") {
-      displayBlocks.push({
-        type: "sub-agent",
-        id: tool.id,
-        role: readRoleFromToolArgs(tool.toolArgs),
-        state: buildSubAgentState(tool),
-        timestamp: tool.timestamp,
-        ...(forceFrozen || tool.status !== "pending" ? { isFrozen: true as const } : {}),
-      });
-    } else {
-      displayBlocks.push({
-        type: "tool-call",
-        id: tool.id,
-        toolName: tool.toolName,
-        toolArgs: tool.toolArgs,
-        status: tool.status,
-        content: tool.result,
-        timestamp: tool.timestamp,
-        ...(forceFrozen || tool.status !== "pending" ? { isFrozen: true as const } : {}),
-      });
-    }
+    upsertToolBlock(tool, forceFrozen);
     tool = null;
+  };
+
+  const nextDisplayBlockId = (id: string): string => {
+    const count = displayIdCounts.get(id) ?? 0;
+    displayIdCounts.set(id, count + 1);
+    return count === 0 ? id : `${id}:${count + 1}`;
+  };
+
+  const upsertToolBlock = (draft: ToolDraft, forceFrozen?: boolean) => {
+    const block = toolBlockFromDraft(draft, forceFrozen);
+    const existingIndex = displayBlocks.findIndex((item) => item.id === block.id);
+    if (existingIndex === -1) {
+      displayBlocks.push(block);
+    } else {
+      displayBlocks[existingIndex] = block;
+    }
   };
 
   const flushAll = (forceFrozen?: boolean) => {
@@ -142,7 +144,7 @@ export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalRead
         flushAll(true);
         displayBlocks.push({
           type: "user",
-          id: message.id,
+          id: nextDisplayBlockId(message.id),
           content: message.content,
           timestamp: event.timestamp,
           isFrozen: true,
@@ -164,8 +166,9 @@ export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalRead
     } else if (event.type === TOOL_EXECUTION_START) {
       flushAssistant(true);
       flushTool(true);
+      const id = toolDisplayBlockId(event);
       tool = {
-        id: event.data.toolCallId,
+        id,
         toolName: event.data.toolName,
         toolArgs: event.data.toolArgs,
         status: "pending",
@@ -175,7 +178,8 @@ export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalRead
       };
     } else if (event.type === TOOL_EXECUTION_UPDATE) {
       const currentTool = tool as ToolDraft | null;
-      if (currentTool && currentTool.id === event.data.toolCallId) {
+      const id = toolDisplayBlockId(event);
+      if (currentTool && currentTool.id === id) {
         tool = {
           id: currentTool.id,
           toolName: currentTool.toolName,
@@ -190,14 +194,27 @@ export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalRead
     } else if (event.type === TOOL_EXECUTION_END) {
       const status = event.data.isError ? "error" : "completed";
       const previousTool = tool as ToolDraft | null;
+      const id = toolDisplayBlockId(event);
+      aiHistory.push({
+        role: "assistant",
+        content: "",
+        tool_calls: [{
+          id: event.data.toolCallId,
+          type: "function",
+          function: {
+            name: event.data.toolName,
+            arguments: event.data.toolArgs,
+          },
+        }],
+      });
       tool = {
-        id: event.data.toolCallId,
+        id,
         toolName: event.data.toolName,
         toolArgs: event.data.toolArgs,
         status,
         result: event.data.result,
         timestamp: event.timestamp,
-        startTimestamp: previousTool?.id === event.data.toolCallId
+        startTimestamp: previousTool?.id === id
           ? previousTool.startTimestamp
           : event.timestamp,
         endTimestamp: event.timestamp,
@@ -224,6 +241,34 @@ export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalRead
 
   flushAll(false);
   return { displayBlocks, aiHistory };
+}
+
+function toolDisplayBlockId(event: ToolExecutionEvent): string {
+  return `${event.turnId ?? event.runId}:${event.data.toolCallId}`;
+}
+
+function toolBlockFromDraft(tool: ToolDraft, forceFrozen?: boolean): ProjectedBlock {
+  if (tool.toolName === "spawnSubAgent") {
+    return {
+      type: "sub-agent",
+      id: tool.id,
+      role: readRoleFromToolArgs(tool.toolArgs),
+      state: buildSubAgentState(tool),
+      timestamp: tool.timestamp,
+      ...(forceFrozen || tool.status !== "pending" ? { isFrozen: true as const } : {}),
+    };
+  }
+
+  return {
+    type: "tool-call",
+    id: tool.id,
+    toolName: tool.toolName,
+    toolArgs: tool.toolArgs,
+    status: tool.status,
+    content: tool.result,
+    timestamp: tool.timestamp,
+    ...(forceFrozen || tool.status !== "pending" ? { isFrozen: true as const } : {}),
+  };
 }
 
 function toAgentMessage(message: HarnessMessage): AgentMessage {
