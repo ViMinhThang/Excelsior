@@ -8,15 +8,19 @@ import {
 type AppearanceTabProps = {
   isDarkMode: boolean;
   themeInput: DesktopTheme;
+  fontInput: string;
   onModeToggle: (nextDark: boolean) => void;
   onThemeChange: (theme: DesktopTheme) => void;
+  onFontChange: (font: string) => void;
 };
 
 export function AppearanceTab({
   isDarkMode,
   themeInput,
+  fontInput,
   onModeToggle,
   onThemeChange,
+  onFontChange,
 }: AppearanceTabProps) {
   const selectedThemeConfig = getThemeOption(themeInput);
   const themeOptions = themeOptionsForMode(isDarkMode);
@@ -65,6 +69,31 @@ export function AppearanceTab({
                 {option.name}
               </option>
             ))}
+          </select>
+          <ChevronDown className="settings-select-icon" />
+        </div>
+      </div>
+
+      <div className="settings-field">
+        <label className="settings-label" htmlFor="font">
+          Font Family
+        </label>
+        <div className="settings-select-wrap">
+          <select
+            id="font"
+            value={fontInput}
+            onChange={(event) => onFontChange(event.target.value)}
+            className="settings-control settings-select transition-snappy-colors"
+          >
+            <option className="bg-brand-surface text-brand-text-strong" value="ui-sans-serif, system-ui, sans-serif">
+              Sans-serif
+            </option>
+            <option className="bg-brand-surface text-brand-text-strong" value="var(--font-mono)">
+              Monospace (JetBrains Mono)
+            </option>
+            <option className="bg-brand-surface text-brand-text-strong" value="var(--font-display)">
+              Serif (DM Serif Display)
+            </option>
           </select>
           <ChevronDown className="settings-select-icon" />
         </div>

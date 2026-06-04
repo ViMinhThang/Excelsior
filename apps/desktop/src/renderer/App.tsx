@@ -42,6 +42,11 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [openToolCalls, setOpenToolCalls] = useState<Record<string, boolean>>({});
   const [theme, setTheme] = useState<DesktopTheme>(getStoredTheme);
+  const [font, setFont] = useState<string>(() => localStorage.getItem("excelsior-font") || "ui-sans-serif, system-ui, sans-serif");
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--font-brand", font);
+  }, [font]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -76,10 +81,12 @@ export default function App() {
     setInputValue(value);
   };
 
-  const handleSaveSettings = (nextSettings: Partial<AppSettings>, nextTheme: DesktopTheme) => {
+  const handleSaveSettings = (nextSettings: Partial<AppSettings>, nextTheme: DesktopTheme, nextFont: string) => {
     saveSettings(nextSettings);
     localStorage.setItem("excelsior-theme", nextTheme);
     setTheme(nextTheme);
+    localStorage.setItem("excelsior-font", nextFont);
+    setFont(nextFont);
     setShowSettings(false);
   };
 
@@ -151,9 +158,11 @@ export default function App() {
         <SettingsDialog
           settings={settings}
           theme={theme}
+          font={font}
           onClose={() => setShowSettings(false)}
           onSave={handleSaveSettings}
           onThemeChange={handleThemeChange}
+          onFontChange={setFont}
         />
       )}
     </div>

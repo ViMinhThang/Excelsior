@@ -34,7 +34,7 @@ export function WorkspaceGate({ error, isInitializing, onSelectWorkspace }: Work
             disabled={isInitializing}
             className="group flex h-11 w-full items-center justify-center gap-2.5 rounded-xl bg-brand-accent px-4 text-sm font-semibold text-brand-accent-contrast hover:bg-brand-accent-hover disabled:opacity-50 transition-snappy-colors"
           >
-            <FolderOpen className="h-4 w-4 transition-transform group-hover:scale-105" />
+            <FolderOpen className="h-4 w-4" />
             {isInitializing ? "Opening..." : "Open Workspace"}
           </button>
 

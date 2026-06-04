@@ -11,9 +11,15 @@ export const DARK_THEMES = [
     valueHash: "#7AA2F7",
     swatches: ["#1a1b26", "#16161e", "#1f2335", "#c0caf5", "#7aa2f7"],
   },
-] as const;
-
-export const LIGHT_THEMES = [
+  {
+    id: "nordic-blue" as const,
+    name: "Nordic Blue",
+    valueHash: "#88C0D0",
+    swatches: ["#2e3440", "#242933", "#3b4252", "#eceff4", "#88c0d0"],
+  },
+ ] as const;
+ 
+ export const LIGHT_THEMES = [
   {
     id: "gruvbox" as const,
     name: "Gruvbox Light",
@@ -27,18 +33,18 @@ export const LIGHT_THEMES = [
     swatches: ["#e1e2e7", "#d5d6db", "#c8c9d1", "#343b58", "#385af6"],
   },
 ] as const;
-
-export const ALL_THEMES = [...DARK_THEMES, ...LIGHT_THEMES] as const;
-
-export type DesktopTheme = (typeof ALL_THEMES)[number]["id"];
-
-export function isDesktopTheme(theme: string | null): theme is DesktopTheme {
-  return ALL_THEMES.some((option) => option.id === theme);
-}
-
-export function isThemeDark(theme: DesktopTheme): boolean {
-  return theme === "one-dark-pro" || theme === "tokyo-night";
-}
+ 
+ export const ALL_THEMES = [...DARK_THEMES, ...LIGHT_THEMES] as const;
+ 
+ export type DesktopTheme = (typeof ALL_THEMES)[number]["id"];
+ 
+ export function isDesktopTheme(theme: string | null): theme is DesktopTheme {
+   return ALL_THEMES.some((option) => option.id === theme);
+ }
+ 
+ export function isThemeDark(theme: DesktopTheme): boolean {
+   return theme === "one-dark-pro" || theme === "tokyo-night" || theme === "nordic-blue";
+ }
 
 export function defaultThemeForMode(darkMode: boolean): DesktopTheme {
   return darkMode ? "one-dark-pro" : "gruvbox";
