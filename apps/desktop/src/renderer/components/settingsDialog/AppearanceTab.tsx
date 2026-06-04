@@ -91,6 +91,9 @@ export function AppearanceTab({
             <option className="bg-brand-surface text-brand-text-strong" value="var(--font-mono)">
               Monospace (JetBrains Mono)
             </option>
+            <option className="bg-brand-surface text-brand-text-strong" value="var(--font-caskaydia)">
+              Monospace (Caskaydia Cove)
+            </option>
             <option className="bg-brand-surface text-brand-text-strong" value="var(--font-display)">
               Serif (DM Serif Display)
             </option>
