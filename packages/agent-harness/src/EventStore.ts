@@ -19,11 +19,13 @@ export class EventStore {
     this.storage.replaceEvents(this.workspaceId, session, []);
   }
 
-  addEvent(event: AnyHarnessEvent, session: Session): void {
-    this.events.push(event);
+  recordEvent(event: AnyHarnessEvent, session: Session, isActive: boolean): Session {
+    if (isActive) {
+      this.events.push(event);
+    }
     this.sequence = event.sequence;
     this.lastEventId = event.id;
-    this.storage.appendEvent(this.workspaceId, session, event);
+    return this.storage.appendEvent(this.workspaceId, session, event);
   }
 
   replaceEvents(session: Session | null, events: AnyHarnessEvent[]): void {

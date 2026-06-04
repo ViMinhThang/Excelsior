@@ -73,11 +73,6 @@ export type HarnessCommandHandler = (
   harness: AgentHarness,
 ) => CommandResult | Promise<CommandResult>;
 
-export type HarnessCommandHandler = (
-  args: string[],
-  harness: AgentHarness,
-) => CommandResult | Promise<CommandResult>;
-
 export interface HarnessCommand {
   definition: CommandDefinition;
   execute: HarnessCommandHandler;
