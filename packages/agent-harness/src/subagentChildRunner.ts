@@ -33,7 +33,7 @@ type ChildOutput =
   | { type: "text_delta"; delta: string }
   | { type: "tool_start"; toolCallId: string; toolName: string; toolArgs: string }
   | { type: "tool_update"; toolCallId: string; delta: string }
-  | { type: "tool_end"; toolCallId: string; toolName: string; toolArgs: string; isError: boolean }
+  | { type: "tool_end"; toolCallId: string; toolName: string; toolArgs: string; result: string; isError: boolean }
   | { type: "final"; content: string }
   | { type: "error"; message: string };
 
@@ -132,6 +132,7 @@ async function main(): Promise<void> {
           toolCallId: toolData.toolCallId,
           toolName: toolData.toolName,
           toolArgs: toolData.toolArgs,
+          result: toolData.result,
           isError: toolData.isError,
         });
         break;
@@ -150,7 +151,10 @@ async function main(): Promise<void> {
   await new RunController().run({
     messages: [{ role: "user", content: request.prompt }],
     systemPrompt: buildChildSystemPrompt(request),
-    settings: request.settings,
+    settings: {
+      ...request.settings,
+      agentToolLoopSteps: "8",
+    },
     providers,
     tools,
     toolContext: ctx,

@@ -114,6 +114,9 @@ export class FileHarnessStorage {
       if (parsed.kind === "session") session = parsed.session;
       if (parsed.kind === "event") events.push(parsed.event);
     }
+    if (session) {
+      session = this.deriveSessionFromEvents(session, events);
+    }
     return { session, events };
   }
 
@@ -183,10 +186,28 @@ export class FileHarnessStorage {
     const path = this.sessionPath(workspaceId, session.id);
     this.ensureDirectory(this.sessionDirectory(workspaceId));
     const lines = [
-      JSON.stringify({ kind: "session", session } satisfies SessionFileLine),
       JSON.stringify({ kind: "event", event } satisfies SessionFileLine),
     ];
     appendFileSync(path, `${lines.join("\n")}\n`, "utf-8");
+  }
+
+  private deriveSessionFromEvents(session: Session, events: readonly AnyHarnessEvent[]): Session {
+    let userInput = session.metadata.userInput;
+    if (!userInput) {
+      const firstUserMessage = events.find(
+        (event): event is Extract<AnyHarnessEvent, { type: typeof MESSAGE_END }> =>
+          event.type === MESSAGE_END && event.data.message.role === "user",
+      );
+      userInput = firstUserMessage?.data.message.content ?? "";
+    }
+    return {
+      ...session,
+      updatedAt: events.at(-1)?.timestamp ?? session.updatedAt,
+      metadata: {
+        ...session.metadata,
+        userInput,
+      },
+    };
   }
 
   private settingsPath(): string {
