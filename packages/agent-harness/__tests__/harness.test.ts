@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +10,9 @@ import {
 } from "@excelsior/agent-harness";
 import {
   AGENT_START,
+  MESSAGE_END,
+  MESSAGE_START,
+  MESSAGE_UPDATE,
   TOOL_EXECUTION_START,
   TURN_START,
 } from "../src/events.js";
@@ -24,6 +27,7 @@ async function makeTempDir() {
 }
 
 afterEach(async () => {
+  vi.useRealTimers();
   if (originalDeepSeekApiKey === undefined) {
     delete process.env.DEEPSEEK_API_KEY;
   } else {
@@ -121,6 +125,83 @@ describe("AgentHarness", () => {
       }),
     ]));
     expect(replay.ok).toBe(true);
+  });
+
+  it("coalesces rapid event notifications while keeping snapshots flushable", async () => {
+    vi.useFakeTimers();
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    const sessionId = harness.getSnapshot().currentSessionId;
+    expect(sessionId).toBeTruthy();
+    const listener = vi.fn();
+    harness.subscribe(listener);
+
+    const store = harness as any;
+    store.eventBus.emit("run_notify", AGENT_START, {}, { sessionId, turnId: "turn_notify" });
+    store.eventBus.emit("run_notify", TURN_START, {}, { sessionId, turnId: "turn_notify" });
+    store.eventBus.emit("run_notify", TOOL_EXECUTION_START, {
+      toolCallId: "call_notify",
+      toolName: "view",
+      toolArgs: "{\"filePath\":\"package.json\"}",
+    }, { sessionId, turnId: "turn_notify", relatedToolCallId: "call_notify" });
+
+    expect(listener).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(32);
+    expect(listener).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    store.eventBus.emit("run_notify", TOOL_EXECUTION_START, {
+      toolCallId: "call_notify_2",
+      toolName: "view",
+      toolArgs: "{\"filePath\":\"packages/core/package.json\"}",
+    }, { sessionId, turnId: "turn_notify", relatedToolCallId: "call_notify_2" });
+
+    expect(harness.getSnapshot().displayBlocks).toHaveLength(2);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("persists streaming message deltas without repeated session headers", async () => {
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    const sessionId = harness.getSnapshot().currentSessionId;
+    expect(sessionId).toBeTruthy();
+
+    const store = harness as any;
+    const runId = "run_storage";
+    const turnId = "turn_storage";
+    const message = { id: "msg_storage", role: "assistant" as const, content: "" };
+    store.eventBus.emit(runId, MESSAGE_START, { message }, { sessionId, turnId });
+    store.eventBus.emit(runId, MESSAGE_UPDATE, {
+      messageId: message.id,
+      role: "assistant",
+      delta: "Hello ",
+    }, { sessionId, turnId });
+    store.eventBus.emit(runId, MESSAGE_UPDATE, {
+      messageId: message.id,
+      role: "assistant",
+      delta: "world",
+    }, { sessionId, turnId });
+    store.eventBus.emit(runId, MESSAGE_END, {
+      message: { ...message, content: "Hello world" },
+    }, { sessionId, turnId });
+
+    const raw = await readFile(join(dataDir, "sessions", "ws_test", `${sessionId}.jsonl`), "utf-8");
+    const records = raw.trim().split(/\r?\n/).map((line) => JSON.parse(line) as any);
+    const sessionRecords = records.filter((record) => record.kind === "session");
+    const messageUpdates = records
+      .filter((record) => record.kind === "event")
+      .map((record) => record.event)
+      .filter((event) => event.type === MESSAGE_UPDATE);
+
+    expect(sessionRecords).toHaveLength(1);
+    expect(messageUpdates).toHaveLength(2);
+    expect(messageUpdates.every((event) => !("content" in event.data))).toBe(true);
+    expect(harness.getSnapshot().displayBlocks).toMatchObject([
+      { type: "assistant", content: "Hello world" },
+    ]);
   });
 
   it("blocks write-like built-in tools in Plan mode before confirmation", async () => {

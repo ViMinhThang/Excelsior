@@ -1,5 +1,5 @@
 import { memo, type FC, type ReactNode } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, Static } from "ink";
 import UserMessage from "./UserMessage.js";
 import AgentMessage from "./AgentMessage.js";
 import ToolMessage from "./ToolMessage.js";
@@ -11,6 +11,7 @@ import { theme } from "../../theme.js";
 interface ChatHistoryProps {
   blocks: ProjectedBlock[];
   commandsExpanded?: boolean;
+  historyRemountKey?: number;
 }
 
 function renderBlock(
@@ -96,7 +97,7 @@ function renderSubAgentTools(block: ProjectedBlock & { type: "sub-agent" }) {
           toolName={tool.toolName}
           toolArgs={tool.toolArgs}
           status={tool.status || "completed"}
-          content=""
+          content={tool.content ?? ""}
           nested
           expanded
         />
@@ -108,10 +109,28 @@ function renderSubAgentTools(block: ProjectedBlock & { type: "sub-agent" }) {
 const ChatHistory: FC<ChatHistoryProps> = ({
   blocks,
   commandsExpanded = true,
+  historyRemountKey = 0,
 }) => {
+  // Find the boundary of the last user prompt
+  let lastUserIndex = -1;
+  for (let i = blocks.length - 1; i >= 0; i--) {
+    if (blocks[i].type === "user") {
+      lastUserIndex = i;
+      break;
+    }
+  }
+
+  const staticBlocks = lastUserIndex >= 0 ? blocks.slice(0, lastUserIndex) : [];
+  const dynamicBlocks = lastUserIndex >= 0 ? blocks.slice(lastUserIndex) : blocks;
+
   return (
     <Box flexDirection="column">
-      {blocks.map((block) => renderBlock(block, commandsExpanded))}
+      {staticBlocks.length > 0 && (
+        <Static key={historyRemountKey} items={staticBlocks}>
+          {(block) => renderBlock(block, false)}
+        </Static>
+      )}
+      {dynamicBlocks.map((block) => renderBlock(block, commandsExpanded))}
     </Box>
   );
 };

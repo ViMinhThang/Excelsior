@@ -3,6 +3,7 @@ export interface ToolCallInfo {
   toolArgs: string;
   toolCallId: string;
   status: "pending" | "completed" | "error";
+  content?: string;
 }
 
 export type ToolCallStatus = "pending" | "completed" | "error";
@@ -66,6 +67,7 @@ export type SubAgentProjectionPart =
       toolArgs: string;
       toolCallId: string;
       status: "pending" | "completed" | "error";
+      content?: string;
     };
 
 export interface SubAgentViewModel {

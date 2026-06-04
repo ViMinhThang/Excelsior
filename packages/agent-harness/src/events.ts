@@ -42,7 +42,6 @@ export type HarnessEventDataMap = {
     messageId: string;
     role: "assistant";
     delta: string;
-    content: string;
   };
   [MESSAGE_END]: { message: HarnessMessage };
   [TOOL_EXECUTION_START]: {
@@ -68,7 +67,7 @@ export type HarnessEventDataMap = {
       | { type: "text_delta"; delta: string }
       | { type: "tool_start"; toolCallId: string; toolName: string; toolArgs: string }
       | { type: "tool_update"; toolCallId: string; delta: string }
-      | { type: "tool_end"; toolCallId: string; toolName: string; toolArgs: string; isError: boolean }
+      | { type: "tool_end"; toolCallId: string; toolName: string; toolArgs: string; result?: string; isError: boolean }
       | { type: "final"; content: string }
       | { type: "error"; message: string };
   };
