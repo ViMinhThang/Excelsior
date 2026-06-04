@@ -23,7 +23,7 @@ import {
   TURN_START,
   type HarnessEventEmitter,
 } from "./events.js";
-import { toModelMessages } from "./context/index.js";
+import { toModelMessages, AssistantStateMachine } from "./context/index.js";
 import type { ProviderRegistry, ToolRegistry } from "./registries.js";
 import type {
   HarnessSettings,
@@ -63,10 +63,8 @@ export class RunController {
     let cancelled = false;
     let failed = false;
     const runPrefix = randomUUID().slice(0, 8);
-    const assistant = new AssistantMessageBuilder(input.emit);
-    const toolInputs = new Map<string, { toolName: string; toolArgs: string }>();
-    const toolInputUpdateBuffers = new Map<string, ToolInputUpdateBuffer>();
-    const startedTools = new Set<string>();
+    const state = new AssistantStateMachine(input.emit);
+
     let stepLimit: number | undefined;
     const rawSteps = input.settings.agentToolLoopSteps;
     const normalizedSteps = normalizeAgentToolLoopSteps(rawSteps);
@@ -79,7 +77,6 @@ export class RunController {
 
     let activeMessages = [...input.messages];
     let stepCount = 0;
-    const completedTools = new Set<string>();
     let failureMessage: string | undefined;
 
     try {
@@ -113,76 +110,24 @@ export class RunController {
 
           switch (part.type) {
             case "text-start":
-              assistant.start(`msg_${runPrefix}_${part.id}`);
+              state.startMessage(`msg_${runPrefix}_${part.id}`);
               break;
             case "text-delta":
-              assistant.update(`msg_${runPrefix}_${part.id}`, part.text);
+              state.updateMessage(`msg_${runPrefix}_${part.id}`, part.text);
               stepText += part.text;
               break;
             case "text-end":
-              assistant.end(`msg_${runPrefix}_${part.id}`);
+              state.endMessage(`msg_${runPrefix}_${part.id}`);
               break;
             case "tool-input-start":
-              toolInputs.set(part.id, { toolName: part.toolName, toolArgs: "" });
-              toolInputUpdateBuffers.set(part.id, {
-                toolName: part.toolName,
-                delta: "",
-                lastEmittedAt: Date.now(),
-              });
-              assistant.end();
-              startedTools.add(part.id);
-              input.emit(
-                TOOL_EXECUTION_START,
-                {
-                  toolCallId: part.id,
-                  toolName: part.toolName,
-                  toolArgs: "",
-                },
-                { relatedToolCallId: part.id },
-              );
+              state.startTool(part.id, part.toolName);
               break;
             case "tool-input-delta": {
-              const current = toolInputs.get(part.id);
-              if (current) {
-                toolInputs.set(part.id, {
-                  ...current,
-                  toolArgs: `${current.toolArgs}${part.delta}`,
-                });
-                queueToolInputUpdate({
-                  emit: input.emit,
-                  buffers: toolInputUpdateBuffers,
-                  toolCallId: part.id,
-                  toolName: current.toolName,
-                  delta: part.delta,
-                });
-              }
+              state.updateToolInput(part.id, part.delta);
               break;
             }
             case "tool-call": {
-              assistant.end();
-              const toolInput = toolInputs.get(part.toolCallId);
-              const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
-              flushToolInputUpdate({
-                emit: input.emit,
-                buffers: toolInputUpdateBuffers,
-                toolCallId: part.toolCallId,
-              });
-              toolInputs.set(part.toolCallId, {
-                toolName: part.toolName,
-                toolArgs,
-              });
-              if (!startedTools.has(part.toolCallId)) {
-                startedTools.add(part.toolCallId);
-                input.emit(
-                  TOOL_EXECUTION_START,
-                  {
-                    toolCallId: part.toolCallId,
-                    toolName: part.toolName,
-                    toolArgs,
-                  },
-                  { relatedToolCallId: part.toolCallId },
-                );
-              }
+              const toolArgs = state.endToolInput(part.toolCallId, part.input);
               stepHasToolCalls = true;
               stepToolCalls.push({
                 id: part.toolCallId,
@@ -192,63 +137,35 @@ export class RunController {
               break;
             }
             case "tool-result": {
-              const toolInput = toolInputs.get(part.toolCallId);
-              const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
-              flushToolInputUpdate({
-                emit: input.emit,
-                buffers: toolInputUpdateBuffers,
-                toolCallId: part.toolCallId,
-              });
-              completeToolExecution({
-                emit: input.emit,
-                startedTools,
-                completedTools,
-                stepToolResults,
+              const toolArgs = state.endToolInput(part.toolCallId, part.input);
+              const resultText = stringifyToolResult(part.output);
+              state.completeTool(part.toolCallId, toolArgs, resultText, false);
+              stepToolResults.push({
                 toolCallId: part.toolCallId,
                 toolName: part.toolName,
-                toolArgs,
-                resultText: stringifyToolResult(part.output),
-                isError: false,
+                content: resultText,
               });
               break;
             }
             case "tool-error": {
-              const toolInput = toolInputs.get(part.toolCallId);
-              const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
-              flushToolInputUpdate({
-                emit: input.emit,
-                buffers: toolInputUpdateBuffers,
-                toolCallId: part.toolCallId,
-              });
-              completeToolExecution({
-                emit: input.emit,
-                startedTools,
-                completedTools,
-                stepToolResults,
+              const toolArgs = state.endToolInput(part.toolCallId, part.input);
+              const resultText = stringifyError(part.error);
+              state.completeTool(part.toolCallId, toolArgs, resultText, true);
+              stepToolResults.push({
                 toolCallId: part.toolCallId,
                 toolName: part.toolName,
-                toolArgs,
-                resultText: stringifyError(part.error),
-                isError: true,
+                content: resultText,
               });
               break;
             }
             case "tool-output-denied": {
-              flushToolInputUpdate({
-                emit: input.emit,
-                buffers: toolInputUpdateBuffers,
-                toolCallId: part.toolCallId,
-              });
-              completeToolExecution({
-                emit: input.emit,
-                startedTools,
-                completedTools,
-                stepToolResults,
+              const toolArgs = state.endToolInput(part.toolCallId);
+              const resultText = "Tool output denied.";
+              state.completeTool(part.toolCallId, toolArgs, resultText, true);
+              stepToolResults.push({
                 toolCallId: part.toolCallId,
                 toolName: part.toolName,
-                toolArgs: "{}",
-                resultText: "Tool output denied.",
-                isError: true,
+                content: resultText,
               });
               break;
             }
@@ -265,7 +182,7 @@ export class RunController {
 
         if (cancelled || failed) break;
 
-        assistant.end();
+        state.endMessage();
 
         if (stepText.trim() || stepToolCalls.length > 0) {
           activeMessages.push({
@@ -299,8 +216,7 @@ export class RunController {
 
         stepCount++;
         if (stepLimit !== undefined && stepCount >= stepLimit) {
-          emitAssistantNotice(
-            input.emit,
+          state.emitNotice(
             `Agent stopped after reaching the configured ${stepLimit}-step tool-loop limit.`,
           );
           break;
@@ -317,268 +233,17 @@ export class RunController {
       }
     } finally {
       if (cancelled || failed) {
-        flushAllToolInputUpdates({
-          emit: input.emit,
-          buffers: toolInputUpdateBuffers,
-        });
-        finalizeIncompleteToolExecutions({
-          emit: input.emit,
-          startedTools,
-          completedTools,
-          toolInputs,
-          resultText: cancelled
+        state.flushAllToolUpdates();
+        state.finalizeIncompleteTools(
+          cancelled
             ? "Tool execution was cancelled before the tool input completed."
             : `Tool input failed before execution.${failureMessage ? ` ${failureMessage}` : ""}`,
-        });
+        );
       }
       const endState = { cancelled: cancelled || failed };
       input.emit(TURN_END, endState);
       input.emit(AGENT_END, endState);
     }
-  }
-}
-
-class AssistantMessageBuilder {
-  private id: string | null = null;
-  private content = "";
-
-  constructor(private readonly emit: HarnessEventEmitter) {}
-
-  start(id = `msg_${randomUUID()}`): void {
-    if (this.id) return;
-    this.id = id;
-    this.content = "";
-    this.emit(MESSAGE_START, {
-      message: {
-        id: this.id,
-        role: "assistant",
-        content: "",
-      },
-    });
-  }
-
-  update(id: string, delta: string): void {
-    this.start(id);
-    this.content += delta;
-    this.emit(MESSAGE_UPDATE, {
-      messageId: this.id ?? id,
-      role: "assistant",
-      delta,
-      content: this.content,
-    });
-  }
-
-  end(expectedId?: string): void {
-    if (!this.id) return;
-    const id = this.id;
-    const content = this.content;
-    this.id = null;
-    this.content = "";
-    if (expectedId && expectedId !== id && !content.trim()) return;
-    this.emit(MESSAGE_END, {
-      message: {
-        id,
-        role: "assistant",
-        content,
-      },
-    });
-  }
-}
-
-function emitAssistantNotice(emit: HarnessEventEmitter, content: string): void {
-  const id = `msg_${randomUUID()}`;
-  emit(MESSAGE_START, {
-    message: {
-      id,
-      role: "assistant",
-      content: "",
-    },
-  });
-  emit(MESSAGE_UPDATE, {
-    messageId: id,
-    role: "assistant",
-    delta: content,
-    content,
-  });
-  emit(MESSAGE_END, {
-    message: {
-      id,
-      role: "assistant",
-      content,
-    },
-  });
-}
-
-function emitToolMessage(
-  emit: HarnessEventEmitter,
-  toolCallId: string,
-  toolName: string,
-  toolArgs: string,
-  content: string,
-  isError = false,
-): void {
-  const message = {
-    id: `msg_${toolCallId}`,
-    role: "tool" as const,
-    content,
-    modelContent: `[Tool result: ${toolName}]\n${content}`,
-    toolCallId,
-    toolName,
-    toolArgs,
-    isError,
-  };
-  emit(MESSAGE_START, { message }, { relatedToolCallId: toolCallId });
-  emit(MESSAGE_END, { message }, { relatedToolCallId: toolCallId });
-}
-
-function queueToolInputUpdate(input: {
-  emit: HarnessEventEmitter;
-  buffers: Map<string, ToolInputUpdateBuffer>;
-  toolCallId: string;
-  toolName: string;
-  delta: string;
-}): void {
-  const now = Date.now();
-  const current = input.buffers.get(input.toolCallId) ?? {
-    toolName: input.toolName,
-    delta: "",
-    lastEmittedAt: now,
-  };
-  input.buffers.set(input.toolCallId, {
-    toolName: input.toolName || current.toolName,
-    delta: `${current.delta}${input.delta}`,
-    lastEmittedAt: current.lastEmittedAt,
-  });
-
-  const buffered = input.buffers.get(input.toolCallId);
-  if (!buffered) return;
-  if (
-    buffered.delta.length >= TOOL_INPUT_UPDATE_CHARS ||
-    now - buffered.lastEmittedAt >= TOOL_INPUT_UPDATE_INTERVAL_MS
-  ) {
-    flushToolInputUpdate({
-      emit: input.emit,
-      buffers: input.buffers,
-      toolCallId: input.toolCallId,
-      now,
-    });
-  }
-}
-
-function flushToolInputUpdate(input: {
-  emit: HarnessEventEmitter;
-  buffers: Map<string, ToolInputUpdateBuffer>;
-  toolCallId: string;
-  now?: number;
-}): void {
-  const current = input.buffers.get(input.toolCallId);
-  if (!current?.delta) return;
-  input.emit(
-    TOOL_EXECUTION_UPDATE,
-    {
-      toolCallId: input.toolCallId,
-      toolName: current.toolName,
-      delta: current.delta,
-    },
-    { relatedToolCallId: input.toolCallId },
-  );
-  input.buffers.set(input.toolCallId, {
-    toolName: current.toolName,
-    delta: "",
-    lastEmittedAt: input.now ?? Date.now(),
-  });
-}
-
-function flushAllToolInputUpdates(input: {
-  emit: HarnessEventEmitter;
-  buffers: Map<string, ToolInputUpdateBuffer>;
-}): void {
-  for (const toolCallId of input.buffers.keys()) {
-    flushToolInputUpdate({
-      emit: input.emit,
-      buffers: input.buffers,
-      toolCallId,
-    });
-  }
-}
-
-function completeToolExecution(input: {
-  emit: HarnessEventEmitter;
-  startedTools: Set<string>;
-  completedTools: Set<string>;
-  stepToolResults: StepToolResult[];
-  toolCallId: string;
-  toolName: string;
-  toolArgs: string;
-  resultText: string;
-  isError: boolean;
-}): void {
-  if (!input.startedTools.has(input.toolCallId)) {
-    input.startedTools.add(input.toolCallId);
-    input.emit(
-      TOOL_EXECUTION_START,
-      {
-        toolCallId: input.toolCallId,
-        toolName: input.toolName,
-        toolArgs: input.toolArgs,
-      },
-      { relatedToolCallId: input.toolCallId },
-    );
-  }
-  input.emit(
-    TOOL_EXECUTION_END,
-    {
-      toolCallId: input.toolCallId,
-      toolName: input.toolName,
-      toolArgs: input.toolArgs,
-      result: input.resultText,
-      isError: input.isError,
-    },
-    { relatedToolCallId: input.toolCallId },
-  );
-  emitToolMessage(input.emit, input.toolCallId, input.toolName, input.toolArgs, input.resultText, input.isError);
-  input.completedTools.add(input.toolCallId);
-  input.stepToolResults.push({
-    toolCallId: input.toolCallId,
-    toolName: input.toolName,
-    content: input.resultText,
-  });
-}
-
-function finalizeIncompleteToolExecutions(input: {
-  emit: HarnessEventEmitter;
-  startedTools: Set<string>;
-  completedTools: Set<string>;
-  toolInputs: Map<string, { toolName: string; toolArgs: string }>;
-  resultText: string;
-}): void {
-  for (const toolCallId of input.startedTools) {
-    if (input.completedTools.has(toolCallId)) continue;
-    const toolInput = input.toolInputs.get(toolCallId);
-    const toolName = toolInput?.toolName ?? "tool";
-    const toolArgs = toolInput?.toolArgs ?? "{}";
-    input.emit(
-      TOOL_EXECUTION_END,
-      {
-        toolCallId,
-        toolName,
-        toolArgs,
-        result: input.resultText,
-        isError: true,
-      },
-      { relatedToolCallId: toolCallId },
-    );
-    emitToolMessage(input.emit, toolCallId, toolName, toolArgs, input.resultText, true);
-    input.completedTools.add(toolCallId);
-  }
-}
-
-function stringifyToolArgs(value: unknown): string {
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value ?? {});
-  } catch {
-    return String(value);
   }
 }
 

@@ -324,7 +324,7 @@ class HarnessStore implements AgentHarness {
         settings: this.settings,
         providers: this.providers,
         tools: this.tools,
-        toolContext: this.createToolContext(),
+        toolContext: this.createToolContext(runId, session.id, turnId),
         signal: abortController.signal,
         emit: this.createEmitter(runId, session.id, turnId),
         getSteeringMessages: () => {
@@ -647,7 +647,8 @@ class HarnessStore implements AgentHarness {
     return event;
   }
 
-  private createToolContext(): ToolExecutionContext {
+  private createToolContext(runId?: string, sessionId?: string, turnId?: string): ToolExecutionContext {
+    const projectInstructions = loadProjectInstructions(this.workspace.rootPath);
     return {
       workspaceRoot: resolve(this.workspace.rootPath),
       mode: this.mode,
@@ -658,6 +659,12 @@ class HarnessStore implements AgentHarness {
         const modePrefix = this.mode === "plan" ? "Plan-only analysis" : "Focused analysis";
         return `${modePrefix} from ${role}:\n${prompt}`;
       },
+      emit: runId && sessionId ? this.createEmitter(runId, sessionId, turnId) : undefined,
+      settings: this.settings,
+      providers: this.providers,
+      tools: this.tools,
+      skillsList: this.skillsList,
+      projectInstructions: projectInstructions?.content,
     };
   }
 
