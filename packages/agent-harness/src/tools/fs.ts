@@ -100,15 +100,15 @@ const writeSchema = z.object({
   content: z.string(),
 });
 
-export function createWriteTool(): HarnessTool<z.infer<typeof writeSchema>> {
+export function createWriteTool(name = "writeFile"): HarnessTool<z.infer<typeof writeSchema>> {
   return {
-    name: "writeFile",
+    name,
     description: "Create or overwrite an entire file.",
     inputSchema: writeSchema,
     capabilities: ["fs:write"],
     async execute({ filePath, content }, ctx) {
       if (ctx.mode === "plan") return text(PLAN_MODE_BLOCKED_MESSAGE, true);
-      const allowed = await authorizeWrite(ctx, "writeFile", filePath);
+      const allowed = await authorizeWrite(ctx, name, filePath);
       if (!allowed) return text("Denied by user.");
       const fullPath = await resolveWorkspacePath(filePath, ctx);
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
@@ -124,15 +124,15 @@ const editSchema = z.object({
   newText: z.string(),
 });
 
-export function createEditTool(): HarnessTool<z.infer<typeof editSchema>> {
+export function createEditTool(name = "editFile"): HarnessTool<z.infer<typeof editSchema>> {
   return {
-    name: "editFile",
+    name,
     description: "Replace one exact text block in a file.",
     inputSchema: editSchema,
     capabilities: ["fs:write"],
     async execute({ filePath, oldText, newText }, ctx) {
       if (ctx.mode === "plan") return text(PLAN_MODE_BLOCKED_MESSAGE, true);
-      const allowed = await authorizeWrite(ctx, "editFile", filePath);
+      const allowed = await authorizeWrite(ctx, name, filePath);
       if (!allowed) return text("Denied by user.");
       const fullPath = await resolveWorkspacePath(filePath, ctx);
       const content = await fs.readFile(fullPath, "utf-8");

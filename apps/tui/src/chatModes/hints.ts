@@ -19,7 +19,7 @@ export function inputHint(ctx: ChatModeHintContext): string {
   const override = globalHint(ctx);
   if (override) return override;
   if (ctx.isLoading) {
-    return "Esc cancel";
+    return "Esc twice cancel";
   }
   return `Ctrl+K command palette`;
 }

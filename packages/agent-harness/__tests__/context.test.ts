@@ -8,9 +8,12 @@ import {
   buildRunContext,
   loadProjectInstructions,
   revertLastCompletedTurn,
+  toModelMessages,
 } from "@excelsior/agent-harness";
 import {
   MESSAGE_END,
+  TOOL_EXECUTION_END,
+  TOOL_EXECUTION_START,
   TURN_END,
   makeHarnessEvent,
   type AnyHarnessEvent,
@@ -106,5 +109,57 @@ describe("harness context helpers", () => {
     expect(result?.revertedTurnId).toBe("turn_two");
     expect(result?.events.map((item) => item.turnId)).toEqual(["turn_one", "turn_one"]);
     expect(events).toHaveLength(4);
+  });
+
+  it("reconstructs assistant tool calls before tool result messages in follow-up context", () => {
+    const events = [
+      event(1, MESSAGE_END, {
+        message: { id: "msg_user", role: "user", content: "read package.json" },
+      }),
+      event(2, TOOL_EXECUTION_START, {
+        toolCallId: "call_read",
+        toolName: "view",
+        toolArgs: "{\"filePath\":\"package.json\"}",
+      }),
+      event(3, TOOL_EXECUTION_END, {
+        toolCallId: "call_read",
+        toolName: "view",
+        toolArgs: "{\"filePath\":\"package.json\"}",
+        result: "{ \"name\": \"excelsior\" }",
+        isError: false,
+      }),
+      event(4, MESSAGE_END, {
+        message: {
+          id: "msg_call_read",
+          role: "tool",
+          content: "{ \"name\": \"excelsior\" }",
+          toolCallId: "call_read",
+          toolName: "view",
+          toolArgs: "{\"filePath\":\"package.json\"}",
+        },
+      }),
+      event(5, TURN_END, { cancelled: false }),
+    ];
+
+    const context = buildRunContext({
+      events,
+      userContent: "now summarize it",
+      mode: "act",
+    });
+    const modelMessages = toModelMessages(context.messages);
+    const toolIndex = modelMessages.findIndex((message) => message.role === "tool");
+
+    expect(toolIndex).toBeGreaterThan(0);
+    expect(modelMessages[toolIndex - 1]).toMatchObject({
+      role: "assistant",
+      content: [
+        {
+          type: "tool-call",
+          toolCallId: "call_read",
+          toolName: "view",
+          input: { filePath: "package.json" },
+        },
+      ],
+    });
   });
 });

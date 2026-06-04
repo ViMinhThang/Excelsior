@@ -10,6 +10,9 @@ export interface PendingActionPanelProps {
   scrollOffset?: number;
   activeHunkIndex?: number;
   hunkCount?: number;
+  canRespond?: boolean;
+  title?: string;
+  helpText?: string;
 }
 
 const PendingActionPanel: FC<PendingActionPanelProps> = ({
@@ -17,10 +20,13 @@ const PendingActionPanel: FC<PendingActionPanelProps> = ({
   scrollOffset,
   activeHunkIndex,
   hunkCount,
+  canRespond = true,
+  title = "Action Required",
+  helpText,
 }) => {
   return (
     <Panel
-      title="Action Required"
+      title={title}
       backgroundColor="transparent"
       titleColor={theme.colors.highlightAction}
       marginTop={1}
@@ -43,11 +49,16 @@ const PendingActionPanel: FC<PendingActionPanelProps> = ({
               pending={true}
             />
           ) : null}
-          <Box flexDirection="row" gap={2} marginTop={1}>
-            <Text color={theme.colors.highlightAction} bold>y accept</Text>
-            <Text color={theme.colors.highlightAction} bold>a accept all</Text>
-            <Text color={theme.colors.error} bold>n deny</Text>
-          </Box>
+          {helpText ? (
+            <Text color={theme.colors.muted}>{helpText}</Text>
+          ) : null}
+          {canRespond ? (
+            <Box flexDirection="row" gap={2} marginTop={1}>
+              <Text color={theme.colors.highlightAction} bold>y accept</Text>
+              <Text color={theme.colors.highlightAction} bold>a accept all</Text>
+              <Text color={theme.colors.error} bold>n deny</Text>
+            </Box>
+          ) : null}
         </Box>
       </Box>
     </Panel>

@@ -13,6 +13,7 @@ import type {
   Workspace,
 } from "@excelsior/core";
 import {
+  AGENT_END,
   CONFIRMATION_ANSWERED,
   CONFIRMATION_REQUESTED,
   HISTORY_COMPACTED,
@@ -22,6 +23,11 @@ import {
   QUESTION_ANSWERED,
   QUESTION_REQUESTED,
   SESSION_CHANGED,
+  TOOL_EXECUTION_END,
+  TOOL_EXECUTION_START,
+  TOOL_EXECUTION_UPDATE,
+  TURN_END,
+  TURN_START,
   makeHarnessEvent,
   type AnyHarnessEvent,
   type HarnessEventDataMap,
@@ -88,6 +94,7 @@ class HarnessStore implements AgentHarness {
   private confirmationResolvers = new Map<string, (response: ConfirmResponse) => void>();
   private questionResolvers = new Map<string, (response: AskQuestionResponse) => void>();
   private steeringQueue: string[] = [];
+  private readonly finalizedRunIds = new Set<string>();
 
   constructor(config: HarnessConfig) {
     this.storage = new FileHarnessStorage(config.dataDir);
@@ -157,13 +164,12 @@ class HarnessStore implements AgentHarness {
 
     this.extensions.load(config.extensions ?? []);
 
+    const session = this.storage.createSession(this.workspace.id);
+    this.currentSessionId = session.id;
+    this.events = [];
+    this.sequence = 0;
+    this.lastEventId = undefined;
     this.refreshSessions();
-    if (this.sessions[0]) {
-      this.currentSessionId = this.sessions[0].id;
-      this.events = this.storage.loadEvents(this.workspace.id, this.currentSessionId);
-      this.sequence = this.events.at(-1)?.sequence ?? 0;
-      this.lastEventId = this.events.at(-1)?.id;
-    }
     this.updateSnapshot();
   }
 
@@ -268,6 +274,7 @@ class HarnessStore implements AgentHarness {
       if (this.abortController === abortController) {
         this.abortController = null;
       }
+      this.finalizedRunIds.delete(runId);
       this.activeRunId = null;
       this.activeTurnId = null;
       this.activeSessionId = null;
@@ -277,9 +284,17 @@ class HarnessStore implements AgentHarness {
   }
 
   cancel(): void {
-    if (!this.abortController) return;
-    this.abortController.abort();
+    const abortController = this.abortController;
+    if (!abortController) return;
+    abortController.abort();
     this.cancelPendingInteractions();
+    this.finalizeActiveRun("Cancelled by user.");
+    this.abortController = null;
+    this.activeRunId = null;
+    this.activeTurnId = null;
+    this.activeSessionId = null;
+    this.steeringQueue = [];
+    this.refreshSessions();
     this.notify();
   }
 
@@ -549,6 +564,21 @@ class HarnessStore implements AgentHarness {
       correlationId?: string;
     },
   ) {
+    if (this.finalizedRunIds.has(runId)) {
+      return makeHarnessEvent({
+        workspaceId: this.workspace.id,
+        sessionId: options?.sessionId ?? this.currentSessionId ?? this.workspace.id,
+        runId,
+        turnId: options?.turnId,
+        sequence: this.sequence,
+        type,
+        data,
+        relatedToolCallId: options?.relatedToolCallId,
+        parentEventId: options?.parentEventId,
+        causationId: options?.causationId,
+        correlationId: options?.correlationId,
+      });
+    }
     const session = options?.sessionId
       ? this.sessions.find((item) => item.id === options.sessionId)
       : this.currentSession();
@@ -656,6 +686,80 @@ class HarnessStore implements AgentHarness {
         cancelled: true,
       });
     }
+  }
+
+  private finalizeActiveRun(reason: string): void {
+    const runId = this.activeRunId;
+    const turnId = this.activeTurnId;
+    const sessionId = this.activeSessionId;
+    if (!runId || !turnId || !sessionId) return;
+
+    const openAssistantMessages = new Map<string, HarnessEventDataMap[typeof MESSAGE_END]["message"]>();
+    const openTools = new Map<string, { toolName: string; toolArgs: string }>();
+    let turnOpen = false;
+
+    for (const event of this.events) {
+      if (event.runId !== runId || event.turnId !== turnId) continue;
+
+      if (event.type === TURN_END) {
+        turnOpen = false;
+      } else if (event.type === TURN_START) {
+        turnOpen = true;
+      } else if (event.type === MESSAGE_START && event.data.message.role === "assistant") {
+        openAssistantMessages.set(event.data.message.id, event.data.message);
+      } else if (event.type === MESSAGE_UPDATE) {
+        const message = openAssistantMessages.get(event.data.messageId);
+        if (message) {
+          openAssistantMessages.set(event.data.messageId, {
+            ...message,
+            content: event.data.content,
+          });
+        }
+      } else if (event.type === MESSAGE_END && event.data.message.role === "assistant") {
+        openAssistantMessages.delete(event.data.message.id);
+      } else if (event.type === TOOL_EXECUTION_START) {
+        openTools.set(event.data.toolCallId, {
+          toolName: event.data.toolName,
+          toolArgs: event.data.toolArgs,
+        });
+      } else if (event.type === TOOL_EXECUTION_UPDATE) {
+        const tool = openTools.get(event.data.toolCallId);
+        if (tool) {
+          openTools.set(event.data.toolCallId, {
+            toolName: tool.toolName,
+            toolArgs: `${tool.toolArgs}${event.data.delta}`,
+          });
+        }
+      } else if (event.type === TOOL_EXECUTION_END) {
+        openTools.delete(event.data.toolCallId);
+      }
+    }
+
+    for (const message of openAssistantMessages.values()) {
+      this.emit(runId, MESSAGE_END, {
+        message: {
+          ...message,
+          isError: true,
+        },
+      }, { sessionId, turnId });
+    }
+
+    for (const [toolCallId, tool] of openTools) {
+      this.emit(runId, TOOL_EXECUTION_END, {
+        toolCallId,
+        toolName: tool.toolName,
+        toolArgs: tool.toolArgs,
+        result: `${reason} Tool input did not complete.`,
+        isError: true,
+      }, { sessionId, turnId, relatedToolCallId: toolCallId });
+    }
+
+    if (turnOpen) {
+      this.emit(runId, TURN_END, { cancelled: true }, { sessionId, turnId });
+      this.emit(runId, AGENT_END, { cancelled: true }, { sessionId, turnId });
+    }
+
+    this.finalizedRunIds.add(runId);
   }
 
   private ensureSession(firstInput: string): Session {

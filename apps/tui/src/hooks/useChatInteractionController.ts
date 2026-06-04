@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createDoubleEscapeCancelState,
+  handleDoubleEscapeCancel,
+  resetDoubleEscapeCancel,
+} from "@excelsior/core";
 import { getCommandInputWithSelection } from "../chatModes/inputMode.js";
 import {
   buildModeViewContext,
@@ -109,6 +114,20 @@ export function useChatInteractionController(): ChatScreenModel {
     setCommandsExpanded((expanded) => !expanded);
   }, []);
 
+  const escapeCancelState = useRef(createDoubleEscapeCancelState());
+  const requestTurnCancel = useCallback(() => {
+    handleDoubleEscapeCancel({
+      state: escapeCancelState.current,
+      isLoading,
+      now: Date.now(),
+      cancel: agent.cancel,
+    });
+  }, [agent.cancel, isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) resetDoubleEscapeCancel(escapeCancelState.current);
+  }, [isLoading]);
+
   const setChatMode = useCallback((nextMode: typeof subAgentNav.chatMode) => {
     subAgentNav.setChatMode(nextMode);
     if (shouldCollapseCommandsForChatMode(nextMode)) setCommandsExpanded(false);
@@ -182,6 +201,7 @@ export function useChatInteractionController(): ChatScreenModel {
     nextHunk: confirmation.nextHunk,
     prevHunk: confirmation.prevHunk,
     cancel: agent.cancel,
+    requestTurnCancel,
   });
 
   const totalTokens = useMemo(() => {
