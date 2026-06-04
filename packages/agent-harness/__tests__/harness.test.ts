@@ -88,9 +88,9 @@ describe("AgentHarness", () => {
     store.activeTurnId = turnId;
     store.activeSessionId = sessionId;
     store.abortController = new AbortController();
-    store.emit(runId, AGENT_START, {}, { sessionId, turnId });
-    store.emit(runId, TURN_START, {}, { sessionId, turnId });
-    store.emit(runId, TOOL_EXECUTION_START, {
+    store.eventBus.emit(runId, AGENT_START, {}, { sessionId, turnId });
+    store.eventBus.emit(runId, TURN_START, {}, { sessionId, turnId });
+    store.eventBus.emit(runId, TOOL_EXECUTION_START, {
       toolCallId: "call_write",
       toolName: "write",
       toolArgs: "{\"filePath\":\"report.html\",\"content\":\"<html>",
@@ -165,7 +165,7 @@ describe("AgentHarness", () => {
     // Create session to generate events
     harness.createSession("Causal Test");
 
-    const events = (harness as any).events;
+    const events = (harness as any).eventStore.events;
     expect(events.length).toBeGreaterThan(0);
 
     // First event should have empty causationId and correlationId matching runId

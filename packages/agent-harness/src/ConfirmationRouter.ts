@@ -11,6 +11,14 @@ export class ConfirmationRouter {
   public readonly confirmationResolvers = new Map<string, (response: ConfirmResponse) => void>();
   public readonly questionResolvers = new Map<string, (response: AskQuestionResponse) => void>();
 
+  addConfirmationResolver(callId: string, resolver: (response: ConfirmResponse) => void): void {
+    this.confirmationResolvers.set(callId, resolver);
+  }
+
+  addQuestionResolver(callId: string, resolver: (response: AskQuestionResponse) => void): void {
+    this.questionResolvers.set(callId, resolver);
+  }
+
   resolveConfirmation(callId: string, approved: boolean): void {
     const resolver = this.confirmationResolvers.get(callId);
     if (resolver) {
