@@ -17,6 +17,12 @@ export const DARK_THEMES = [
     valueHash: "#88C0D0",
     swatches: ["#2e3440", "#242933", "#3b4252", "#eceff4", "#88c0d0"],
   },
+  {
+    id: "rose-pine-dark" as const,
+    name: "Rosé Pine Dark",
+    valueHash: "#EBBCBA",
+    swatches: ["#191724", "#1f1d2e", "#26233a", "#e0def4", "#ebbcba"],
+  },
  ] as const;
  
  export const LIGHT_THEMES = [
@@ -32,6 +38,12 @@ export const DARK_THEMES = [
     valueHash: "#385AF6",
     swatches: ["#e1e2e7", "#d5d6db", "#c8c9d1", "#343b58", "#385af6"],
   },
+  {
+    id: "rose-pine-light" as const,
+    name: "Rosé Pine Light",
+    valueHash: "#D7827E",
+    swatches: ["#faf4ed", "#fffaf3", "#f2e9e1", "#575279", "#d7827e"],
+  },
 ] as const;
  
  export const ALL_THEMES = [...DARK_THEMES, ...LIGHT_THEMES] as const;
@@ -43,7 +55,12 @@ export const DARK_THEMES = [
  }
  
  export function isThemeDark(theme: DesktopTheme): boolean {
-   return theme === "one-dark-pro" || theme === "tokyo-night" || theme === "nordic-blue";
+   return (
+     theme === "one-dark-pro" ||
+     theme === "tokyo-night" ||
+     theme === "nordic-blue" ||
+     theme === "rose-pine-dark"
+   );
  }
 
 export function defaultThemeForMode(darkMode: boolean): DesktopTheme {
