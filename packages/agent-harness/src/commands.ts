@@ -1,4 +1,9 @@
 import { SESSION_PICKER_PANEL_ID, type CommandResult } from "@excelsior/core";
+import {
+  formatHarnessReplayReport,
+  formatHarnessTrace,
+  type HarnessTraceOptions,
+} from "./inspector.js";
 import type { AgentHarness, HarnessCommand, ReviewCommandServices } from "./types.js";
 
 export function createBuiltInCommands(input: {
@@ -32,6 +37,11 @@ export function createBuiltInCommands(input: {
       return ok("Conversation compacted.");
     }),
     command("revert", "runtime", "Revert the last completed turn", "/revert", async (_args, harness) => harness.revertLastTurn()),
+    command("trace", "runtime", "Inspect harness event timeline", "/trace [all|<turnIdPrefix>]", traceCommand),
+    command("replay", "runtime", "Replay and validate current harness events", "/replay", async (_args, harness) => {
+      const inspection = harness.inspectCurrentSession();
+      return ok(formatHarnessReplayReport(harness.replayCurrentSession(), inspection));
+    }),
     command("review", "review", "Review a pull request by number", "/review <prNumber>", async (args, harness) => {
       const prNumber = Number(args[0]);
       if (!Number.isInteger(prNumber)) return ok("Usage: /review <prNumber>");
@@ -72,6 +82,17 @@ function command(
 
 function ok(message: string): CommandResult {
   return { handled: true, message, clearInput: true };
+}
+
+function traceCommand(args: string[], harness: AgentHarness): CommandResult {
+  const target = args[0]?.trim();
+  const options: HarnessTraceOptions = !target
+    ? { mode: "latest" }
+    : target.toLowerCase() === "all"
+      ? { mode: "all" }
+      : { mode: "turn", turnIdPrefix: target };
+
+  return ok(formatHarnessTrace(harness.inspectCurrentSession(), options));
 }
 
 async function sessionCommand(args: string[], harness: AgentHarness): Promise<CommandResult> {

@@ -23,7 +23,7 @@
     "test:agent-host": "vitest run packages/agent-host/__tests__/harnessAgentHost.test.ts",
     "test:arch": "vitest run src/__tests__/architecture.test.ts",
     "test:projection": "vitest run packages/agent-harness/__tests__/projection.test.ts",
-    "test:runtime": "vitest run packages/agent-harness/__tests__/runController.test.ts packages/agent-harness/__tests__/harness.test.ts",
+    "test:runtime": "vitest run packages/agent-harness/__tests__/runController.test.ts packages/agent-harness/__tests__/harness.test.ts packages/agent-harness/__tests__/inspector.test.ts packages/agent-harness/__tests__/context.test.ts",
     "test:tools": "vitest run packages/agent-harness/__tests__/tools.test.ts",
     "test:watch": "vitest"
   },

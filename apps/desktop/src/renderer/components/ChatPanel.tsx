@@ -7,11 +7,12 @@ import type {
 import {
   ChatTranscript,
   ScrollToBottomButton,
-} from "./chatPanel/ChatTranscript.tsx";
-import { FloatingComposer } from "./chatPanel/FloatingComposer.tsx";
-import { PendingConfirmation, PendingQuestion } from "./chatPanel/PendingPrompts.tsx";
+} from "./chatPanel/ChatTranscript.js";
+import { FloatingComposer } from "./chatPanel/FloatingComposer.js";
+import { PendingConfirmation, PendingQuestion } from "./chatPanel/PendingPrompts.js";
 
 type ChatPanelProps = {
+  commandResult: string | null;
   inputValue: string;
   openToolCalls: Record<string, boolean>;
   state: AgentClientState | null;
@@ -27,6 +28,7 @@ type ChatPanelProps = {
 const BOTTOM_THRESHOLD_PX = 80;
 
 export function ChatPanel({
+  commandResult,
   inputValue,
   openToolCalls,
   state,
@@ -155,6 +157,17 @@ export function ChatPanel({
                 onRespond={onRespondToQuestion}
               />
             )}
+          </div>
+        )}
+
+        {commandResult && (
+          <div className={`chat-floating-layer pointer-events-auto absolute ${hasPendingAction ? "bottom-[30rem]" : "bottom-32"}`}>
+            <pre
+              data-testid="command-result"
+              className="max-h-64 w-full overflow-y-auto rounded-xl border border-brand-border bg-brand-surface/95 p-4 text-xs leading-5 text-brand-text-light shadow-xl"
+            >
+              {commandResult}
+            </pre>
           </div>
         )}
 

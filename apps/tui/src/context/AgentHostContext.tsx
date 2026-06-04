@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import type { AgentHost } from "@excelsior/client";
 import { getDefaultAgentHost } from "@excelsior/agent-host";
@@ -13,6 +13,7 @@ export function AgentHostProvider({
   host?: AgentHost;
 }) {
   const resolvedHost = useMemo(() => host ?? getDefaultAgentHost(), [host]);
+  useEffect(() => () => resolvedHost.dispose(), [resolvedHost]);
   return (
     <AgentHostContext.Provider value={resolvedHost}>
       {children}

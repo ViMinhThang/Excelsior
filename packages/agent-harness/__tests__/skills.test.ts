@@ -3,6 +3,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createAgentHarness } from "../src/harness.js";
+import type { ISkillReader } from "../src/types.js";
 
 const tempDirs: string[] = [];
 
@@ -72,5 +73,66 @@ Mock instructions detail.
     const userBlock = snapshot.displayBlocks.find((b) => b.type === "user");
     expect(userBlock).toBeDefined();
     expect(userBlock?.content).toBe("Running skill: TestSkill");
+  });
+
+  it("discovers skills using an InMemorySkillReader without filesystem access", async () => {
+    const dataDir = await makeTempDir();
+
+    class InMemorySkillReader implements ISkillReader {
+      exists(pathStr: string): boolean {
+        const normalized = pathStr.replace(/\\/g, "/").replace(/^[a-zA-Z]:/, "");
+        if (normalized === "/virtual/workspace/.agents/skills") return true;
+        if (normalized === "/virtual/workspace/.agents/skills/test-virtual-skill") return true;
+        if (normalized === "/virtual/workspace/.agents/skills/test-virtual-skill/SKILL.md") return true;
+        return false;
+      }
+      
+      readDir(pathStr: string): Array<{ name: string; isDirectory(): boolean }> {
+        const normalized = pathStr.replace(/\\/g, "/").replace(/^[a-zA-Z]:/, "");
+        if (normalized === "/virtual/workspace/.agents/skills") {
+          return [{ name: "test-virtual-skill", isDirectory: () => true }];
+        }
+        return [];
+      }
+
+      readFile(pathStr: string): string {
+        const normalized = pathStr.replace(/\\/g, "/").replace(/^[a-zA-Z]:/, "");
+        if (normalized === "/virtual/workspace/.agents/skills/test-virtual-skill/SKILL.md") {
+          return `---
+name: VirtualSkill
+description: A mock skill resolved completely from in-memory virtual loader.
+enabled: true
+---
+Virtual instructions detail.
+`;
+        }
+        throw new Error(`File not found: ${pathStr}`);
+      }
+    }
+
+    const skillsReader = new InMemorySkillReader();
+
+    const harness = createAgentHarness({
+      dataDir,
+      workspaceRoot: "/virtual/workspace",
+      workspaceId: "ws_virtual_test",
+      skillsReader,
+    });
+
+    const catalog = harness.getCatalog();
+    const commandDef = catalog.commands.find((c) => c.name === "virtualskill");
+    expect(commandDef).toBeDefined();
+    expect(commandDef?.category).toBe("skills");
+
+    const tool = (harness as any).tools.list().find((t: any) => t.name === "skill_virtualskill");
+    expect(tool).toBeDefined();
+
+    const toolResult = await tool.execute({}, {
+      workspaceRoot: "/virtual/workspace",
+      mode: "act",
+    } as any);
+    expect(toolResult.content).toContain("<skill>");
+    expect(toolResult.content).toContain("<name>VirtualSkill</name>");
+    expect(toolResult.content).toContain("Virtual instructions detail.");
   });
 });

@@ -66,6 +66,36 @@ describe("ToolMessage command formatting", () => {
     expect(frame).toContain("const state = \"new\";");
   });
 
+  it("renders pending write progress in the expandable tool row", () => {
+    const partialArgs = [
+      "{\"filePath\":\"report.html\",\"content\":\"<html>",
+      "\\n<body>",
+      "\\n<h1>Report",
+    ].join("");
+
+    const collapsed = render(createElement(ToolMessage, {
+      toolName: "write",
+      toolArgs: partialArgs,
+      status: "pending",
+      expanded: false,
+    }));
+    expect(collapsed.lastFrame()).toContain("Writing...");
+    expect(collapsed.lastFrame()).toContain("(Ctrl+O to expand)");
+
+    const expanded = render(createElement(ToolMessage, {
+      toolName: "write",
+      toolArgs: partialArgs,
+      status: "pending",
+      expanded: true,
+    }));
+    const frame = expanded.lastFrame() ?? "";
+    expect(frame).toContain("Writing...");
+    expect(frame).toContain("target: report.html");
+    expect(frame).toContain("received");
+    expect(frame).toContain("<html>");
+    expect(frame).toContain("<body>");
+  });
+
   it("shows edit panes by default without the collapsed summary", () => {
     const screen = render(createElement(ToolMessage, {
       toolName: "edit",

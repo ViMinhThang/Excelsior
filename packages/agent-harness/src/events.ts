@@ -11,6 +11,7 @@ export const MESSAGE_END = "message_end";
 export const TOOL_EXECUTION_START = "tool_execution_start";
 export const TOOL_EXECUTION_UPDATE = "tool_execution_update";
 export const TOOL_EXECUTION_END = "tool_execution_end";
+export const SUB_AGENT_EVENT = "sub_agent_event";
 export const CONFIRMATION_REQUESTED = "confirmation_requested";
 export const CONFIRMATION_ANSWERED = "confirmation_answered";
 export const QUESTION_REQUESTED = "question_requested";
@@ -59,6 +60,16 @@ export type HarnessEventDataMap = {
     toolArgs: string;
     result: string;
     isError: boolean;
+  };
+  [SUB_AGENT_EVENT]: {
+    parentToolCallId: string;
+    event:
+      | { type: "text_delta"; delta: string }
+      | { type: "tool_start"; toolCallId: string; toolName: string; toolArgs: string }
+      | { type: "tool_update"; toolCallId: string; delta: string }
+      | { type: "tool_end"; toolCallId: string; toolName: string; toolArgs: string; isError: boolean }
+      | { type: "final"; content: string }
+      | { type: "error"; message: string };
   };
   [CONFIRMATION_REQUESTED]: { request: ConfirmRequest };
   [CONFIRMATION_ANSWERED]: { response: ConfirmResponse };

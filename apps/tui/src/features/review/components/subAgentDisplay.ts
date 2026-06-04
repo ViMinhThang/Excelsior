@@ -3,6 +3,7 @@ import {
   type ProjectedSubAgent,
   type ToolCallInfo,
 } from "@excelsior/core";
+import { formatElapsedMs } from "../../../lib/timeFormat.js";
 
 export function cleanSubAgentRole(role: string): string {
   return (role || "Sub-agent")
@@ -12,18 +13,10 @@ export function cleanSubAgentRole(role: string): string {
     .trim();
 }
 
-export function formatDuration(ms: number): string {
-  const secs = Math.max(0, ms / 1000);
-  if (secs < 60) return `${secs.toFixed(1)}s`;
-  const mins = Math.floor(secs / 60);
-  const remSecs = Math.floor(secs % 60);
-  return `${mins}m ${remSecs}s`;
-}
-
 export function getSubAgentDuration(agent: ProjectedSubAgent, now: number): string {
   const start = agent.startTime || now;
   const end = agent.endTime || now;
-  return formatDuration(end - start);
+  return formatElapsedMs(end - start);
 }
 
 export function formatToolCallSummary(toolCall: ToolCallInfo): string {

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import type { AppSettings, Session, Workspace } from "@excelsior/core";
 import {
@@ -122,7 +122,6 @@ export class FileHarnessStorage {
   }
 
   appendEvent(workspaceId: string, session: Session, event: AnyHarnessEvent): Session {
-    const events = this.loadEvents(workspaceId, session.id);
     const userInput = event.type === MESSAGE_END && event.data.message.role === "user"
       ? event.data.message.content
       : session.metadata.userInput;
@@ -136,7 +135,7 @@ export class FileHarnessStorage {
             userInput,
           },
     };
-    this.writeSessionFile(workspaceId, updated, [...events, event]);
+    this.appendSessionLines(workspaceId, updated, event);
     return updated;
   }
 
@@ -178,6 +177,16 @@ export class FileHarnessStorage {
       ...events.map((event) => JSON.stringify({ kind: "event", event } satisfies SessionFileLine)),
     ];
     writeFileSync(path, `${lines.join("\n")}\n`, "utf-8");
+  }
+
+  private appendSessionLines(workspaceId: string, session: Session, event: AnyHarnessEvent): void {
+    const path = this.sessionPath(workspaceId, session.id);
+    this.ensureDirectory(this.sessionDirectory(workspaceId));
+    const lines = [
+      JSON.stringify({ kind: "session", session } satisfies SessionFileLine),
+      JSON.stringify({ kind: "event", event } satisfies SessionFileLine),
+    ];
+    appendFileSync(path, `${lines.join("\n")}\n`, "utf-8");
   }
 
   private settingsPath(): string {

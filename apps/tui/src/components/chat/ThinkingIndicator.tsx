@@ -1,21 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 import { theme } from '../../theme.js';
-
-function formatDuration(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  const parts: string[] = [];
-  if (h > 0) parts.push(`${h}h`);
-  if (m > 0) parts.push(`${m}m`);
-  parts.push(`${s}s`);
-  return parts.join(' ');
-}
+import { formatElapsedSeconds } from '../../lib/timeFormat.js';
 
 const ThinkingIndicator = () => {
   const [frame, setFrame] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [startedAt] = useState(() => Date.now());
   const frames = ['.', '..', '...'];
 
   useEffect(() => {
@@ -27,10 +18,10 @@ const ThinkingIndicator = () => {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setElapsed(s => s + 1);
-    }, 1000);
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 250);
     return () => clearInterval(timer);
-  }, []);
+  }, [startedAt]);
 
   return (
     <Box flexDirection="column" gap={0} paddingX={1} marginTop={1}>
@@ -38,7 +29,7 @@ const ThinkingIndicator = () => {
         Thinking {frames[frame]}
       </Text>
       <Text color={theme.colors.muted} dimColor>
-        Worked for {formatDuration(elapsed)}
+        Worked for {formatElapsedSeconds(elapsed)}
       </Text>
     </Box>
   );

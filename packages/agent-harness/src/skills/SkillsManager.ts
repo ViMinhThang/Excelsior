@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import type { ISkillReader } from "../types.js";
 
 export interface SkillMetadata {
   name: string;
@@ -11,10 +12,23 @@ export interface SkillMetadata {
   enabled: boolean;
 }
 
+export class NodeSkillReader implements ISkillReader {
+  exists(pathStr: string): boolean {
+    return fs.existsSync(pathStr);
+  }
+  readDir(pathStr: string): Array<{ name: string; isDirectory(): boolean }> {
+    return fs.readdirSync(pathStr, { withFileTypes: true });
+  }
+  readFile(pathStr: string): string {
+    return fs.readFileSync(pathStr, "utf-8");
+  }
+}
+
 export interface SkillsManagerOptions {
   homeDir?: string;
   systemDir?: string;
   programDataDir?: string;
+  reader?: ISkillReader;
 }
 
 export function truncateDescription(desc: string, maxLen = 80): string {
@@ -29,9 +43,10 @@ export function truncateDescription(desc: string, maxLen = 80): string {
 export function parseSkillFile(
   filePath: string,
   scope: "Repo" | "User" | "System" | "Admin",
+  reader: ISkillReader = new NodeSkillReader(),
 ): { metadata: SkillMetadata; body: string } | null {
   try {
-    const content = fs.readFileSync(filePath, "utf-8");
+    const content = reader.readFile(filePath);
     const normalized = content.replace(/\r\n/g, "\n").trim();
     if (!normalized.startsWith("---")) return null;
 
@@ -93,12 +108,14 @@ export function parseSkillFile(
 export class SkillsManager {
   private readonly workspaceRoot: string | null;
   private readonly registry = new Map<string, { metadata: SkillMetadata; body: string }>();
+  private readonly reader: ISkillReader;
 
   constructor(
     workspaceRoot?: string,
     private readonly options: SkillsManagerOptions = {},
   ) {
     this.workspaceRoot = workspaceRoot ? path.resolve(workspaceRoot) : null;
+    this.reader = options.reader ?? new NodeSkillReader();
   }
 
   discoverSkills(): void {
@@ -129,15 +146,15 @@ export class SkillsManager {
     }
 
     for (const { dir, scope } of pathsToScan) {
-      if (!fs.existsSync(dir)) continue;
+      if (!this.reader.exists(dir)) continue;
 
       try {
-        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        const entries = this.reader.readDir(dir);
         for (const entry of entries) {
           if (entry.isDirectory()) {
             const skillMdPath = path.join(dir, entry.name, "SKILL.md");
-            if (fs.existsSync(skillMdPath)) {
-              const parsed = parseSkillFile(skillMdPath, scope);
+            if (this.reader.exists(skillMdPath)) {
+              const parsed = parseSkillFile(skillMdPath, scope, this.reader);
               if (parsed) {
                 // Register in registry (higher scope priority naturally overwrites)
                 this.registry.set(parsed.metadata.name, parsed);
@@ -162,7 +179,7 @@ export class SkillsManager {
     if (!item || !item.metadata.enabled) return null;
 
     try {
-      const parsed = parseSkillFile(item.metadata.path, item.metadata.scope);
+      const parsed = parseSkillFile(item.metadata.path, item.metadata.scope, this.reader);
       if (parsed) {
         // Update in registry
         this.registry.set(name, parsed);
