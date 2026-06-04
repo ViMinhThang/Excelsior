@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import { FC, useState, useEffect } from "react";
 import { Box, Text } from "ink";
 import { theme } from "../../theme.js";
 import { getChatModeHint } from "../../chatModes/registry.js";
@@ -29,6 +29,21 @@ const FooterBar: FC<FooterBarProps> = ({
   workspaceRootPath,
   totalTokens,
 }) => {
+  const [extraTokens, setExtraTokens] = useState(0);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setExtraTokens(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setExtraTokens((prev) => prev + 300);
+    }, 500);
+    return () => clearInterval(interval);
+  }, [isLoading]);
+
+  const displayedTokens = (totalTokens ?? 0) + extraTokens;
+
   const footerHint = getChatModeHint({
     chatMode,
     isLoading,
@@ -49,7 +64,7 @@ const FooterBar: FC<FooterBarProps> = ({
         <>
           <Text color={theme.colors.border}> </Text>
           <Text color={theme.colors.muted} dimColor>
-            | {(totalTokens / 1000).toFixed(1)} tok |
+            | {(displayedTokens / 1000).toFixed(1)} tok |
           </Text>
         </>
       )}
