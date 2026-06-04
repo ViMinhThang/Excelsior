@@ -155,6 +155,7 @@ export function buildPendingActionModel(
     scrollOffset,
     activeHunkIndex,
     hunkCount,
+    helpText: pending.warning,
   };
 }
 

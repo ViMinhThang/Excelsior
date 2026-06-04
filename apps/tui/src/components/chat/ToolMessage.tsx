@@ -66,9 +66,9 @@ const ToolMessage: FC<ToolMessageProps> = ({
   const display = createToolDisplay({ toolName, toolArgs, status, content });
   const cmd = display.command;
   const isPendingFileAction = status === "pending" && isFileActionTool(toolName);
-  const progressLines = isPendingFileAction ? buildWritingProgressLines(toolArgs) : [];
+  const progressLines = isPendingFileAction && expanded ? buildWritingProgressLines(toolArgs) : [];
   const activity = isPendingFileAction ? "Writing..." : undefined;
-  if (isPendingFileAction) {
+  if (isPendingFileAction && expanded) {
     display.detail = progressLines.join("\n");
     display.fileChangePreview = undefined;
     display.showCompletion = false;

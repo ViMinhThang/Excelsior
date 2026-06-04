@@ -362,4 +362,112 @@ describe("RunController", () => {
     expect(toolEnd?.data.result).toContain("Unterminated string in JSON");
     expect(types.indexOf(TOOL_EXECUTION_END)).toBeGreaterThan(types.indexOf(ERROR));
   });
+
+  it("coalesces frequent streamed tool input deltas before notifying", async () => {
+    const events: AnyHarnessEvent[] = [];
+    let sequence = 0;
+    const emit: HarnessEventEmitter = (type, data, options) => {
+      const event = makeHarnessEvent({
+        workspaceId: "ws_test",
+        sessionId: "ses_test",
+        runId: "run_test",
+        turnId: options?.turnId ?? "turn_test",
+        sequence: ++sequence,
+        type,
+        data,
+        relatedToolCallId: options?.relatedToolCallId,
+        parentEventId: options?.parentEventId,
+      });
+      events.push(event as AnyHarnessEvent);
+      return event;
+    };
+
+    const chunks = [
+      "{\"filePath\":\"report.html\",",
+      "\"content\":\"<html>",
+      "\\n<body>",
+      "\\n<h1>Report</h1>",
+      "\\n</body></html>\"}",
+    ];
+
+    const providers = new ProviderRegistry();
+    providers.register({
+      id: "deepseek",
+      displayName: "Fake",
+      createModel: () => new MockLanguageModelV3({
+        doStream: async () => ({
+          stream: simulateReadableStream({
+            chunks: [
+              { type: "tool-input-start", id: "call-write", toolName: "write" },
+              ...chunks.map((delta) => ({
+                type: "tool-input-delta" as const,
+                id: "call-write",
+                delta,
+              })),
+              {
+                type: "tool-call",
+                toolCallId: "call-write",
+                toolName: "write",
+                input: chunks.join(""),
+              },
+              {
+                type: "finish",
+                finishReason: { unified: "tool-calls", raw: undefined },
+                logprobs: undefined,
+                usage: {
+                  inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+                  outputTokens: { total: 1, text: 1, reasoning: undefined },
+                },
+              },
+            ],
+            initialDelayInMs: null,
+            chunkDelayInMs: null,
+          }),
+        }),
+      }),
+    });
+
+    const tools = new ToolRegistry();
+    tools.register({
+      name: "write",
+      description: "mock write",
+      inputSchema: z.object({
+        filePath: z.string(),
+        content: z.string(),
+      }),
+      capabilities: ["fs:write"],
+      execute: async () => ({ content: "wrote file" }),
+    });
+
+    await new RunController().run({
+      messages: [{ role: "user", content: "write a report" }],
+      systemPrompt: "test system prompt",
+      settings: {
+        deepseekApiKey: "test",
+        githubToken: "",
+        agentToolLoopSteps: "1",
+      },
+      providers,
+      tools,
+      toolContext: {
+        workspaceRoot: process.cwd(),
+        mode: "act",
+        confirm: async (request) => ({ callId: request.toolName, approved: true }),
+        askQuestion: async () => ({
+          callId: "question",
+          answer: "",
+          isManual: true,
+          cancelled: true,
+        }),
+        sendSubAgent: async () => "",
+      },
+      signal: new AbortController().signal,
+      emit,
+    });
+
+    const updates = events.filter((event) => event.type === TOOL_EXECUTION_UPDATE);
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.data.delta).toBe(chunks.join(""));
+  });
 });

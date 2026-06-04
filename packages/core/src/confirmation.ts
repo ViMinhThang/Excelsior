@@ -7,6 +7,7 @@ export type ConfirmRequest = {
   diff?: string;
   filePath?: string;
   action?: DiffAction;
+  warning?: string;
 };
 
 export type ConfirmResponse = {
