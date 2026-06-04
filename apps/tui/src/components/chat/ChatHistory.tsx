@@ -3,6 +3,7 @@ import { Box, Text } from "ink";
 import UserMessage from "./UserMessage.js";
 import AgentMessage from "./AgentMessage.js";
 import ToolMessage from "./ToolMessage.js";
+import ReasoningMessage from "./ReasoningMessage.js";
 import SubAgentRow from "../../features/review/components/SubAgentRow.js";
 import type { ProjectedBlock, SubAgentProjectionPart } from "@excelsior/core";
 import { theme } from "../../theme.js";
@@ -18,6 +19,15 @@ function renderBlock(
 ): ReactNode {
   if (block.type === "user") {
     return <UserMessage key={block.id} content={block.content} timestamp={block.timestamp} />;
+  }
+  if (block.type === "reasoning") {
+    return (
+      <ReasoningMessage
+        key={block.id}
+        content={block.content}
+        timestamp={block.timestamp}
+      />
+    );
   }
   if (block.type === "assistant") {
     return (

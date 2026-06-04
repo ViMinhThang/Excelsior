@@ -4,6 +4,7 @@ import {
   MESSAGE_END,
   MESSAGE_START,
   MESSAGE_UPDATE,
+  REASONING_END,
   SUB_AGENT_EVENT,
   TOOL_EXECUTION_END,
   TOOL_EXECUTION_START,
@@ -322,6 +323,24 @@ describe("harness projector", () => {
     expect(blocks).toMatchObject([
       { type: "assistant", content: "first" },
       { type: "assistant", content: "second" },
+    ]);
+  });
+
+  it("projects reasoning blocks from reasoning events", () => {
+    const events = [
+      event(1, REASONING_END, {
+        messageId: "reasoning_0",
+        content: "I should check the folder structure first.",
+      }),
+      event(2, MESSAGE_END, {
+        message: { id: "msg_assistant", role: "assistant", content: "Hello!" },
+      }),
+    ];
+
+    const blocks = projectEventsToDisplayBlocks(events);
+    expect(blocks).toMatchObject([
+      { type: "reasoning", content: "I should check the folder structure first.", isFrozen: true },
+      { type: "assistant", content: "Hello!", isFrozen: true },
     ]);
   });
 });

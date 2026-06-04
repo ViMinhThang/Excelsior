@@ -23,6 +23,13 @@ export type ProjectedBlock =
       isFrozen?: true;
     }
   | {
+      type: "reasoning";
+      id: string;
+      content: string;
+      timestamp: string;
+      isFrozen?: true;
+    }
+  | {
       type: "tool-call";
       id: string;
       toolName: string;
