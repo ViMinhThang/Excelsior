@@ -10,6 +10,7 @@ import {
   TOOL_EXECUTION_END,
   TOOL_EXECUTION_START,
   TOOL_EXECUTION_UPDATE,
+  REASONING_END,
   makeHarnessEvent,
   type AnyHarnessEvent,
   type HarnessEventEmitter,
@@ -47,6 +48,7 @@ export class AssistantStateMachine {
   private aiHistory: AgentMessage[] = [];
   private displayIdCounts = new Map<string, number>();
   private assistant: AssistantDraft | null = null;
+  private reasoning: AssistantDraft | null = null;
   private tool: ToolDraft | null = null;
   private subAgentStates = new Map<string, ProjectedSubAgent>();
 
@@ -130,6 +132,52 @@ export class AssistantStateMachine {
       this.emit(MESSAGE_END, event.data);
     }
     this.applyEvent(event);
+  }
+
+  startReasoning(id = `msg_${randomUUID()}`): void {
+    if (this.reasoning) return;
+    this.reasoning = {
+      id,
+      content: "",
+      timestamp: new Date().toISOString(),
+      frozen: false,
+    };
+  }
+
+  updateReasoning(id: string, delta: string): void {
+    this.startReasoning(id);
+    if (this.reasoning) {
+      this.reasoning.content += delta;
+      this.upsertReasoningBlock(this.reasoning, false);
+    }
+  }
+
+  endReasoning(): void {
+    if (!this.reasoning) return;
+    this.upsertReasoningBlock(this.reasoning, true);
+    this.reasoning = null;
+  }
+
+  private upsertReasoningBlock(draft: AssistantDraft, forceFrozen?: boolean) {
+    const block: ProjectedBlock = {
+      type: "reasoning",
+      id: draft.id,
+      content: draft.content,
+      timestamp: draft.timestamp,
+      ...(forceFrozen || draft.frozen ? { isFrozen: true as const } : {}),
+    };
+    const existingIndex = this.displayBlocks.findIndex((item) => item.id === block.id);
+    if (existingIndex === -1) {
+      this.displayBlocks.push(block);
+    } else {
+      this.displayBlocks[existingIndex] = block;
+    }
+  }
+
+  private flushReasoning(forceFrozen?: boolean) {
+    if (!this.reasoning) return;
+    this.upsertReasoningBlock(this.reasoning, forceFrozen);
+    this.reasoning = null;
   }
 
   startTool(callId: string, toolName: string): void {
@@ -466,6 +514,14 @@ export class AssistantStateMachine {
           };
         }
       }
+    } else if (event.type === REASONING_END) {
+      this.flushAll(true);
+      this.upsertReasoningBlock({
+        id: event.data.messageId,
+        content: event.data.content,
+        timestamp: event.timestamp || new Date().toISOString(),
+        frozen: true,
+      }, true);
     } else if (event.type === HISTORY_COMPACTED) {
       this.flushAll(true);
       this.aiHistory.push({
@@ -530,6 +586,7 @@ export class AssistantStateMachine {
   private flushAll(forceFrozen?: boolean) {
     this.flushAssistant(forceFrozen);
     this.flushTool(forceFrozen);
+    this.flushReasoning(forceFrozen);
   }
 }
 

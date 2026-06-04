@@ -19,6 +19,7 @@ export const QUESTION_ANSWERED = "question_answered";
 export const HISTORY_COMPACTED = "history_compacted";
 export const SESSION_CHANGED = "session_changed";
 export const ERROR = "error";
+export const REASONING_END = "reasoning_end";
 
 export interface HarnessMessage {
   id: string;
@@ -85,6 +86,10 @@ export type HarnessEventDataMap = {
     reason: "created" | "switched" | "deleted" | "renamed" | "reset";
   };
   [ERROR]: { message: string };
+  [REASONING_END]: {
+    messageId: string;
+    content: string;
+  };
 };
 
 export type HarnessEventType = keyof HarnessEventDataMap;
