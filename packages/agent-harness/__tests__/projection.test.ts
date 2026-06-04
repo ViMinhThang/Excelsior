@@ -4,6 +4,7 @@ import {
   MESSAGE_END,
   MESSAGE_START,
   MESSAGE_UPDATE,
+  SUB_AGENT_EVENT,
   TOOL_EXECUTION_END,
   TOOL_EXECUTION_START,
   makeHarnessEvent,
@@ -91,6 +92,96 @@ describe("harness projector", () => {
     expect(projectEventsToDisplayBlocks(events)).toMatchObject([
       { type: "tool-call", toolName: "runCommand", status: "completed", content: "ok" },
       { type: "sub-agent", role: "Reviewer", state: { status: "done", latestLine: "finding" } },
+    ]);
+  });
+
+  it("projects live spawned sub-agent progress into nested output parts", () => {
+    const events = [
+      event(1, TOOL_EXECUTION_START, {
+        toolCallId: "call_parent",
+        toolName: "spawnSubAgent",
+        toolArgs: "{\"role\":\"Scout\"}",
+      }),
+      event(2, SUB_AGENT_EVENT, {
+        parentToolCallId: "call_parent",
+        event: { type: "text_delta", delta: "reading\n" },
+      }),
+      event(3, SUB_AGENT_EVENT, {
+        parentToolCallId: "call_parent",
+        event: {
+          type: "tool_start",
+          toolCallId: "call_child",
+          toolName: "view",
+          toolArgs: "{\"filePath\":\"package.json\"}",
+        },
+      }),
+      event(4, SUB_AGENT_EVENT, {
+        parentToolCallId: "call_parent",
+        event: {
+          type: "tool_end",
+          toolCallId: "call_child",
+          toolName: "view",
+          toolArgs: "{\"filePath\":\"package.json\"}",
+          isError: false,
+        },
+      }),
+      event(5, SUB_AGENT_EVENT, {
+        parentToolCallId: "call_parent",
+        event: { type: "final", content: "done" },
+      }),
+      event(6, TOOL_EXECUTION_END, {
+        toolCallId: "call_parent",
+        toolName: "spawnSubAgent",
+        toolArgs: "{\"role\":\"Scout\"}",
+        result: "done",
+        isError: false,
+      }),
+    ];
+
+    const blocks = projectEventsToDisplayBlocks(events);
+    expect(blocks).toMatchObject([
+      {
+        type: "sub-agent",
+        role: "Scout",
+        state: {
+          status: "done",
+          latestLine: "done",
+          fullOutput: "done",
+          toolCalls: [{ toolName: "view", status: "completed" }],
+          parts: [
+            { type: "text", text: "reading\n" },
+            { type: "tool-call", toolName: "view", status: "completed" },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it("keeps parallel spawned sub-agent progress scoped by parent tool call", () => {
+    const events = [
+      event(1, TOOL_EXECUTION_START, {
+        toolCallId: "parent_a",
+        toolName: "spawnSubAgent",
+        toolArgs: "{\"role\":\"A\"}",
+      }),
+      event(2, TOOL_EXECUTION_START, {
+        toolCallId: "parent_b",
+        toolName: "spawnSubAgent",
+        toolArgs: "{\"role\":\"B\"}",
+      }),
+      event(3, SUB_AGENT_EVENT, {
+        parentToolCallId: "parent_a",
+        event: { type: "text_delta", delta: "a" },
+      }),
+      event(4, SUB_AGENT_EVENT, {
+        parentToolCallId: "parent_b",
+        event: { type: "text_delta", delta: "b" },
+      }),
+    ];
+
+    expect(projectEventsToDisplayBlocks(events)).toMatchObject([
+      { type: "sub-agent", role: "A", state: { fullOutput: "a" } },
+      { type: "sub-agent", role: "B", state: { fullOutput: "b" } },
     ]);
   });
 

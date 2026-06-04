@@ -12,7 +12,8 @@ import type {
   SendOptions,
   Session,
 } from "@excelsior/core";
-import type { AnyHarnessEvent, HarnessEvent } from "./events.js";
+import type { AnyHarnessEvent, HarnessEvent, HarnessEventEmitter } from "./events.js";
+import type { ProviderRegistry, ToolRegistry } from "./registries.js";
 
 export type HarnessSettings = AppSettings;
 export type HarnessSnapshot = AgentClientState;
@@ -40,6 +41,12 @@ export interface ToolExecutionContext {
   workspaceRoot: string;
   mode: AgentMode;
   abortSignal?: AbortSignal;
+  emit?: HarnessEventEmitter;
+  settings?: HarnessSettings;
+  providers?: ProviderRegistry;
+  tools?: ToolRegistry;
+  skillsList?: string;
+  projectInstructions?: string;
   confirm(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse>;
   askQuestion(input: {
     question: string;
@@ -49,13 +56,22 @@ export interface ToolExecutionContext {
   sendSubAgent(input: { role: string; prompt: string }): Promise<string>;
 }
 
+export interface ToolExecuteOptions {
+  toolCallId?: string;
+}
+
 export interface HarnessTool<TInput = unknown> {
   name: string;
   description: string;
   inputSchema: z.ZodType<TInput>;
   capabilities: ToolCapability[];
-  execute(input: TInput, ctx: ToolExecutionContext): Promise<ToolResult>;
+  execute(input: TInput, ctx: ToolExecutionContext, options?: ToolExecuteOptions): Promise<ToolResult>;
 }
+
+export type HarnessCommandHandler = (
+  args: string[],
+  harness: AgentHarness,
+) => CommandResult | Promise<CommandResult>;
 
 export type HarnessCommandHandler = (
   args: string[],
@@ -84,12 +100,19 @@ export interface ReviewCommandServices {
   postPRComment(prNumber: number, body: string): Promise<string>;
 }
 
+export interface ISkillReader {
+  exists(path: string): boolean;
+  readDir(path: string): Array<{ name: string; isDirectory(): boolean }>;
+  readFile(path: string): string;
+}
+
 export interface HarnessConfig {
   workspaceRoot?: string;
   workspaceId?: string;
   dataDir?: string;
   extensions?: HarnessExtension[];
   reviewServices?: ReviewCommandServices;
+  skillsReader?: ISkillReader;
 }
 
 export interface HarnessCatalog {

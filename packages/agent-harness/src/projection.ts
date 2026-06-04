@@ -5,6 +5,7 @@ import {
   MESSAGE_END,
   MESSAGE_START,
   MESSAGE_UPDATE,
+  SUB_AGENT_EVENT,
   TOOL_EXECUTION_END,
   TOOL_EXECUTION_START,
   TOOL_EXECUTION_UPDATE,
@@ -78,6 +79,7 @@ export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalRead
   const displayIdCounts = new Map<string, number>();
   let assistant: AssistantDraft | null = null;
   let tool: ToolDraft | null = null;
+  const subAgentStates = new Map<string, ProjectedSubAgent>();
 
   const flushAssistant = (forceFrozen?: boolean) => {
     if (!assistant) return;
@@ -104,7 +106,7 @@ export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalRead
   };
 
   const upsertToolBlock = (draft: ToolDraft, forceFrozen?: boolean) => {
-    const block = toolBlockFromDraft(draft, forceFrozen);
+    const block = toolBlockFromDraft(draft, forceFrozen, subAgentStates.get(draft.id));
     const existingIndex = displayBlocks.findIndex((item) => item.id === block.id);
     if (existingIndex === -1) {
       displayBlocks.push(block);
@@ -220,6 +222,22 @@ export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalRead
         endTimestamp: event.timestamp,
       };
       flushTool(true);
+    } else if (event.type === SUB_AGENT_EVENT) {
+      const id = `${event.turnId ?? event.runId}:${event.data.parentToolCallId}`;
+      subAgentStates.set(id, updateSubAgentState(subAgentStates.get(id), event.data.event, event.timestamp));
+      if (tool?.id === id) {
+        upsertToolBlock(tool, false);
+      } else {
+        const existingIndex = displayBlocks.findIndex((item) => item.id === id);
+        const existing = displayBlocks[existingIndex];
+        if (existing?.type === "sub-agent") {
+          displayBlocks[existingIndex] = {
+            ...existing,
+            state: subAgentStates.get(id)!,
+            ...(subAgentStates.get(id)!.status !== "running" ? { isFrozen: true as const } : {}),
+          };
+        }
+      }
     } else if (event.type === HISTORY_COMPACTED) {
       flushAll(true);
       aiHistory.push({
@@ -247,13 +265,17 @@ function toolDisplayBlockId(event: ToolExecutionEvent): string {
   return `${event.turnId ?? event.runId}:${event.data.toolCallId}`;
 }
 
-function toolBlockFromDraft(tool: ToolDraft, forceFrozen?: boolean): ProjectedBlock {
+function toolBlockFromDraft(
+  tool: ToolDraft,
+  forceFrozen?: boolean,
+  subAgentState?: ProjectedSubAgent,
+): ProjectedBlock {
   if (tool.toolName === "spawnSubAgent") {
     return {
       type: "sub-agent",
       id: tool.id,
       role: readRoleFromToolArgs(tool.toolArgs),
-      state: buildSubAgentState(tool),
+      state: subAgentState ?? buildSubAgentState(tool),
       timestamp: tool.timestamp,
       ...(forceFrozen || tool.status !== "pending" ? { isFrozen: true as const } : {}),
     };
@@ -303,4 +325,111 @@ function buildSubAgentState(tool: ToolDraft): ProjectedSubAgent {
       ? undefined
       : new Date(tool.endTimestamp).getTime(),
   };
+}
+
+function updateSubAgentState(
+  previous: ProjectedSubAgent | undefined,
+  event: Extract<AnyHarnessEvent, { type: typeof SUB_AGENT_EVENT }>["data"]["event"],
+  timestamp: string,
+): ProjectedSubAgent {
+  const startTime = previous?.startTime ?? new Date(timestamp).getTime();
+  const base: ProjectedSubAgent = previous ?? {
+    status: "running",
+    latestLine: "",
+    fullOutput: "",
+    toolCalls: [],
+    parts: [],
+    startTime,
+  };
+
+  if (event.type === "text_delta") {
+    const fullOutput = `${base.fullOutput}${event.delta}`;
+    return {
+      ...base,
+      fullOutput,
+      latestLine: latestLine(fullOutput),
+      parts: appendTextPart(base.parts, event.delta),
+    };
+  }
+
+  if (event.type === "tool_start") {
+    const call = {
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      toolArgs: event.toolArgs,
+      status: "pending" as const,
+    };
+    return {
+      ...base,
+      toolCalls: [...base.toolCalls, call],
+      parts: [...base.parts, { type: "tool-call", ...call }],
+    };
+  }
+
+  if (event.type === "tool_update") {
+    return {
+      ...base,
+      toolCalls: base.toolCalls.map((call) =>
+        call.toolCallId === event.toolCallId
+          ? { ...call, toolArgs: `${call.toolArgs}${event.delta}` }
+          : call
+      ),
+      parts: base.parts.map((part) =>
+        part.type === "tool-call" && part.toolCallId === event.toolCallId
+          ? { ...part, toolArgs: `${part.toolArgs}${event.delta}` }
+          : part
+      ),
+    };
+  }
+
+  if (event.type === "tool_end") {
+    const status = event.isError ? "error" as const : "completed" as const;
+    return {
+      ...base,
+      toolCalls: base.toolCalls.map((call) =>
+        call.toolCallId === event.toolCallId
+          ? { ...call, toolName: event.toolName, toolArgs: event.toolArgs, status }
+          : call
+      ),
+      parts: base.parts.map((part) =>
+        part.type === "tool-call" && part.toolCallId === event.toolCallId
+          ? { ...part, toolName: event.toolName, toolArgs: event.toolArgs, status }
+          : part
+      ),
+    };
+  }
+
+  if (event.type === "final") {
+    const fullOutput = event.content || base.fullOutput;
+    return {
+      ...base,
+      status: "done",
+      fullOutput,
+      latestLine: latestLine(fullOutput),
+      endTime: new Date(timestamp).getTime(),
+      parts: base.parts.length > 0 ? base.parts : [{ type: "text", text: fullOutput }],
+    };
+  }
+
+  const fullOutput = `${base.fullOutput}${base.fullOutput ? "\n" : ""}Error: ${event.message}`;
+  return {
+    ...base,
+    status: "error",
+    fullOutput,
+    latestLine: latestLine(fullOutput),
+    endTime: new Date(timestamp).getTime(),
+    parts: appendTextPart(base.parts, `${base.parts.length ? "\n" : ""}Error: ${event.message}`),
+  };
+}
+
+function appendTextPart(parts: ProjectedSubAgent["parts"], delta: string): ProjectedSubAgent["parts"] {
+  const last = parts.at(-1);
+  if (last?.type === "text") {
+    return [...parts.slice(0, -1), { type: "text", text: `${last.text}${delta}` }];
+  }
+  return [...parts, { type: "text", text: delta }];
+}
+
+function latestLine(text: string): string {
+  return text.split(/\r?\n/).filter(Boolean).at(-1) ?? "";
 }
