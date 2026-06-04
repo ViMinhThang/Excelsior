@@ -198,6 +198,25 @@ export function useAgentHost() {
     void client.clear();
   }, [client]);
 
+  const switchWorkspace = useCallback(async (path: string) => {
+    setIsInitializing(true);
+    setWorkspaceError(null);
+    try {
+      await window.api.initializeWorkspace(path);
+      const tree = await window.api.getWorkspaceTree();
+      setWorkspacePath(path);
+      setWorkspaceTree(tree);
+      localStorage.setItem("excelsior-workspace-path", path);
+    } catch (err) {
+      console.error("Failed to switch workspace:", err);
+      setWorkspaceError(
+        err instanceof Error ? err.message : "Failed to switch workspace.",
+      );
+    } finally {
+      setIsInitializing(false);
+    }
+  }, []);
+
   const revertLastTurn = useCallback(
     (): Promise<CommandResult> => client.revertLastTurn(),
     [client],
@@ -212,6 +231,7 @@ export function useAgentHost() {
     isInitializing,
     workspaceError,
     selectWorkspace,
+    switchWorkspace,
     send,
     cancel,
     executeCommand,

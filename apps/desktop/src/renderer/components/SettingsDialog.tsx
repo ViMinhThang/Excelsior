@@ -13,6 +13,8 @@ import {
   isThemeDark,
   type DesktopTheme,
 } from "./settingsDialog/themeOptions.js";
+import { Dialog, DialogContent } from "./ui/dialog.js";
+import { Button } from "./ui/button.js";
 
 type SettingsDialogProps = {
   settings: AppSettings | null;
@@ -85,8 +87,11 @@ export function SettingsDialog({
   };
 
   return (
-    <div className="settings-overlay">
-      <section className="settings-modal animate-fade-in-snappy">
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        className="sm:max-w-[896px] max-w-[896px] h-[640px] p-0 gap-0 overflow-hidden border-brand-border bg-brand-surface text-brand-text-strong shadow-2xl flex flex-row"
+      >
         <aside className="settings-sidebar">
           <div className="settings-nav">
             <button
@@ -176,15 +181,15 @@ export function SettingsDialog({
           </div>
 
           <footer className="settings-footer">
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={onClose}
-              className="settings-action settings-action-secondary scale-snappy transition-snappy-colors"
+              className="h-9 px-4 text-brand-text-muted hover:text-brand-text-strong border-brand-border hover:bg-brand-panel"
             >
               Cancel
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="default"
               onClick={() =>
                 onSave(
                   {
@@ -198,13 +203,13 @@ export function SettingsDialog({
                   fontInput,
                 )
               }
-              className="settings-action settings-action-primary scale-snappy transition-snappy-colors"
+              className="h-9 px-4 bg-brand-accent hover:bg-brand-accent-hover text-brand-accent-contrast border-0"
             >
               Save
-            </button>
+            </Button>
           </footer>
         </div>
-      </section>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

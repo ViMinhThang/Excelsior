@@ -70,7 +70,7 @@ export function SessionRow({ isActive, session, onRequestDelete, onRename, onSwi
           onChange={(event) => setDraftTitle(event.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={commitRename}
-          className="sidebar-session-input rounded-8"
+          className="sidebar-session-input rounded-12"
         />
       ) : (
         <button

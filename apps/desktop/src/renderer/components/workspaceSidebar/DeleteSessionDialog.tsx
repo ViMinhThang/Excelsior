@@ -1,7 +1,14 @@
-import { useEffect, useRef } from "react";
 import { TriangleAlert } from "lucide-react";
 import type { Session } from "@excelsior/core";
 import { sessionTitle } from "./sessionListModel.js";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "../ui/dialog.js";
+import { Button } from "../ui/button.js";
 
 type DeleteSessionDialogProps = {
   session: Session;
@@ -14,64 +21,49 @@ export function DeleteSessionDialog({
   onCancel,
   onConfirm,
 }: DeleteSessionDialogProps) {
-  const cancelButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    cancelButtonRef.current?.focus();
-
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCancel();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel]);
-
   return (
-    <div className="confirm-overlay" onMouseDown={onCancel}>
-      <section
-        aria-labelledby="delete-session-title"
-        aria-modal="true"
-        className="confirm-dialog animate-fade-in-snappy"
-        role="dialog"
-        onMouseDown={(event) => event.stopPropagation()}
+    <Dialog open={true} onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogContent
+        showCloseButton={false}
+        className="sm:max-w-[420px] max-w-[420px] p-0 gap-0 overflow-hidden border-brand-border bg-brand-surface text-brand-text-strong shadow-2xl"
       >
-        <div className="confirm-dialog-body">
-          <div className="confirm-dialog-icon rounded-8" aria-hidden="true">
+        <div className="flex gap-4 p-6 pb-5">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-red-500/30 bg-red-500/10 text-red-500"
+            aria-hidden="true"
+          >
             <TriangleAlert className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h2 id="delete-session-title" className="confirm-dialog-title">
+            <DialogTitle className="text-base font-semibold text-brand-text-strong">
               Delete chat?
-            </h2>
-            <p className="confirm-dialog-copy">
-              <span className="confirm-dialog-name">{sessionTitle(session)}</span> will be removed
-              from this workspace.
-            </p>
+            </DialogTitle>
+            <DialogDescription className="mt-2 text-sm text-brand-text-light">
+              <span className="font-semibold text-brand-text-strong">
+                {sessionTitle(session)}
+              </span>{" "}
+              will be removed from this workspace.
+            </DialogDescription>
           </div>
         </div>
 
-        <div className="confirm-dialog-actions">
-          <button
-            ref={cancelButtonRef}
-            type="button"
+        <DialogFooter className="m-0 bg-brand-bg/40 border-t border-brand-border px-5 py-3 flex gap-2 justify-end sm:flex-row">
+          <Button
+            variant="outline"
             onClick={onCancel}
-            className="confirm-action confirm-action-secondary scale-snappy transition-snappy-colors"
+            className="h-9 px-4 text-brand-text-muted hover:text-brand-text-strong border-brand-border hover:bg-brand-panel"
           >
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="destructive"
             onClick={() => onConfirm(session.id)}
-            className="confirm-action confirm-action-danger scale-snappy transition-snappy-colors"
+            className="h-9 px-4 bg-red-500 hover:bg-red-600 text-white border-0"
           >
             Delete
-          </button>
-        </div>
-      </section>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
