@@ -108,12 +108,12 @@ export function createWriteTool(name = "writeFile"): HarnessTool<z.infer<typeof 
     capabilities: ["fs:write"],
     async execute({ filePath, content }, ctx) {
       if (ctx.mode === "plan") return text(PLAN_MODE_BLOCKED_MESSAGE, true);
-      const allowed = await authorizeWrite(ctx, name, filePath);
-      if (!allowed) return text("Denied by user.");
-      const fullPath = await resolveWorkspacePath(filePath, ctx);
+      const authorization = await authorizeWrite(ctx, name, filePath);
+      if (!authorization.approved) return text("Denied by user.");
+      const fullPath = authorization.fullPath;
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
       await fs.writeFile(fullPath, content, "utf-8");
-      return text(`Successfully wrote ${content.length} characters to ${filePath}`);
+      return text(`Successfully wrote ${content.length} characters to ${authorization.displayPath}`);
     },
   };
 }
@@ -132,27 +132,52 @@ export function createEditTool(name = "editFile"): HarnessTool<z.infer<typeof ed
     capabilities: ["fs:write"],
     async execute({ filePath, oldText, newText }, ctx) {
       if (ctx.mode === "plan") return text(PLAN_MODE_BLOCKED_MESSAGE, true);
-      const allowed = await authorizeWrite(ctx, name, filePath);
-      if (!allowed) return text("Denied by user.");
-      const fullPath = await resolveWorkspacePath(filePath, ctx);
+      const authorization = await authorizeWrite(ctx, name, filePath);
+      if (!authorization.approved) return text("Denied by user.");
+      const fullPath = authorization.fullPath;
       const content = await fs.readFile(fullPath, "utf-8");
       const occurrences = content.split(oldText).length - 1;
       if (occurrences === 0) return text("Error: oldText not found in file.", true);
       if (occurrences > 1) return text(`Error: oldText matched ${occurrences} times. Make it unique.`, true);
       await fs.writeFile(fullPath, content.replace(oldText, newText), "utf-8");
-      return text(`Successfully replaced the block in ${filePath}.`);
+      return text(`Successfully replaced the block in ${authorization.displayPath}.`);
     },
   };
 }
 
-async function authorizeWrite(ctx: ToolExecutionContext, toolName: string, filePath: string): Promise<boolean> {
+type WriteAuthorization = {
+  approved: boolean;
+  fullPath: string;
+  displayPath: string;
+};
+
+async function authorizeWrite(
+  ctx: ToolExecutionContext,
+  toolName: string,
+  filePath: string,
+): Promise<WriteAuthorization> {
+  const fullPath = resolveToolPath(filePath, ctx);
+  const outsideWorkspace = isOutsideWorkspace(fullPath, ctx);
+  const displayPath = outsideWorkspace ? fullPath : filePath;
   const response = await ctx.confirm({
     toolName,
-    args: JSON.stringify({ filePath }),
-    filePath,
-    action: existsSync(path.resolve(ctx.workspaceRoot, filePath)) ? "overwrite" : "create",
+    args: JSON.stringify({
+      filePath,
+      ...(outsideWorkspace ? {
+        resolvedPath: fullPath,
+        outsideWorkspace: true,
+        workspaceRoot: ctx.workspaceRoot,
+      } : {}),
+    }),
+    filePath: displayPath,
+    action: outsideWorkspace
+      ? "warning"
+      : existsSync(fullPath) ? "overwrite" : "create",
+    warning: outsideWorkspace
+      ? `Target is outside the workspace. Review carefully before approving.\nTarget: ${fullPath}\nWorkspace: ${ctx.workspaceRoot}`
+      : undefined,
   });
-  return response.approved;
+  return { approved: response.approved, fullPath, displayPath };
 }
 
 function resolveToolPath(inputPath: string, ctx: ToolExecutionContext): string {
@@ -161,11 +186,17 @@ function resolveToolPath(inputPath: string, ctx: ToolExecutionContext): string {
 
 async function resolveWorkspacePath(inputPath: string, ctx: ToolExecutionContext): Promise<string> {
   const resolved = resolveToolPath(inputPath, ctx);
-  const relative = path.relative(ctx.workspaceRoot, resolved);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (isOutsideWorkspace(resolved, ctx)) {
     throw new Error(`Path is outside the workspace: ${inputPath}`);
   }
   return resolved;
+}
+
+function isOutsideWorkspace(resolvedPath: string, ctx: ToolExecutionContext): boolean {
+  const relative = path.relative(ctx.workspaceRoot, resolvedPath);
+  return relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative);
 }
 
 function validateWorkspacePattern(pattern: string): void {

@@ -36,6 +36,15 @@ type StepToolResult = {
   content: string;
 };
 
+type ToolInputUpdateBuffer = {
+  toolName: string;
+  delta: string;
+  lastEmittedAt: number;
+};
+
+const TOOL_INPUT_UPDATE_INTERVAL_MS = 250;
+const TOOL_INPUT_UPDATE_CHARS = 2048;
+
 export class RunController {
   async run(input: {
     messages: readonly AgentMessage[];
@@ -56,6 +65,7 @@ export class RunController {
     const runPrefix = randomUUID().slice(0, 8);
     const assistant = new AssistantMessageBuilder(input.emit);
     const toolInputs = new Map<string, { toolName: string; toolArgs: string }>();
+    const toolInputUpdateBuffers = new Map<string, ToolInputUpdateBuffer>();
     const startedTools = new Set<string>();
     let stepLimit: number | undefined;
     const rawSteps = input.settings.agentToolLoopSteps;
@@ -114,6 +124,11 @@ export class RunController {
               break;
             case "tool-input-start":
               toolInputs.set(part.id, { toolName: part.toolName, toolArgs: "" });
+              toolInputUpdateBuffers.set(part.id, {
+                toolName: part.toolName,
+                delta: "",
+                lastEmittedAt: Date.now(),
+              });
               assistant.end();
               startedTools.add(part.id);
               input.emit(
@@ -133,15 +148,13 @@ export class RunController {
                   ...current,
                   toolArgs: `${current.toolArgs}${part.delta}`,
                 });
-                input.emit(
-                  TOOL_EXECUTION_UPDATE,
-                  {
-                    toolCallId: part.id,
-                    toolName: current.toolName,
-                    delta: part.delta,
-                  },
-                  { relatedToolCallId: part.id },
-                );
+                queueToolInputUpdate({
+                  emit: input.emit,
+                  buffers: toolInputUpdateBuffers,
+                  toolCallId: part.id,
+                  toolName: current.toolName,
+                  delta: part.delta,
+                });
               }
               break;
             }
@@ -149,6 +162,11 @@ export class RunController {
               assistant.end();
               const toolInput = toolInputs.get(part.toolCallId);
               const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
+              flushToolInputUpdate({
+                emit: input.emit,
+                buffers: toolInputUpdateBuffers,
+                toolCallId: part.toolCallId,
+              });
               toolInputs.set(part.toolCallId, {
                 toolName: part.toolName,
                 toolArgs,
@@ -176,6 +194,11 @@ export class RunController {
             case "tool-result": {
               const toolInput = toolInputs.get(part.toolCallId);
               const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
+              flushToolInputUpdate({
+                emit: input.emit,
+                buffers: toolInputUpdateBuffers,
+                toolCallId: part.toolCallId,
+              });
               completeToolExecution({
                 emit: input.emit,
                 startedTools,
@@ -192,6 +215,11 @@ export class RunController {
             case "tool-error": {
               const toolInput = toolInputs.get(part.toolCallId);
               const toolArgs = stringifyToolArgs(part.input ?? toolInput?.toolArgs);
+              flushToolInputUpdate({
+                emit: input.emit,
+                buffers: toolInputUpdateBuffers,
+                toolCallId: part.toolCallId,
+              });
               completeToolExecution({
                 emit: input.emit,
                 startedTools,
@@ -206,6 +234,11 @@ export class RunController {
               break;
             }
             case "tool-output-denied": {
+              flushToolInputUpdate({
+                emit: input.emit,
+                buffers: toolInputUpdateBuffers,
+                toolCallId: part.toolCallId,
+              });
               completeToolExecution({
                 emit: input.emit,
                 startedTools,
@@ -284,6 +317,10 @@ export class RunController {
       }
     } finally {
       if (cancelled || failed) {
+        flushAllToolInputUpdates({
+          emit: input.emit,
+          buffers: toolInputUpdateBuffers,
+        });
         finalizeIncompleteToolExecutions({
           emit: input.emit,
           startedTools,
@@ -392,6 +429,77 @@ function emitToolMessage(
   };
   emit(MESSAGE_START, { message }, { relatedToolCallId: toolCallId });
   emit(MESSAGE_END, { message }, { relatedToolCallId: toolCallId });
+}
+
+function queueToolInputUpdate(input: {
+  emit: HarnessEventEmitter;
+  buffers: Map<string, ToolInputUpdateBuffer>;
+  toolCallId: string;
+  toolName: string;
+  delta: string;
+}): void {
+  const now = Date.now();
+  const current = input.buffers.get(input.toolCallId) ?? {
+    toolName: input.toolName,
+    delta: "",
+    lastEmittedAt: now,
+  };
+  input.buffers.set(input.toolCallId, {
+    toolName: input.toolName || current.toolName,
+    delta: `${current.delta}${input.delta}`,
+    lastEmittedAt: current.lastEmittedAt,
+  });
+
+  const buffered = input.buffers.get(input.toolCallId);
+  if (!buffered) return;
+  if (
+    buffered.delta.length >= TOOL_INPUT_UPDATE_CHARS ||
+    now - buffered.lastEmittedAt >= TOOL_INPUT_UPDATE_INTERVAL_MS
+  ) {
+    flushToolInputUpdate({
+      emit: input.emit,
+      buffers: input.buffers,
+      toolCallId: input.toolCallId,
+      now,
+    });
+  }
+}
+
+function flushToolInputUpdate(input: {
+  emit: HarnessEventEmitter;
+  buffers: Map<string, ToolInputUpdateBuffer>;
+  toolCallId: string;
+  now?: number;
+}): void {
+  const current = input.buffers.get(input.toolCallId);
+  if (!current?.delta) return;
+  input.emit(
+    TOOL_EXECUTION_UPDATE,
+    {
+      toolCallId: input.toolCallId,
+      toolName: current.toolName,
+      delta: current.delta,
+    },
+    { relatedToolCallId: input.toolCallId },
+  );
+  input.buffers.set(input.toolCallId, {
+    toolName: current.toolName,
+    delta: "",
+    lastEmittedAt: input.now ?? Date.now(),
+  });
+}
+
+function flushAllToolInputUpdates(input: {
+  emit: HarnessEventEmitter;
+  buffers: Map<string, ToolInputUpdateBuffer>;
+}): void {
+  for (const toolCallId of input.buffers.keys()) {
+    flushToolInputUpdate({
+      emit: input.emit,
+      buffers: input.buffers,
+      toolCallId,
+    });
+  }
 }
 
 function completeToolExecution(input: {
