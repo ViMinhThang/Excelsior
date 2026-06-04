@@ -67,7 +67,6 @@ export class EventBus {
       messageId: message.id,
       role: "assistant",
       delta: content,
-      content,
     }, { sessionId, turnId });
     this.emit(runId, MESSAGE_END, { message }, { sessionId, turnId });
   }

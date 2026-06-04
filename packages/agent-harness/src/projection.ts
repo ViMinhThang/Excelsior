@@ -3,13 +3,45 @@ import type { AnyHarnessEvent } from "./events.js";
 import type { HarnessSnapshot } from "./types.js";
 import { AssistantStateMachine } from "./context/index.js";
 
-interface CanonicalReadModel {
+export interface CanonicalReadModel {
   displayBlocks: ProjectedBlock[];
   aiHistory: AgentMessage[];
 }
 
+export class ProjectionCache {
+  private stateMachine = new AssistantStateMachine();
+  private appliedEventCount = 0;
+  private lastAppliedEventId: string | undefined;
+
+  project(events: readonly AnyHarnessEvent[]): CanonicalReadModel {
+    if (!this.canApplyIncrementally(events)) {
+      this.reset();
+    }
+
+    for (let index = this.appliedEventCount; index < events.length; index++) {
+      this.stateMachine.applyEvent(events[index]!);
+    }
+    this.appliedEventCount = events.length;
+    this.lastAppliedEventId = events.at(-1)?.id;
+    return this.stateMachine.getCanonicalReadModel();
+  }
+
+  reset(): void {
+    this.stateMachine = new AssistantStateMachine();
+    this.appliedEventCount = 0;
+    this.lastAppliedEventId = undefined;
+  }
+
+  private canApplyIncrementally(events: readonly AnyHarnessEvent[]): boolean {
+    if (this.appliedEventCount === 0) return true;
+    if (this.appliedEventCount > events.length) return false;
+    return events[this.appliedEventCount - 1]?.id === this.lastAppliedEventId;
+  }
+}
+
 export function projectHarnessState(input: {
   events: readonly AnyHarnessEvent[];
+  readModel?: CanonicalReadModel;
   isLoading: boolean;
   sessions: Session[];
   currentSessionId: string | null;
@@ -18,7 +50,7 @@ export function projectHarnessState(input: {
   pendingConfirmation: HarnessSnapshot["pendingConfirmation"];
   pendingQuestion: HarnessSnapshot["pendingQuestion"];
 }): HarnessSnapshot {
-  const readModel = projectEvents(input.events);
+  const readModel = input.readModel ?? projectEvents(input.events);
   return {
     displayBlocks: readModel.displayBlocks,
     isLoading: input.isLoading,
@@ -40,9 +72,5 @@ export function projectEventsToDisplayBlocks(events: readonly AnyHarnessEvent[])
 }
 
 export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalReadModel {
-  const stateMachine = new AssistantStateMachine();
-  for (const event of events) {
-    stateMachine.applyEvent(event);
-  }
-  return stateMachine.getCanonicalReadModel();
+  return new ProjectionCache().project(events);
 }

@@ -96,7 +96,7 @@ function renderSubAgentTools(block: ProjectedBlock & { type: "sub-agent" }) {
           toolName={tool.toolName}
           toolArgs={tool.toolArgs}
           status={tool.status || "completed"}
-          content=""
+          content={tool.content ?? ""}
           nested
           expanded
         />

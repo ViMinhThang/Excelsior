@@ -224,7 +224,7 @@ function formatEventDetail(event: AnyHarnessEvent): string {
     case MESSAGE_START:
       return `${event.data.message.role} id=${shortId(event.data.message.id)}`;
     case MESSAGE_UPDATE:
-      return `assistant +=${event.data.delta.length} chars total=${event.data.content.length}`;
+      return `assistant +=${event.data.delta.length} chars`;
     case MESSAGE_END:
       return `${event.data.message.role} id=${shortId(event.data.message.id)} "${preview(event.data.message.content)}"`;
     case TOOL_EXECUTION_START:

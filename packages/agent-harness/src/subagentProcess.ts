@@ -9,9 +9,12 @@ type ChildOutput =
   | { type: "text_delta"; delta: string }
   | { type: "tool_start"; toolCallId: string; toolName: string; toolArgs: string }
   | { type: "tool_update"; toolCallId: string; delta: string }
-  | { type: "tool_end"; toolCallId: string; toolName: string; toolArgs: string; isError: boolean }
+  | { type: "tool_end"; toolCallId: string; toolName: string; toolArgs: string; result?: string; isError: boolean }
   | { type: "final"; content: string }
   | { type: "error"; message: string };
+
+const SUBAGENT_PROGRESS_INTERVAL_MS = 250;
+const SUBAGENT_PROGRESS_CHARS = 2048;
 
 interface RunSpawnedSubAgentInput {
   role: string;
@@ -31,6 +34,9 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
     let stderr = "";
     let finalOutput = "";
     let settled = false;
+    let pendingTextDelta = "";
+    let lastProgressEmittedAt = Date.now();
+    const pendingToolUpdates = new Map<string, string>();
 
     const child = spawn(spawnSpec.command, spawnSpec.args, {
       cwd: input.ctx.workspaceRoot,
@@ -41,6 +47,7 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
     const finish = (content: string, isError = false) => {
       if (settled) return;
       settled = true;
+      flushProgress();
       input.ctx.abortSignal?.removeEventListener("abort", abort);
       if (isError) {
         input.ctx.emit?.(SUB_AGENT_EVENT, {
@@ -107,11 +114,53 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
       }
       if (parsed.type === "final") {
         finalOutput = parsed.content;
+        flushProgress();
+      } else if (parsed.type === "text_delta") {
+        pendingTextDelta += parsed.delta;
+        flushProgressIfNeeded();
+        return;
+      } else if (parsed.type === "tool_update") {
+        pendingToolUpdates.set(
+          parsed.toolCallId,
+          `${pendingToolUpdates.get(parsed.toolCallId) ?? ""}${parsed.delta}`,
+        );
+        flushProgressIfNeeded();
+        return;
+      } else if (parsed.type === "tool_start" || parsed.type === "tool_end" || parsed.type === "error") {
+        flushProgress();
       }
+      emitChildEvent(parsed);
+    }
+
+    function emitChildEvent(event: ChildOutput): void {
       input.ctx.emit?.(SUB_AGENT_EVENT, {
         parentToolCallId: input.parentToolCallId,
-        event: parsed,
+        event,
       }, { relatedToolCallId: input.parentToolCallId });
+    }
+
+    function flushProgressIfNeeded(): void {
+      const pendingChars = pendingTextDelta.length +
+        [...pendingToolUpdates.values()].reduce((sum, delta) => sum + delta.length, 0);
+      const now = Date.now();
+      if (
+        pendingChars >= SUBAGENT_PROGRESS_CHARS ||
+        now - lastProgressEmittedAt >= SUBAGENT_PROGRESS_INTERVAL_MS
+      ) {
+        flushProgress(now);
+      }
+    }
+
+    function flushProgress(now = Date.now()): void {
+      if (pendingTextDelta) {
+        emitChildEvent({ type: "text_delta", delta: pendingTextDelta });
+        pendingTextDelta = "";
+      }
+      for (const [toolCallId, delta] of pendingToolUpdates) {
+        if (delta) emitChildEvent({ type: "tool_update", toolCallId, delta });
+      }
+      pendingToolUpdates.clear();
+      lastProgressEmittedAt = now;
     }
   });
 }
