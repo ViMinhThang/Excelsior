@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AppSettings } from "@excelsior/core";
+import type { AppSettings, Session } from "@excelsior/core";
 import { ChatPanel } from "./components/ChatPanel.tsx";
 import { SettingsDialog } from "./components/SettingsDialog.tsx";
 import { WorkspaceGate } from "./components/WorkspaceGate.tsx";
@@ -24,6 +24,7 @@ export default function App() {
     isInitializing,
     workspaceError,
     selectWorkspace,
+    switchWorkspace,
     send,
     cancel,
     executeCommand,
@@ -37,11 +38,111 @@ export default function App() {
     respondToQuestion,
   } = useAgentHost();
 
+  const [workspaces, setWorkspaces] = useState<Array<{ path: string; name: string }>>(() => {
+    const raw = localStorage.getItem("excelsior-workspaces");
+    return raw ? JSON.parse(raw) : [];
+  });
+
+  const [sessionsCache, setSessionsCache] = useState<Record<string, Session[]>>(() => {
+    const cache: Record<string, Session[]> = {};
+    const rawWorkspaces = localStorage.getItem("excelsior-workspaces");
+    if (rawWorkspaces) {
+      const parsed: Array<{ path: string; name: string }> = JSON.parse(rawWorkspaces);
+      parsed.forEach((w) => {
+        const rawSessions = localStorage.getItem(`excelsior-sessions-${w.path}`);
+        if (rawSessions) {
+          cache[w.path] = JSON.parse(rawSessions);
+        }
+      });
+    }
+    return cache;
+  });
+
+  const [pendingAction, setPendingAction] = useState<{
+    type: "switch-session" | "create-session";
+    workspacePath: string;
+    sessionId?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!workspacePath) return;
+    const name = state?.workspace?.name || workspacePath.split(/[/\\]/).pop() || "Workspace";
+    
+    setWorkspaces((prev) => {
+      const exists = prev.some((w) => w.path === workspacePath);
+      if (exists) {
+        const updated = prev.map((w) => w.path === workspacePath ? { ...w, name } : w);
+        localStorage.setItem("excelsior-workspaces", JSON.stringify(updated));
+        return updated;
+      }
+      const next = [...prev, { path: workspacePath, name }];
+      localStorage.setItem("excelsior-workspaces", JSON.stringify(next));
+      return next;
+    });
+  }, [workspacePath, state?.workspace?.name]);
+
+  useEffect(() => {
+    if (!workspacePath || !state?.sessions) return;
+    const key = `excelsior-sessions-${workspacePath}`;
+    localStorage.setItem(key, JSON.stringify(state.sessions));
+    setSessionsCache((prev) => ({
+      ...prev,
+      [workspacePath]: state.sessions,
+    }));
+  }, [workspacePath, state?.sessions]);
+
+  useEffect(() => {
+    if (!pendingAction) return;
+    if (workspacePath === pendingAction.workspacePath && !isInitializing) {
+      if (pendingAction.type === "switch-session" && pendingAction.sessionId) {
+        void switchSession(pendingAction.sessionId);
+      } else if (pendingAction.type === "create-session") {
+        void createSession();
+      }
+      setPendingAction(null);
+    }
+  }, [workspacePath, isInitializing, pendingAction, switchSession, createSession]);
+
+  const handleSwitchWorkspaceAndSession = async (path: string, sessionId: string) => {
+    if (workspacePath === path) {
+      await switchSession(sessionId);
+    } else {
+      setPendingAction({ type: "switch-session", workspacePath: path, sessionId });
+      await switchWorkspace(path);
+    }
+  };
+
+  const handleCreateSessionInWorkspace = async (path: string) => {
+    if (workspacePath === path) {
+      await createSession();
+    } else {
+      setPendingAction({ type: "create-session", workspacePath: path });
+      await switchWorkspace(path);
+    }
+  };
+
+  const handleDeleteSession = async (path: string, sessionId: string) => {
+    if (workspacePath === path) {
+      await deleteSession(sessionId);
+    }
+  };
+
+  const handleRenameSession = (path: string, sessionId: string, title: string) => {
+    if (workspacePath === path) {
+      renameSession(sessionId, title);
+    }
+  };
+
   const [inputValue, setInputValue] = useState("");
   const [commandResult, setCommandResult] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [openToolCalls, setOpenToolCalls] = useState<Record<string, boolean>>({});
   const [theme, setTheme] = useState<DesktopTheme>(getStoredTheme);
+  const [font, setFont] = useState<string>(() => localStorage.getItem("excelsior-font") || "ui-sans-serif, system-ui, sans-serif");
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--font-brand", font);
+  }, [font]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -76,10 +177,12 @@ export default function App() {
     setInputValue(value);
   };
 
-  const handleSaveSettings = (nextSettings: Partial<AppSettings>, nextTheme: DesktopTheme) => {
+  const handleSaveSettings = (nextSettings: Partial<AppSettings>, nextTheme: DesktopTheme, nextFont: string) => {
     saveSettings(nextSettings);
     localStorage.setItem("excelsior-theme", nextTheme);
     setTheme(nextTheme);
+    localStorage.setItem("excelsior-font", nextFont);
+    setFont(nextFont);
     setShowSettings(false);
   };
 
@@ -108,21 +211,16 @@ export default function App() {
 
       <div className="flex min-h-0 flex-1 overflow-hidden bg-brand-bg">
         <WorkspaceSidebar
+          currentWorkspacePath={workspacePath}
+          workspaces={workspaces}
+          sessionsCache={sessionsCache}
           currentSessionId={state?.currentSessionId ?? null}
-          sessions={state?.sessions ?? []}
-          workspaceName={state?.workspace?.name ?? "Workspace"}
-          onCreateSession={() => {
-            void createSession();
-          }}
-          onDeleteSession={(sessionId) => {
-            void deleteSession(sessionId);
-          }}
+          onCreateSession={handleCreateSessionInWorkspace}
+          onDeleteSession={handleDeleteSession}
           onOpenSettings={() => setShowSettings(true)}
-          onRenameSession={renameSession}
+          onRenameSession={handleRenameSession}
           onSelectWorkspace={selectWorkspace}
-          onSwitchSession={(sessionId) => {
-            void switchSession(sessionId);
-          }}
+          onSwitchSession={handleSwitchWorkspaceAndSession}
         />
 
         <ChatPanel
@@ -151,9 +249,11 @@ export default function App() {
         <SettingsDialog
           settings={settings}
           theme={theme}
+          font={font}
           onClose={() => setShowSettings(false)}
           onSave={handleSaveSettings}
           onThemeChange={handleThemeChange}
+          onFontChange={setFont}
         />
       )}
     </div>

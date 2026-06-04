@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Code,
   Compass,
-  Terminal,
 } from "lucide-react";
 import { MarkdownMessage } from "../MarkdownMessage.js";
 
@@ -64,80 +63,78 @@ function ToolBubble({
   });
   const fileChange = display.fileChangePreview;
   const resultLines = display.resultPreview ?? [];
+  const isRunning = block.status === "pending";
 
   return (
-    <div className="flex gap-3 pr-14">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-surface text-brand-text-muted">
+    <div className={`flex gap-3 pr-14 ${isRunning ? "animate-pulse" : ""}`}>
+      <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center text-brand-text-muted">
         <Code className="h-4 w-4" />
       </div>
 
-      <div className="min-w-0 flex-1 overflow-hidden rounded-xl border border-brand-border bg-brand-surface">
+      <div className="min-w-0 flex-1">
         <button
           type="button"
           onClick={() => onToggle(block.id)}
-          className="flex h-11 w-full items-center justify-between gap-3 px-4 text-left text-xs text-brand-text-light hover:bg-brand-panel transition-snappy-colors"
+          className="flex h-5 items-center gap-2 text-left text-base font-mono text-brand-text-muted hover:text-brand-text-light transition-colors"
         >
-          <span className="flex min-w-0 items-center gap-2.5">
-            <Terminal className="h-4 w-4 shrink-0 text-brand-accent" />
-            <span className="truncate font-mono text-[12px]">{display.command}</span>
-          </span>
-          <span className="flex shrink-0 items-center gap-2 text-brand-text-muted">
-            {block.status}
-            {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </span>
+          <span className="truncate">{display.command}</span>
+          <span className="text-xs opacity-60">({block.status})</span>
+          {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
 
-        {isOpen && (
-          <div className="space-y-3 border-t border-brand-border p-4">
+        <div
+          className="grid transition-[grid-template-rows,opacity,margin-top] duration-200 ease-in-out"
+          style={{
+            gridTemplateRows: isOpen ? "1fr" : "0fr",
+            opacity: isOpen ? 1 : 0,
+            marginTop: isOpen ? "0.375rem" : "0px",
+          }}
+        >
+          <div className="overflow-hidden ml-5 pl-3 border-l border-brand-border/30 space-y-2 text-sm text-brand-text-muted select-text">
             {display.summaryLine && (
-              <p className="text-xs font-medium text-brand-text-light">{display.summaryLine}</p>
+              <p className="font-medium text-brand-text-light">{display.summaryLine}</p>
             )}
             {display.detail && (
-              <p className="text-xs leading-5 text-brand-text-muted">{display.detail}</p>
+              <p className="leading-5">{display.detail}</p>
             )}
             {fileChange && (
-              <div className="rounded-lg border border-brand-border bg-brand-panel/50 px-3 py-2 text-xs text-brand-text-light">
-                <span className="font-mono">{fileChange.filePath || display.summary}</span>
+              <div className="font-mono text-xs text-brand-text-light">
+                <span>{fileChange.filePath || display.summary}</span>
                 <span className="ml-2 text-emerald-400">+{fileChange.added}</span>
                 <span className="ml-1 text-red-400">-{fileChange.removed}</span>
               </div>
             )}
             {resultLines.length > 0 && (
-              <pre className="max-h-56 select-text">
+              <pre className="max-h-56 overflow-auto font-mono text-xs">
                 {resultLines.join("\n")}
                 {display.omittedResultLines ? `\n... ${display.omittedResultLines} more lines` : ""}
               </pre>
             )}
             {resultLines.length === 0 && !display.detail && !fileChange && block.content && (
-              <pre className="max-h-56 select-text">{block.content}</pre>
+              <pre className="max-h-56 overflow-auto font-mono text-xs">{block.content}</pre>
             )}
-            {block.toolArgs && <pre className="max-h-48 select-text">{block.toolArgs}</pre>}
+            {block.toolArgs && <pre className="max-h-48 overflow-auto font-mono text-xs">{block.toolArgs}</pre>}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
 function SubAgentBubble({ block }: { block: Extract<ProjectedBlock, { type: "sub-agent" }> }) {
+  const isRunning = block.state.status === "running";
   return (
-    <div className="flex gap-3 pr-14">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-surface text-brand-text-muted">
+    <div className={`flex gap-3 pr-14 py-1 ${isRunning ? "animate-pulse" : ""}`}>
+      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-brand-text-muted">
         <Compass className="h-4 w-4" />
       </div>
 
-      <div className="min-w-0 flex-1 rounded-xl border border-brand-border bg-brand-surface p-4">
-        <div className="mb-2 flex items-center gap-2 text-xs text-brand-text-muted">
-          <StatusDot isLoading={block.state.status === "running"} />
-          <span className="truncate font-medium">{block.role}</span>
-          <span>{block.state.status}</span>
-        </div>
-        <p className="text-sm leading-6 text-brand-text-light">
-          {block.state.latestLine || "Working..."}
-        </p>
-        {block.state.fullOutput && (
-          <pre className="mt-3 max-h-56 select-text">{block.state.fullOutput}</pre>
-        )}
+      <div className="min-w-0 flex-1 flex items-center gap-2 text-sm">
+        <StatusDot isLoading={isRunning} />
+        <span className="font-semibold text-brand-text-strong">{block.role}</span>
+        <span className="text-brand-text-muted">
+          {isRunning ? "is running..." : `finished (${block.state.status})`}
+        </span>
       </div>
     </div>
   );
@@ -156,7 +153,9 @@ function ReasoningBubble({ block }: { block: Extract<ProjectedBlock, { type: "re
   );
 }
 
-export function MessageBlock({ block, isToolOpen, onToggleToolCall }: MessageBlockProps) {
+import { memo } from "react";
+
+export const MessageBlock = memo(function MessageBlock({ block, isToolOpen, onToggleToolCall }: MessageBlockProps) {
   if (block.type === "user") return <UserBubble block={block} />;
   if (block.type === "assistant") return <AssistantBubble block={block} />;
   if (block.type === "reasoning") return <ReasoningBubble block={block} />;
@@ -164,7 +163,7 @@ export function MessageBlock({ block, isToolOpen, onToggleToolCall }: MessageBlo
     return <ToolBubble block={block} isOpen={isToolOpen} onToggle={onToggleToolCall} />;
   }
   return <SubAgentBubble block={block} />;
-}
+});
 
 export function ThinkingRow() {
   return (

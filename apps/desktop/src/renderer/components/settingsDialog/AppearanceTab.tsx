@@ -1,22 +1,33 @@
-import { ChevronDown, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import {
   getThemeOption,
   themeOptionsForMode,
   type DesktopTheme,
 } from "./themeOptions.js";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select.js";
 
 type AppearanceTabProps = {
   isDarkMode: boolean;
   themeInput: DesktopTheme;
+  fontInput: string;
   onModeToggle: (nextDark: boolean) => void;
   onThemeChange: (theme: DesktopTheme) => void;
+  onFontChange: (font: string) => void;
 };
 
 export function AppearanceTab({
   isDarkMode,
   themeInput,
+  fontInput,
   onModeToggle,
   onThemeChange,
+  onFontChange,
 }: AppearanceTabProps) {
   const selectedThemeConfig = getThemeOption(themeInput);
   const themeOptions = themeOptionsForMode(isDarkMode);
@@ -49,25 +60,47 @@ export function AppearanceTab({
         <label className="settings-label" htmlFor="theme">
           Theme Scheme
         </label>
-        <div className="settings-select-wrap">
-          <select
-            id="theme"
-            value={themeInput}
-            onChange={(event) => onThemeChange(event.target.value as DesktopTheme)}
-            className="settings-control settings-select transition-snappy-colors"
-          >
+        <Select value={themeInput} onValueChange={(val) => onThemeChange(val as DesktopTheme)}>
+          <SelectTrigger className="w-full settings-control transition-snappy-colors text-brand-text-strong">
+            <SelectValue placeholder="Select theme" />
+          </SelectTrigger>
+          <SelectContent className="bg-brand-surface text-brand-text-strong border-brand-border">
             {themeOptions.map((option) => (
-              <option
+              <SelectItem
                 key={option.id}
-                className="bg-brand-surface text-brand-text-strong"
                 value={option.id}
+                className="focus:bg-brand-panel focus:text-brand-text-strong"
               >
                 {option.name}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-          <ChevronDown className="settings-select-icon" />
-        </div>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="settings-field">
+        <label className="settings-label" htmlFor="font">
+          Font Family
+        </label>
+        <Select value={fontInput} onValueChange={(val) => onFontChange(val)}>
+          <SelectTrigger className="w-full settings-control transition-snappy-colors text-brand-text-strong">
+            <SelectValue placeholder="Select font" />
+          </SelectTrigger>
+          <SelectContent className="bg-brand-surface text-brand-text-strong border-brand-border">
+            <SelectItem className="focus:bg-brand-panel focus:text-brand-text-strong" value="ui-sans-serif, system-ui, sans-serif">
+              Sans-serif
+            </SelectItem>
+            <SelectItem className="focus:bg-brand-panel focus:text-brand-text-strong" value="var(--font-mono)">
+              Monospace (JetBrains Mono)
+            </SelectItem>
+            <SelectItem className="focus:bg-brand-panel focus:text-brand-text-strong" value="var(--font-caskaydia)">
+              Monospace (Caskaydia Cove)
+            </SelectItem>
+            <SelectItem className="focus:bg-brand-panel focus:text-brand-text-strong" value="var(--font-display)">
+              Serif (DM Serif Display)
+            </SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {selectedThemeConfig && (

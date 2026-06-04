@@ -153,7 +153,7 @@ async function main(): Promise<void> {
     systemPrompt: buildChildSystemPrompt(request),
     settings: {
       ...request.settings,
-      agentToolLoopSteps: "8",
+      agentToolLoopSteps: "200",
     },
     providers,
     tools,
