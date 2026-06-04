@@ -197,7 +197,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
 }
 
 type MarkdownMessageProps = {
-  block: Extract<ProjectedBlock, { type: "assistant" }>;
+  block: { content: string };
 };
 
 export function MarkdownMessage({ block }: MarkdownMessageProps) {
