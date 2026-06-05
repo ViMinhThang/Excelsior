@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { execFileSync } from "child_process";
 import type { AgentClientState } from "@excelsior/client";
 import { HarnessAgentHost } from "@excelsior/agent-host";
 
@@ -8,6 +9,13 @@ export type WorkspaceTreeNode = {
   path: string;
   type: "file" | "directory";
   children?: WorkspaceTreeNode[];
+};
+
+export type WorkspaceEnvironmentInfo = {
+  rootPath: string | null;
+  branchName: string | null;
+  changeCount: number | null;
+  hasGit: boolean;
 };
 
 const IGNORED_TREE_NAMES = new Set([
@@ -54,6 +62,51 @@ export function buildWorkspaceTree(
   });
 }
 
+export function readWorkspaceEnvironment(rootPath: string | null): WorkspaceEnvironmentInfo {
+  if (!rootPath) {
+    return {
+      rootPath: null,
+      branchName: null,
+      changeCount: null,
+      hasGit: false,
+    };
+  }
+
+  try {
+    let branchName = execGit(rootPath, ["branch", "--show-current"]).trim();
+    if (!branchName) {
+      const revision = execGit(rootPath, ["rev-parse", "--short", "HEAD"]).trim();
+      branchName = revision ? `detached:${revision}` : "";
+    }
+
+    const status = execGit(rootPath, ["status", "--porcelain"]);
+    const changeCount = status.trim()
+      ? status.trim().split(/\r?\n/).length
+      : 0;
+
+    return {
+      rootPath,
+      branchName: branchName || null,
+      changeCount,
+      hasGit: true,
+    };
+  } catch {
+    return {
+      rootPath,
+      branchName: null,
+      changeCount: null,
+      hasGit: false,
+    };
+  }
+}
+
+function execGit(rootPath: string, args: string[]): string {
+  return execFileSync("git", ["-C", rootPath, ...args], {
+    encoding: "utf-8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+}
+
 export class DesktopWorkspaceHost {
   private agentHost: HarnessAgentHost | null = null;
   private stateChangeUnsubscribe: (() => void) | null = null;
@@ -81,6 +134,10 @@ export class DesktopWorkspaceHost {
     return this.currentWorkspaceRoot
       ? buildWorkspaceTree(this.currentWorkspaceRoot)
       : [];
+  }
+
+  getWorkspaceEnvironment(): WorkspaceEnvironmentInfo {
+    return readWorkspaceEnvironment(this.currentWorkspaceRoot);
   }
 
   requireHost(): HarnessAgentHost {

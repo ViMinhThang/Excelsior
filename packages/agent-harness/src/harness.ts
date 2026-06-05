@@ -127,9 +127,7 @@ class HarnessStore implements AgentHarness {
     for (const command of this.createCommands(config)) this.commands.register(command);
 
     this.extensions.load(config.extensions ?? []);
-
-    const session = this.sessionManager.createSession();
-    this.eventStore.clear(session);
+    this.loadCurrentSessionEvents();
     this.updateSnapshot();
   }
 
@@ -414,6 +412,19 @@ class HarnessStore implements AgentHarness {
       definition,
       execute: () => ({ handled: true }),
     }));
+  }
+
+  private loadCurrentSessionEvents(): void {
+    const session = this.sessionManager.currentSession();
+    if (!session) {
+      this.eventStore.replaceEvents(null, []);
+      return;
+    }
+
+    this.eventStore.replaceEvents(
+      session,
+      this.storage.loadEvents(this.workspace.id, session.id),
+    );
   }
 
   private createToolContext(runId?: string, sessionId?: string, turnId?: string): ToolExecutionContext {

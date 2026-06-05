@@ -40,24 +40,38 @@ afterEach(async () => {
 });
 
 describe("AgentHarness", () => {
-  it("starts a fresh session for each harness run in the same workspace", async () => {
+  it("does not create a session until the first prompt is sent", async () => {
     const dataDir = await makeTempDir();
     const workspaceRoot = await makeTempDir();
 
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+
+    expect(harness.getSnapshot().currentSessionId).toBeNull();
+    expect(harness.getSnapshot().sessions).toEqual([]);
+
+    await harness.send({ content: "hello", mode: "act" });
+
+    expect(harness.getSnapshot().currentSessionId).toBeTruthy();
+    expect(harness.getSnapshot().sessions).toHaveLength(1);
+  });
+
+  it("reopens the latest existing session without creating a replacement", async () => {
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
     const firstHarness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
-    const firstSessionId = firstHarness.getSnapshot().currentSessionId;
+
+    await firstHarness.send({ content: "remember this", mode: "act" });
+    const firstState = firstHarness.getSnapshot();
+    const firstSessionId = firstState.currentSessionId;
     firstHarness.dispose();
 
     const secondHarness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
     const secondState = secondHarness.getSnapshot();
-    const secondSessionId = secondState.currentSessionId;
 
     expect(firstSessionId).toBeTruthy();
-    expect(secondSessionId).toBeTruthy();
-    expect(secondSessionId).not.toBe(firstSessionId);
-    expect(secondState.sessions.map((session) => session.id)).toEqual(
-      expect.arrayContaining([firstSessionId, secondSessionId]),
-    );
+    expect(secondState.currentSessionId).toBe(firstSessionId);
+    expect(secondState.sessions.map((session) => session.id)).toEqual([firstSessionId]);
+    expect(secondState.displayBlocks).toEqual(firstState.displayBlocks);
   });
 
   it("executes core commands and projects session state", async () => {
@@ -83,6 +97,7 @@ describe("AgentHarness", () => {
     const dataDir = await makeTempDir();
     const workspaceRoot = await makeTempDir();
     const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    harness.createSession("Notify Test");
     const sessionId = harness.getSnapshot().currentSessionId;
     expect(sessionId).toBeTruthy();
     const listener = vi.fn();
@@ -117,6 +132,7 @@ describe("AgentHarness", () => {
     const dataDir = await makeTempDir();
     const workspaceRoot = await makeTempDir();
     const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    harness.createSession("Storage Test");
     const sessionId = harness.getSnapshot().currentSessionId;
     expect(sessionId).toBeTruthy();
 

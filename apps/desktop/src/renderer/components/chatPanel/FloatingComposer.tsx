@@ -115,6 +115,7 @@ export function FloatingComposer({
             type="button"
             className="flex items-center justify-center p-1 rounded-lg text-brand-text-muted hover:text-brand-text-strong hover:bg-brand-panel transition-colors"
             title="Add context"
+            aria-label="Add context"
           >
             <Plus className="h-4 w-4" />
           </button>

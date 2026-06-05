@@ -13,6 +13,13 @@ export type WorkspaceTreeNode = {
   children?: WorkspaceTreeNode[];
 };
 
+export type WorkspaceEnvironmentInfo = {
+  rootPath: string | null;
+  branchName: string | null;
+  changeCount: number | null;
+  hasGit: boolean;
+};
+
 // Define the API exposed to the renderer process
 const excelsiorApi = {
   // Subscriptions to state changes
@@ -34,6 +41,7 @@ const excelsiorApi = {
   selectWorkspaceFolder: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-workspace-folder"),
   initializeWorkspace: (path: string): Promise<AgentClientState> => ipcRenderer.invoke("host:initialize-workspace", path),
   getWorkspaceTree: (): Promise<WorkspaceTreeNode[]> => ipcRenderer.invoke("workspace:get-tree"),
+  getWorkspaceEnvironment: (): Promise<WorkspaceEnvironmentInfo> => ipcRenderer.invoke("workspace:get-environment"),
   changeTheme: (theme: string) => ipcRenderer.send("theme:changed", theme),
 };
 
