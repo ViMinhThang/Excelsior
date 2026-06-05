@@ -43,7 +43,7 @@ interface ToolDraft {
   endTimestamp?: string;
 }
 
-export class AssistantStateMachine {
+class AssistantStateMachineCore {
   private displayBlocks: ProjectedBlock[] = [];
   private aiHistory: AgentMessage[] = [];
   private displayIdCounts = new Map<string, number>();
@@ -382,14 +382,6 @@ export class AssistantStateMachine {
     this.endMessage(id);
   }
 
-  getToolName(callId: string): string | undefined {
-    return this.toolInputs.get(callId)?.toolName;
-  }
-
-  getToolArgs(callId: string): string | undefined {
-    return this.toolInputs.get(callId)?.toolArgs;
-  }
-
   // --- Replay / Projection Logic (event sourced) ---
 
   applyEvent(event: AnyHarnessEvent): void {
@@ -625,6 +617,78 @@ export class AssistantStateMachine {
     this.flushAssistant(forceFrozen);
     this.flushTool(forceFrozen);
     this.flushReasoning(forceFrozen);
+  }
+}
+
+export class RunAssistantState {
+  private readonly core: AssistantStateMachineCore;
+
+  constructor(emit?: HarnessEventEmitter) {
+    this.core = new AssistantStateMachineCore(emit);
+  }
+
+  startMessage(id?: string): void {
+    this.core.startMessage(id);
+  }
+
+  updateMessage(id: string, delta: string): void {
+    this.core.updateMessage(id, delta);
+  }
+
+  endMessage(expectedId?: string): void {
+    this.core.endMessage(expectedId);
+  }
+
+  startReasoning(id?: string): void {
+    this.core.startReasoning(id);
+  }
+
+  updateReasoning(id: string, delta: string): void {
+    this.core.updateReasoning(id, delta);
+  }
+
+  endReasoning(): void {
+    this.core.endReasoning();
+  }
+
+  startTool(callId: string, toolName: string): void {
+    this.core.startTool(callId, toolName);
+  }
+
+  updateToolInput(callId: string, delta: string): void {
+    this.core.updateToolInput(callId, delta);
+  }
+
+  flushAllToolUpdates(): void {
+    this.core.flushAllToolUpdates();
+  }
+
+  endToolInput(callId: string, finalInput?: unknown): string {
+    return this.core.endToolInput(callId, finalInput);
+  }
+
+  completeTool(callId: string, toolArgs: string, resultText: string, isError: boolean): void {
+    this.core.completeTool(callId, toolArgs, resultText, isError);
+  }
+
+  finalizeIncompleteTools(resultText: string): void {
+    this.core.finalizeIncompleteTools(resultText);
+  }
+
+  emitNotice(content: string): void {
+    this.core.emitNotice(content);
+  }
+}
+
+export class ProjectionAssistantState {
+  private readonly core = new AssistantStateMachineCore();
+
+  applyEvent(event: AnyHarnessEvent): void {
+    this.core.applyEvent(event);
+  }
+
+  getCanonicalReadModel(): ReturnType<AssistantStateMachineCore["getCanonicalReadModel"]> {
+    return this.core.getCanonicalReadModel();
   }
 }
 

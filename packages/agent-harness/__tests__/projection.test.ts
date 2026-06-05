@@ -13,7 +13,7 @@ import {
   type HarnessEventDataMap,
   type HarnessEventType,
 } from "../src/events.js";
-import { AssistantStateMachine } from "../src/context/AssistantStateMachine.js";
+import { ProjectionAssistantState } from "../src/context/AssistantStateMachine.js";
 import {
   ProjectionCache,
   projectEventsToDisplayBlocks,
@@ -391,7 +391,7 @@ describe("harness projector", () => {
 
   it("only applies newly appended events after the first cached projection", () => {
     const cache = new ProjectionCache();
-    const applyEvent = vi.spyOn(AssistantStateMachine.prototype, "applyEvent");
+    const applyEvent = vi.spyOn(ProjectionAssistantState.prototype, "applyEvent");
     const events = [
       event(1, MESSAGE_START, {
         message: { id: "msg_stream", role: "assistant", content: "" },
