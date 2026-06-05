@@ -36,28 +36,6 @@ export function useAgentHost() {
   const storeRef = useRef<IpcStateStore | null>(null);
 
   useEffect(() => {
-    const savedPath = localStorage.getItem("excelsior-workspace-path") || "c:/Users/huynh/Desktop/Projects/ex/Excelsior";
-    setIsInitializing(true);
-    setWorkspaceError(null);
-    window.api.initializeWorkspace(savedPath)
-      .then(() => window.api.getWorkspaceTree())
-      .then((tree) => {
-        setWorkspacePath(savedPath);
-        setWorkspaceTree(tree);
-        localStorage.setItem("excelsior-workspace-path", savedPath);
-      })
-      .catch((err) => {
-        console.error("Failed to auto-initialize workspace:", err);
-        setWorkspaceError(
-          err instanceof Error ? err.message : "Failed to auto-initialize workspace.",
-        );
-      })
-      .finally(() => {
-        setIsInitializing(false);
-      });
-  }, []);
-
-  useEffect(() => {
     if (!workspacePath) return;
 
     const store = createIpcStateStore(window.api);
@@ -107,7 +85,6 @@ export function useAgentHost() {
       if (result.workspacePath) {
         setWorkspacePath(result.workspacePath);
         setWorkspaceTree(result.workspaceTree);
-        localStorage.setItem("excelsior-workspace-path", result.workspacePath);
       }
     } catch (err) {
       console.error("Workspace selection failed:", err);
@@ -206,7 +183,6 @@ export function useAgentHost() {
       const tree = await window.api.getWorkspaceTree();
       setWorkspacePath(path);
       setWorkspaceTree(tree);
-      localStorage.setItem("excelsior-workspace-path", path);
     } catch (err) {
       console.error("Failed to switch workspace:", err);
       setWorkspaceError(
