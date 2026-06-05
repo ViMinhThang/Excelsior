@@ -360,7 +360,10 @@ class HarnessStore implements AgentHarness {
     const compactedEventCount = this.eventStore.events.length;
     if (compactedEventCount === 0) return;
 
-    const summary = buildCompactionSummary(this.eventStore.events);
+    const summary = await buildCompactionSummary(this.eventStore.events, {
+      providers: this.providers,
+      settings: this.settingsStore.settings,
+    });
     this.eventStore.clear(session);
 
     const runId = `run_${randomUUID()}`;
