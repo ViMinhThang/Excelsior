@@ -1,3 +1,26 @@
+/**
+ * RunController orchestrates the step-by-step agent execution loop.
+ *
+ * Lifecycle and Execution Flow:
+ * 1. Emits `AGENT_START` and `TURN_START` to initialize the run context and hierarchy boundaries.
+ * 2. Runs an execution loop (`while (true)`) representing steps of the agent's tool-call loop:
+ *    - Validates abort signals (`input.signal.aborted`) before triggering new network calls.
+ *    - Initiates an LLM request via Vercel AI SDK's `streamText()`. By setting `stopWhen: stepCountIs(1)`,
+ *      the SDK is configured to pause after exactly one generation/execution step, returning control back to us.
+ * 3. Streams parts from the response (`fullStream`) and delegates to `RunAssistantState` (the event writer):
+ *    - `text-*` and `reasoning-*`: Streams the assistant's talking and thinking output live.
+ *    - `tool-input-*`: Streams raw JSON tool arguments token-by-token.
+ *    - `tool-call`, `tool-result`, `tool-error`, `tool-output-denied`: Runs the local tool execution logic,
+ *      marking the tool status, capturing returns/errors, and saving results.
+ * 4. At the end of each step:
+ *    - Commits the accumulated assistant response (conversational text and/or tool call structures) and
+ *      the respective tool execution results back to the local conversation history (`activeMessages`).
+ *    - Ingests and appends any user-provided steering messages (mid-run corrections) into history.
+ *    - Ends the loop if the assistant did not generate any new tool calls (`!stepHasToolCalls`) or if it
+ *      reaches loop limits (`agentToolLoopSteps`).
+ * 5. Handles cleanup in the `finally` block: finalizes incomplete tool logs, flushes buffers,
+ *    and emits `TURN_END` and `AGENT_END` lifecycle boundaries.
+ */
 import { randomUUID } from "node:crypto";
 import {
   stepCountIs,
