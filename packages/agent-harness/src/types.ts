@@ -47,6 +47,7 @@ export interface ToolExecutionContext {
   tools?: ToolRegistry;
   skillsList?: string;
   projectInstructions?: string;
+  backupDir?: string;
   confirm(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse>;
   askQuestion(input: {
     question: string;
