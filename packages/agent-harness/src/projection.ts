@@ -1,7 +1,7 @@
 import type { AgentMessage, ProjectedBlock, Session, Workspace } from "@excelsior/core";
 import type { AnyHarnessEvent } from "./events.js";
 import type { HarnessSnapshot } from "./types.js";
-import { AssistantStateMachine } from "./context/index.js";
+import { ProjectionAssistantState } from "./context/AssistantStateMachine.js";
 
 export interface CanonicalReadModel {
   displayBlocks: ProjectedBlock[];
@@ -9,7 +9,7 @@ export interface CanonicalReadModel {
 }
 
 export class ProjectionCache {
-  private stateMachine = new AssistantStateMachine();
+  private stateMachine = new ProjectionAssistantState();
   private appliedEventCount = 0;
   private lastAppliedEventId: string | undefined;
 
@@ -27,7 +27,7 @@ export class ProjectionCache {
   }
 
   reset(): void {
-    this.stateMachine = new AssistantStateMachine();
+    this.stateMachine = new ProjectionAssistantState();
     this.appliedEventCount = 0;
     this.lastAppliedEventId = undefined;
   }

@@ -3,5 +3,4 @@ export { buildRunContext, type RunContext, type RunContextInput } from "./contex
 export { toModelMessages, normalizeMessageContent } from "./modelMessages.js";
 export { loadProjectInstructions, type ProjectInstructions } from "./projectInstructions.js";
 export { buildSystemPrompt, type SystemPromptInput } from "./systemPrompt.js";
-export { AssistantStateMachine } from "./AssistantStateMachine.js";
 
