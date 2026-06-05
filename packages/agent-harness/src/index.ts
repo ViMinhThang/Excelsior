@@ -17,7 +17,6 @@ export {
   loadProjectInstructions,
   normalizeMessageContent,
   toModelMessages,
-  AssistantStateMachine,
   type CompactionSummaryOptions,
   type ProjectInstructions,
   type RunContext,

@@ -24,7 +24,8 @@ import {
   REASONING_END,
   type HarnessEventEmitter,
 } from "./events.js";
-import { toModelMessages, AssistantStateMachine } from "./context/index.js";
+import { RunAssistantState } from "./context/AssistantStateMachine.js";
+import { toModelMessages } from "./context/index.js";
 import type { ProviderRegistry, ToolRegistry } from "./registries.js";
 import type {
   HarnessSettings,
@@ -64,7 +65,7 @@ export class RunController {
     let cancelled = false;
     let failed = false;
     const runPrefix = randomUUID().slice(0, 8);
-    const state = new AssistantStateMachine(input.emit);
+    const state = new RunAssistantState(input.emit);
 
     let stepLimit: number | undefined;
     const rawSteps = input.settings.agentToolLoopSteps;
