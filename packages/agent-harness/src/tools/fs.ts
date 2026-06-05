@@ -111,6 +111,7 @@ export function createWriteTool(name = "writeFile"): HarnessTool<z.infer<typeof 
       const authorization = await authorizeWrite(ctx, name, filePath);
       if (!authorization.approved) return text("Denied by user.");
       const fullPath = authorization.fullPath;
+      await backupFile(ctx, filePath, fullPath);
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
       await fs.writeFile(fullPath, content, "utf-8");
       return text(`Successfully wrote ${content.length} characters to ${authorization.displayPath}`);
@@ -135,6 +136,7 @@ export function createEditTool(name = "editFile"): HarnessTool<z.infer<typeof ed
       const authorization = await authorizeWrite(ctx, name, filePath);
       if (!authorization.approved) return text("Denied by user.");
       const fullPath = authorization.fullPath;
+      await backupFile(ctx, filePath, fullPath);
       const content = await fs.readFile(fullPath, "utf-8");
       const occurrences = content.split(oldText).length - 1;
       if (occurrences === 0) return text("Error: oldText not found in file.", true);
@@ -178,6 +180,38 @@ async function authorizeWrite(
       : undefined,
   });
   return { approved: response.approved, fullPath, displayPath };
+}
+
+async function backupFile(ctx: ToolExecutionContext, relativePath: string, fullPath: string): Promise<void> {
+  if (!ctx.backupDir) return;
+
+  const manifestPath = path.join(ctx.backupDir, "manifest.json");
+  let manifest: Array<{ path: string; action: "modify" | "create" }> = [];
+  if (existsSync(manifestPath)) {
+    try {
+      manifest = JSON.parse(await fs.readFile(manifestPath, "utf-8"));
+    } catch {
+      manifest = [];
+    }
+  }
+
+  if (manifest.some((entry) => entry.path === relativePath)) {
+    return;
+  }
+
+  const exists = existsSync(fullPath);
+  if (exists) {
+    const originalContent = await fs.readFile(fullPath, "utf-8");
+    const backupPath = path.join(ctx.backupDir, relativePath);
+    await fs.mkdir(path.dirname(backupPath), { recursive: true });
+    await fs.writeFile(backupPath, originalContent, "utf-8");
+    manifest.push({ path: relativePath, action: "modify" });
+  } else {
+    manifest.push({ path: relativePath, action: "create" });
+  }
+
+  await fs.mkdir(ctx.backupDir, { recursive: true });
+  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf-8");
 }
 
 function resolveToolPath(inputPath: string, ctx: ToolExecutionContext): string {

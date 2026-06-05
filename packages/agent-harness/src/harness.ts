@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import { SkillCatalog } from "./skills/SkillCatalog.js";
 import type {
@@ -348,10 +349,39 @@ class HarnessStore implements AgentHarness {
       return { handled: true, message: "No completed turn to revert.", clearInput: true };
     }
 
+    await this.restoreBackups(session.id, result.revertedTurnId);
+
     this.eventStore.replaceEvents(session, result.events);
     this.sessionManager.refreshSessions();
     this.notify();
     return { handled: true, message: "Reverted last turn.", clearInput: true };
+  }
+
+  private async restoreBackups(sessionId: string, turnId?: string): Promise<void> {
+    if (!turnId) return;
+    const backupDir = resolve(this.storage.rootDir, "backups", this.workspace.id, sessionId, turnId);
+    const manifestPath = resolve(backupDir, "manifest.json");
+    if (!existsSync(manifestPath)) return;
+
+    try {
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Array<{ path: string; action: "modify" | "create" }>;
+      for (const entry of manifest) {
+        const workspacePath = resolve(this.workspace.rootPath, entry.path);
+        if (entry.action === "modify") {
+          const backupFilePath = resolve(backupDir, entry.path);
+          if (existsSync(backupFilePath)) {
+            const content = readFileSync(backupFilePath, "utf-8");
+            writeFileSync(workspacePath, content, "utf-8");
+          }
+        } else if (entry.action === "create") {
+          if (existsSync(workspacePath)) {
+            unlinkSync(workspacePath);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to restore backups:", err);
+    }
   }
 
   async compactCurrentSession(triggerMode: "manual" | "auto" = "manual"): Promise<void> {
@@ -449,6 +479,7 @@ class HarnessStore implements AgentHarness {
       tools: this.tools,
       skillsList: this.skillsList,
       projectInstructions: projectInstructions?.content,
+      backupDir: sessionId && turnId ? resolve(this.storage.rootDir, "backups", this.workspace.id, sessionId, turnId) : undefined,
     };
   }
 
