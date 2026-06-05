@@ -179,6 +179,7 @@ class HarnessStore implements AgentHarness {
     if (input.sessionId) await this.switchSession(input.sessionId);
 
     const session = this.ensureSession(content);
+    // load AGENTS.md
     const projectInstructions = loadProjectInstructions(this.workspace.rootPath);
     const runContext = buildRunContext({
       events: this.eventStore.events,
@@ -522,7 +523,7 @@ class HarnessStore implements AgentHarness {
     this.notifyTimer = setTimeout(() => {
       this.notifyTimer = null;
       this.flushNotify();
-    }, 33);
+    }, 0);
   }
 
   private flushPendingSnapshot(): void {
