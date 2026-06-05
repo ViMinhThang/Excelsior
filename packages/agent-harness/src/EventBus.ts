@@ -9,7 +9,6 @@ import {
   type HarnessEventEmitter,
   type AnyHarnessEvent,
 } from "./events.js";
-import type { Session } from "@excelsior/core";
 import type { SessionManager } from "./SessionManager.js";
 import type { EventStore } from "./EventStore.js";
 import type { ExtensionRegistry } from "./registries.js";
@@ -21,7 +20,7 @@ export class EventBus {
     private readonly eventStore: EventStore,
     private readonly extensions: ExtensionRegistry,
     private readonly notify: () => void,
-    private readonly finalizedRunIds: Set<string>,
+    private readonly isRunFinalized: (runId: string) => boolean,
   ) {}
 
   public createEmitter(runId: string, sessionId: string, turnId: string): HarnessEventEmitter {
@@ -84,7 +83,7 @@ export class EventBus {
       correlationId?: string;
     },
   ) {
-    if (this.finalizedRunIds.has(runId)) {
+    if (this.isRunFinalized(runId)) {
       return makeHarnessEvent({
         workspaceId: this.workspaceId,
         sessionId: options?.sessionId ?? this.sessionManager.currentSessionId ?? this.workspaceId,

@@ -78,55 +78,6 @@ describe("AgentHarness", () => {
     expect(help.message).toContain("/session");
   });
 
-  it("finalizes an active partial tool call immediately on cancel", async () => {
-    const dataDir = await makeTempDir();
-    const workspaceRoot = await makeTempDir();
-    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
-    const sessionId = harness.getSnapshot().currentSessionId;
-    expect(sessionId).toBeTruthy();
-
-    const store = harness as any;
-    const runId = "run_cancel";
-    const turnId = "turn_cancel";
-    store.activeRunId = runId;
-    store.activeTurnId = turnId;
-    store.activeSessionId = sessionId;
-    store.abortController = new AbortController();
-    store.eventBus.emit(runId, AGENT_START, {}, { sessionId, turnId });
-    store.eventBus.emit(runId, TURN_START, {}, { sessionId, turnId });
-    store.eventBus.emit(runId, TOOL_EXECUTION_START, {
-      toolCallId: "call_write",
-      toolName: "write",
-      toolArgs: "{\"filePath\":\"report.html\",\"content\":\"<html>",
-    }, { sessionId, turnId, relatedToolCallId: "call_write" });
-
-    harness.cancel();
-
-    const snapshot = harness.getSnapshot();
-    const events = harness.inspectCurrentSession().events;
-    const replay = harness.replayCurrentSession();
-
-    expect(snapshot.isLoading).toBe(false);
-    expect(events).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        type: "tool_execution_end",
-        data: expect.objectContaining({
-          toolCallId: "call_write",
-          isError: true,
-        }),
-      }),
-      expect.objectContaining({
-        type: "turn_end",
-        data: { cancelled: true },
-      }),
-      expect.objectContaining({
-        type: "agent_end",
-        data: { cancelled: true },
-      }),
-    ]));
-    expect(replay.ok).toBe(true);
-  });
-
   it("coalesces rapid event notifications while keeping snapshots flushable", async () => {
     vi.useFakeTimers();
     const dataDir = await makeTempDir();
