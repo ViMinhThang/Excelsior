@@ -10,6 +10,7 @@ import type {
 } from "@excelsior/client";
 import { AgentHostClient } from "@excelsior/client";
 import type { ExcelsiorApi } from "../../main/preload";
+import type { WorkspaceEnvironmentInfo } from "../../main/preload";
 import type { WorkspaceTreeNode } from "../../main/preload";
 import {
   createDesktopHostAdapter,
@@ -30,6 +31,7 @@ export function useAgentHost() {
   const [commands, setCommands] = useState<CommandDefinition[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [workspaceTree, setWorkspaceTree] = useState<WorkspaceTreeNode[]>([]);
+  const [workspaceEnvironment, setWorkspaceEnvironment] = useState<WorkspaceEnvironmentInfo | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
 
@@ -47,6 +49,7 @@ export function useAgentHost() {
       setSettings(catalog.settings);
     });
     window.api.getWorkspaceTree().then(setWorkspaceTree);
+    window.api.getWorkspaceEnvironment().then(setWorkspaceEnvironment);
 
     return () => {
       store.dispose();
@@ -65,6 +68,21 @@ export function useAgentHost() {
     ),
     useCallback(() => storeRef.current?.getSnapshot() ?? null, [workspacePath]),
   );
+
+  const wasLoadingRef = useRef(false);
+
+  useEffect(() => {
+    if (!workspacePath) {
+      wasLoadingRef.current = false;
+      return;
+    }
+
+    const isLoading = state?.isLoading ?? false;
+    if (wasLoadingRef.current && !isLoading) {
+      window.api.getWorkspaceEnvironment().then(setWorkspaceEnvironment);
+    }
+    wasLoadingRef.current = isLoading;
+  }, [state?.isLoading, workspacePath]);
 
   const client = useMemo(() => {
     const hostAdapter = createDesktopHostAdapter({
@@ -85,6 +103,7 @@ export function useAgentHost() {
       if (result.workspacePath) {
         setWorkspacePath(result.workspacePath);
         setWorkspaceTree(result.workspaceTree);
+        setWorkspaceEnvironment(await window.api.getWorkspaceEnvironment());
       }
     } catch (err) {
       console.error("Workspace selection failed:", err);
@@ -181,8 +200,10 @@ export function useAgentHost() {
     try {
       await window.api.initializeWorkspace(path);
       const tree = await window.api.getWorkspaceTree();
+      const environment = await window.api.getWorkspaceEnvironment();
       setWorkspacePath(path);
       setWorkspaceTree(tree);
+      setWorkspaceEnvironment(environment);
     } catch (err) {
       console.error("Failed to switch workspace:", err);
       setWorkspaceError(
@@ -204,6 +225,7 @@ export function useAgentHost() {
     commands,
     settings,
     workspaceTree,
+    workspaceEnvironment,
     isInitializing,
     workspaceError,
     selectWorkspace,

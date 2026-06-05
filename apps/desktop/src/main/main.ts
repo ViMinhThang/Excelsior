@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import { initializeAgentHostRuntime } from "@excelsior/agent-host";
 import type { AgentHostIntent } from "@excelsior/client";
 import { DesktopWorkspaceHost } from "./workspaceHost.js";
+import { titlebarOverlayForTheme } from "./titlebarTheme.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -13,6 +14,7 @@ const workspaceHost = new DesktopWorkspaceHost((state) => {
 });
 
 function createWindow() {
+  const titlebarOverlay = titlebarOverlayForTheme();
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -26,11 +28,10 @@ function createWindow() {
     },
     titleBarStyle: "hidden",
     titleBarOverlay: {
-      color: "#1e2227",
-      symbolColor: "#5c6370",
+      ...titlebarOverlay,
       height: 32,
     },
-    backgroundColor: "#282c34",
+    backgroundColor: titlebarOverlay.color,
   });
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
@@ -65,31 +66,18 @@ app.on("window-all-closed", () => {
 
 ipcMain.on("theme:changed", (_event, theme: string) => {
   if (!mainWindow) return;
-
-  let color = "#1e2227";
-  let symbolColor = "#5c6370";
-
-  if (theme === "tokyo-night") {
-    color = "#13131a";
-    symbolColor = "#565f89";
-  } else if (theme === "gruvbox") {
-    color = "#ebdbb2";
-    symbolColor = "#928374";
-  } else if (theme === "tokyo-night-light") {
-    color = "#c8c9d1";
-    symbolColor = "#9699a3";
-  }
+  const titlebarOverlay = titlebarOverlayForTheme(theme);
 
   try {
     mainWindow.setTitleBarOverlay({
-      color,
-      symbolColor,
+      ...titlebarOverlay,
       height: 32,
     });
   } catch (err) {
     console.error("Failed to set title bar overlay:", err);
   }
 });
+
 
 ipcMain.handle("dialog:select-workspace-folder", async () => {
   if (!mainWindow) return null;
@@ -112,3 +100,4 @@ ipcMain.handle("host:dispatch", (_event, intent: AgentHostIntent) =>
   workspaceHost.requireHost().dispatch(intent),
 );
 ipcMain.handle("workspace:get-tree", () => workspaceHost.getWorkspaceTree());
+ipcMain.handle("workspace:get-environment", () => workspaceHost.getWorkspaceEnvironment());
