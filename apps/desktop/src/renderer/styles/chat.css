@@ -76,6 +76,14 @@
   background: color-mix(in srgb, var(--brand-surface) 78%, transparent) !important;
 }
 
+.context-rail-scroll {
+  scrollbar-width: none;
+}
+
+.context-rail-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 
 .glass-overlay {
   background: color-mix(in srgb, var(--brand-bg) 65%, transparent) !important;

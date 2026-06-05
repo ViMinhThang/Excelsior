@@ -11,8 +11,11 @@ describe("settings theme options", () => {
   it("maps themes to their visual mode", () => {
     expect(isThemeDark("one-dark-pro")).toBe(true);
     expect(isThemeDark("tokyo-night")).toBe(true);
+    expect(isThemeDark("nordic-blue")).toBe(true);
+    expect(isThemeDark("rose-pine-dark")).toBe(true);
     expect(isThemeDark("gruvbox")).toBe(false);
     expect(isThemeDark("tokyo-night-light")).toBe(false);
+    expect(isThemeDark("rose-pine-light")).toBe(false);
   });
 
   it("selects mode defaults and visible options", () => {
@@ -21,10 +24,13 @@ describe("settings theme options", () => {
     expect(themeOptionsForMode(true).map((option) => option.id)).toEqual([
       "one-dark-pro",
       "tokyo-night",
+      "nordic-blue",
+      "rose-pine-dark",
     ]);
     expect(themeOptionsForMode(false).map((option) => option.id)).toEqual([
       "gruvbox",
       "tokyo-night-light",
+      "rose-pine-light",
     ]);
   });
 

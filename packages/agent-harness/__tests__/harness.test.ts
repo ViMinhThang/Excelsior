@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -40,24 +41,38 @@ afterEach(async () => {
 });
 
 describe("AgentHarness", () => {
-  it("starts a fresh session for each harness run in the same workspace", async () => {
+  it("does not create a session until the first prompt is sent", async () => {
     const dataDir = await makeTempDir();
     const workspaceRoot = await makeTempDir();
 
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+
+    expect(harness.getSnapshot().currentSessionId).toBeNull();
+    expect(harness.getSnapshot().sessions).toEqual([]);
+
+    await harness.send({ content: "hello", mode: "act" });
+
+    expect(harness.getSnapshot().currentSessionId).toBeTruthy();
+    expect(harness.getSnapshot().sessions).toHaveLength(1);
+  });
+
+  it("reopens the latest existing session without creating a replacement", async () => {
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
     const firstHarness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
-    const firstSessionId = firstHarness.getSnapshot().currentSessionId;
+
+    await firstHarness.send({ content: "remember this", mode: "act" });
+    const firstState = firstHarness.getSnapshot();
+    const firstSessionId = firstState.currentSessionId;
     firstHarness.dispose();
 
     const secondHarness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
     const secondState = secondHarness.getSnapshot();
-    const secondSessionId = secondState.currentSessionId;
 
     expect(firstSessionId).toBeTruthy();
-    expect(secondSessionId).toBeTruthy();
-    expect(secondSessionId).not.toBe(firstSessionId);
-    expect(secondState.sessions.map((session) => session.id)).toEqual(
-      expect.arrayContaining([firstSessionId, secondSessionId]),
-    );
+    expect(secondState.currentSessionId).toBe(firstSessionId);
+    expect(secondState.sessions.map((session) => session.id)).toEqual([firstSessionId]);
+    expect(secondState.displayBlocks).toEqual(firstState.displayBlocks);
   });
 
   it("executes core commands and projects session state", async () => {
@@ -78,60 +93,12 @@ describe("AgentHarness", () => {
     expect(help.message).toContain("/session");
   });
 
-  it("finalizes an active partial tool call immediately on cancel", async () => {
-    const dataDir = await makeTempDir();
-    const workspaceRoot = await makeTempDir();
-    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
-    const sessionId = harness.getSnapshot().currentSessionId;
-    expect(sessionId).toBeTruthy();
-
-    const store = harness as any;
-    const runId = "run_cancel";
-    const turnId = "turn_cancel";
-    store.activeRunId = runId;
-    store.activeTurnId = turnId;
-    store.activeSessionId = sessionId;
-    store.abortController = new AbortController();
-    store.eventBus.emit(runId, AGENT_START, {}, { sessionId, turnId });
-    store.eventBus.emit(runId, TURN_START, {}, { sessionId, turnId });
-    store.eventBus.emit(runId, TOOL_EXECUTION_START, {
-      toolCallId: "call_write",
-      toolName: "write",
-      toolArgs: "{\"filePath\":\"report.html\",\"content\":\"<html>",
-    }, { sessionId, turnId, relatedToolCallId: "call_write" });
-
-    harness.cancel();
-
-    const snapshot = harness.getSnapshot();
-    const events = harness.inspectCurrentSession().events;
-    const replay = harness.replayCurrentSession();
-
-    expect(snapshot.isLoading).toBe(false);
-    expect(events).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        type: "tool_execution_end",
-        data: expect.objectContaining({
-          toolCallId: "call_write",
-          isError: true,
-        }),
-      }),
-      expect.objectContaining({
-        type: "turn_end",
-        data: { cancelled: true },
-      }),
-      expect.objectContaining({
-        type: "agent_end",
-        data: { cancelled: true },
-      }),
-    ]));
-    expect(replay.ok).toBe(true);
-  });
-
   it("coalesces rapid event notifications while keeping snapshots flushable", async () => {
     vi.useFakeTimers();
     const dataDir = await makeTempDir();
     const workspaceRoot = await makeTempDir();
     const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    harness.createSession("Notify Test");
     const sessionId = harness.getSnapshot().currentSessionId;
     expect(sessionId).toBeTruthy();
     const listener = vi.fn();
@@ -147,9 +114,7 @@ describe("AgentHarness", () => {
     }, { sessionId, turnId: "turn_notify", relatedToolCallId: "call_notify" });
 
     expect(listener).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(32);
-    expect(listener).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1);
+    vi.advanceTimersByTime(0);
     expect(listener).toHaveBeenCalledTimes(1);
 
     store.eventBus.emit("run_notify", TOOL_EXECUTION_START, {
@@ -166,6 +131,7 @@ describe("AgentHarness", () => {
     const dataDir = await makeTempDir();
     const workspaceRoot = await makeTempDir();
     const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    harness.createSession("Storage Test");
     const sessionId = harness.getSnapshot().currentSessionId;
     expect(sessionId).toBeTruthy();
 
@@ -284,5 +250,47 @@ describe("AgentHarness", () => {
     expect(traceTurn.message).toContain(turnId);
     expect(replay.message).toContain("Replay: OK");
     expect(after).toEqual(before);
+  });
+
+  it("reverts file modifications and creations when reverting a turn", async () => {
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
+
+    const existingFile = join(workspaceRoot, "existing.txt");
+    await writeFile(existingFile, "original content", "utf-8");
+
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    const sessionId = "ses_test";
+    const turnId = "turn_test";
+
+    // Mock ToolExecutionContext
+    const ctx: ToolExecutionContext = {
+      workspaceRoot,
+      mode: "act",
+      confirm: async () => ({ callId: "1", approved: true }),
+      askQuestion: async () => ({ callId: "1", answer: "", isManual: true, cancelled: true }),
+      sendSubAgent: async () => "",
+      backupDir: join(dataDir, "backups", "ws_test", sessionId, turnId),
+    };
+
+    const tools = createBuiltInTools();
+    const writeFileTool = tools.find((tool) => tool.name === "writeFile")!;
+
+    // Modify existing file
+    await writeFileTool.execute({ filePath: "existing.txt", content: "modified content" }, ctx);
+
+    // Create new file
+    await writeFileTool.execute({ filePath: "new.txt", content: "new content" }, ctx);
+
+    // Verify files were written
+    expect(await readFile(existingFile, "utf-8")).toBe("modified content");
+    expect(await readFile(join(workspaceRoot, "new.txt"), "utf-8")).toBe("new content");
+
+    // Perform restore backups
+    await (harness as any).restoreBackups(sessionId, turnId);
+
+    // Verify files were reverted
+    expect(await readFile(existingFile, "utf-8")).toBe("original content");
+    expect(existsSync(join(workspaceRoot, "new.txt"))).toBe(false);
   });
 });

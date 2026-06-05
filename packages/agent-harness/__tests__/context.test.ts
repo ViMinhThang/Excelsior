@@ -74,7 +74,7 @@ describe("harness context helpers", () => {
     expect(context.messages).toEqual([{ role: "user", content: "inspect the repo" }]);
   });
 
-  it("builds compaction summaries without mutating source events", () => {
+  it("builds compaction summaries without mutating source events", async () => {
     const events = [
       event(1, MESSAGE_END, {
         message: { id: "msg_user", role: "user", content: "original request" },
@@ -84,7 +84,7 @@ describe("harness context helpers", () => {
       }),
     ];
 
-    const summary = buildCompactionSummary(events);
+    const summary = await buildCompactionSummary(events);
 
     expect(summary).toContain("USER: original request");
     expect(summary).toContain("ASSISTANT: final answer");

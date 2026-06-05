@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
-import type { AppSettings, Session } from "@excelsior/core";
+import type { AppSettings } from "@excelsior/core";
 import { ChatPanel } from "./components/ChatPanel.tsx";
+import { ContextRail } from "./components/ContextRail.tsx";
 import { SettingsDialog } from "./components/SettingsDialog.tsx";
 import { WorkspaceGate } from "./components/WorkspaceGate.tsx";
 import { WorkspaceSidebar } from "./components/WorkspaceSidebar.tsx";
+import { buildDesktopContextPrompt } from "./components/contextRail/contextRailModel.js";
 import {
   defaultThemeForMode,
   isDesktopTheme,
   type DesktopTheme,
 } from "./components/settingsDialog/themeOptions.js";
+import { useDesktopWorkspaceController } from "./hooks/desktopWorkspaceController.js";
 import { useAgentHost } from "./hooks/useAgentHost.ts";
+import { useDesktopContextRail } from "./hooks/useDesktopContextRail.js";
 
 function getStoredTheme(): DesktopTheme {
   const storedTheme = localStorage.getItem("excelsior-theme");
@@ -21,6 +25,7 @@ export default function App() {
     workspacePath,
     state,
     settings,
+    workspaceEnvironment,
     isInitializing,
     workspaceError,
     selectWorkspace,
@@ -38,100 +43,17 @@ export default function App() {
     respondToQuestion,
   } = useAgentHost();
 
-  const [workspaces, setWorkspaces] = useState<Array<{ path: string; name: string }>>(() => {
-    const raw = localStorage.getItem("excelsior-workspaces");
-    return raw ? JSON.parse(raw) : [];
+  const desktopWorkspace = useDesktopWorkspaceController({
+    currentWorkspacePath: workspacePath,
+    currentWorkspaceName: state?.workspace?.name,
+    sessions: state?.sessions,
+    isInitializing,
+    switchWorkspace,
+    createSession,
+    switchSession,
+    deleteSession,
+    renameSession,
   });
-
-  const [sessionsCache, setSessionsCache] = useState<Record<string, Session[]>>(() => {
-    const cache: Record<string, Session[]> = {};
-    const rawWorkspaces = localStorage.getItem("excelsior-workspaces");
-    if (rawWorkspaces) {
-      const parsed: Array<{ path: string; name: string }> = JSON.parse(rawWorkspaces);
-      parsed.forEach((w) => {
-        const rawSessions = localStorage.getItem(`excelsior-sessions-${w.path}`);
-        if (rawSessions) {
-          cache[w.path] = JSON.parse(rawSessions);
-        }
-      });
-    }
-    return cache;
-  });
-
-  const [pendingAction, setPendingAction] = useState<{
-    type: "switch-session" | "create-session";
-    workspacePath: string;
-    sessionId?: string;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!workspacePath) return;
-    const name = state?.workspace?.name || workspacePath.split(/[/\\]/).pop() || "Workspace";
-    
-    setWorkspaces((prev) => {
-      const exists = prev.some((w) => w.path === workspacePath);
-      if (exists) {
-        const updated = prev.map((w) => w.path === workspacePath ? { ...w, name } : w);
-        localStorage.setItem("excelsior-workspaces", JSON.stringify(updated));
-        return updated;
-      }
-      const next = [...prev, { path: workspacePath, name }];
-      localStorage.setItem("excelsior-workspaces", JSON.stringify(next));
-      return next;
-    });
-  }, [workspacePath, state?.workspace?.name]);
-
-  useEffect(() => {
-    if (!workspacePath || !state?.sessions) return;
-    const key = `excelsior-sessions-${workspacePath}`;
-    localStorage.setItem(key, JSON.stringify(state.sessions));
-    setSessionsCache((prev) => ({
-      ...prev,
-      [workspacePath]: state.sessions,
-    }));
-  }, [workspacePath, state?.sessions]);
-
-  useEffect(() => {
-    if (!pendingAction) return;
-    if (workspacePath === pendingAction.workspacePath && !isInitializing) {
-      if (pendingAction.type === "switch-session" && pendingAction.sessionId) {
-        void switchSession(pendingAction.sessionId);
-      } else if (pendingAction.type === "create-session") {
-        void createSession();
-      }
-      setPendingAction(null);
-    }
-  }, [workspacePath, isInitializing, pendingAction, switchSession, createSession]);
-
-  const handleSwitchWorkspaceAndSession = async (path: string, sessionId: string) => {
-    if (workspacePath === path) {
-      await switchSession(sessionId);
-    } else {
-      setPendingAction({ type: "switch-session", workspacePath: path, sessionId });
-      await switchWorkspace(path);
-    }
-  };
-
-  const handleCreateSessionInWorkspace = async (path: string) => {
-    if (workspacePath === path) {
-      await createSession();
-    } else {
-      setPendingAction({ type: "create-session", workspacePath: path });
-      await switchWorkspace(path);
-    }
-  };
-
-  const handleDeleteSession = async (path: string, sessionId: string) => {
-    if (workspacePath === path) {
-      await deleteSession(sessionId);
-    }
-  };
-
-  const handleRenameSession = (path: string, sessionId: string, title: string) => {
-    if (workspacePath === path) {
-      renameSession(sessionId, title);
-    }
-  };
 
   const [inputValue, setInputValue] = useState("");
   const [commandResult, setCommandResult] = useState<string | null>(null);
@@ -139,6 +61,12 @@ export default function App() {
   const [openToolCalls, setOpenToolCalls] = useState<Record<string, boolean>>({});
   const [theme, setTheme] = useState<DesktopTheme>(getStoredTheme);
   const [font, setFont] = useState<string>(() => localStorage.getItem("excelsior-font") || "ui-sans-serif, system-ui, sans-serif");
+  const currentSessionId = state?.currentSessionId ?? null;
+  const contextRail = useDesktopContextRail({
+    workspacePath,
+    sessionId: currentSessionId,
+    blocks: state?.displayBlocks ?? [],
+  });
 
   useEffect(() => {
     document.documentElement.style.setProperty("--font-brand", font);
@@ -166,7 +94,14 @@ export default function App() {
       });
     } else {
       setCommandResult(null);
-      send(trimmed);
+      const contextualPrompt = buildDesktopContextPrompt({
+        basePrompt: trimmed,
+        environment: workspaceEnvironment,
+        workspaceName: state?.workspace?.name,
+        pinnedSnippets: contextRail.pinnedSnippets,
+        notes: contextRail.notes,
+      });
+      send(contextualPrompt, { displayContent: trimmed });
     }
 
     setInputValue("");
@@ -209,18 +144,18 @@ export default function App() {
         </span>
       </div>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden bg-brand-bg">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden bg-brand-bg">
         <WorkspaceSidebar
           currentWorkspacePath={workspacePath}
-          workspaces={workspaces}
-          sessionsCache={sessionsCache}
+          workspaces={desktopWorkspace.workspaces}
+          sessionsCache={desktopWorkspace.sessionsCache}
           currentSessionId={state?.currentSessionId ?? null}
-          onCreateSession={handleCreateSessionInWorkspace}
-          onDeleteSession={handleDeleteSession}
+          onCreateSession={desktopWorkspace.createSessionInWorkspace}
+          onDeleteSession={desktopWorkspace.deleteSessionInWorkspace}
           onOpenSettings={() => setShowSettings(true)}
-          onRenameSession={handleRenameSession}
+          onRenameSession={desktopWorkspace.renameSessionInWorkspace}
           onSelectWorkspace={selectWorkspace}
-          onSwitchSession={handleSwitchWorkspaceAndSession}
+          onSwitchSession={desktopWorkspace.switchWorkspaceAndSession}
         />
 
         <ChatPanel
@@ -242,6 +177,16 @@ export default function App() {
           }
           onRespondToConfirmation={respondToConfirmation}
           onRespondToQuestion={respondToQuestion}
+        />
+
+        <ContextRail
+          environment={workspaceEnvironment}
+          notes={contextRail.notes}
+          pinnedSnippetIds={contextRail.pinnedSnippetIds}
+          snippets={contextRail.snippets}
+          workspaceName={state?.workspace?.name ?? "Workspace"}
+          onNotesChange={contextRail.setNotes}
+          onToggleSnippet={contextRail.togglePinnedSnippet}
         />
       </div>
 

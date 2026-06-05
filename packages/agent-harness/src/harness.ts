@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 import { SkillCatalog } from "./skills/SkillCatalog.js";
 import type {
@@ -30,7 +31,6 @@ import {
 } from "./context/index.js";
 import { GitHubReviewService } from "./github.js";
 import { revertLastCompletedTurn } from "./history/revert.js";
-import { findIncompleteEvents, emitRunFinalization } from "./history/runFinalizer.js";
 import { copyHarnessEvents, replayHarnessEvents } from "./inspector.js";
 import { createDeepSeekProvider } from "./provider.js";
 import { projectHarnessState, ProjectionCache } from "./projection.js";
@@ -41,6 +41,7 @@ import { SessionManager } from "./SessionManager.js";
 import { EventStore } from "./EventStore.js";
 import { SettingsStore } from "./SettingsStore.js";
 import { ConfirmationRouter } from "./ConfirmationRouter.js";
+import { ActiveRunManager } from "./activeRun.js";
 import { createBuiltInTools } from "./tools/index.js";
 import type {
   AgentHarness,
@@ -72,17 +73,12 @@ class HarnessStore implements AgentHarness {
   private readonly eventStore: EventStore;
   private readonly settingsStore: SettingsStore;
   private readonly confirmRouter: ConfirmationRouter;
+  private readonly activeRun = new ActiveRunManager();
 
   private mode: AgentMode = "act";
-  private abortController: AbortController | null = null;
-  private activeRunId: string | null = null;
-  private activeTurnId: string | null = null;
-  private activeSessionId: string | null = null;
   private snapshot!: HarnessSnapshot;
   private skillCatalog!: SkillCatalog;
   private skillsList?: string;
-  private steeringQueue: string[] = [];
-  private readonly finalizedRunIds = new Set<string>();
   private readonly eventBus: EventBus;
   private notifyTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly projectionCache = new ProjectionCache();
@@ -105,7 +101,7 @@ class HarnessStore implements AgentHarness {
       this.eventStore,
       this.extensions,
       () => this.notify(),
-      this.finalizedRunIds,
+      (runId) => this.activeRun.isRunFinalized(runId),
     );
 
     this.providers.register(createDeepSeekProvider());
@@ -132,9 +128,7 @@ class HarnessStore implements AgentHarness {
     for (const command of this.createCommands(config)) this.commands.register(command);
 
     this.extensions.load(config.extensions ?? []);
-
-    const session = this.sessionManager.createSession();
-    this.eventStore.clear(session);
+    this.loadCurrentSessionEvents();
     this.updateSnapshot();
   }
 
@@ -169,21 +163,16 @@ class HarnessStore implements AgentHarness {
   }
 
   async send(input: { content: string; mode: AgentMode; sessionId?: string; displayContent?: string; silent?: boolean }): Promise<void> {
-    if (this.abortController) {
-      const content = input.content.trim();
-      if (!content) return;
-      if (input.sessionId && input.sessionId !== this.activeSessionId) return;
-      if (!this.activeRunId || !this.activeTurnId || !this.activeSessionId) return;
-
+    if (this.activeRun.isActive()) {
+      const steering = this.activeRun.acceptSteering({ content: input.content, sessionId: input.sessionId });
+      if (!steering) return;
       this.eventBus.emitUserMessage({
-        runId: this.activeRunId,
-        turnId: this.activeTurnId,
-        sessionId: this.activeSessionId,
-        content,
-        displayContent: input.displayContent ?? content,
+        runId: steering.runId,
+        turnId: steering.turnId,
+        sessionId: steering.sessionId,
+        content: steering.content,
+        displayContent: input.displayContent ?? steering.content,
       });
-
-      this.steeringQueue.push(content);
       return;
     }
     const content = input.content.trim();
@@ -191,6 +180,7 @@ class HarnessStore implements AgentHarness {
     if (input.sessionId) await this.switchSession(input.sessionId);
 
     const session = this.ensureSession(content);
+    // load AGENTS.md
     const projectInstructions = loadProjectInstructions(this.workspace.rootPath);
     const runContext = buildRunContext({
       events: this.eventStore.events,
@@ -201,15 +191,10 @@ class HarnessStore implements AgentHarness {
     });
     const runId = `run_${randomUUID()}`;
     const turnId = `turn_${randomUUID()}`;
-    const abortController = new AbortController();
- 
+    const run = this.activeRun.begin({ runId, turnId, sessionId: session.id });
+
     this.mode = input.mode;
-    this.abortController = abortController;
-    this.activeRunId = runId;
-    this.activeTurnId = turnId;
-    this.activeSessionId = session.id;
-    this.steeringQueue = [];
- 
+
     if (!input.silent) {
       this.eventBus.emitUserMessage({
         runId,
@@ -228,38 +213,28 @@ class HarnessStore implements AgentHarness {
         providers: this.providers,
         tools: this.tools,
         toolContext: this.createToolContext(runId, session.id, turnId),
-        signal: abortController.signal,
+        signal: run.signal,
         emit: this.eventBus.createEmitter(runId, session.id, turnId),
-        getSteeringMessages: () => {
-          const msgs = [...this.steeringQueue];
-          this.steeringQueue = [];
-          return msgs;
-        },
+        getSteeringMessages: () => this.activeRun.drainSteeringMessages(),
       });
     } finally {
-      if (this.abortController === abortController) {
-        this.abortController = null;
-      }
-      this.finalizedRunIds.delete(runId);
-      this.activeRunId = null;
-      this.activeTurnId = null;
-      this.activeSessionId = null;
+      this.activeRun.finish(run);
       this.sessionManager.refreshSessions();
       this.notify();
     }
   }
 
   cancel(): void {
-    const abortController = this.abortController;
-    if (!abortController) return;
-    abortController.abort();
+    const run = this.activeRun.abort();
+    if (!run) return;
     this.confirmRouter.cancelAll();
-    this.finalizeActiveRun("Cancelled by user.");
-    this.abortController = null;
-    this.activeRunId = null;
-    this.activeTurnId = null;
-    this.activeSessionId = null;
-    this.steeringQueue = [];
+    this.activeRun.finalizeCancelled(
+      run,
+      this.eventStore.events,
+      this.eventBus.createEmitter(run.runId, run.sessionId, run.turnId),
+      "Cancelled by user.",
+    );
+    this.activeRun.clear(run);
     this.sessionManager.refreshSessions();
     this.notify();
   }
@@ -374,10 +349,39 @@ class HarnessStore implements AgentHarness {
       return { handled: true, message: "No completed turn to revert.", clearInput: true };
     }
 
+    await this.restoreBackups(session.id, result.revertedTurnId);
+
     this.eventStore.replaceEvents(session, result.events);
     this.sessionManager.refreshSessions();
     this.notify();
     return { handled: true, message: "Reverted last turn.", clearInput: true };
+  }
+
+  private async restoreBackups(sessionId: string, turnId?: string): Promise<void> {
+    if (!turnId) return;
+    const backupDir = resolve(this.storage.rootDir, "backups", this.workspace.id, sessionId, turnId);
+    const manifestPath = resolve(backupDir, "manifest.json");
+    if (!existsSync(manifestPath)) return;
+
+    try {
+      const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Array<{ path: string; action: "modify" | "create" }>;
+      for (const entry of manifest) {
+        const workspacePath = resolve(this.workspace.rootPath, entry.path);
+        if (entry.action === "modify") {
+          const backupFilePath = resolve(backupDir, entry.path);
+          if (existsSync(backupFilePath)) {
+            const content = readFileSync(backupFilePath, "utf-8");
+            writeFileSync(workspacePath, content, "utf-8");
+          }
+        } else if (entry.action === "create") {
+          if (existsSync(workspacePath)) {
+            unlinkSync(workspacePath);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to restore backups:", err);
+    }
   }
 
   async compactCurrentSession(triggerMode: "manual" | "auto" = "manual"): Promise<void> {
@@ -386,7 +390,10 @@ class HarnessStore implements AgentHarness {
     const compactedEventCount = this.eventStore.events.length;
     if (compactedEventCount === 0) return;
 
-    const summary = buildCompactionSummary(this.eventStore.events);
+    const summary = await buildCompactionSummary(this.eventStore.events, {
+      providers: this.providers,
+      settings: this.settingsStore.settings,
+    });
     this.eventStore.clear(session);
 
     const runId = `run_${randomUUID()}`;
@@ -441,12 +448,25 @@ class HarnessStore implements AgentHarness {
     }));
   }
 
+  private loadCurrentSessionEvents(): void {
+    const session = this.sessionManager.currentSession();
+    if (!session) {
+      this.eventStore.replaceEvents(null, []);
+      return;
+    }
+
+    this.eventStore.replaceEvents(
+      session,
+      this.storage.loadEvents(this.workspace.id, session.id),
+    );
+  }
+
   private createToolContext(runId?: string, sessionId?: string, turnId?: string): ToolExecutionContext {
     const projectInstructions = loadProjectInstructions(this.workspace.rootPath);
     return {
       workspaceRoot: resolve(this.workspace.rootPath),
       mode: this.mode,
-      abortSignal: this.abortController?.signal,
+      abortSignal: this.activeRun.currentSignal(),
       confirm: (request) => this.requestConfirmation(request),
       askQuestion: (request) => this.requestQuestion(request),
       sendSubAgent: async ({ role, prompt }) => {
@@ -459,15 +479,17 @@ class HarnessStore implements AgentHarness {
       tools: this.tools,
       skillsList: this.skillsList,
       projectInstructions: projectInstructions?.content,
+      backupDir: sessionId && turnId ? resolve(this.storage.rootDir, "backups", this.workspace.id, sessionId, turnId) : undefined,
     };
   }
 
   private requestConfirmation(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse> {
     return new Promise((resolveResponse) => {
       const callId = randomUUID();
-      const runId = this.activeRunId ?? `run_${randomUUID()}`;
-      const turnId = this.activeTurnId ?? undefined;
-      const sessionId = this.activeSessionId ?? this.sessionManager.currentSession()?.id;
+      const active = this.activeRun.currentIdentity();
+      const runId = active?.runId ?? `run_${randomUUID()}`;
+      const turnId = active?.turnId;
+      const sessionId = active?.sessionId ?? this.sessionManager.currentSession()?.id;
       const confirmRequest = { callId, ...request };
       this.confirmRouter.pendingConfirmation = confirmRequest;
       this.confirmRouter.addConfirmationResolver(callId, (response) => {
@@ -488,9 +510,10 @@ class HarnessStore implements AgentHarness {
   private requestQuestion(input: Omit<AskQuestionRequest, "callId">): Promise<AskQuestionResponse> {
     return new Promise((resolveResponse) => {
       const callId = randomUUID();
-      const runId = this.activeRunId ?? `run_${randomUUID()}`;
-      const turnId = this.activeTurnId ?? undefined;
-      const sessionId = this.activeSessionId ?? this.sessionManager.currentSession()?.id;
+      const active = this.activeRun.currentIdentity();
+      const runId = active?.runId ?? `run_${randomUUID()}`;
+      const turnId = active?.turnId;
+      const sessionId = active?.sessionId ?? this.sessionManager.currentSession()?.id;
       const request = { callId, ...input };
       this.confirmRouter.pendingQuestion = request;
       this.confirmRouter.addQuestionResolver(callId, (response) => {
@@ -508,17 +531,6 @@ class HarnessStore implements AgentHarness {
     });
   }
 
-  private finalizeActiveRun(reason: string): void {
-    const runId = this.activeRunId;
-    const turnId = this.activeTurnId;
-    const sessionId = this.activeSessionId;
-    if (!runId || !turnId || !sessionId) return;
-
-    const incomplete = findIncompleteEvents(this.eventStore.events, runId, turnId);
-    emitRunFinalization(incomplete, reason, this.eventBus.createEmitter(runId, sessionId, turnId));
-    this.finalizedRunIds.add(runId);
-  }
-
   private ensureSession(firstInput: string): Session {
     const current = this.sessionManager.currentSession();
     if (current) return current;
@@ -530,7 +542,7 @@ class HarnessStore implements AgentHarness {
     this.snapshot = projectHarnessState({
       events: this.eventStore.events,
       readModel: this.projectionCache.project(this.eventStore.events),
-      isLoading: this.abortController !== null,
+      isLoading: this.activeRun.isLoading(),
       sessions: this.sessionManager.sessions,
       currentSessionId: this.sessionManager.currentSessionId,
       workspace: this.workspace,
@@ -545,7 +557,7 @@ class HarnessStore implements AgentHarness {
     this.notifyTimer = setTimeout(() => {
       this.notifyTimer = null;
       this.flushNotify();
-    }, 33);
+    }, 0);
   }
 
   private flushPendingSnapshot(): void {
