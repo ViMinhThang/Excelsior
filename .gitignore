@@ -11,3 +11,4 @@ data/sessions/*.jsonl
 AGENTS.md
 .agent
 skills-lock.json
+.grok

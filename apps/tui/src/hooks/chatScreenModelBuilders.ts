@@ -50,7 +50,7 @@ export interface BuildModeViewContextInput {
   subAgents: SubAgentBlock[];
   subAgentIndex: number;
   commandsExpanded: boolean;
-  historyRemountKey: number;
+  historyResetKey: number;
 }
 
 interface CommandPaletteState {
@@ -85,7 +85,7 @@ export function buildModeViewContext({
   subAgents,
   subAgentIndex,
   commandsExpanded,
-  historyRemountKey,
+  historyResetKey,
 }: BuildModeViewContextInput): ChatModeRenderContext {
   const conversation = {
     input: {
@@ -104,7 +104,7 @@ export function buildModeViewContext({
     transcript: {
       blocks: displayBlocks,
       commandsExpanded,
-      historyRemountKey,
+      historyResetKey,
     },
     panel: {
       active: activePanel,

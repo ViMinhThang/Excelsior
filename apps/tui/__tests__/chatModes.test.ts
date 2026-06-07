@@ -72,6 +72,7 @@ function makeRenderContext(chatMode: ChatMode): ChatModeRenderContext {
     subAgents: [],
     subAgentIndex: 0,
     commandsExpanded: false,
+    historyResetKey: 0,
   });
 }
 

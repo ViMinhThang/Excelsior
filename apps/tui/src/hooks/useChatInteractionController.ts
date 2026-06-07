@@ -34,6 +34,10 @@ import {
   buildOptimisticTranscript,
   shouldClearOptimisticMessage,
 } from "./optimisticTranscript.js";
+import {
+  createHistoryResetSnapshot,
+  shouldResetHistory,
+} from "./historyReset.js";
 
 const TOKEN_ESTIMATE_TEXT_SCAN_LIMIT = 50_000;
 const PENDING_TOOL_TOKEN_SCAN_LIMIT = 4_000;
@@ -87,41 +91,25 @@ export function useChatInteractionController(): ChatScreenModel {
   const inputHistory = useInputHistory(derivedDisplayBlocks);
   const subAgentNav = useSubAgentNavigation(derivedDisplayBlocks);
   const [commandsExpanded, setCommandsExpanded] = useState(false);
-  const [historyRemountKey, setHistoryRemountKey] = useState(0);
-
-  const lastUserIndex = useMemo(() => {
-    for (let i = derivedDisplayBlocks.length - 1; i >= 0; i--) {
-      if (derivedDisplayBlocks[i].type === "user") {
-        return i;
-      }
-    }
-    return -1;
-  }, [derivedDisplayBlocks]);
-
-  const prevLastUserIndexRef = useRef(lastUserIndex);
-  const prevSessionIdRef = useRef(currentSessionId);
+  const [historyResetKey, setHistoryResetKey] = useState(0);
+  const historyResetSnapshot = useMemo(() => createHistoryResetSnapshot({
+    sessionId: currentSessionId,
+    blocks: derivedDisplayBlocks,
+  }), [currentSessionId, derivedDisplayBlocks]);
+  const prevHistoryResetSnapshotRef = useRef(historyResetSnapshot);
 
   useEffect(() => {
-    let shouldRemount = false;
-    if (currentSessionId !== prevSessionIdRef.current) {
-      prevSessionIdRef.current = currentSessionId;
-      prevLastUserIndexRef.current = lastUserIndex;
-      shouldRemount = true;
-    } else if (lastUserIndex !== prevLastUserIndexRef.current) {
-      prevLastUserIndexRef.current = lastUserIndex;
-      shouldRemount = true;
+    if (shouldResetHistory(prevHistoryResetSnapshotRef.current, historyResetSnapshot)) {
+      setHistoryResetKey((k) => k + 1);
     }
-
-    if (shouldRemount) {
-      setHistoryRemountKey((k) => k + 1);
-    }
-  }, [lastUserIndex, currentSessionId]);
+    prevHistoryResetSnapshotRef.current = historyResetSnapshot;
+  }, [historyResetSnapshot]);
 
   useEffect(() => {
-    if (historyRemountKey > 0) {
+    if (historyResetKey > 0) {
       process.stdout.write("\u001b[2J\u001b[3J\u001b[H");
     }
-  }, [historyRemountKey]);
+  }, [historyResetKey]);
 
   const command = useCommandResult(inputHistory.input);
   const confirmation = useToolConfirmation(
@@ -284,7 +272,7 @@ export function useChatInteractionController(): ChatScreenModel {
       subAgents: subAgentNav.subAgentBlocks,
       subAgentIndex: subAgentNav.subAgentIndex,
       commandsExpanded,
-      historyRemountKey,
+      historyResetKey,
     }),
     pendingAction: buildPendingActionModel(
       confirmation.pending,
