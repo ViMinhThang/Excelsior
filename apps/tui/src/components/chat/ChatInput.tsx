@@ -1,8 +1,8 @@
 import { memo, type FC } from 'react';
-import { Box, Text } from 'ink';
 import TextInput from './SafeTextInput.js';
 import { theme } from '../../theme.js';
 import Panel from '../shared/Panel.js';
+import { textAttrs } from '../../platform/opentui/textAttributes.js';
 
 interface ChatInputProps {
   value: string;
@@ -25,13 +25,15 @@ const ChatInput: FC<ChatInputProps> = ({
 }) => {
   return (
     <Panel
-      marginTop={1}
+      marginTop={0}
       marginBottom={0}
       backgroundColor="transparent"
       borderTopBottomColor={focus ? theme.colors.muted : theme.colors.border}
+      flexShrink={0}
+      minHeight={3}
     >
-      <Box paddingLeft={0} flexDirection="row">
-        <Text color="white" dimColor>&gt; </Text>
+      <box paddingLeft={0} flexDirection="row" flexGrow={1} width="100%">
+        <text fg={theme.colors.text} attributes={textAttrs({ dim: true })}>&gt; </text>
         <TextInput
           value={value}
           onChange={onChange}
@@ -41,7 +43,7 @@ const ChatInput: FC<ChatInputProps> = ({
           mask={mask}
           shouldSubmit={shouldSubmit}
         />
-      </Box>
+      </box>
     </Panel>
   );
 };

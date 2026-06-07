@@ -12,6 +12,7 @@ const emptyState: AgentClientState = {
   sessions: [],
   currentSessionId: null,
   workspace: { id: "", name: "", rootPath: "" },
+  llm: { providerName: "", modelName: "" },
   mode: "plan",
   pendingConfirmation: null,
   pendingQuestion: null,

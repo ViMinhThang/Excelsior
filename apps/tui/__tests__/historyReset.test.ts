@@ -74,11 +74,11 @@ describe("history reset decisions", () => {
     expect(shouldResetHistory(previous, next)).toBe(true);
   });
 
-  it("does not reset for a new session before static history exists", () => {
+  it("resets when the active session id changes even before static history exists", () => {
     const previous = snapshot(null, []);
     const next = snapshot("ses_1", [userBlock("user_1")]);
 
-    expect(shouldResetHistory(previous, next)).toBe(false);
+    expect(shouldResetHistory(previous, next)).toBe(true);
   });
 
   it("resets when same-session static history shrinks or is replaced", () => {

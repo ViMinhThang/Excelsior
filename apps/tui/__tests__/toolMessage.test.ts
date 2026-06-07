@@ -1,8 +1,8 @@
 import { createElement } from "react";
-import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import { createToolDisplay } from "@excelsior/core";
 import ToolMessage from "../src/components/chat/ToolMessage.js";
+import { renderTui } from "../src/platform/opentui/testing/renderTui.js";
 
 function commandFor(toolName: string, args: Record<string, unknown>): string {
   return createToolDisplay({
@@ -37,8 +37,8 @@ describe("ToolMessage command formatting", () => {
     )).toBe(`Listfiles(${directoryPath})`);
   });
 
-  it("renders expanded edit output as old and new panes", () => {
-    const screen = render(createElement(ToolMessage, {
+  it("renders expanded edit output with highlighted diff rows", async () => {
+    const screen = await renderTui(createElement(ToolMessage, {
       toolName: "edit",
       toolArgs: JSON.stringify({ filePath: "demo.ts" }),
       status: "completed",
@@ -56,24 +56,22 @@ describe("ToolMessage command formatting", () => {
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("edit(demo.ts)");
-    expect(frame).toContain("completed edit: demo.ts");
-    expect(frame).toContain("(+1)");
-    expect(frame).toContain("(-1)");
-    expect(frame).toContain("old");
-    expect(frame).toContain("new");
+    expect(frame).toContain("Edit");
+    expect(frame).toContain("demo.ts");
+    expect(frame).not.toContain("completed edit:");
+    expect(frame).toContain("const label = \"demo\";");
     expect(frame).toContain("const state = \"old\";");
     expect(frame).toContain("const state = \"new\";");
   });
 
-  it("renders pending write progress in the expandable tool row", () => {
+  it("renders pending write progress as colored line stats when expanded", async () => {
     const partialArgs = [
       "{\"filePath\":\"report.html\",\"content\":\"<html>",
       "\\n<body>",
       "\\n<h1>Report",
     ].join("");
 
-    const collapsed = render(createElement(ToolMessage, {
+    const collapsed = await renderTui(createElement(ToolMessage, {
       toolName: "write",
       toolArgs: partialArgs,
       status: "pending",
@@ -82,7 +80,7 @@ describe("ToolMessage command formatting", () => {
     expect(collapsed.lastFrame()).toContain("Writing...");
     expect(collapsed.lastFrame()).toContain("(Ctrl+O to expand)");
 
-    const expanded = render(createElement(ToolMessage, {
+    const expanded = await renderTui(createElement(ToolMessage, {
       toolName: "write",
       toolArgs: partialArgs,
       status: "pending",
@@ -90,14 +88,18 @@ describe("ToolMessage command formatting", () => {
     }));
     const frame = expanded.lastFrame() ?? "";
     expect(frame).toContain("Writing...");
-    expect(frame).toContain("target: report.html");
-    expect(frame).toContain("received");
-    expect(frame).toContain("<html>");
-    expect(frame).toContain("<body>");
+    expect(frame).toContain("write");
+    expect(frame).toContain("+3");
+    expect(frame).toContain("-0");
+    expect(frame).toContain("lines");
+    expect(frame).not.toContain("target:");
+    expect(frame).not.toContain("received");
+    expect(frame).not.toContain("<html>");
+    expect(frame).not.toContain("<body>");
   });
 
-  it("shows edit panes by default without the collapsed summary", () => {
-    const screen = render(createElement(ToolMessage, {
+  it("shows line-numbered changed rows for compact edits", async () => {
+    const screen = await renderTui(createElement(ToolMessage, {
       toolName: "edit",
       toolArgs: JSON.stringify({ filePath: "demo.ts" }),
       status: "completed",
@@ -113,63 +115,106 @@ describe("ToolMessage command formatting", () => {
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("edit(demo.ts)");
-    expect(frame).toContain("completed edit: demo.ts");
-    expect(frame).toContain("(+1)");
-    expect(frame).toContain("(-1)");
+    expect(frame).toContain("Edit");
+    expect(frame).toContain("demo.ts");
+    expect(frame).not.toContain("completed edit:");
     expect(frame).toContain("old");
     expect(frame).toContain("new");
   });
 
-  it("does not render an omitted rows footer for file changes", () => {
-    const lines = Array.from({ length: 20 }, (_, index) => [
-      `-old ${index}`,
-      `+new ${index}`,
-    ]).flat();
-    const screen = render(createElement(ToolMessage, {
+  it("renders expanded edit harness output as a diff instead of the success sentence", async () => {
+    const screen = await renderTui(createElement(ToolMessage, {
       toolName: "edit",
-      toolArgs: JSON.stringify({ filePath: "many.ts" }),
+      toolArgs: JSON.stringify({ filePath: "test.txt" }),
       status: "completed",
       expanded: true,
       content: [
-        "Successfully replaced the block in many.ts.",
-        "--- many.ts",
-        "+++ many.ts",
-        "@@ -1,20 +1,20 @@",
-        ...lines,
+        "Successfully replaced the block in test.txt.",
+        "--- test.txt",
+        "+++ test.txt",
+        "@@ -1,1 +1,1 @@",
+        "-before block after",
+        "+before updated after",
       ].join("\n"),
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("old 19");
-    expect(frame).toContain("new 19");
-    expect(frame).not.toContain("more rows");
+    expect(frame).toContain("Edit");
+    expect(frame).toContain("test.txt");
+    expect(frame).toContain("before block after");
+    expect(frame).toContain("before updated after");
+    expect(frame).not.toContain("Successfully replaced the block");
   });
 
-  it("keeps pane content full instead of replacing long lines with ellipses", () => {
-    const oldLine = "const previousValue = \"this should remain visible\";";
-    const newLine = "const nextValue = \"this should also remain visible\";";
-    const screen = render(createElement(ToolMessage, {
-      toolName: "edit",
-      toolArgs: JSON.stringify({ filePath: "wide.ts" }),
+  it("renders expanded write output with highlighted added rows", async () => {
+    const screen = await renderTui(createElement(ToolMessage, {
+      toolName: "write",
+      toolArgs: JSON.stringify({ filePath: "created.ts" }),
       status: "completed",
       expanded: true,
       content: [
-        "Successfully replaced the block in wide.ts.",
-        "--- wide.ts",
-        "+++ wide.ts",
-        "@@ -1,1 +1,1 @@",
-        `-${oldLine}`,
-        `+${newLine}`,
+        "Successfully wrote 25 characters to created.ts",
+        "--- created.ts",
+        "+++ created.ts",
+        "@@ -1,0 +1,2 @@",
+        "+export const name = \"new\";",
+        "+export const ready = true;",
       ].join("\n"),
     }));
 
     const frame = screen.lastFrame() ?? "";
-    expect(frame).toContain("const previousValue =");
-    expect(frame).toContain("visible\";");
-    expect(frame).toContain("const nextValue =");
-    expect(frame).toContain("should also");
-    expect(frame).toContain("remain visible\";");
-    expect(frame).not.toContain("...");
+    expect(frame).toContain("Write");
+    expect(frame).toContain("created.ts");
+    expect(frame).toContain("export const name = \"new\";");
+    expect(frame).toContain("export const ready = true;");
+    expect(frame).not.toContain("Successfully wrote");
+  });
+
+  it("renders overwrite write output without removed rows", async () => {
+    const screen = await renderTui(createElement(ToolMessage, {
+      toolName: "write",
+      toolArgs: JSON.stringify({ filePath: "created.ts" }),
+      status: "completed",
+      expanded: true,
+      content: [
+        "Successfully wrote 24 characters to created.ts",
+        "--- created.ts",
+        "+++ created.ts",
+        "@@ -1,1 +1,1 @@",
+        "-export const name = \"old\";",
+        "+export const name = \"new\";",
+      ].join("\n"),
+    }));
+
+    const frame = screen.lastFrame() ?? "";
+    expect(frame).toContain("Write");
+    expect(frame).toContain("created.ts");
+    expect(frame).toContain("export const name = \"new\";");
+    expect(frame).not.toContain("export const name = \"old\";");
+  });
+
+  it("shows capped diff with stats and expand hint when collapsed", async () => {
+    const screen = await renderTui(createElement(ToolMessage, {
+      toolName: "edit",
+      toolArgs: JSON.stringify({ filePath: "demo.ts" }),
+      status: "completed",
+      expanded: false,
+      content: [
+        "Successfully replaced the block in demo.ts.",
+        "--- demo.ts",
+        "+++ demo.ts",
+        "@@ -1,1 +1,1 @@",
+        "-old",
+        "+new",
+      ].join("\n"),
+    }));
+
+    const frame = screen.lastFrame() ?? "";
+    expect(frame).toContain("Edit");
+    expect(frame).toContain("demo.ts");
+    expect(frame).toContain("+1 -1");
+    expect(frame).toContain("(Ctrl+O to expand)");
+    expect(frame).toContain("old");
+    expect(frame).toContain("new");
   });
 });

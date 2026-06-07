@@ -25,6 +25,7 @@ function createState(rootPath = "") {
     sessions: [],
     currentSessionId: null,
     workspace: { id: "ws_harness", name: "Harness", rootPath },
+    llm: { providerName: "DeepSeek", modelName: "deepseek-v4-flash" },
     mode: "act" as const,
     pendingConfirmation: null,
     pendingQuestion: null,

@@ -1,9 +1,37 @@
 import { memo, type FC, type ReactNode } from "react";
-import { Box, Text } from "ink";
+import type { BorderCharacters, BorderSides } from "@opentui/core";
 import { theme } from "../../theme.js";
+import { textAttrs } from "../../platform/opentui/textAttributes.js";
 
-const LEFT_BORDER_STYLE = { top: "", bottom: "", left: theme.glyphs.output, right: "", topLeft: "", topRight: "", bottomLeft: "", bottomRight: "" };
-const TOP_BOTTOM_BORDER_STYLE = { top: theme.glyphs.section, bottom: theme.glyphs.section, left: "", right: "", topLeft: "", topRight: "", bottomLeft: "", bottomRight: "" };
+const EMPTY_BORDER_CHAR = " ";
+
+const LEFT_BORDER_CHARS: BorderCharacters = {
+  topLeft: EMPTY_BORDER_CHAR,
+  topRight: EMPTY_BORDER_CHAR,
+  bottomLeft: EMPTY_BORDER_CHAR,
+  bottomRight: EMPTY_BORDER_CHAR,
+  horizontal: EMPTY_BORDER_CHAR,
+  vertical: theme.glyphs.output,
+  topT: EMPTY_BORDER_CHAR,
+  bottomT: EMPTY_BORDER_CHAR,
+  leftT: EMPTY_BORDER_CHAR,
+  rightT: EMPTY_BORDER_CHAR,
+  cross: EMPTY_BORDER_CHAR,
+};
+
+const TOP_BOTTOM_BORDER_CHARS: BorderCharacters = {
+  topLeft: EMPTY_BORDER_CHAR,
+  topRight: EMPTY_BORDER_CHAR,
+  bottomLeft: EMPTY_BORDER_CHAR,
+  bottomRight: EMPTY_BORDER_CHAR,
+  horizontal: theme.glyphs.section,
+  vertical: EMPTY_BORDER_CHAR,
+  topT: EMPTY_BORDER_CHAR,
+  bottomT: EMPTY_BORDER_CHAR,
+  leftT: EMPTY_BORDER_CHAR,
+  rightT: EMPTY_BORDER_CHAR,
+  cross: EMPTY_BORDER_CHAR,
+};
 
 interface PanelProps {
   title?: string;
@@ -17,6 +45,8 @@ interface PanelProps {
   borderColor?: string;
   paddingX?: number;
   paddingY?: number;
+  flexShrink?: number;
+  minHeight?: number;
 }
 
 const Panel: FC<PanelProps> = ({
@@ -31,27 +61,44 @@ const Panel: FC<PanelProps> = ({
   borderColor,
   paddingX = 0,
   paddingY = 0,
+  flexShrink,
+  minHeight,
 }) => {
   const bgProp = backgroundColor === "transparent" ? undefined : backgroundColor;
 
+  const borderProps = borderLeftColor
+    ? { border: ["left"] as BorderSides[], customBorderChars: LEFT_BORDER_CHARS, borderColor: borderLeftColor }
+    : borderTopBottomColor
+      ? { border: ["top", "bottom"] as BorderSides[], customBorderChars: TOP_BOTTOM_BORDER_CHARS, borderColor: borderTopBottomColor }
+      : borderColor
+        ? { border: true, borderStyle: "rounded" as const, borderColor }
+        : {};
+
   return (
-    <Box flexDirection="column" marginTop={marginTop} marginBottom={marginBottom}>
+    <box
+      flexDirection="column"
+      marginTop={marginTop}
+      marginBottom={marginBottom}
+      flexShrink={flexShrink}
+      minHeight={minHeight}
+      width="100%"
+    >
       {title && (
-        <Box paddingX={paddingX} paddingTop={1} backgroundColor={bgProp}>
-          <Text backgroundColor={bgProp} color={titleColor} bold>{title}</Text>
-        </Box>
+        <box paddingX={paddingX} paddingTop={1} backgroundColor={bgProp} width="100%">
+          <text bg={bgProp} fg={titleColor} attributes={textAttrs({ bold: true })}>{title}</text>
+        </box>
       )}
-      <Box
+      <box
         flexDirection="row"
         backgroundColor={bgProp}
-        borderStyle={borderLeftColor ? LEFT_BORDER_STYLE : borderTopBottomColor ? TOP_BOTTOM_BORDER_STYLE : borderColor ? "round" : undefined}
-        borderColor={borderLeftColor || borderTopBottomColor || borderColor}
+        width="100%"
+        {...borderProps}
       >
-        <Box backgroundColor={bgProp} paddingX={paddingX} paddingY={paddingY} flexDirection="column" flexGrow={1}>
+        <box backgroundColor={bgProp} paddingX={paddingX} paddingY={paddingY} flexDirection="column" width="100%">
           {children}
-        </Box>
-      </Box>
-    </Box>
+        </box>
+      </box>
+    </box>
   );
 };
 

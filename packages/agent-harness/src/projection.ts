@@ -1,4 +1,4 @@
-import type { AgentMessage, ProjectedBlock, Session, Workspace } from "@excelsior/core";
+import type { AgentLlmInfo, AgentMessage, ProjectedBlock, Session, Workspace } from "@excelsior/core";
 import type { AnyHarnessEvent } from "./events.js";
 import type { HarnessSnapshot } from "./types.js";
 import { ProjectionAssistantState } from "./context/AssistantStateMachine.js";
@@ -46,6 +46,7 @@ export function projectHarnessState(input: {
   sessions: Session[];
   currentSessionId: string | null;
   workspace: Workspace;
+  llm: AgentLlmInfo;
   mode: HarnessSnapshot["mode"];
   pendingConfirmation: HarnessSnapshot["pendingConfirmation"];
   pendingQuestion: HarnessSnapshot["pendingQuestion"];
@@ -57,6 +58,7 @@ export function projectHarnessState(input: {
     sessions: input.sessions,
     currentSessionId: input.currentSessionId,
     workspace: input.workspace,
+    llm: input.llm,
     mode: input.mode,
     pendingConfirmation: input.pendingConfirmation,
     pendingQuestion: input.pendingQuestion,

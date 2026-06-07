@@ -29,6 +29,7 @@ export type ToolCapability =
 export interface HarnessProvider {
   id: string;
   displayName: string;
+  modelId: string;
   createModel(settings: HarnessSettings): LanguageModel;
 }
 

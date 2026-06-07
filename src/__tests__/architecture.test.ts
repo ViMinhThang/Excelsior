@@ -114,6 +114,7 @@ describe("package architecture boundaries", () => {
       "@excelsior/agent-host",
       "react",
       "ink",
+      "@opentui/",
       "electron",
       "better-sqlite3",
       "@ai-sdk/",

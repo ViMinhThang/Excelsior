@@ -20,17 +20,12 @@ export function normalizeToolText(text?: string): string {
   return text.replace(/\\r\\n/g, "\n").replace(/\\n/g, "\n").replace(/\\t/g, "\t");
 }
 
-export function plural(count: number, label: string): string {
-  const suffix = label.endsWith("ch") ? "es" : "s";
-  return `${count} ${label}${count === 1 ? "" : suffix}`;
-}
-
 export function countLines(text: string): number {
   if (text.length === 0) return 0;
   return text.split(/\r?\n/).length;
 }
 
-export function truncateLine(line: string): string {
+function truncateLine(line: string): string {
   if (line.length <= MAX_PREVIEW_LINE_LENGTH) return line;
   return `${line.slice(0, MAX_PREVIEW_LINE_LENGTH - 3)}...`;
 }

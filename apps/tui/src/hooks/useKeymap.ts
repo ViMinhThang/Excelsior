@@ -1,4 +1,4 @@
-import { useInput } from "ink";
+import { useKeyboardInput } from "../platform/opentui/useKeyboardInput.js";
 import { useEffect, useRef } from "react";
 import {
   register,
@@ -31,7 +31,7 @@ export function useKeymap(
     return register(entryRef.current);
   }, []);
 
-  useInput((input, key) => {
+  useKeyboardInput((input, key) => {
     const combo = parseKeyCombo(input, key);
     const winner = getAction(combo);
     if (winner && winner.entry === entryRef.current) {

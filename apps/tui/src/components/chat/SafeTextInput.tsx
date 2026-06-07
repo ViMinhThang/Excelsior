@@ -1,8 +1,21 @@
-import { useEffect, useState, type FC } from "react";
-import { Text, useInput } from "ink";
-import chalk from "chalk";
+import { useCallback, useEffect, useMemo, useState, type FC, type ReactNode } from "react";
+import { decodePasteBytes } from "@opentui/core";
+import { usePaste, useRenderer } from "@opentui/react";
+import { useKeyboardInput } from "../../platform/opentui/useKeyboardInput.js";
+import { useKeymap } from "../../hooks/useKeymap.js";
+import {
+  applyTextInputKey,
+  getCopyText,
+  getSingleLineInputPreview,
+  insertTextAtCursor,
+  isClipboardShortcut,
+  sanitizeSingleLinePaste,
+  shouldIgnoreTextInputKey,
+} from "../../lib/input/textInput.js";
+import { copyTextToClipboard, readTextFromClipboard } from "../../platform/clipboard.js";
 import { truncateVisible } from "../../lib/textFormat.js";
-import type { TuiKey } from "../../lib/tuiKey.js";
+import { textAttrs } from "../../platform/opentui/textAttributes.js";
+import { theme } from "../../theme.js";
 
 interface SafeTextInputProps {
   value: string;
@@ -16,74 +29,108 @@ interface SafeTextInputProps {
   shouldSubmit?: (value: string) => boolean;
 }
 
-export function shouldIgnoreTextInputKey(input: string, key: TuiKey): boolean {
-  return Boolean(
-    key.upArrow ||
-    key.downArrow ||
-    key.tab ||
-    (key.shift && key.tab) ||
-    ((key.ctrl || key.meta) && input.length > 0)
-  );
+interface TextRun {
+  text: string;
+  inverse?: boolean;
+  dim?: boolean;
+  selected?: boolean;
 }
 
-export function getSingleLineInputPreview(
+function buildInputRuns(
   value: string,
-  cursorOffset: number,
-  maxDisplayWidth: number,
-): { text: string; cursorOffset: number } {
-  const beforeCursor = value.slice(0, cursorOffset);
-  const lineStart = beforeCursor.lastIndexOf("\n") + 1;
-  const lineEnd = value.indexOf("\n", cursorOffset);
-  const rawLine = value.slice(lineStart, lineEnd === -1 ? value.length : lineEnd).replace(/\r/g, "");
-  const rawCursorOffset = Math.max(0, cursorOffset - lineStart);
-  const text = truncateVisible(rawLine, maxDisplayWidth);
-
-  return {
-    text,
-    cursorOffset: Math.min(rawCursorOffset, text.length),
-  };
-}
-
-export function clampCursorOffset(value: string, cursorOffset: number): number {
-  return Math.max(0, Math.min(cursorOffset, value.length));
-}
-
-export function applyTextInputKey(
-  originalValue: string,
-  cursorOffset: number,
-  input: string,
-  key: TuiKey,
+  displayCursorOffset: number,
+  selectionRange: { start: number; end: number } | null,
+  placeholder: string,
+  focus: boolean,
   showCursor: boolean,
-): { value: string; cursorOffset: number; cursorWidth: number } {
-  let nextCursorOffset = cursorOffset;
-  let nextValue = originalValue;
-  let nextCursorWidth = 0;
-
-  if (key.leftArrow) {
-    if (showCursor) nextCursorOffset--;
-  } else if (key.rightArrow) {
-    if (showCursor) nextCursorOffset++;
-  } else if (key.backspace || key.delete) {
-    if (cursorOffset > 0) {
-      nextValue =
-        originalValue.slice(0, cursorOffset - 1) +
-        originalValue.slice(cursorOffset, originalValue.length);
-      nextCursorOffset--;
+  maxDisplayWidth: number,
+): TextRun[] {
+  if (value.length === 0) {
+    if (placeholder) {
+      const truncated = truncateVisible(placeholder, maxDisplayWidth);
+      if (focus && showCursor && truncated.length > 0) {
+        return [
+          { text: truncated[0], inverse: true, dim: true },
+          { text: truncated.slice(1), dim: true },
+        ];
+      }
+      return [{ text: truncated, dim: true }];
     }
-  } else {
-    nextValue =
-      originalValue.slice(0, cursorOffset) +
-      input +
-      originalValue.slice(cursorOffset, originalValue.length);
-    nextCursorOffset += input.length;
-    if (input.length > 1) nextCursorWidth = input.length;
+
+    if (focus && showCursor) {
+      return [{ text: " ", inverse: true }];
+    }
+
+    return [{ text: "" }];
   }
 
-  return {
-    value: nextValue,
-    cursorOffset: clampCursorOffset(nextValue, nextCursorOffset),
-    cursorWidth: nextCursorWidth,
+  if (!focus || !showCursor) {
+    return [{ text: value }];
+  }
+
+  const runs: TextRun[] = [];
+  let buffer = "";
+  let bufferInverse = false;
+  let bufferSelected = false;
+
+  const flush = () => {
+    if (!buffer) return;
+    runs.push({
+      text: buffer,
+      inverse: bufferInverse,
+      dim: false,
+      selected: bufferSelected,
+    });
+    buffer = "";
   };
+
+  for (let i = 0; i < value.length; i++) {
+    const inverse = i === displayCursorOffset;
+    const selected = Boolean(
+      selectionRange && i >= selectionRange.start && i < selectionRange.end,
+    );
+
+    if (buffer && (inverse !== bufferInverse || selected !== bufferSelected)) {
+      flush();
+    }
+
+    bufferInverse = inverse;
+    bufferSelected = selected;
+    buffer += value[i];
+  }
+  flush();
+
+  if (displayCursorOffset === value.length) {
+    runs.push({ text: " ", inverse: true });
+  }
+
+  return runs;
+}
+
+function renderRuns(runs: TextRun[]): ReactNode {
+  return (
+    <box flexDirection="row">
+      {runs.map((run, index) => (
+        <text
+          key={`input_run_${index}`}
+          fg={
+            run.selected
+              ? theme.colors.highlight
+              : run.dim
+                ? theme.colors.muted
+                : theme.colors.text
+          }
+          bg={run.selected ? theme.colors.modeHintKeyBg : undefined}
+          attributes={textAttrs({
+            inverse: run.inverse,
+            dim: run.dim && !run.inverse && !run.selected,
+          })}
+        >
+          {run.text}
+        </text>
+      ))}
+    </box>
+  );
 }
 
 const SafeTextInput: FC<SafeTextInputProps> = ({
@@ -97,12 +144,14 @@ const SafeTextInput: FC<SafeTextInputProps> = ({
   maxDisplayWidth = 96,
   shouldSubmit,
 }) => {
+  const renderer = useRenderer();
   const [state, setState] = useState({
     cursorOffset: (originalValue || "").length,
+    selectionAnchor: null as number | null,
     cursorWidth: 0,
   });
 
-  const { cursorOffset } = state;
+  const { cursorOffset, selectionAnchor } = state;
 
   useEffect(() => {
     setState((previousState) => {
@@ -112,6 +161,7 @@ const SafeTextInput: FC<SafeTextInputProps> = ({
       if (previousState.cursorOffset > newValue.length - 1) {
         return {
           cursorOffset: newValue.length,
+          selectionAnchor: null,
           cursorWidth: 0,
         };
       }
@@ -120,36 +170,88 @@ const SafeTextInput: FC<SafeTextInputProps> = ({
     });
   }, [originalValue, focus, showCursor]);
 
-  const cursorActualWidth = 0;
+  const applyPaste = useCallback((rawText: string) => {
+    const text = sanitizeSingleLinePaste(rawText);
+    if (!text) return;
+
+    const next = insertTextAtCursor(
+      originalValue,
+      cursorOffset,
+      selectionAnchor,
+      text,
+    );
+
+    setState({
+      cursorOffset: next.cursorOffset,
+      selectionAnchor: null,
+      cursorWidth: text.length,
+    });
+
+    if (next.value !== originalValue) {
+      onChange(next.value);
+    }
+  }, [cursorOffset, onChange, originalValue, selectionAnchor]);
+
+  const copySelection = useCallback(() => {
+    copyTextToClipboard(
+      getCopyText(originalValue, cursorOffset, selectionAnchor),
+      renderer,
+    );
+  }, [cursorOffset, originalValue, renderer, selectionAnchor]);
+
+  const pasteFromClipboard = useCallback(() => {
+    void readTextFromClipboard().then(applyPaste);
+  }, [applyPaste]);
+
+  useKeymap(
+    {
+      "ctrl+c": copySelection,
+      "ctrl+v": pasteFromClipboard,
+      "meta+c": copySelection,
+      "meta+v": pasteFromClipboard,
+      "ctrl+a": () => {
+        setState((previous) => ({
+          ...previous,
+          cursorOffset: originalValue.length,
+          selectionAnchor: 0,
+        }));
+      },
+      "meta+a": () => {
+        setState((previous) => ({
+          ...previous,
+          cursorOffset: originalValue.length,
+          selectionAnchor: 0,
+        }));
+      },
+    },
+    { enabled: focus, priority: 150 },
+  );
+
+  usePaste(useCallback((event) => {
+    if (!focus) return;
+    applyPaste(decodePasteBytes(event.bytes));
+  }, [applyPaste, focus]));
+
   const rawDisplayValue = mask ? mask.repeat(originalValue.length) : originalValue;
   const preview = getSingleLineInputPreview(rawDisplayValue, cursorOffset, maxDisplayWidth);
-  const value = preview.text;
-  const displayCursorOffset = preview.cursorOffset;
-  let renderedValue = value;
-  let renderedPlaceholder = placeholder ? chalk.grey(truncateVisible(placeholder, maxDisplayWidth)) : undefined;
+  const runs = useMemo(
+    () => buildInputRuns(
+      preview.text,
+      preview.cursorOffset,
+      null,
+      placeholder,
+      focus,
+      showCursor,
+      maxDisplayWidth,
+    ),
+    [preview.text, preview.cursorOffset, placeholder, focus, showCursor, maxDisplayWidth],
+  );
 
-  if (showCursor && focus) {
-    renderedPlaceholder =
-      placeholder.length > 0
-        ? chalk.inverse(placeholder[0]) + chalk.grey(placeholder.slice(1))
-        : chalk.inverse(" ");
-    renderedValue = value.length > 0 ? "" : chalk.inverse(" ");
-
-    let i = 0;
-    for (const char of value) {
-      renderedValue +=
-        i >= displayCursorOffset - cursorActualWidth && i <= displayCursorOffset
-          ? chalk.inverse(char)
-          : char;
-      i++;
+  useKeyboardInput((input, key) => {
+    if (isClipboardShortcut(input, key, { selectAll: true })) {
+      return;
     }
 
-    if (value.length > 0 && displayCursorOffset === value.length) {
-      renderedValue += chalk.inverse(" ");
-    }
-  }
-
-  useInput((input, key) => {
     if (shouldIgnoreTextInputKey(input, key)) return;
 
     if (key.return) {
@@ -161,6 +263,7 @@ const SafeTextInput: FC<SafeTextInputProps> = ({
     const next = applyTextInputKey(
       originalValue,
       cursorOffset,
+      selectionAnchor,
       input,
       key,
       showCursor,
@@ -168,6 +271,7 @@ const SafeTextInput: FC<SafeTextInputProps> = ({
 
     setState({
       cursorOffset: next.cursorOffset,
+      selectionAnchor: next.selectionAnchor,
       cursorWidth: next.cursorWidth,
     });
 
@@ -176,15 +280,7 @@ const SafeTextInput: FC<SafeTextInputProps> = ({
     }
   }, { isActive: focus });
 
-  return (
-    <Text>
-      {placeholder
-        ? value.length > 0
-          ? renderedValue
-          : renderedPlaceholder
-        : renderedValue}
-    </Text>
-  );
+  return renderRuns(runs);
 };
 
 export default SafeTextInput;

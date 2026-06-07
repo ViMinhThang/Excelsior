@@ -1,5 +1,6 @@
 import { createElement } from "react";
-import { render } from "ink";
+import { createCliRenderer } from "@opentui/core";
+import { createRoot } from "@opentui/react";
 import {
   initializeAgentHostRuntime,
   logAgentHostError,
@@ -8,7 +9,8 @@ import App from "./app.js";
 
 async function main() {
   initializeAgentHostRuntime();
-  render(createElement(App));
+  const renderer = await createCliRenderer({ exitOnCtrlC: false });
+  createRoot(renderer).render(createElement(App));
 }
 
 main().catch((err) => {

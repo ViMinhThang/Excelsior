@@ -59,6 +59,39 @@ function inferAction(toolName: string, removed: number): FileChangeAction {
   return removed === 0 ? "create" : "overwrite";
 }
 
+function splitFileLines(content: string): string[] {
+  if (!content) return [];
+  return content.split(/\r?\n/);
+}
+
+export function buildUnifiedFileDiff(
+  filePath: string,
+  oldContent: string,
+  newContent: string,
+): string | undefined {
+  if (oldContent === newContent) return undefined;
+
+  const oldLines = splitFileLines(oldContent);
+  const newLines = splitFileLines(newContent);
+
+  if (oldLines.length === 0) {
+    return [
+      `--- ${filePath}`,
+      `+++ ${filePath}`,
+      `@@ -1,0 +1,${newLines.length} @@`,
+      ...newLines.map((line) => `+${line}`),
+    ].join("\n");
+  }
+
+  return [
+    `--- ${filePath}`,
+    `+++ ${filePath}`,
+    `@@ -1,${oldLines.length} +1,${newLines.length} @@`,
+    ...oldLines.map((line) => `-${line}`),
+    ...newLines.map((line) => `+${line}`),
+  ].join("\n");
+}
+
 export function parseFileChangePreview({
   toolName,
   filePath,
@@ -142,9 +175,9 @@ export function parseFileChangePreview({
   };
 }
 
-export function getFileChangeToolName(toolName: string): "edit" | "write" | undefined {
-  if (toolName === "editFile") return "edit";
-  if (toolName === "writeFile") return "write";
+function getFileChangeToolName(toolName: string): "edit" | "write" | undefined {
+  if (toolName === "edit" || toolName === "editFile") return "edit";
+  if (toolName === "write" || toolName === "writeFile") return "write";
   return undefined;
 }
 

@@ -1,8 +1,8 @@
 import type { FC } from "react";
-import { Box, Text } from "ink";
 import { theme } from "../../theme.js";
-import { getChatModeHint } from "../../chatModes/registry.js";
+import { chatModeRegistry } from "../../chatModes/registry.js";
 import type { ChatMode } from "../../chatModes/types.js";
+import { textAttrs } from "../../platform/opentui/textAttributes.js";
 
 export interface FooterBarProps {
   chatMode: ChatMode;
@@ -11,9 +11,8 @@ export interface FooterBarProps {
   pendingKind?: "confirmation" | "question" | null;
   activePanelId: string | null;
   subAgentCount: number;
-  commandCount: number;
-  commandsExpanded: boolean;
-  workspaceRootPath: string;
+  toolCallCount: number;
+  toolsExpanded: boolean;
   totalTokens?: number;
 }
 
@@ -24,40 +23,35 @@ const FooterBar: FC<FooterBarProps> = ({
   pendingKind,
   activePanelId,
   subAgentCount,
-  commandCount,
-  commandsExpanded,
-  workspaceRootPath,
+  toolCallCount,
+  toolsExpanded,
   totalTokens,
 }) => {
-  const footerHint = getChatModeHint({
+  const footerHint = chatModeRegistry[chatMode].getHint({
     chatMode,
     isLoading,
     hasPending,
     pendingKind,
     activePanelId,
     subAgentCount,
-    commandCount,
-    commandsExpanded,
+    toolCallCount,
+    toolsExpanded,
   });
 
   return (
-    <Box marginTop={1} paddingLeft={1} flexDirection="row">
-      <Text color={theme.colors.muted} dimColor wrap="truncate-end">
+    <box flexDirection="row" width="100%">
+      <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })} truncate>
         {footerHint}
-      </Text>
+      </text>
       {totalTokens !== undefined && (
         <>
-          <Text color={theme.colors.border}> </Text>
-          <Text color={theme.colors.muted} dimColor>
+          <text fg={theme.colors.border}> </text>
+          <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
             | {(totalTokens / 1000).toFixed(1)} tok |
-          </Text>
+          </text>
         </>
       )}
-      <Text color={theme.colors.border}>{theme.glyphs.separator}</Text>
-      <Text color={theme.colors.muted} dimColor wrap="truncate-start">
-        {workspaceRootPath}
-      </Text>
-    </Box>
+    </box>
   );
 };
 

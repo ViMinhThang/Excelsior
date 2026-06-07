@@ -1,10 +1,6 @@
-import type {
-  ChatMode,
-  ChatModeKeymapContext,
-} from "../chatModes/types.js";
-import { shouldEnableInputModeKeymap } from "../chatModes/inputMode.js";
-import { shouldEnableModalModeKeymap } from "../chatModes/modalKeymaps.js";
-import { useChatModeKeymaps } from "../chatModes/useChatModeKeymaps.js";
+import type { ChatModeKeymapContext } from "../chatModes/types.js";
+import { getChatModeKeymaps } from "../chatModes/registry.js";
+import { ownsModalInput } from "../lib/inputOwnership.js";
 import { useKeymap } from "./useKeymap.js";
 
 type UseChatKeymapsOptions = ChatModeKeymapContext & {
@@ -23,18 +19,11 @@ type UseChatKeymapsOptions = ChatModeKeymapContext & {
   prevHunk?: () => void;
 };
 
-export function shouldEnableModalKeymap(isPaletteOpen: boolean): boolean {
-  return shouldEnableModalModeKeymap(isPaletteOpen);
-}
-
-export function shouldEnableInputKeymap(options: {
-  pending: unknown;
-  activePanelId: string | null;
-  chatMode: ChatMode;
-  isPaletteOpen: boolean;
-}): boolean {
-  return shouldEnableInputModeKeymap(options);
-}
+const disabledKeymap = {
+  map: {},
+  enabled: false,
+  priority: 0,
+};
 
 export function useChatKeymaps(options: UseChatKeymapsOptions) {
   const {
@@ -53,7 +42,7 @@ export function useChatKeymaps(options: UseChatKeymapsOptions) {
     nextHunk,
     prevHunk,
   } = options;
-  const modalKeymapsEnabled = shouldEnableModalKeymap(isPaletteOpen);
+  const modalKeymapsEnabled = ownsModalInput(isPaletteOpen);
   const hasConfirmationPending =
     confirmationPending === undefined ? pending : confirmationPending;
 
@@ -86,5 +75,15 @@ export function useChatKeymaps(options: UseChatKeymapsOptions) {
   const chatModeOptions = options.chatMode === "input"
     ? { ...options, cancel: requestTurnCancel ?? cancel }
     : options;
-  useChatModeKeymaps(chatModeOptions);
+  const [first = disabledKeymap, second = disabledKeymap] = getChatModeKeymaps(chatModeOptions);
+
+  useKeymap(first.map, {
+    enabled: first.enabled,
+    priority: first.priority,
+  });
+
+  useKeymap(second.map, {
+    enabled: second.enabled,
+    priority: second.priority,
+  });
 }

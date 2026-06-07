@@ -1,6 +1,6 @@
 import type { FC } from 'react';
-import { Box, Text } from 'ink';
 import { theme } from '../theme.js';
+import { textAttrs } from '../platform/opentui/textAttributes.js';
 
 interface ErrorScreenProps {
   error: Error;
@@ -8,27 +8,27 @@ interface ErrorScreenProps {
 
 const ErrorScreen: FC<ErrorScreenProps> = ({ error }) => {
   return (
-    <Box flexDirection="column" padding={1} borderStyle="single" borderColor={theme.colors.error}>
-      <Box marginBottom={1}>
-        <Text color={theme.colors.error} bold>Critical App Error</Text>
-      </Box>
+    <box flexDirection="column" padding={1} border borderStyle="single" borderColor={theme.colors.error}>
+      <box marginBottom={1}>
+        <text fg={theme.colors.error} attributes={textAttrs({ bold: true })}>Critical App Error</text>
+      </box>
 
-      <Box marginBottom={1} flexDirection="column">
-        <Text bold color={theme.colors.highlightEmphasis}>Message:</Text>
-        <Text color={theme.colors.error}>{error.message}</Text>
-      </Box>
+      <box marginBottom={1} flexDirection="column">
+        <text attributes={textAttrs({ bold: true })} fg={theme.colors.highlightEmphasis}>Message:</text>
+        <text fg={theme.colors.error}>{error.message}</text>
+      </box>
 
       {error.stack && (
-        <Box marginBottom={1} flexDirection="column">
-          <Text bold color={theme.colors.highlightEmphasis}>Stack Trace:</Text>
-          <Text color={theme.colors.secondary} dimColor>{error.stack.split('\n').slice(0, 5).join('\n')}</Text>
-        </Box>
+        <box marginBottom={1} flexDirection="column">
+          <text attributes={textAttrs({ bold: true })} fg={theme.colors.highlightEmphasis}>Stack Trace:</text>
+          <text fg={theme.colors.secondary} attributes={textAttrs({ dim: true })}>{error.stack.split('\n').slice(0, 5).join('\n')}</text>
+        </box>
       )}
 
-      <Box marginTop={1} flexDirection="column">
-        <Text color={theme.colors.muted}>Fatal error. Press ^C to exit.</Text>
-      </Box>
-    </Box>
+      <box marginTop={1} flexDirection="column">
+        <text fg={theme.colors.muted}>Fatal error. Press ^C to exit.</text>
+      </box>
+    </box>
   );
 };
 

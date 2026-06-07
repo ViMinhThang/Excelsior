@@ -539,6 +539,7 @@ class HarnessStore implements AgentHarness {
   }
 
   private updateSnapshot(): void {
+    const provider = this.providers.get();
     this.snapshot = projectHarnessState({
       events: this.eventStore.events,
       readModel: this.projectionCache.project(this.eventStore.events),
@@ -546,6 +547,10 @@ class HarnessStore implements AgentHarness {
       sessions: this.sessionManager.sessions,
       currentSessionId: this.sessionManager.currentSessionId,
       workspace: this.workspace,
+      llm: {
+        providerName: provider.displayName,
+        modelName: provider.modelId,
+      },
       mode: this.mode,
       pendingConfirmation: this.confirmRouter.pendingConfirmation,
       pendingQuestion: this.confirmRouter.pendingQuestion,

@@ -1,22 +1,21 @@
 import { memo, type FC, type ReactNode } from "react";
-import { Box, Text, Static } from "ink";
 import UserMessage from "./UserMessage.js";
 import AgentMessage from "./AgentMessage.js";
 import ToolMessage from "./ToolMessage.js";
 import ReasoningMessage from "./ReasoningMessage.js";
-import SubAgentRow from "../../features/review/components/SubAgentRow.js";
+import SubAgentRow from "../subAgents/SubAgentRow.js";
 import type { ProjectedBlock, SubAgentProjectionPart } from "@excelsior/core";
 import { theme } from "../../theme.js";
+import { textAttrs } from "../../platform/opentui/textAttributes.js";
 
 interface ChatHistoryProps {
   blocks: ProjectedBlock[];
-  commandsExpanded?: boolean;
-  historyResetKey?: number;
+  toolsExpanded?: boolean;
 }
 
 function renderBlock(
   block: ProjectedBlock,
-  commandsExpanded: boolean,
+  toolsExpanded: boolean,
 ): ReactNode {
   if (block.type === "user") {
     return <UserMessage key={block.id} content={block.content} timestamp={block.timestamp} />;
@@ -47,40 +46,29 @@ function renderBlock(
         toolArgs={block.toolArgs}
         status={block.status}
         content={block.content}
-        expanded={commandsExpanded}
+        expanded={toolsExpanded}
       />
     );
   }
   if (block.type === "sub-agent") {
-    const partTools = block.state.parts.filter(
-      (part): part is Extract<SubAgentProjectionPart, { type: "tool-call" }> =>
-        part.type === "tool-call",
-    );
-    const toolsCount = partTools.length > 0 ? partTools.length : block.state.toolCalls.length;
-
     return (
-      <Box key={block.id} flexDirection="column">
+      <box key={block.id} flexDirection="column">
         <SubAgentRow
           agent={block.state}
           role={block.role}
           isSelected={false}
         />
-        {commandsExpanded ? (
-          renderSubAgentTools(block)
-        ) : (
-          <Box paddingLeft={4}>
-            <Text color={theme.colors.muted} dimColor>
-              └── {toolsCount} tool call{toolsCount !== 1 ? "s" : ""}
-            </Text>
-          </Box>
-        )}
-      </Box>
+        {renderSubAgentTools(block, toolsExpanded)}
+      </box>
     );
   }
   return null;
 }
 
-function renderSubAgentTools(block: ProjectedBlock & { type: "sub-agent" }) {
+function renderSubAgentTools(
+  block: ProjectedBlock & { type: "sub-agent" },
+  expanded: boolean,
+) {
   const partTools = block.state.parts.filter(
     (part): part is Extract<SubAgentProjectionPart, { type: "tool-call" }> =>
       part.type === "tool-call",
@@ -89,9 +77,11 @@ function renderSubAgentTools(block: ProjectedBlock & { type: "sub-agent" }) {
 
   if (tools.length === 0) return null;
 
+  const visibleTools = expanded ? tools : tools.slice(-2);
+
   return (
-    <Box flexDirection="column" paddingLeft={2}>
-      {tools.map((tool) => (
+    <box flexDirection="column" paddingLeft={2}>
+      {visibleTools.map((tool) => (
         <ToolMessage
           key={tool.toolCallId}
           toolName={tool.toolName}
@@ -99,39 +89,29 @@ function renderSubAgentTools(block: ProjectedBlock & { type: "sub-agent" }) {
           status={tool.status || "completed"}
           content={tool.content ?? ""}
           nested
-          expanded
+          expanded={expanded}
         />
       ))}
-    </Box>
+      {!expanded && tools.length > visibleTools.length ? (
+        <box paddingLeft={1}>
+          <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
+            {theme.glyphs.branch} {tools.length - visibleTools.length} earlier{" "}
+            {tools.length - visibleTools.length === 1 ? "tool" : "tools"}
+          </text>
+        </box>
+      ) : null}
+    </box>
   );
 }
 
 const ChatHistory: FC<ChatHistoryProps> = ({
   blocks,
-  commandsExpanded = true,
-  historyResetKey = 0,
+  toolsExpanded = false,
 }) => {
-  // Find the boundary of the last user prompt
-  let lastUserIndex = -1;
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    if (blocks[i].type === "user") {
-      lastUserIndex = i;
-      break;
-    }
-  }
-
-  const staticBlocks = lastUserIndex >= 0 ? blocks.slice(0, lastUserIndex) : [];
-  const dynamicBlocks = lastUserIndex >= 0 ? blocks.slice(lastUserIndex) : blocks;
-
   return (
-    <Box flexDirection="column">
-      {staticBlocks.length > 0 && (
-        <Static key={historyResetKey} items={staticBlocks}>
-          {(block) => renderBlock(block, false)}
-        </Static>
-      )}
-      {dynamicBlocks.map((block) => renderBlock(block, commandsExpanded))}
-    </Box>
+    <box flexDirection="column">
+      {blocks.map((block) => renderBlock(block, toolsExpanded))}
+    </box>
   );
 };
 

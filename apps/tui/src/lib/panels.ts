@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import { SESSION_PICKER_PANEL_ID } from "@excelsior/core";
 import SessionPickerPanel, {
   type SessionPickerPanelContext,
-} from "../features/session/SessionPickerPanel.js";
+} from "../components/sessions/SessionPickerPanel.js";
 
 export type TuiPanelContext = SessionPickerPanelContext;
 

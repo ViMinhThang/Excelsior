@@ -1,9 +1,8 @@
-import { Text } from "ink";
-import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import type { AgentHost } from "@excelsior/client";
 import { AgentHostProvider } from "../src/context/AgentHostContext.js";
 import { useAgentHostClient } from "../src/hooks/useAgentHostClient.js";
+import { renderTui } from "../src/platform/opentui/testing/renderTui.js";
 
 function createMockHost(): AgentHost {
   const state = {
@@ -15,6 +14,10 @@ function createMockHost(): AgentHost {
       id: "ws_test",
       name: "Test workspace",
       rootPath: "C:/workspace",
+    },
+    llm: {
+      providerName: "DeepSeek",
+      modelName: "deepseek-v4-flash",
     },
     mode: "plan" as const,
     pendingConfirmation: null,
@@ -56,12 +59,12 @@ function createMockHost(): AgentHost {
 
 function Probe() {
   const { state, getCommands } = useAgentHostClient();
-  return <Text>{`${state.mode}:${getCommands()[0].name}`}</Text>;
+  return <text>{`${state.mode}:${getCommands()[0].name}`}</text>;
 }
 
 describe("AgentHostProvider", () => {
-  it("lets TUI hooks read from a mocked AgentHost", () => {
-    const screen = render(
+  it("lets TUI hooks read from a mocked AgentHost", async () => {
+    const screen = await renderTui(
       <AgentHostProvider host={createMockHost()}>
         <Probe />
       </AgentHostProvider>,

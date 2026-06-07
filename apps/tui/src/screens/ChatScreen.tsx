@@ -1,5 +1,4 @@
-import { memo, useState, useEffect } from 'react';
-import { Box, Static } from 'ink';
+import { memo } from 'react';
 import AppHeader from '../components/shared/AppHeader.js';
 import PendingActionPanel from '../components/chat/PendingActionPanel.js';
 import PendingQuestionPanel from '../components/chat/PendingQuestionPanel.js';
@@ -7,47 +6,68 @@ import FooterBar from '../components/chat/FooterBar.js';
 import { CommandSuggestions } from '../components/chat/CommandSuggestions.js';
 import CommandPalette from '../components/palette/CommandPalette.js';
 import { useChatInteractionController } from '../hooks/useChatInteractionController.js';
-import { ChatModeView } from '../chatModes/registry.js';
+import { chatModeRegistry } from '../chatModes/registry.js';
+import type { ChatModeRenderContext } from '../chatModes/types.js';
+import { theme } from '../theme.js';
+
+function renderModeView(modeView: ChatModeRenderContext) {
+  switch (modeView.chatMode) {
+    case "input":
+      return chatModeRegistry.input.render(modeView);
+    case "subagent-picker":
+      return chatModeRegistry["subagent-picker"].render(modeView);
+    case "subagent-detail":
+      return chatModeRegistry["subagent-detail"].render(modeView);
+  }
+}
 
 const ChatScreen = () => {
-  const [headerItems, setHeaderItems] = useState<string[]>([]);
-
-  useEffect(() => {
-    setHeaderItems(['app-header']);
-  }, []);
-
   const screen = useChatInteractionController();
 
   return (
-    <Box flexDirection="column">
-      <Static items={headerItems}>
-        {() => (
-          <Box key="app-header">
-            <AppHeader />
-          </Box>
-        )}
-      </Static>
+    <box
+      flexDirection="column"
+      height="100%"
+      width="100%"
+      flexGrow={1}
+      backgroundColor={theme.colors.background}
+    >
+      <box flexShrink={0} width="100%">
+        <AppHeader {...screen.header} />
+      </box>
 
-      <ChatModeView context={screen.modeView} />
+      <box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} width="100%">
+        {renderModeView(screen.modeView)}
+      </box>
 
       {screen.pendingAction && (
-        <PendingActionPanel {...screen.pendingAction} />
+        <box flexShrink={0} width="100%">
+          <PendingActionPanel {...screen.pendingAction} />
+        </box>
       )}
 
       {screen.pendingQuestion && (
-        <PendingQuestionPanel {...screen.pendingQuestion} />
+        <box flexShrink={0} width="100%">
+          <PendingQuestionPanel {...screen.pendingQuestion} />
+        </box>
       )}
 
       {screen.suggestions.visible && (
-        <CommandSuggestions {...screen.suggestions.props} />
+        <box flexShrink={0} width="100%">
+          <CommandSuggestions {...screen.suggestions.props} />
+        </box>
       )}
 
       {screen.palette.visible && (
-        <CommandPalette {...screen.palette.props} />
+        <box flexShrink={0} width="100%">
+          <CommandPalette {...screen.palette.props} />
+        </box>
       )}
 
-      <FooterBar {...screen.footer} />
-    </Box>
+      <box flexShrink={0} width="100%">
+        <FooterBar {...screen.footer} />
+      </box>
+    </box>
   );
 };
 

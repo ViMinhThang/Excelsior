@@ -59,44 +59,6 @@ export interface ToolFormatterContext {
 
 export type ToolFormatter = (ctx: ToolFormatterContext) => Partial<ToolDisplay>;
 
-export interface InlineDiffRow {
-  marker: " " | "-" | "+";
-  text: string;
-  tone: "context" | "removed" | "added";
-  lineNumber?: number;
-}
-
-export interface FileChangePreviewFrameInput {
-  preview: FileChangePreview;
-  terminalColumns: number;
-  scrollOffset?: number;
-  pending?: boolean;
-  focused?: boolean;
-}
-
-export interface FileChangePreviewFrame {
-  isWide: boolean;
-  previewWidth: number;
-  oldRows: FileChangeRow[];
-  newRows: FileChangeRow[];
-  inlineRows: InlineDiffRow[];
-  paneWidth: number;
-  totalRows: number;
-  totalInlineRows: number;
-  viewportHeight: number;
-  isCapped: boolean;
-  showScrollbar: boolean;
-  scrollbarInnerHeight: number;
-  thumbPosition: number;
-}
-
-export interface FileChangePreviewNavigation {
-  totalRows: number;
-  hunkIndices: readonly number[];
-  hunkCount: number;
-  maxScroll: number;
-}
-
 export interface ToolDisplayConfig {
   formatCommand?: (
     args: Record<string, unknown> | null,

@@ -13,6 +13,7 @@ function fakeProvider(id = "fake"): HarnessProvider {
   return {
     id,
     displayName: "Fake Provider",
+    modelId: "fake-model",
     createModel: () => ({}) as ReturnType<HarnessProvider["createModel"]>,
   };
 }

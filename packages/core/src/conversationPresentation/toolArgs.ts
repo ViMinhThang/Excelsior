@@ -28,7 +28,7 @@ export function stringifyToolArgValue(value: unknown): string {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
-export function compactToolArgText(
+function compactToolArgText(
   value: string,
   maxLength = DEFAULT_SUMMARY_LENGTH,
 ): string {
@@ -55,7 +55,7 @@ export function genericToolArgsSummary(
   return pairs.length ? pairs.join(", ") : "no arguments";
 }
 
-export function getStringToolArg(
+function getStringToolArg(
   args: ParsedToolArgs,
   name: string,
 ): string {
@@ -63,7 +63,7 @@ export function getStringToolArg(
   return typeof value === "string" ? value : "";
 }
 
-export function getStringArrayToolArg(
+function getStringArrayToolArg(
   args: ParsedToolArgs,
   name: string,
 ): string[] {
