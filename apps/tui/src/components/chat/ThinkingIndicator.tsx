@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Box, Text } from 'ink';
 import { theme } from '../../theme.js';
 import { formatElapsedSeconds } from '../../lib/timeFormat.js';
+import { textAttrs } from '../../platform/opentui/textAttributes.js';
 
 const ThinkingIndicator = () => {
   const [frame, setFrame] = useState(0);
@@ -24,14 +24,14 @@ const ThinkingIndicator = () => {
   }, [startedAt]);
 
   return (
-    <Box flexDirection="column" gap={0} paddingX={1} marginTop={1}>
-      <Text color={theme.colors.muted} dimColor italic>
+    <box flexDirection="column" gap={0} marginTop={1}>
+      <text fg={theme.colors.muted} attributes={textAttrs({ dim: true, italic: true })}>
         Thinking {frames[frame]}
-      </Text>
-      <Text color={theme.colors.muted} dimColor>
+      </text>
+      <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
         Worked for {formatElapsedSeconds(elapsed)}
-      </Text>
-    </Box>
+      </text>
+    </box>
   );
 };
 

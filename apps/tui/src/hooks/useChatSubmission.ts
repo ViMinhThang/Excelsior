@@ -9,7 +9,6 @@ interface UseChatSubmissionOptions {
   executeCommand: (input: string) => Promise<CommandResult>;
   send: (content: string) => void;
   resetInput: () => void;
-  setInput: (value: string) => void;
   setCommandResult: (message: string | null) => void;
   openPanel: (panelId: string) => void;
   navigate: (screen: "settings") => void;
@@ -22,7 +21,6 @@ export function useChatSubmission({
   executeCommand,
   send,
   resetInput,
-  setInput,
   setCommandResult,
   openPanel,
   navigate,
@@ -35,9 +33,9 @@ export function useChatSubmission({
 
     const command = getSubmittedCommand(trimmed);
     if (command) {
+      resetInput();
       executeCommand(command).then((result) => {
         if (!result.handled) return;
-        if (result.clearInput) setInput("");
         if (result.message) setCommandResult(result.message);
         if (result.openPanelId) openPanel(result.openPanelId);
         if (result.navigate) navigate(result.navigate);
@@ -55,7 +53,6 @@ export function useChatSubmission({
     executeCommand,
     send,
     resetInput,
-    setInput,
     setCommandResult,
     openPanel,
     navigate,

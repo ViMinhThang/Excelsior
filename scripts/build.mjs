@@ -36,4 +36,9 @@ function run(command, args) {
 
 await rm(resolveInsideWorkspace("dist"), { recursive: true, force: true });
 await run(process.execPath, [resolveInsideWorkspace("node_modules/typescript/bin/tsc")]);
+await run(process.execPath, [
+  resolveInsideWorkspace("node_modules/typescript/bin/tsc"),
+  "-p",
+  "apps/tui/tsconfig.json",
+]);
 await run(process.execPath, ["scripts/sync-package-dist.mjs"]);

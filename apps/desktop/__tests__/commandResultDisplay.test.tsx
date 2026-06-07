@@ -11,6 +11,7 @@ function state(): AgentClientState {
     sessions: [],
     currentSessionId: null,
     workspace: { id: "ws", name: "Workspace", rootPath: "C:/repo" },
+    llm: { providerName: "DeepSeek", modelName: "deepseek-v4-flash" },
     mode: "act",
     pendingConfirmation: null,
     pendingQuestion: null,

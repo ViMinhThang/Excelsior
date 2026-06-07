@@ -544,7 +544,7 @@ class AssistantStateMachineCore {
 
   private materializeDisplayBlocks(): ProjectedBlock[] {
     let blocks = [...this.displayBlocks];
-    if (this.assistant) {
+    if (this.assistant?.content.trim()) {
       blocks = upsertSnapshotBlock(blocks, {
         type: "assistant",
         id: this.snapshotBlockId(this.assistant.id, blocks),
@@ -597,13 +597,15 @@ class AssistantStateMachineCore {
 
   private flushAssistant(forceFrozen?: boolean) {
     if (!this.assistant) return;
-    this.displayBlocks.push({
-      type: "assistant",
-      id: this.nextDisplayBlockId(this.assistant.id),
-      content: this.assistant.content,
-      timestamp: this.assistant.timestamp,
-      ...(forceFrozen || this.assistant.frozen ? { isFrozen: true as const } : {}),
-    });
+    if (this.assistant.content.trim()) {
+      this.displayBlocks.push({
+        type: "assistant",
+        id: this.nextDisplayBlockId(this.assistant.id),
+        content: this.assistant.content,
+        timestamp: this.assistant.timestamp,
+        ...(forceFrozen || this.assistant.frozen ? { isFrozen: true as const } : {}),
+      });
+    }
     this.assistant = null;
   }
 

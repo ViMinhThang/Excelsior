@@ -1,8 +1,8 @@
 import { createElement } from "react";
-import { render } from "ink-testing-library";
 import { describe, expect, it } from "vitest";
 import type { ProjectedBlock } from "@excelsior/core";
 import ChatHistory from "../src/components/chat/ChatHistory.js";
+import { renderTui } from "../src/platform/opentui/testing/renderTui.js";
 
 function rootToolBlock(): ProjectedBlock {
   return {
@@ -44,24 +44,41 @@ function subAgentBlock(): ProjectedBlock {
   };
 }
 
+describe("ChatHistory assistant rows", () => {
+  it("does not render empty assistant rows", async () => {
+    const blocks: ProjectedBlock[] = [
+      {
+        type: "assistant",
+        id: "assistant_empty",
+        content: "",
+        timestamp: "2026-05-18T00:00:01.000Z",
+      },
+    ];
+
+    const rendered = await renderTui(createElement(ChatHistory, { blocks }));
+
+    expect(rendered.lastFrame() ?? "").toBe("");
+  });
+});
+
 describe("ChatHistory command expansion", () => {
-  it("shows collapsed summaries for tool calls and sub-agent counts by default, and expanded details when commandsExpanded is true", () => {
+  it("shows collapsed summaries for tool calls and sub-agent counts by default, and expanded details when toolsExpanded is true", async () => {
     const blocks = [rootToolBlock(), subAgentBlock()];
 
-    const collapsed = render(createElement(ChatHistory, { blocks, commandsExpanded: false }));
+    const collapsed = await renderTui(createElement(ChatHistory, { blocks, toolsExpanded: false }));
     const collapsedFrame = collapsed.lastFrame() ?? "";
-    expect(collapsedFrame).toContain("read(README.md)");
+    expect(collapsedFrame).toContain("read README.md");
     expect(collapsedFrame).toContain("(Ctrl+O to expand)");
     expect(collapsedFrame).not.toContain("README contents");
     expect(collapsedFrame).toContain("reviewer");
-    expect(collapsedFrame).toContain("1 tool call");
+    expect(collapsedFrame).toContain("Listfiles packages");
 
-    const expanded = render(createElement(ChatHistory, {
+    const expanded = await renderTui(createElement(ChatHistory, {
       blocks,
-      commandsExpanded: true,
+      toolsExpanded: true,
     }));
     const expandedFrame = expanded.lastFrame() ?? "";
-    expect(expandedFrame).toContain("read(README.md)");
+    expect(expandedFrame).toContain("read README.md");
     expect(expandedFrame).toContain("Read 1 lines");
     expect(expandedFrame).toContain("0 files, 0 folders");
     expect(expandedFrame).not.toContain("README contents");

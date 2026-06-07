@@ -7,7 +7,7 @@ import {
   getSessionPickerRows,
   SESSION_PICKER_HINT,
   moveSessionSelection,
-} from "../src/features/session/sessionPicker.js";
+} from "../src/components/sessions/sessionPicker.js";
 
 function session(id: string, title?: string, userInput = ""): Session {
   return {

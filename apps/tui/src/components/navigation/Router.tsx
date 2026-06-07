@@ -1,26 +1,19 @@
 import { memo } from 'react';
-import { Box, useApp } from 'ink';
-import { useNavigation, type Screen } from '../../context/NavigationContext.js';
+import { useRenderer } from '@opentui/react';
+import { useNavigation } from '../../context/NavigationContext.js';
 import { useAgentHost } from '../../context/AgentHostContext.js';
 import { useEvent } from '../../hooks/useEvent.js';
 import { useKeymap } from '../../hooks/useKeymap.js';
+import {
+  getGlobalNavigationAction,
+  GLOBAL_EXIT_KEYMAP_PRIORITY,
+  GLOBAL_NAVIGATION_KEYMAP_PRIORITY,
+} from '../../lib/navigation/globalActions.js';
 import ChatScreen from '../../screens/ChatScreen.js';
 import SettingsScreen from '../../screens/SettingsScreen.js';
-import type { TuiKey } from '../../lib/tuiKey.js';
 
 interface ScreenDispatcherProps {
-  screen: Screen;
-}
-
-export function getGlobalNavigationAction(
-  input: string,
-  key: TuiKey,
-  currentScreen: Screen,
-): "exit" | "back" | "settings" | null {
-  if (key.ctrl && input === 'c') return "exit";
-  if (key.backspace && currentScreen !== 'settings' && currentScreen !== 'chat') return "back";
-  if (key.ctrl && input === 's' && currentScreen === 'chat') return "settings";
-  return null;
+  screen: ReturnType<typeof useNavigation>['currentScreen'];
 }
 
 const ScreenDispatcher = memo(function ScreenDispatcher({ screen }: ScreenDispatcherProps) {
@@ -36,14 +29,14 @@ const ScreenDispatcher = memo(function ScreenDispatcher({ screen }: ScreenDispat
 
 const Router = () => {
   const { currentScreen, navigate, goBack } = useNavigation();
-  const { exit } = useApp();
+  const renderer = useRenderer();
   const host = useAgentHost();
 
   const onNavigate = useEvent(navigate);
   const onGoBack = useEvent(goBack);
   const onExit = useEvent(() => {
     host.dispose();
-    exit();
+    renderer.destroy();
     const timer = setTimeout(() => process.exit(0), 50);
     timer.unref?.();
   });
@@ -57,6 +50,12 @@ const Router = () => {
   useKeymap(
     {
       "ctrl+c": () => runNavigationAction("exit"),
+    },
+    { priority: GLOBAL_EXIT_KEYMAP_PRIORITY },
+  );
+
+  useKeymap(
+    {
       "ctrl+s": () => runNavigationAction(
         getGlobalNavigationAction("s", { ctrl: true }, currentScreen),
       ),
@@ -64,13 +63,13 @@ const Router = () => {
         getGlobalNavigationAction("", { backspace: true }, currentScreen),
       ),
     },
-    { priority: 1 },
+    { priority: GLOBAL_NAVIGATION_KEYMAP_PRIORITY },
   );
 
   return (
-    <Box flexDirection="column" minHeight={20}>
+    <box flexDirection="column" height="100%" width="100%" flexGrow={1}>
       <ScreenDispatcher screen={currentScreen} />
-    </Box>
+    </box>
   );
 };
 

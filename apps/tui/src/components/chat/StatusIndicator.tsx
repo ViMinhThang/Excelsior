@@ -1,6 +1,6 @@
 import { useEffect, useState, type FC } from "react";
-import { Text } from "ink";
 import { theme } from "../../theme.js";
+import { textAttrs } from "../../platform/opentui/textAttributes.js";
 
 interface StatusIndicatorProps {
   status: "pending" | "completed" | "error";
@@ -26,9 +26,15 @@ const StatusIndicator: FC<StatusIndicatorProps> = ({ status }) => {
         : theme.colors.activity;
 
   return (
-    <Text color={color} dimColor={status === "pending" && !isBeat} bold={status !== "pending" || isBeat}>
+    <text
+      fg={color}
+      attributes={textAttrs({
+        dim: status === "pending" && !isBeat,
+        bold: status !== "pending" || isBeat,
+      })}
+    >
       {"●"}
-    </Text>
+    </text>
   );
 };
 

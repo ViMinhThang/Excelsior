@@ -62,6 +62,7 @@ function inspection(events: AnyHarnessEvent[], isLoading = false): HarnessInspec
       sessions: [session],
       currentSessionId: session.id,
       workspace,
+      llm: { providerName: "DeepSeek", modelName: "deepseek-v4-flash" },
       mode: "act",
       pendingConfirmation: null,
       pendingQuestion: null,

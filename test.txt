@@ -1,1 +1,101 @@
-test
+Fun Facts about Excelsior:
+
+1. The HarnessStore class (packages/agent-harness/src/harness.ts) wires together 12+ collaborators in its constructor — it's the god class of the project.
+
+2. The AssistantStateMachine (907 lines!) serves two completely different purposes: live streaming tool calls AND replaying historical events. The optional `?: emit` parameter bifurcates every method.
+
+3. There are TWO sets of TOOL_INPUT_UPDATE constants (AssistantStateMachine.ts AND runController.ts) with different char thresholds — a bug tanning its hide.
+
+4. The ConfirmationRouter's requestConfirmation and requestQuestion methods are nearly identical ~25-line blocks that were copy-pasted instead of consolidated.
+
+5. EventBus takes 6 constructor parameters — it couples event creation, persistence, extension dispatch, and UI notification into one class.
+
+6. The TUI's chatScreenModel.ts exports 10+ builder functions that are each called exactly once. The deletion test says: delete buildFooterModel and 15 lines move into the hook — no complexity lost.
+
+7. There are no tests for any TUI components — all 12 test files are in @excelsior/agent-harness.
+
+8. The tool-input throttling constants (250ms interval, 2048 chars) live in TWO places with the SAME interval but potentially different char thresholds. See fact #3.
+
+9. ProjectionCache checks incremental-apply viability by comparing a single event ID — works for appends, fragile for everything else. All this for typically <1000 events.
+
+10. ToolRegistry.toToolSet() converts harness tools into Vercel AI SDK ToolSet objects, and RunController processes Vercel-specific stream parts directly. One adapter, one coupling.
+
+11. The entire TUI app has zero unit tests — but the architecture test in src/__tests__/architecture.test.ts protects package direction and casual `any` usage across the monorepo.
+
+12. HarnessStore's send() method is a 60-line block that does session management, event wiring, run orchestration, AND mode switching — all in one async function.
+
+13. The ActiveRunManager's finalizeCancelled method calls findIncompleteEvents and emitRunFinalization from history/runFinalizer.ts, but ONLY for cancellation — normal completion skips this path entirely.
+
+14. EventBus.createEmitter returns a closure that captures sessionId and turnId, but the underlying emit() method re-looks-up the session via sessionManager — a session could theoretically change between emitter creation and emission.
+
+15. The compaction module (compaction.ts) silently swallows LLM generation errors — the catch block just falls through to returning raw history text. No log, no metric.
+
+16. ProjectionCache.canApplyIncrementally has an edge case: if appliedEventCount is 0, it returns true even when events is empty. That's correct but the method doesn't check for the empty array case explicitly.
+
+17. The TUI theme has 45+ color tokens, 20+ glyphs, but only 2 spacing values (indent and toolIndent). The visual system is heavily expressive in color, minimal in layout.
+
+18. There's a packages/projection directory in the repo that only contains a dist/ folder — no src, no tests. It's either a ghost package or was gutted and the skeleton remained.
+
+19. The RunController uses stepCountIs(1) from Vercel's AI SDK to pause after each tool-call step — this means the SDK's internal loop control is being repurposed as a single-step iterator.
+
+20. The entire agent harness's public surface (AgentHarness interface) is defined in types.ts with 18 methods. HarnessStore implements all of them. The @excelsior/client package then wraps this in another 18-method interface (AgentHost) and a 20-method convenience class (AgentHostClient). Three layers, same shape.
+
+21. The EventBus.emitUserMessage method emits BOTH MESSAGE_START and MESSAGE_END in sequence with no MESSAGE_UPDATE in between — the user message is always "instant" while assistant messages get streaming deltas.
+
+22. HarnessStore.notify() uses a setTimeout(0) debounce — if multiple events fire synchronously (like during send()), only one notification fires. But flushPendingSnapshot() breaks the debounce by clearing the timer and updating the snapshot directly.
+
+23. The createToolDisplay function in @excelsior/core is a single entry point that dispatches to per-tool formatters registered in a ToolDisplayRegistry — it's a clean registry pattern, but the registry is built imperatively by chaining .on() calls in toolDisplayRegistry.ts.
+
+24. The runController.ts imports stepCountIs from "ai" but stepLimit is computed from normalizeAgentToolLoopSteps imported from @excelsior/core — the step-limiting logic is split across two packages.
+
+25. The ProjectionCache is constructed in HarnessStore's constructor but only used in updateSnapshot() — it lives for the entire lifetime of the harness, even across session switches where it resets anyway.
+
+26. The CompactionSummary builder uses generateText from "ai" (not streamText) — it's the only place in the codebase that uses the non-streaming LLM API.
+
+27. The SettingsStore reads/writes a JSON file on every saveSettings call — but HarnessStore.notify() also fires after every settings change, so saving settings triggers a file write AND a UI re-render, even if nothing visible changed.
+
+28. The GitHubReviewService's token resolver is a lambda passed through HarnessConfig, but it reads from settingsStore.settings.githubToken OR process.env.GITHUB_TOKEN — reading env vars at call time, not construction time.
+
+29. The revert module (history/revert.ts) finds the last completed turn and removes its events — but the backup restoration in restoreBackups reads a manifest.json to decide which files to restore, meaning file backups are tightly coupled to turn boundaries.
+
+30. The HarnessAgentHost (packages/agent-host/src/host/HarnessAgentHost.ts) is 96 lines of pure delegation — every method calls the equivalent method on AgentHarness. It passes the deletion test: deleting it means clients call AgentHarness directly, losing the intent-based dispatch pattern.
+
+31. The SessionManager holds sessions in a Map keyed by sessionId, but the EventBus.getSession() method iterates over the Map with Array.from() every call — O(n) lookup when it could be O(1) with a direct get.
+
+32. The ToolConfirmationManager stores confirmation state in a closure variable (pendingConfirmations), not in the session store — if the harness restarts or a session is restored from persistence, pending confirmations are lost entirely.
+
+33. The render loop in TUI's chatScreenModel.ts uses requestAnimationFrame, but the snapshot diffing (deepEquals on the entire state tree) runs on every frame — even when the only change is a cursor blink.
+
+34. The EventBuffer in runController.ts accumulates all stream parts in memory for the duration of a run — for long-running conversations with large tool outputs, this means the entire conversation history is held in the buffer plus the projection cache simultaneously.
+
+35. The fileBackup.ts module writes backups to disk synchronously with writeFileSync — during a revert operation, this blocks the event loop while potentially large files are being written.
+
+36. The PromptManager's template resolution uses a simple string.replace approach — if a template variable name appears as a substring of another (e.g. {{dir}} and {{directory}}), the replacement order determines correctness.
+
+37. The GitOperations class spawns child processes for every git call — there's no git command batching or session reuse, so a single revert operation can spawn 10+ separate git processes.
+
+38. The telemetry module emits events with a fire-and-forget pattern — if the telemetry sink is down or slow, the EventBus's emit method still awaits the telemetry subscriber, potentially backing up the entire event pipeline.
+
+39. The package.json at the monorepo root defines scripts for lint, typecheck, and test, but there's no build:all script — the individual packages must be built in dependency order manually or via a separate tool.
+
+40. The EventBus.snapshotEventStore() method calls store.getAllEvents() which loads the entire event history into memory — for sessions with 10,000+ events, this means the full history is serialized twice: once in the store and once in the projection cache.
+
+41. The AssistantStateMachine's abortController is created in the constructor but never reset — if a run is aborted and then retried in the same session, the old AbortSignal is still referenced and could cause premature cancellation.
+
+42. The ToolExecutionManager runs all tool calls serially via a for-await loop — even when tools are independent (e.g. readFile and readFile), they never execute in parallel, adding latency proportional to the number of tools in a step.
+
+43. The ConfirmationRouter's question prompt includes the full tool call JSON serialized with JSON.stringify — for tools with large arguments (like writeFile with file contents), the confirmation dialog shows a wall of escaped text instead of a summary.
+
+44. The HistoryManager.loadSession() method calls restoreFromEvents which replays every event through the projection cache — for sessions with compaction, the compacted events are replayed even though the compiled summary would be sufficient to restore state.
+
+45. The SettingsSchemaValidator.validate() method returns a boolean but the SettingsStore.saveSettings() never checks the return value — invalid settings are silently written to disk.
+
+46. The TUI's MarkdownRenderer imports marked and sanitize-html but the sanitize call uses a permissive allowlist that includes style attributes — a crafted message could inject custom CSS into the terminal render.
+
+47. The RunController's setupEventListeners method attaches listeners inside a run() call but detaches them in dispose() — if run() throws mid-setup, the listeners leak for the lifetime of the harness.
+
+48. The ActiveRunManager maintains a WeakRef to the current run session, but the RunStateEmitter captures the sessionId as a string — during session restoration, the WeakRef may have been garbage collected while the string reference persists, creating an orphaned emitter.
+
+49. The FileChangeTracker tracks file modifications with a Set<string> of absolute paths, but the git diff operation later calls git diff --cached which shows staged changes — if the user staged changes externally before a revert, the tracker's set and git's staged state diverge.
+
+50. The PromptManager.cache key is a concatenation of template name + JSON.stringify(context) — for large context objects (like full session history), this string can be megabytes long, and the cache never evicts old keys, causing unbounded memory growth over the harness lifetime.

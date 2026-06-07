@@ -5,14 +5,16 @@ import {
   resetDoubleEscapeCancel,
 } from "@excelsior/core";
 import { getCommandInputWithSelection } from "../chatModes/inputMode.js";
+import { shouldAllowChatInputSubmit } from "../lib/commandSubmission.js";
 import {
+  buildChatInteractionState,
   buildModeViewContext,
   buildPaletteModel,
   buildPendingActionModel,
   buildPendingQuestionModel,
   buildSuggestionsModel,
-  type ChatScreenModel,
-} from "./chatScreenModelBuilders.js";
+  type ChatScreenViewModel,
+} from "./chatScreenViewModel.js";
 import { useNavigation } from "../context/NavigationContext.js";
 import { useAgentHostClient } from "./useAgentHostClient.js";
 import { useToolConfirmation } from "./useToolConfirmation.js";
@@ -26,11 +28,6 @@ import { useChatSubmission } from "./useChatSubmission.js";
 import { useChatKeymaps } from "./useChatKeymaps.js";
 import { useCommandPalette } from "./useCommandPalette.js";
 import {
-  buildChatControlPlane,
-  shouldCollapseCommandsForChatMode,
-  shouldResetChatModeForPending,
-} from "./chatScreenControlPlane.js";
-import {
   buildOptimisticTranscript,
   shouldClearOptimisticMessage,
 } from "./optimisticTranscript.js";
@@ -38,11 +35,11 @@ import {
   createHistoryResetSnapshot,
   shouldResetHistory,
 } from "./historyReset.js";
+import { useViewportReset } from "../platform/opentui/useViewportReset.js";
+import { estimateTranscriptTokens } from "../lib/tokenEstimate.js";
+import { useGitBranch } from "./useGitBranch.js";
 
-const TOKEN_ESTIMATE_TEXT_SCAN_LIMIT = 50_000;
-const PENDING_TOOL_TOKEN_SCAN_LIMIT = 4_000;
-
-export function useChatInteractionController(): ChatScreenModel {
+export function useChatInteractionController(): ChatScreenViewModel {
   const { navigate } = useNavigation();
   const agent = useAgentHostClient();
   const {
@@ -51,10 +48,12 @@ export function useChatInteractionController(): ChatScreenModel {
     sessions,
     currentSessionId,
     workspace,
+    llm,
     mode,
     pendingConfirmation,
     pendingQuestion,
   } = agent.state;
+  const branchName = useGitBranch(workspace.rootPath);
 
   const [optimisticUserMessage, setOptimisticUserMessage] = useState<string | null>(null);
 
@@ -90,7 +89,7 @@ export function useChatInteractionController(): ChatScreenModel {
 
   const inputHistory = useInputHistory(derivedDisplayBlocks);
   const subAgentNav = useSubAgentNavigation(derivedDisplayBlocks);
-  const [commandsExpanded, setCommandsExpanded] = useState(false);
+  const [toolsExpanded, setToolsExpanded] = useState(false);
   const [historyResetKey, setHistoryResetKey] = useState(0);
   const historyResetSnapshot = useMemo(() => createHistoryResetSnapshot({
     sessionId: currentSessionId,
@@ -105,11 +104,7 @@ export function useChatInteractionController(): ChatScreenModel {
     prevHistoryResetSnapshotRef.current = historyResetSnapshot;
   }, [historyResetSnapshot]);
 
-  useEffect(() => {
-    if (historyResetKey > 0) {
-      process.stdout.write("\u001b[2J\u001b[3J\u001b[H");
-    }
-  }, [historyResetKey]);
+  useViewportReset(historyResetKey);
 
   const command = useCommandResult(inputHistory.input);
   const confirmation = useToolConfirmation(
@@ -137,8 +132,8 @@ export function useChatInteractionController(): ChatScreenModel {
     setInput: inputHistory.setInput,
   });
 
-  const toggleCommandsExpanded = useCallback(() => {
-    setCommandsExpanded((expanded) => !expanded);
+  const toggleToolsExpanded = useCallback(() => {
+    setToolsExpanded((expanded) => !expanded);
   }, []);
 
   const escapeCancelState = useRef(createDoubleEscapeCancelState());
@@ -157,15 +152,17 @@ export function useChatInteractionController(): ChatScreenModel {
 
   const setChatMode = useCallback((nextMode: typeof subAgentNav.chatMode) => {
     subAgentNav.setChatMode(nextMode);
-    if (shouldCollapseCommandsForChatMode(nextMode)) setCommandsExpanded(false);
+    if (nextMode === "input") setToolsExpanded(false);
   }, [subAgentNav.setChatMode]);
 
   const openSubAgent = useCallback(() => {
-    setCommandsExpanded(true);
+    setToolsExpanded(true);
     subAgentNav.openSubAgent();
   }, [subAgentNav.openSubAgent]);
 
-  const controlPlane = buildChatControlPlane({
+  const submitRef = useRef<() => void>(() => {});
+
+  const interactionState = buildChatInteractionState({
     displayBlocks: derivedDisplayBlocks,
     chatMode: subAgentNav.chatMode,
     isLoading,
@@ -175,26 +172,25 @@ export function useChatInteractionController(): ChatScreenModel {
     isPaletteOpen: palette.isOpen,
     suggestion,
     setInput: inputHistory.setInput,
+    submit: () => submitRef.current(),
     cancel: agent.cancel,
     toggleMode: agent.toggleMode,
     openSubAgent,
     subAgentBlocks: subAgentNav.subAgentBlocks,
-    commandsExpanded,
-    toggleCommandsExpanded,
+    toolsExpanded,
+    toggleToolsExpanded,
     navigateUp: inputHistory.navigateUp,
     navigateDown: inputHistory.navigateDown,
-    openPalette: palette.toggle,
     setChatMode,
     nextSubAgent: subAgentNav.nextSubAgent,
     prevSubAgent: subAgentNav.prevSubAgent,
-    workspaceRootPath: workspace.rootPath,
   });
 
   useEffect(() => {
-    if (!shouldResetChatModeForPending(controlPlane.pending)) return;
+    if (!interactionState.pending) return;
     subAgentNav.setChatMode("input");
-    setCommandsExpanded(false);
-  }, [controlPlane.pending, subAgentNav.setChatMode]);
+    setToolsExpanded(false);
+  }, [interactionState.pending, subAgentNav.setChatMode]);
 
   const handleSubmit = useChatSubmission({
     isLoading,
@@ -202,21 +198,24 @@ export function useChatInteractionController(): ChatScreenModel {
     executeCommand: agent.executeCommand,
     send: customSend,
     resetInput: inputHistory.resetInput,
-    setInput: inputHistory.setInput,
     setCommandResult: command.setCommandResult,
     openPanel: panel.openPanel,
     navigate,
     getSubmittedInput: () => getCommandInputWithSelection(
-      controlPlane.inputModeKeymap,
+      interactionState.inputModeKeymap,
       inputHistory.input,
     ),
   });
+  submitRef.current = handleSubmit;
 
-  const shouldSubmitInput = () => true;
+  const shouldSubmit = useCallback(
+    (value: string) => shouldAllowChatInputSubmit(value, suggestion),
+    [suggestion],
+  );
 
   useChatKeymaps({
-    ...controlPlane.chatModeKeymap,
-    pending: controlPlane.pending,
+    ...interactionState.chatModeKeymap,
+    pending: interactionState.pending,
     confirmationPending: confirmation.pending,
     questionPending: question.pending,
     approve: confirmation.approve,
@@ -231,39 +230,26 @@ export function useChatInteractionController(): ChatScreenModel {
     requestTurnCancel,
   });
 
-  const totalTokens = useMemo(() => {
-    let tokens = 0;
-    const addText = (text: string, scanLimit = TOKEN_ESTIMATE_TEXT_SCAN_LIMIT) => {
-      tokens += estimateTokens(text, scanLimit);
-    };
-    for (const block of derivedDisplayBlocks) {
-      if (block.type === "user" || block.type === "assistant") {
-        addText(block.content);
-      } else if (block.type === "tool-call") {
-        addText(block.toolName);
-        addText(
-          block.toolArgs,
-          block.status === "pending" ? PENDING_TOOL_TOKEN_SCAN_LIMIT : TOKEN_ESTIMATE_TEXT_SCAN_LIMIT,
-        );
-        addText(block.content);
-      } else if (block.type === "sub-agent") {
-        addText(block.role);
-        addText(block.state.fullOutput);
-      }
-    }
-    return Math.ceil(tokens);
-  }, [derivedDisplayBlocks]);
+  const totalTokens = useMemo(
+    () => estimateTranscriptTokens(derivedDisplayBlocks),
+    [derivedDisplayBlocks],
+  );
 
   return {
+    header: {
+      workspaceName: workspace.name,
+      branchName,
+      modelLabel: `${llm.providerName} · ${llm.modelName}`,
+    },
     modeView: buildModeViewContext({
       chatMode: subAgentNav.chatMode,
       displayBlocks: derivedDisplayBlocks,
       inputValue: inputHistory.input,
       setInput: inputHistory.setInput,
       handleSubmit,
-      shouldSubmit: shouldSubmitInput,
+      shouldSubmit,
       isLoading,
-      pending: controlPlane.pending,
+      pending: interactionState.pending,
       paletteOpen: palette.isOpen,
       commandResult: command.commandResult,
       agentMode: mode,
@@ -271,8 +257,8 @@ export function useChatInteractionController(): ChatScreenModel {
       featureContext: panel.panelContext,
       subAgents: subAgentNav.subAgentBlocks,
       subAgentIndex: subAgentNav.subAgentIndex,
-      commandsExpanded,
-      historyResetKey,
+      toolsExpanded,
+      viewportKey: `${currentSessionId ?? "none"}:${historyResetKey}`,
     }),
     pendingAction: buildPendingActionModel(
       confirmation.pending,
@@ -290,21 +276,8 @@ export function useChatInteractionController(): ChatScreenModel {
     suggestions: buildSuggestionsModel(suggestion, palette.isOpen),
     palette: buildPaletteModel(palette),
     footer: {
-      ...controlPlane.footer,
+      ...interactionState.footer,
       totalTokens,
     },
   };
-}
-
-function estimateTokens(text: string, scanLimit: number): number {
-  const scannedLength = Math.min(text.length, scanLimit);
-  let tokens = 0;
-  for (let i = 0; i < scannedLength; i++) {
-    const code = text.charCodeAt(i);
-    tokens += code >= 0x4e00 && code <= 0x9fff ? 0.6 : 0.3;
-  }
-  if (text.length > scanLimit) {
-    tokens += (text.length - scanLimit) * 0.3;
-  }
-  return tokens;
 }

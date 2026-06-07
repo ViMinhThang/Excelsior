@@ -10,3 +10,12 @@ export function completeCommandInput(commands: CommandDefinition[], selectedInde
   const selected = commands[selectedIndex];
   return selected ? `/${selected.name} ` : null;
 }
+
+export function shouldAllowChatInputSubmit(
+  value: string,
+  suggestion: { show: boolean; filtered: { length: number } },
+): boolean {
+  if (!value.trim().startsWith("/")) return true;
+  if (!suggestion.show || suggestion.filtered.length === 0) return true;
+  return false;
+}

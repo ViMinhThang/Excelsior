@@ -14,9 +14,20 @@ import {
   viewDisplayConfig,
 } from "./readToolDisplays.js";
 import { runCommandDisplayConfig } from "./runCommandDisplay.js";
-import { ToolDisplayRegistry } from "./toolDisplayRegistryCore.js";
+import type { ToolDisplayConfig } from "./types.js";
 
-export { ToolDisplayRegistry } from "./toolDisplayRegistryCore.js";
+class ToolDisplayRegistry {
+  private readonly configs = new Map<string, ToolDisplayConfig>();
+
+  on(name: string, config: ToolDisplayConfig): this {
+    this.configs.set(name, config);
+    return this;
+  }
+
+  get(name: string): ToolDisplayConfig | undefined {
+    return this.configs.get(name);
+  }
+}
 
 export const toolDisplayRegistry = new ToolDisplayRegistry()
   .on("view", viewDisplayConfig)

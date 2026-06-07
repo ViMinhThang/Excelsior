@@ -28,7 +28,7 @@ export function shouldResetHistory(
   next: HistoryResetSnapshot,
 ): boolean {
   if (previous.sessionId !== next.sessionId) {
-    return previous.staticBlockIds.length > 0 || next.staticBlockIds.length > 0;
+    return true;
   }
   return !isPrefix(previous.staticBlockIds, next.staticBlockIds);
 }

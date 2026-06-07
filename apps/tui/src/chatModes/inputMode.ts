@@ -1,26 +1,12 @@
 import { completeCommandInput } from "../lib/commandSubmission.js";
-import {
-  ownsChatInput,
-  type TuiInputOwnershipState,
-} from "../lib/inputOwnership.js";
+import { ownsChatInput } from "../lib/inputOwnership.js";
 import { inputHint } from "./hints.js";
 import { renderConversation } from "./conversationView.js";
-import { emptySelection } from "./selection.js";
 import type {
-  ChatMode,
   ChatModeDefinition,
   ChatModeKeymapSpec,
   InputModeKeymapContext,
 } from "./types.js";
-
-export function shouldEnableInputModeKeymap(options: {
-  pending: unknown;
-  activePanelId: string | null;
-  chatMode: ChatMode;
-  isPaletteOpen: boolean;
-}): boolean {
-  return ownsChatInput(options satisfies TuiInputOwnershipState);
-}
 
 export function getCommandInputWithSelection(
   ctx: InputModeKeymapContext,
@@ -51,14 +37,11 @@ function inputKeymaps(ctx: InputModeKeymapContext): ChatModeKeymapSpec[] {
   const hasSuggestions = hasCommandSuggestions(ctx);
   return [
     {
-      enabled: shouldEnableInputModeKeymap(ctx),
+      enabled: ownsChatInput(ctx),
       priority: 10,
       map: {
         escape: () => {
           if (ctx.isLoading) ctx.cancel();
-        },
-        "ctrl+k": () => {
-          ctx.openPalette?.();
         },
         "shift+tab": () => {
           ctx.toggleMode();
@@ -67,7 +50,7 @@ function inputKeymaps(ctx: InputModeKeymapContext): ChatModeKeymapSpec[] {
           ctx.toggleMode();
         },
         "ctrl+o": () => {
-          ctx.toggleCommandsExpanded();
+          ctx.toggleToolsExpanded();
         },
         up: () => {
           if (hasSuggestions) ctx.suggestion.prev();
@@ -86,8 +69,8 @@ function inputKeymaps(ctx: InputModeKeymapContext): ChatModeKeymapSpec[] {
           if (completed) ctx.setInput(completed);
         },
         return: () => {
-          const selectedCommand = getCommandInputWithSelection(ctx);
-          if (selectedCommand) ctx.setInput(selectedCommand);
+          if (!hasCommandSuggestions(ctx)) return;
+          ctx.submit();
         },
       },
     },
@@ -97,6 +80,5 @@ function inputKeymaps(ctx: InputModeKeymapContext): ChatModeKeymapSpec[] {
 export const inputMode: ChatModeDefinition<"input"> = {
   render: (ctx) => renderConversation(ctx, { showCommandResult: true }),
   getHint: inputHint,
-  getSelection: emptySelection,
   getKeymaps: inputKeymaps,
 };

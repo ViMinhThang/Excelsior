@@ -1,15 +1,48 @@
-import {
-  COLLAPSED_VIEWPORT_HEIGHT,
-  PENDING_VIEWPORT_HEIGHT,
-} from "./fileChangePreviewConstants.js";
 import type {
-  FileChangePreviewFrame,
-  FileChangePreviewFrameInput,
+  FileChangePreview,
   FileChangeRow,
-  InlineDiffRow,
 } from "./types.js";
 
-export function getInlineRowsAndMap(
+const PENDING_VIEWPORT_HEIGHT = 12;
+const COLLAPSED_VIEWPORT_HEIGHT = 10;
+
+export interface InlineDiffRow {
+  marker: " " | "-" | "+";
+  text: string;
+  tone: "context" | "removed" | "added";
+  lineNumber?: number;
+}
+
+export interface FileChangePreviewFrameInput {
+  preview: FileChangePreview;
+  terminalColumns: number;
+  scrollOffset?: number;
+  pending?: boolean;
+  focused?: boolean;
+  hideRemovedRows?: boolean;
+}
+
+export interface FileChangePreviewFrame {
+  previewWidth: number;
+  contentWidth: number;
+  inlineRows: InlineDiffRow[];
+  totalRows: number;
+  totalInlineRows: number;
+  viewportHeight: number;
+  isCapped: boolean;
+  showScrollbar: boolean;
+  scrollbarInnerHeight: number;
+  thumbPosition: number;
+}
+
+export interface FileChangePreviewNavigation {
+  totalRows: number;
+  hunkIndices: readonly number[];
+  hunkCount: number;
+  maxScroll: number;
+}
+
+function getInlineRowsAndMap(
   oldRows: FileChangeRow[],
   newRows: FileChangeRow[],
 ): { rows: InlineDiffRow[]; parallelToInlineMap: number[] } {
@@ -85,59 +118,74 @@ export function getInlineRowsAndMap(
   return { rows: result, parallelToInlineMap };
 }
 
+function hideRemovedInlineRows(
+  rows: InlineDiffRow[],
+  parallelToInlineMap: number[],
+): { rows: InlineDiffRow[]; parallelToInlineMap: number[] } {
+  const visibleRows: InlineDiffRow[] = [];
+  const originalToVisibleMap: number[] = [];
+
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index];
+    originalToVisibleMap[index] = visibleRows.length;
+    if (row.tone !== "removed") {
+      visibleRows.push(row);
+    }
+  }
+
+  return {
+    rows: visibleRows,
+    parallelToInlineMap: parallelToInlineMap.map((index) =>
+      originalToVisibleMap[index] ?? visibleRows.length
+    ),
+  };
+}
+
 export function buildFileChangePreviewFrame({
   preview,
   terminalColumns,
   scrollOffset = 0,
   pending = false,
   focused = false,
+  hideRemovedRows = false,
 }: FileChangePreviewFrameInput): FileChangePreviewFrame {
-  const isWide = terminalColumns >= 120;
-  const previewWidth = Math.max(80, terminalColumns - 6);
+  const previewWidth = Math.max(80, terminalColumns);
   const totalRows = preview.oldRows.length;
-  const { rows: allInlineRows, parallelToInlineMap } = getInlineRowsAndMap(
+  const inlineResult = getInlineRowsAndMap(
     preview.oldRows,
     preview.newRows,
   );
+  const { rows: allInlineRows, parallelToInlineMap } = hideRemovedRows
+    ? hideRemovedInlineRows(inlineResult.rows, inlineResult.parallelToInlineMap)
+    : inlineResult;
   const totalInlineRows = allInlineRows.length;
 
-  const viewportHeight = isWide
-    ? (pending ? PENDING_VIEWPORT_HEIGHT : (focused ? totalRows : Math.min(COLLAPSED_VIEWPORT_HEIGHT, totalRows)))
-    : (pending ? PENDING_VIEWPORT_HEIGHT : (focused ? totalInlineRows : Math.min(COLLAPSED_VIEWPORT_HEIGHT, totalInlineRows)));
+  const viewportHeight = pending
+    ? PENDING_VIEWPORT_HEIGHT
+    : focused
+      ? totalInlineRows
+      : Math.min(COLLAPSED_VIEWPORT_HEIGHT, totalInlineRows);
 
   const isCapped =
     !pending &&
     !focused &&
-    (isWide ? totalRows > COLLAPSED_VIEWPORT_HEIGHT : totalInlineRows > COLLAPSED_VIEWPORT_HEIGHT);
+    totalInlineRows > COLLAPSED_VIEWPORT_HEIGHT;
 
-  let oldRows = preview.oldRows;
-  let newRows = preview.newRows;
-  let inlineRows: InlineDiffRow[] = [];
-  let inlineStart = 0;
+  const inlineStart = pending
+    ? Math.min(
+      parallelToInlineMap[scrollOffset] ?? 0,
+      Math.max(0, totalInlineRows - viewportHeight),
+    )
+    : 0;
+  const inlineRows = allInlineRows.slice(inlineStart, inlineStart + viewportHeight);
 
-  if (isWide) {
-    const start = pending ? Math.min(scrollOffset, Math.max(0, totalRows - viewportHeight)) : 0;
-    oldRows = preview.oldRows.slice(start, start + viewportHeight);
-    newRows = preview.newRows.slice(start, start + viewportHeight);
-  } else {
-    inlineStart = pending
-      ? Math.min(
-        parallelToInlineMap[scrollOffset] ?? 0,
-        Math.max(0, totalInlineRows - viewportHeight),
-      )
-      : 0;
-    inlineRows = allInlineRows.slice(inlineStart, inlineStart + viewportHeight);
-  }
-
-  const showScrollbar = pending && (isWide ? totalRows > viewportHeight : totalInlineRows > viewportHeight);
+  const showScrollbar = pending && totalInlineRows > viewportHeight;
   const scrollbarInnerHeight = Math.max(0, viewportHeight - 2);
 
   let thumbPosition = 0;
   if (showScrollbar) {
-    const totalScrollRange = isWide ? totalRows : totalInlineRows;
-    const maxScrollPos = Math.max(1, totalScrollRange - viewportHeight);
-    const currentScrollPos = isWide ? scrollOffset : inlineStart;
-    const scrollRatio = Math.min(1, Math.max(0, currentScrollPos / maxScrollPos));
+    const maxScrollPos = Math.max(1, totalInlineRows - viewportHeight);
+    const scrollRatio = Math.min(1, Math.max(0, inlineStart / maxScrollPos));
     thumbPosition = Math.min(
       scrollbarInnerHeight - 1,
       Math.round(scrollRatio * (scrollbarInnerHeight - 1)),
@@ -145,12 +193,9 @@ export function buildFileChangePreviewFrame({
   }
 
   return {
-    isWide,
     previewWidth,
-    oldRows,
-    newRows,
     inlineRows,
-    paneWidth: Math.max(36, Math.floor((previewWidth - (showScrollbar ? 4 : 1)) / 2)),
+    contentWidth: previewWidth - (showScrollbar ? 4 : 0),
     totalRows,
     totalInlineRows,
     viewportHeight,
@@ -158,5 +203,19 @@ export function buildFileChangePreviewFrame({
     showScrollbar,
     scrollbarInnerHeight,
     thumbPosition,
+  };
+}
+
+export function getFileChangePreviewNavigation(
+  preview: FileChangePreview | null | undefined,
+): FileChangePreviewNavigation {
+  const totalRows = preview?.oldRows?.length ?? 0;
+  const hunkIndices = preview?.hunkIndices ?? [];
+
+  return {
+    totalRows,
+    hunkIndices,
+    hunkCount: hunkIndices.length,
+    maxScroll: Math.max(0, totalRows - PENDING_VIEWPORT_HEIGHT),
   };
 }

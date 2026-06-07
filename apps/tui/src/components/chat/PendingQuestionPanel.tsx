@@ -1,9 +1,9 @@
 import type { FC } from "react";
-import { Box, Text } from "ink";
 import type { AskQuestionRequest } from "@excelsior/core";
 import { theme } from "../../theme.js";
 import Panel from "../shared/Panel.js";
 import TextInput from "./SafeTextInput.js";
+import { textAttrs } from "../../platform/opentui/textAttributes.js";
 
 export interface PendingQuestionPanelProps {
   pending: AskQuestionRequest;
@@ -31,26 +31,26 @@ const PendingQuestionPanel: FC<PendingQuestionPanelProps> = ({
       titleColor={theme.colors.highlightAction}
       marginTop={1}
     >
-      <Box flexDirection="column">
-        <Text color={theme.colors.text} bold>{pending.question}</Text>
+      <box flexDirection="column">
+        <text fg={theme.colors.text} attributes={textAttrs({ bold: true })}>{pending.question}</text>
 
         {pending.options.length > 0 && (
-          <Box flexDirection="column" marginTop={1} paddingLeft={theme.spacing.toolIndent}>
+          <box flexDirection="column" marginTop={1} paddingLeft={theme.spacing.toolIndent}>
             {pending.options.map((option, index) => (
-              <Box key={option.id} flexDirection="column">
-                <Text color={theme.colors.highlightAction} bold>
+              <box key={option.id} flexDirection="column">
+                <text fg={theme.colors.highlightAction} attributes={textAttrs({ bold: true })}>
                   {index + 1}. {option.label}
-                </Text>
+                </text>
                 {option.description ? (
-                  <Text color={theme.colors.secondary}>{option.description}</Text>
+                  <text fg={theme.colors.secondary}>{option.description}</text>
                 ) : null}
-              </Box>
+              </box>
             ))}
-          </Box>
+          </box>
         )}
 
-        <Box marginTop={1} paddingLeft={theme.spacing.toolIndent} flexDirection="row">
-          <Text color={theme.colors.highlightAction} bold>&gt; </Text>
+        <box marginTop={1} paddingLeft={theme.spacing.toolIndent} flexDirection="row">
+          <text fg={theme.colors.highlightAction} attributes={textAttrs({ bold: true })}>&gt; </text>
           <TextInput
             value={input}
             onChange={setInput}
@@ -59,8 +59,8 @@ const PendingQuestionPanel: FC<PendingQuestionPanelProps> = ({
             placeholder={placeholder}
             focus
           />
-        </Box>
-      </Box>
+        </box>
+      </box>
     </Panel>
   );
 };

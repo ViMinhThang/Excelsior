@@ -101,6 +101,78 @@ describe("built-in harness tools", () => {
     }));
   });
 
+  it("returns a unified diff for completed writes", async () => {
+    const workspaceRoot = await makeTempDir();
+    const confirm = vi.fn(async (request) => ({
+      callId: request.toolName,
+      approved: true,
+    }));
+    const ctx: ToolExecutionContext = {
+      workspaceRoot,
+      mode: "act",
+      confirm,
+      askQuestion: async () => ({
+        callId: "question",
+        answer: "",
+        isManual: true,
+        cancelled: true,
+      }),
+      sendSubAgent: async () => "sub-agent result",
+    };
+    const write = createBuiltInTools().find((tool) => tool.name === "write");
+
+    const created = await write?.execute({
+      filePath: "created.ts",
+      content: "export const x = 1;",
+    }, ctx);
+    expect(created?.content).toContain("Successfully wrote");
+    expect(created?.content).toContain("--- created.ts");
+    expect(created?.content).toContain("+++ created.ts");
+    expect(created?.content).toContain("+export const x = 1;");
+
+    const overwritten = await write?.execute({
+      filePath: "created.ts",
+      content: "export const x = 2;",
+    }, ctx);
+    expect(overwritten?.content).toContain("-export const x = 1;");
+    expect(overwritten?.content).toContain("+export const x = 2;");
+  });
+
+  it("returns a unified diff for completed edits", async () => {
+    const workspaceRoot = await makeTempDir();
+    const target = join(workspaceRoot, "test.txt");
+    await writeFile(target, "before block after", "utf-8");
+    const confirm = vi.fn(async (request) => ({
+      callId: request.toolName,
+      approved: true,
+    }));
+    const ctx: ToolExecutionContext = {
+      workspaceRoot,
+      mode: "act",
+      confirm,
+      askQuestion: async () => ({
+        callId: "question",
+        answer: "",
+        isManual: true,
+        cancelled: true,
+      }),
+      sendSubAgent: async () => "sub-agent result",
+    };
+    const edit = createBuiltInTools().find((tool) => tool.name === "edit");
+
+    const result = await edit?.execute({
+      filePath: "test.txt",
+      oldText: "before block after",
+      newText: "before updated after",
+    }, ctx);
+
+    expect(result?.content).toContain("Successfully replaced the block in test.txt.");
+    expect(result?.content).toContain("--- test.txt");
+    expect(result?.content).toContain("-before block after");
+    expect(result?.content).toContain("+before updated after");
+    expect(await readFile(target, "utf-8")).toBe("before updated after");
+  });
+
   it("edits outside the workspace only after warning approval", async () => {
     const workspaceRoot = await makeTempDir();
     const outsideRoot = await makeTempDir();

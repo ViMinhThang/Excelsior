@@ -1,83 +1,248 @@
-import { memo, useMemo, type FC } from "react";
-import { Box, Text } from "ink";
+import { Fragment, memo, useMemo, type FC, type ReactNode } from "react";
 import { lexer } from "marked";
 import type { Token, Tokens } from "marked";
 import { escapeXml, highlightCode, highlightFilenames } from "../../lib/markdown/highlight.js";
 import { normalizePipeTables, formatMarkdownTable, getRawText, getTokenText } from "../../lib/markdown/tables.js";
+import { textAttrs } from "../../platform/opentui/textAttributes.js";
 import { theme } from "../../theme.js";
-
-export { highlightCode, highlightFilenames } from "../../lib/markdown/highlight.js";
-export { normalizePipeTables, formatMarkdownTable, type MarkdownTableInput } from "../../lib/markdown/tables.js";
 
 interface StyleProps {
   dimColor?: boolean;
   italic?: boolean;
+  bold?: boolean;
+  textColor?: string;
+  emphasisColor?: string;
+  alternateEmphasisColor?: string;
 }
 
-const InlineRenderer: FC<{ tokens: Token[] } & StyleProps> = ({ tokens, dimColor, italic }) => (
+function styleAttrs(dimColor?: boolean, italic?: boolean, bold?: boolean) {
+  return textAttrs({ dim: dimColor, italic, bold });
+}
+
+function resolveTextColor({
+  bold,
+  italic,
+  dimColor,
+  textColor,
+  emphasisColor,
+  alternateEmphasisColor,
+}: StyleProps): string | undefined {
+  if (dimColor) return textColor;
+  if (bold) {
+    return emphasisColor ?? theme.colors.highlight;
+  }
+  if (italic) {
+    return alternateEmphasisColor ?? theme.colors.highlightSecondary;
+  }
+  return textColor;
+}
+
+interface InlineContentProps extends StyleProps {
+  tokens: Token[];
+}
+
+const InlineContent: FC<InlineContentProps> = ({
+  tokens,
+  dimColor,
+  italic,
+  bold,
+  textColor,
+  emphasisColor,
+  alternateEmphasisColor,
+}) => (
   <>
     {tokens.map((token, i) => {
       const key = `inline_${token.type}_${i}`;
+      const attrs = styleAttrs(dimColor, italic, bold);
       switch (token.type) {
         case "text": {
           const t = token as Tokens.Text;
           if (t.tokens && t.tokens.length > 0) {
-            return <InlineRenderer key={key} tokens={t.tokens} dimColor={dimColor} italic={italic} />;
+            return (
+              <InlineContent
+                key={key}
+                tokens={t.tokens}
+                dimColor={dimColor}
+                italic={italic}
+                bold={bold}
+                textColor={textColor}
+                emphasisColor={emphasisColor}
+                alternateEmphasisColor={alternateEmphasisColor}
+              />
+            );
           }
-          return <Text key={key} dimColor={dimColor} italic={italic}>{highlightFilenames(token.text)}</Text>;
+          const content = highlightFilenames(token.text);
+          const fg = resolveTextColor({
+            bold,
+            italic,
+            dimColor,
+            textColor,
+            emphasisColor,
+            alternateEmphasisColor,
+          });
+          if (!fg && !attrs) return <Fragment key={key}>{content}</Fragment>;
+          return (
+            <span key={key} fg={fg} attributes={attrs}>
+              {content}
+            </span>
+          );
         }
         case "strong":
           return (
-            <Text key={key} color={theme.colors.highlightEmphasis} bold dimColor={dimColor} italic={italic}>
-              <InlineRenderer tokens={(token as Tokens.Strong).tokens} dimColor={dimColor} italic={italic} />
-            </Text>
+            <strong
+              key={key}
+              fg={resolveTextColor({
+                bold: true,
+                dimColor,
+                textColor,
+                emphasisColor,
+                alternateEmphasisColor,
+              })}
+              attributes={textAttrs({ bold: true })}
+            >
+              <InlineContent
+                tokens={(token as Tokens.Strong).tokens}
+                dimColor={dimColor}
+                italic={italic}
+                bold
+                textColor={textColor}
+                emphasisColor={emphasisColor}
+                alternateEmphasisColor={alternateEmphasisColor}
+              />
+            </strong>
           );
         case "em":
           return (
-            <Text key={key} italic dimColor={dimColor}>
-              <InlineRenderer tokens={(token as Tokens.Em).tokens} dimColor={dimColor} italic={italic} />
-            </Text>
+            <em
+              key={key}
+              fg={resolveTextColor({
+                bold,
+                italic: true,
+                dimColor,
+                textColor,
+                emphasisColor,
+                alternateEmphasisColor,
+              })}
+              attributes={textAttrs({ italic: true })}
+            >
+              <InlineContent
+                tokens={(token as Tokens.Em).tokens}
+                dimColor={dimColor}
+                italic
+                bold={bold}
+                textColor={textColor}
+                emphasisColor={emphasisColor}
+                alternateEmphasisColor={alternateEmphasisColor}
+              />
+            </em>
           );
         case "codespan":
           return (
-            <Text key={key} color={theme.colors.highlightInline} dimColor={dimColor} italic={italic}>
+            <span
+              key={key}
+              fg={dimColor ? theme.colors.muted : theme.colors.highlightInline}
+              attributes={attrs}
+            >
               {escapeXml((token as Tokens.Codespan).text)}
-            </Text>
+            </span>
           );
         case "del":
           return (
-            <Text key={key} dimColor={true} italic={italic}>
-              <InlineRenderer tokens={(token as Tokens.Del).tokens} dimColor={dimColor} italic={italic} />
-            </Text>
+            <InlineContent
+              key={key}
+              tokens={(token as Tokens.Del).tokens}
+              dimColor
+              italic={italic}
+              bold={bold}
+              textColor={textColor}
+              emphasisColor={emphasisColor}
+              alternateEmphasisColor={alternateEmphasisColor}
+            />
           );
         case "link": {
           const link = token as Tokens.Link;
           return (
-            <Text key={key} color={theme.colors.highlightLink} dimColor={dimColor} italic={italic}>
-              <InlineRenderer tokens={link.tokens} dimColor={dimColor} italic={italic} /> ({link.href})
-            </Text>
+            <Fragment key={key}>
+              <InlineContent
+                tokens={link.tokens}
+                dimColor={dimColor}
+                italic={italic}
+                bold={bold}
+                textColor={textColor}
+                emphasisColor={emphasisColor}
+                alternateEmphasisColor={alternateEmphasisColor}
+              />
+              <span
+                fg={dimColor ? theme.colors.muted : theme.colors.highlightLink}
+                attributes={attrs}
+              >
+                {` (${link.href})`}
+              </span>
+            </Fragment>
           );
         }
+        case "paragraph":
+          return (
+            <InlineContent
+              key={key}
+              tokens={(token as Tokens.Paragraph).tokens}
+              dimColor={dimColor}
+              italic={italic}
+              bold={bold}
+              textColor={textColor}
+              emphasisColor={emphasisColor}
+              alternateEmphasisColor={alternateEmphasisColor}
+            />
+          );
         case "image": {
           const img = token as Tokens.Image;
-          return <Text key={key} color={theme.colors.muted} dimColor={dimColor} italic={italic}>[image: {img.text} ({img.href})]</Text>;
+          return (
+            <span key={key} fg={theme.colors.muted} attributes={attrs}>
+              {`[image: ${img.text} (${img.href})]`}
+            </span>
+          );
         }
         case "escape":
-          return <Text key={key} dimColor={dimColor} italic={italic}>{escapeXml((token as Tokens.Escape).text)}</Text>;
+          return (
+            <span key={key} fg={textColor} attributes={attrs}>
+              {escapeXml((token as Tokens.Escape).text)}
+            </span>
+          );
         case "html":
-          return <Text key={key} dimColor={dimColor} italic={italic}>{escapeXml((token as Tokens.HTML).text)}</Text>;
+          return (
+            <span key={key} fg={textColor} attributes={attrs}>
+              {escapeXml((token as Tokens.HTML).text)}
+            </span>
+          );
         default:
-          return <Text key={key} dimColor={dimColor} italic={italic}>{getTokenText(token)}</Text>;
+          return (
+            <span key={key} fg={textColor} attributes={attrs}>
+              {getTokenText(token)}
+            </span>
+          );
       }
     })}
   </>
 );
 
+function InlineText(props: InlineContentProps): ReactNode {
+  return (
+    <text>
+      <InlineContent {...props} />
+    </text>
+  );
+}
+
 function isTableBorderChar(char: string): boolean {
   return /^[\u2500-\u257f]$/.test(char);
 }
 
-const TableLine: FC<{ line: string; id: string } & StyleProps> = ({ line, id, dimColor, italic }) => {
+interface TableLineProps extends StyleProps {
+  line: string;
+  id: string;
+}
+
+const TableLine: FC<TableLineProps> = ({ line, id, dimColor, italic, textColor }) => {
   const segments: Array<{ text: string; isBorder: boolean }> = [];
 
   for (const char of line) {
@@ -90,88 +255,126 @@ const TableLine: FC<{ line: string; id: string } & StyleProps> = ({ line, id, di
     }
   }
 
+  const attrs = styleAttrs(dimColor, italic);
+
   return (
-    <Text wrap="truncate-end" dimColor={dimColor} italic={italic}>
+    <text>
       {segments.map((segment, index) => (
-        <Text
+        <span
           key={`table_segment_${id}_${index}`}
-          color={segment.isBorder ? theme.colors.border : undefined}
-          dimColor={dimColor}
-          italic={italic}
+          fg={segment.isBorder ? theme.colors.border : textColor}
+          attributes={attrs}
         >
           {segment.text}
-        </Text>
+        </span>
       ))}
-    </Text>
+    </text>
   );
 };
 
-const BlockRenderer: FC<{ token: Token; index: number } & StyleProps> = ({ token, index, dimColor, italic }) => {
+interface BlockRendererProps extends StyleProps {
+  token: Token;
+  index: number;
+}
+
+const BlockRenderer: FC<BlockRendererProps> = ({
+  token,
+  index,
+  dimColor,
+  italic,
+  textColor,
+  emphasisColor,
+  alternateEmphasisColor,
+}) => {
   const key = `block_${token.type}_${index}`;
+  const attrs = styleAttrs(dimColor, italic);
+  const inlineProps = {
+    dimColor,
+    italic,
+    textColor,
+    emphasisColor,
+    alternateEmphasisColor,
+  };
+
   switch (token.type) {
     case "space":
       return null;
     case "heading": {
       const heading = token as Tokens.Heading;
       return (
-        <Box key={key} marginTop={index > 0 ? 1 : 0}>
-          <Text color={theme.colors.highlightHeading} bold dimColor={dimColor} italic={italic}>
-            <InlineRenderer tokens={heading.tokens} dimColor={dimColor} italic={italic} />
-          </Text>
-        </Box>
+        <box key={key} marginTop={index > 0 ? 1 : 0} width="100%">
+          <InlineText
+            tokens={heading.tokens}
+            {...inlineProps}
+            bold
+          />
+        </box>
       );
     }
     case "paragraph":
       return (
-        <Box key={key} marginTop={index > 0 ? 1 : 0}>
-          <Text dimColor={dimColor} italic={italic}>
-            <InlineRenderer tokens={(token as Tokens.Paragraph).tokens} dimColor={dimColor} italic={italic} />
-          </Text>
-        </Box>
+        <box key={key} marginTop={index > 0 ? 1 : 0} width="100%">
+          <InlineText
+            tokens={(token as Tokens.Paragraph).tokens}
+            {...inlineProps}
+          />
+        </box>
       );
     case "code": {
       const code = token as Tokens.Code;
-      // Code highlights usually shouldn't be italic/dim unless we want to, but let's let highlightCode handle its style.
       return (
-        <Box
+        <box
           key={key}
           marginTop={index > 0 ? 1 : 0}
           flexDirection="column"
+          width="100%"
         >
-          <Box>{highlightCode(code.text, code.lang)}</Box>
-        </Box>
+          {highlightCode(code.text, code.lang)}
+        </box>
       );
     }
     case "blockquote": {
       const bq = token as Tokens.Blockquote;
       return (
-        <Box key={key} marginTop={index > 0 ? 1 : 0} borderLeft paddingLeft={1} borderColor={theme.colors.border}>
-          <Text color={theme.colors.muted} dimColor={true} italic={italic}>
-            <InlineRenderer tokens={bq.tokens} dimColor={dimColor} italic={italic} />
-          </Text>
-        </Box>
+        <box key={key} marginTop={index > 0 ? 1 : 0} border={["left"]} paddingLeft={1} borderColor={theme.colors.border} width="100%">
+          <InlineText
+            tokens={bq.tokens}
+            dimColor
+            italic
+            textColor={textColor}
+            emphasisColor={emphasisColor}
+            alternateEmphasisColor={alternateEmphasisColor}
+          />
+        </box>
       );
     }
     case "list": {
       const listToken = token as Tokens.List;
       return (
-        <Box key={key} marginTop={index > 0 ? 1 : 0} flexDirection="column">
+        <box key={key} marginTop={index > 0 ? 1 : 0} flexDirection="column" width="100%">
           {(listToken.items as Tokens.ListItem[]).map((item, i) => (
-            <Box key={`listitem_${index}_${i}`} paddingLeft={theme.spacing.indent}>
-              <Text dimColor={dimColor} italic={italic}>{listToken.ordered ? `${i + 1}.` : "-"} </Text>
-              <Text dimColor={dimColor} italic={italic}>
-                <InlineRenderer tokens={item.tokens} dimColor={dimColor} italic={italic} />
-              </Text>
-            </Box>
+            <box key={`listitem_${index}_${i}`} paddingLeft={theme.spacing.indent} width="100%">
+              <text>
+                <span fg={textColor} attributes={attrs}>
+                  {listToken.ordered ? `${i + 1}. ` : "- "}
+                </span>
+                <InlineContent
+                  tokens={item.tokens}
+                  {...inlineProps}
+                />
+              </text>
+            </box>
           ))}
-        </Box>
+        </box>
       );
     }
     case "hr":
       return (
-        <Box key={key} marginTop={index > 0 ? 1 : 0}>
-          <Text color={theme.colors.muted} dimColor={true}>{"-".repeat(40)}</Text>
-        </Box>
+        <box key={key} marginTop={index > 0 ? 1 : 0} width="100%">
+          <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
+            {"-".repeat(40)}
+          </text>
+        </box>
       );
     case "table": {
       const table = token as Tokens.Table;
@@ -181,26 +384,48 @@ const BlockRenderer: FC<{ token: Token; index: number } & StyleProps> = ({ token
         align: table.align ?? [],
       });
       return (
-        <Box key={key} marginTop={index > 0 ? 1 : 0} flexDirection="column">
+        <box key={key} marginTop={index > 0 ? 1 : 0} flexDirection="column" width="100%">
           {lines.map((line, li) => (
-            <TableLine key={`table_line_${index}_${li}`} id={`${index}_${li}`} line={line} dimColor={dimColor} italic={italic} />
+            <TableLine
+              key={`table_line_${index}_${li}`}
+              id={`${index}_${li}`}
+              line={line}
+              dimColor={dimColor}
+              italic={italic}
+              textColor={textColor}
+            />
           ))}
-        </Box>
+        </box>
       );
     }
     case "html":
-      return <Text key={key} dimColor={dimColor} italic={italic}>{escapeXml((token as Tokens.HTML).text)}</Text>;
+      return (
+        <text key={key} fg={textColor} attributes={attrs}>
+          {escapeXml((token as Tokens.HTML).text)}
+        </text>
+      );
     case "def":
       return null;
     default:
-      return <Text key={key} dimColor={dimColor} italic={italic}>{getTokenText(token)}</Text>;
+      return (
+        <text key={key} fg={textColor} attributes={attrs}>
+          {getTokenText(token)}
+        </text>
+      );
   }
 };
 
-function MarkdownRendererInner({ content, dimColor, italic }: { content: string } & StyleProps) {
+function MarkdownRendererInner({
+  content,
+  dimColor,
+  italic,
+  textColor,
+  emphasisColor,
+  alternateEmphasisColor,
+}: { content: string } & StyleProps) {
   const tokens = useMemo(() => lexer(normalizePipeTables(content)), [content]);
   return (
-    <Box flexDirection="column">
+    <box flexDirection="column" width="100%">
       {tokens.map((token, i) => (
         <BlockRenderer
           key={`markdown_block_${token.type}_${i}`}
@@ -208,9 +433,12 @@ function MarkdownRendererInner({ content, dimColor, italic }: { content: string 
           index={i}
           dimColor={dimColor}
           italic={italic}
+          textColor={textColor}
+          emphasisColor={emphasisColor}
+          alternateEmphasisColor={alternateEmphasisColor}
         />
       ))}
-    </Box>
+    </box>
   );
 }
 
