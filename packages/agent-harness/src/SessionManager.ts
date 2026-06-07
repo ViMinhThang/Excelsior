@@ -10,9 +10,6 @@ export class SessionManager {
     private readonly workspaceId: string,
   ) {
     this.refreshSessions();
-    if (this.sessions.length > 0) {
-      this.currentSessionId = this.sessions[0].id;
-    }
   }
 
   refreshSessions(): void {

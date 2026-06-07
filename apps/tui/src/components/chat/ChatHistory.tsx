@@ -11,7 +11,7 @@ import { theme } from "../../theme.js";
 interface ChatHistoryProps {
   blocks: ProjectedBlock[];
   commandsExpanded?: boolean;
-  historyRemountKey?: number;
+  historyResetKey?: number;
 }
 
 function renderBlock(
@@ -109,7 +109,7 @@ function renderSubAgentTools(block: ProjectedBlock & { type: "sub-agent" }) {
 const ChatHistory: FC<ChatHistoryProps> = ({
   blocks,
   commandsExpanded = true,
-  historyRemountKey = 0,
+  historyResetKey = 0,
 }) => {
   // Find the boundary of the last user prompt
   let lastUserIndex = -1;
@@ -126,7 +126,7 @@ const ChatHistory: FC<ChatHistoryProps> = ({
   return (
     <Box flexDirection="column">
       {staticBlocks.length > 0 && (
-        <Static key={historyRemountKey} items={staticBlocks}>
+        <Static key={historyResetKey} items={staticBlocks}>
           {(block) => renderBlock(block, false)}
         </Static>
       )}
