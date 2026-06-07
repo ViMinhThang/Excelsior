@@ -56,7 +56,7 @@ describe("AgentHarness", () => {
     expect(harness.getSnapshot().sessions).toHaveLength(1);
   });
 
-  it("reopens the latest existing session without creating a replacement", async () => {
+  it("starts with no current session (empty history) even if previous sessions exist on disk", async () => {
     const dataDir = await makeTempDir();
     const workspaceRoot = await makeTempDir();
     const firstHarness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
@@ -69,10 +69,11 @@ describe("AgentHarness", () => {
     const secondHarness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
     const secondState = secondHarness.getSnapshot();
 
-    expect(firstSessionId).toBeTruthy();
-    expect(secondState.currentSessionId).toBe(firstSessionId);
+    // No auto-reopen: start blank (TUI shows no history). A session is created
+    // only when the user types and submits (via ensureSession in send).
+    expect(secondState.currentSessionId).toBeNull();
     expect(secondState.sessions.map((session) => session.id)).toEqual([firstSessionId]);
-    expect(secondState.displayBlocks).toEqual(firstState.displayBlocks);
+    expect(secondState.displayBlocks).toEqual([]);
   });
 
   it("executes core commands and projects session state", async () => {

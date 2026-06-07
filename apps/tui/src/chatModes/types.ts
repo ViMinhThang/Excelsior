@@ -74,7 +74,7 @@ export interface ConversationRenderContext {
   transcript: {
     blocks: ProjectedBlock[];
     commandsExpanded: boolean;
-    historyRemountKey: number;
+    historyResetKey: number;
   };
   panel: {
     active: TuiPanelDefinition | undefined;
