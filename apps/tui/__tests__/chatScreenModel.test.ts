@@ -310,6 +310,7 @@ describe("chat screen model builders", () => {
       subAgents: [selectedSubAgent],
       subAgentIndex: 0,
       commandsExpanded: true,
+      historyResetKey: 0,
     });
 
     expect(context.chatMode).toBe("subagent-picker");
@@ -346,6 +347,7 @@ describe("chat screen model builders", () => {
       subAgents: [selectedSubAgent],
       subAgentIndex: 0,
       commandsExpanded: true,
+      historyResetKey: 0,
     });
 
     expect(context.chatMode).toBe("subagent-detail");
