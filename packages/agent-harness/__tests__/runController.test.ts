@@ -45,6 +45,7 @@ describe("RunController", () => {
     providers.register({
       id: "deepseek",
       displayName: "Fake",
+      modelId: "fake-model",
       createModel: () => new MockLanguageModelV3({
         doStream: async () => ({
           stream: simulateReadableStream({
@@ -134,6 +135,7 @@ describe("RunController", () => {
     providers.register({
       id: "deepseek",
       displayName: "Fake",
+      modelId: "fake-model",
       createModel: () => new MockLanguageModelV3({
         doStream: async ({ prompt }: any) => {
           // Check if any user message contains our steering keyword
@@ -273,6 +275,7 @@ describe("RunController", () => {
     providers.register({
       id: "deepseek",
       displayName: "Fake",
+      modelId: "fake-model",
       createModel: () => new MockLanguageModelV3({
         doStream: async () => ({
           stream: simulateReadableStream({
@@ -394,6 +397,7 @@ describe("RunController", () => {
     providers.register({
       id: "deepseek",
       displayName: "Fake",
+      modelId: "fake-model",
       createModel: () => new MockLanguageModelV3({
         doStream: async () => ({
           stream: simulateReadableStream({

@@ -1,74 +1,120 @@
 process.env.FORCE_COLOR = "3";
 import { describe, expect, it } from "vitest";
-import { formatMarkdownTable, highlightCode, highlightFilenames, normalizePipeTables } from "../src/components/shared/MarkdownRenderer.js";
+import { highlightCode, highlightCodeLine, highlightFilenames } from "../src/lib/markdown/highlight.js";
+import { formatMarkdownTable, normalizePipeTables } from "../src/lib/markdown/tables.js";
+import { parseAnsiLine } from "../src/lib/markdown/ansiSpans.js";
 import { getRawText, getTokenText } from "../src/lib/markdown/tables.js";
 import React from "react";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import type { Token } from "marked";
+import { MarkdownRenderer } from "../src/components/shared/MarkdownRenderer.js";
 
-/** Utility to detect presence of standard ANSI escape codes in content string */
-function hasAnsi(text: string): boolean {
-  return /\u001b\[\d+m/.test(text);
+interface BoxElementProps {
+  children?: React.ReactNode;
 }
 
 interface TextElementProps {
   children?: unknown;
-  color?: string;
-  bold?: boolean;
+  fg?: string;
+  bg?: string;
+  attributes?: number;
 }
 
-function getTextProps(node: React.ReactNode): TextElementProps {
-  if (!React.isValidElement<TextElementProps>(node)) {
-    throw new Error("Expected React text element");
+function getBoxChildren(node: React.ReactNode): React.ReactNode[] {
+  if (!React.isValidElement<BoxElementProps>(node)) {
+    throw new Error("Expected React box element");
   }
-  return node.props;
+  return React.Children.toArray(node.props.children);
+}
+
+function flattenText(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") {
+    return String(node);
+  }
+  if (!React.isValidElement<{ children?: React.ReactNode }>(node)) {
+    return "";
+  }
+  return React.Children.toArray(node.props.children)
+    .map((child) => flattenText(child))
+    .join("");
+}
+
+function findSpanByText(renderer: ReactTestRenderer, text: string) {
+  return renderer.root.findAll((node) =>
+    node.type === "span" && flattenText(node.props.children) === text
+  )[0];
 }
 
 describe("syntax highlighting logic", () => {
-  it("highlights code blocks and generates output", () => {
+  it("highlights code blocks with rose pine colors", () => {
     const node = highlightCode("const x = 123;", "ts");
-    const props = getTextProps(node);
-    expect(node).toBeDefined();
-    expect(props.children).toBeDefined();
-    
-    const output = props.children;
-    // Confirm output remains a robust string
-    expect(typeof output).toBe("string");
-    // Confirm it contains the core code content
+    const lines = getBoxChildren(node);
+    expect(lines).toHaveLength(1);
+
+    const output = flattenText(lines[0]);
     expect(output).toContain("const");
     expect(output).toContain("123");
-    // Confirm ANSI color escape codes are generated
-    expect(hasAnsi(output as string)).toBe(true);
+
+    const spans = parseAnsiLine("prefix \u001b[38;2;196;167;231mkeyword");
+    expect(spans).toEqual([
+      { text: "prefix ", bold: false, italic: false, underline: false },
+      { text: "keyword", fg: "#c4a7e7", bold: false, italic: false, underline: false },
+    ]);
+  });
+
+  it("renders each source line on its own row", () => {
+    const node = highlightCode("const a = 1;\nconst b = 2;", "ts");
+    const lines = getBoxChildren(node);
+    expect(lines).toHaveLength(2);
+    expect(flattenText(lines[0])).toContain("const a = 1;");
+    expect(flattenText(lines[1])).toContain("const b = 2;");
   });
 
   it("successfully executes across distinct language types", () => {
-    const pythonNode = getTextProps(highlightCode("def my_func():", "py"));
-    const jsonNode = getTextProps(highlightCode('{"a": 1}', "json"));
-    
-    expect(typeof pythonNode.children).toBe("string");
-    expect(typeof jsonNode.children).toBe("string");
-    expect(pythonNode.children).toContain("def");
-    
-    // Confirm ANSI color escape codes are generated for multiple distinct languages
-    expect(hasAnsi(pythonNode.children as string)).toBe(true);
-    expect(hasAnsi(jsonNode.children as string)).toBe(true);
+    const pythonLines = getBoxChildren(highlightCode("def my_func():", "py"));
+    const jsonLines = getBoxChildren(highlightCode('{"a": 1}', "json"));
+
+    expect(flattenText(pythonLines[0])).toContain("def");
+    expect(flattenText(jsonLines[0])).toContain('"a"');
+  });
+
+  it("renders highlighted inline code with a row background", () => {
+    const line = highlightCodeLine("const x = 1;", "ts", {
+      bg: "#111111",
+      fallbackColor: "#eeeeee",
+      keyPrefix: "diff_test",
+    });
+    const spans = React.Children.toArray(line);
+
+    expect(spans.map((span) => flattenText(span)).join("")).toContain("const x = 1;");
+    expect(spans.every((span) =>
+      React.isValidElement<TextElementProps>(span) && span.props.bg === "#111111"
+    )).toBe(true);
   });
 
   it("gracefully falls back on execution fail or empty parameters", () => {
-    const emptyNode = getTextProps(highlightCode("plain text only", undefined));
-    expect(emptyNode).toBeDefined();
-    // Should either highlight via auto-discovery or safely print raw text
-    const rawText = (emptyNode.children as string).replace(/\u001b\[[0-9;]*m/g, "");
-    expect(rawText).toContain("plain text only");
+    const lines = getBoxChildren(highlightCode("plain text only", undefined));
+    expect(flattenText(lines[0])).toContain("plain text only");
   });
 
   it("renders inline filename mentions as normal text", () => {
-    const result = highlightFilenames("Check out useSettingValidator.ts and README.md.");
-    expect(result).toBeDefined();
+    expect(highlightFilenames("Check out useSettingValidator.ts and README.md."))
+      .toBe("Check out useSettingValidator.ts and README.md.");
+  });
 
-    const props = getTextProps(result);
-    expect(props.children).toBe("Check out useSettingValidator.ts and README.md.");
-    expect(props.color).toBeUndefined();
-    expect(props.bold).toBeUndefined();
+  it("uses separate muted highlight colors for bold and italic markdown text", async () => {
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(React.createElement(MarkdownRenderer, {
+        content: "**primary** and *secondary*",
+        textColor: "#cccccc",
+        emphasisColor: "#a89468",
+        alternateEmphasisColor: "#8d8072",
+      }));
+    });
+
+    expect(findSpanByText(renderer, "primary").props.fg).toBe("#a89468");
+    expect(findSpanByText(renderer, "secondary").props.fg).toBe("#8d8072");
   });
 
   it("truncates long markdown table cells while keeping row widths aligned", () => {

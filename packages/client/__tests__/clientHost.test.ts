@@ -14,6 +14,10 @@ function createHost(result: AgentHostDispatchResult): AgentHost {
         name: "Test workspace",
         rootPath: "/tmp/workspace",
       },
+      llm: {
+        providerName: "DeepSeek",
+        modelName: "deepseek-v4-flash",
+      },
       mode: "plan",
       pendingConfirmation: null,
       pendingQuestion: null,

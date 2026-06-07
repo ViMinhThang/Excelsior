@@ -1,9 +1,9 @@
 import type { FC } from "react";
-import { Box, Text } from "ink";
 import type { ToolDisplay } from "@excelsior/core";
 import { theme } from "../../theme.js";
+import { FileChangePreviewView } from "../diff/FileChangePreviewView.js";
 import Panel from "../shared/Panel.js";
-import { FileChangePreviewView } from "../../features/fileChangePreview/FileChangePreviewView.js";
+import { textAttrs } from "../../platform/opentui/textAttributes.js";
 
 export interface PendingActionPanelProps {
   display: ToolDisplay;
@@ -17,9 +17,9 @@ export interface PendingActionPanelProps {
 
 const PendingActionPanel: FC<PendingActionPanelProps> = ({
   display,
-  scrollOffset,
-  activeHunkIndex,
-  hunkCount,
+  scrollOffset = 0,
+  activeHunkIndex = 0,
+  hunkCount = 0,
   canRespond = true,
   title = "Action Required",
   helpText,
@@ -31,36 +31,37 @@ const PendingActionPanel: FC<PendingActionPanelProps> = ({
       titleColor={theme.colors.highlightAction}
       marginTop={1}
     >
-      <Box flexDirection="column">
-        <Box flexDirection="row" gap={1}>
-          <Text color={theme.colors.highlightAction} bold>{display.label}</Text>
-          <Text color={theme.colors.muted}>{theme.glyphs.section}</Text>
-          <Text color={theme.colors.text} wrap="truncate-end">{display.summary}</Text>
-        </Box>
-        <Box flexDirection="column" paddingLeft={theme.spacing.toolIndent} marginTop={1}>
-          <Text color={theme.colors.secondary}>{display.detail || "waiting for approval"}</Text>
-          {display.fileChangePreview ? (
+      <box flexDirection="column">
+        <box flexDirection="row" gap={1}>
+          <text fg={theme.colors.highlightAction} attributes={textAttrs({ bold: true })}>{display.label}</text>
+          <text fg={theme.colors.muted}>{theme.glyphs.section}</text>
+          <text fg={theme.colors.text} truncate>{display.summary}</text>
+        </box>
+        <box flexDirection="column" paddingLeft={theme.spacing.toolIndent} marginTop={1}>
+          <text fg={theme.colors.secondary}>{display.detail || "waiting for approval"}</text>
+          {helpText ? (
+            <text fg={theme.colors.muted}>{helpText}</text>
+          ) : null}
+          {canRespond ? (
+            <box flexDirection="row" gap={2} marginTop={1}>
+              <text fg={theme.colors.highlightAction} attributes={textAttrs({ bold: true })}>y accept</text>
+              <text fg={theme.colors.highlightAction} attributes={textAttrs({ bold: true })}>a accept all</text>
+              <text fg={theme.colors.error} attributes={textAttrs({ bold: true })}>n deny</text>
+            </box>
+          ) : null}
+        </box>
+        {display.fileChangePreview ? (
+          <box marginTop={1} width="100%">
             <FileChangePreviewView
-              command={display.command}
               preview={display.fileChangePreview}
               scrollOffset={scrollOffset}
               activeHunkIndex={activeHunkIndex}
               hunkCount={hunkCount}
-              pending={true}
+              pending
             />
-          ) : null}
-          {helpText ? (
-            <Text color={theme.colors.muted}>{helpText}</Text>
-          ) : null}
-          {canRespond ? (
-            <Box flexDirection="row" gap={2} marginTop={1}>
-              <Text color={theme.colors.highlightAction} bold>y accept</Text>
-              <Text color={theme.colors.highlightAction} bold>a accept all</Text>
-              <Text color={theme.colors.error} bold>n deny</Text>
-            </Box>
-          ) : null}
-        </Box>
-      </Box>
+          </box>
+        ) : null}
+      </box>
     </Panel>
   );
 };

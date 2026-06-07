@@ -1,16 +1,17 @@
 import { useState, useCallback, useEffect, useRef, type FC } from 'react';
-import { Box, Text, useInput } from 'ink';
-import { useDatabase } from '../hooks/useDatabase.js';
+import { useSettings } from '../hooks/useSettings.js';
 import { useNavigation } from '../context/NavigationContext.js';
+import { useKeyboardInput } from '../platform/opentui/useKeyboardInput.js';
 import ChatInput from '../components/chat/ChatInput.js';
 import { theme } from '../theme.js';
+import { textAttrs } from '../platform/opentui/textAttributes.js';
 
 interface SettingsScreenProps {
   onClose?: () => void;
 }
 
 const SettingsScreen: FC<SettingsScreenProps> = ({ onClose }) => {
-  const { getApiKey, saveApiKey, getGithubToken, saveGithubToken } = useDatabase();
+  const { getApiKey, saveApiKey, getGithubToken, saveGithubToken } = useSettings();
   const { goBack } = useNavigation();
   const [apiKey, setApiKey] = useState(() => getApiKey());
   const [githubToken, setGithubToken] = useState(() => getGithubToken());
@@ -24,7 +25,7 @@ const SettingsScreen: FC<SettingsScreenProps> = ({ onClose }) => {
     };
   }, []);
 
-  useInput(useCallback((_input, key) => {
+  useKeyboardInput(useCallback((_input, key) => {
     if (key.tab) {
       setFocusedField(prev => prev === 'apiKey' ? 'githubToken' : 'apiKey');
     }
@@ -49,15 +50,15 @@ const SettingsScreen: FC<SettingsScreenProps> = ({ onClose }) => {
   }, [githubToken, saveGithubToken]);
 
   return (
-    <Box flexDirection="column" padding={1}>
-      <Box marginBottom={1}>
-        <Text color={theme.colors.highlightHeading} bold>Settings</Text>
-      </Box>
+    <box flexDirection="column" padding={1}>
+      <box marginBottom={1}>
+        <text fg={theme.colors.highlightHeading} attributes={textAttrs({ bold: true })}>Settings</text>
+      </box>
 
-      <Box flexDirection="column" marginBottom={1}>
-        <Text color={focusedField === 'apiKey' ? theme.colors.highlightSelected : theme.colors.muted}>
+      <box flexDirection="column" marginBottom={1}>
+        <text fg={focusedField === 'apiKey' ? theme.colors.highlightSelected : theme.colors.muted}>
           {focusedField === 'apiKey' ? `${theme.glyphs.active}` : " "}DeepSeek API Key
-        </Text>
+        </text>
         <ChatInput
           value={apiKey}
           onChange={setApiKey}
@@ -66,12 +67,12 @@ const SettingsScreen: FC<SettingsScreenProps> = ({ onClose }) => {
           focus={focusedField === 'apiKey'}
           mask="*"
         />
-      </Box>
+      </box>
 
-      <Box flexDirection="column" marginBottom={1}>
-        <Text color={focusedField === 'githubToken' ? theme.colors.highlightSelected : theme.colors.muted}>
+      <box flexDirection="column" marginBottom={1}>
+        <text fg={focusedField === 'githubToken' ? theme.colors.highlightSelected : theme.colors.muted}>
           {focusedField === 'githubToken' ? `${theme.glyphs.active}` : " "}GitHub Token
-        </Text>
+        </text>
         <ChatInput
           value={githubToken}
           onChange={setGithubToken}
@@ -80,18 +81,18 @@ const SettingsScreen: FC<SettingsScreenProps> = ({ onClose }) => {
           focus={focusedField === 'githubToken'}
           mask="*"
         />
-      </Box>
+      </box>
 
       {status && (
-        <Box marginBottom={1}>
-          <Text color={theme.colors.success}>{status}</Text>
-        </Box>
+        <box marginBottom={1}>
+          <text fg={theme.colors.success}>{status}</text>
+        </box>
       )}
 
-      <Box marginTop={1}>
-        <Text color={theme.colors.muted}>Tab switch{theme.glyphs.separator}Enter save{theme.glyphs.separator}Esc back</Text>
-      </Box>
-    </Box>
+      <box marginTop={1}>
+        <text fg={theme.colors.muted}>Tab switch{theme.glyphs.separator}Enter save{theme.glyphs.separator}Esc back</text>
+      </box>
+    </box>
   );
 };
 

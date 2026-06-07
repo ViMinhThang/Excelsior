@@ -9,5 +9,10 @@
     "packages/*/__tests__",
     "apps/*/src",
     "apps/*/__tests__"
+  ],
+  "exclude": [
+    "apps/tui/src",
+    "apps/tui/__tests__",
+    "apps/desktop/src/renderer"
   ]
 }

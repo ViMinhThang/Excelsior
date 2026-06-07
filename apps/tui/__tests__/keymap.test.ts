@@ -2,14 +2,11 @@ import { describe, expect, it } from "vitest";
 import { parseKeyCombo } from "../src/lib/parseKeyCombo.js";
 import { getTuiInputOwner } from "../src/lib/inputOwnership.js";
 import { resolveKeyAction, type KeymapEntry } from "../src/lib/keymapRegistry.js";
-import {
-  shouldEnableInputKeymap,
-  shouldEnableModalKeymap,
-} from "../src/hooks/useChatKeymaps.js";
+import { ownsChatInput, ownsModalInput } from "../src/lib/inputOwnership.js";
 import {
   type BuildChatModeKeymapContextInput,
   buildChatModeKeymapContext,
-} from "../src/chatModes/keymapContext.js";
+} from "../src/hooks/chatScreenViewModel.js";
 import {
   getChatModeKeymaps,
 } from "../src/chatModes/registry.js";
@@ -40,14 +37,15 @@ function makeKeymapContext(
       prev: noop,
     },
     setInput: noop,
+    submit: noop,
     setChatMode: noop,
     cancel: noop,
     toggleMode: () => undefined,
     openSubAgent: noop,
     subAgentCount: 0,
-    commandCount: 0,
-    commandsExpanded: false,
-    toggleCommandsExpanded: noop,
+    toolCallCount: 0,
+    toolsExpanded: false,
+    toggleToolsExpanded: noop,
     nextSubAgent: noop,
     prevSubAgent: noop,
     navigateUp: noop,
@@ -75,13 +73,14 @@ function makeInputKeymapContext(
       prev: noop,
     },
     setInput: noop,
+    submit: noop,
     cancel: noop,
     toggleMode: () => undefined,
     openSubAgent: noop,
     subAgentCount: 0,
-    commandCount: 0,
-    commandsExpanded: false,
-    toggleCommandsExpanded: noop,
+    toolCallCount: 0,
+    toolsExpanded: false,
+    toggleToolsExpanded: noop,
     navigateUp: noop,
     navigateDown: noop,
     ...overrides,
@@ -145,12 +144,12 @@ describe("chat keymap gating", () => {
   });
 
   it("disables lower-priority modal keymaps while command palette is open", () => {
-    expect(shouldEnableModalKeymap(true)).toBe(false);
-    expect(shouldEnableModalKeymap(false)).toBe(true);
+    expect(ownsModalInput(true)).toBe(false);
+    expect(ownsModalInput(false)).toBe(true);
   });
 
   it("disables input keymaps while command palette is open", () => {
-    expect(shouldEnableInputKeymap({
+    expect(ownsChatInput({
       pending: null,
       activePanelId: null,
       chatMode: "input",
@@ -159,7 +158,7 @@ describe("chat keymap gating", () => {
   });
 
   it("keeps normal chat input keymaps enabled when no modal owns input", () => {
-    expect(shouldEnableInputKeymap({
+    expect(ownsChatInput({
       pending: null,
       activePanelId: null,
       chatMode: "input",
@@ -168,7 +167,7 @@ describe("chat keymap gating", () => {
   });
 
   it("disables normal chat input keymaps while a question is pending", () => {
-    expect(shouldEnableInputKeymap({
+    expect(ownsChatInput({
       pending: { callId: "question_1" },
       activePanelId: null,
       chatMode: "input",
@@ -258,17 +257,17 @@ describe("chat mode keymap registry", () => {
       .toEqual(["ctrl+o", "escape"]);
   });
 
-  it("always routes Ctrl+O to toggleCommandsExpanded regardless of sub-agents existence", () => {
+  it("always routes Ctrl+O to toggleToolsExpanded regardless of sub-agents existence", () => {
     let openedSubAgent = false;
     let toggledCommands = false;
 
     getChatModeKeymaps(makeKeymapContext("input", {
       subAgentCount: 1,
-      commandCount: 2,
+      toolCallCount: 2,
       openSubAgent: () => {
         openedSubAgent = true;
       },
-      toggleCommandsExpanded: () => {
+      toggleToolsExpanded: () => {
         toggledCommands = true;
       },
     }))[0]!.map["ctrl+o"]!();
@@ -279,11 +278,11 @@ describe("chat mode keymap registry", () => {
     toggledCommands = false;
     getChatModeKeymaps(makeKeymapContext("input", {
       subAgentCount: 0,
-      commandCount: 1,
+      toolCallCount: 1,
       openSubAgent: () => {
         openedSubAgent = true;
       },
-      toggleCommandsExpanded: () => {
+      toggleToolsExpanded: () => {
         toggledCommands = true;
       },
     }))[0]!.map["ctrl+o"]!();
@@ -292,7 +291,7 @@ describe("chat mode keymap registry", () => {
     expect(toggledCommands).toBe(true);
   });
 
-  it("routes input navigation to command suggestions while suggestions are visible", () => {
+  it("routes input navigation to command suggestions when slash menu is open", () => {
     let suggestionPrevCount = 0;
     let historyUpCount = 0;
     const map = getChatModeKeymaps(makeKeymapContext("input", {
@@ -317,31 +316,31 @@ describe("chat mode keymap registry", () => {
     expect(historyUpCount).toBe(0);
   });
 
-  it("fills the selected command suggestion on enter", () => {
-    let input = "/";
+  it("submits slash commands on enter when the suggestion menu is open", () => {
+    let submitted = false;
     const map = getChatModeKeymaps(makeKeymapContext("input", {
       suggestion: {
         show: true,
         filtered: [
           { name: "help", description: "List commands" },
-          { name: "settings", description: "Open settings" },
+          { name: "write-a-skill", description: "Create a new skill" },
         ],
         selectedIndex: 1,
         maxVisibleCount: 2,
         next: () => {},
         prev: () => {},
       },
-      setInput: (value) => {
-        input = value;
+      submit: () => {
+        submitted = true;
       },
     }))[0]!.map;
 
     map.return!();
 
-    expect(input).toBe("/settings");
+    expect(submitted).toBe(true);
   });
 
-  it("resolves the selected command for one-enter execution", () => {
+  it("resolves selected commands from slash suggestions", () => {
     expect(getCommandInputWithSelection(makeInputKeymapContext({
       suggestion: {
         show: true,
@@ -357,7 +356,7 @@ describe("chat mode keymap registry", () => {
     }))).toBe("/settings");
   });
 
-  it("keeps typed command arguments when suggestions are visible", () => {
+  it("preserves typed command arguments when slash suggestions are open", () => {
     expect(getCommandInputWithSelection(makeInputKeymapContext({
       suggestion: {
         show: true,

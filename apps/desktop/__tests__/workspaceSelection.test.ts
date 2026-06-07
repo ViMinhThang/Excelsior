@@ -13,6 +13,7 @@ function state(): AgentClientState {
     sessions: [],
     currentSessionId: null,
     workspace: { id: "ws", name: "ws", rootPath: "C:/repo" },
+    llm: { providerName: "DeepSeek", modelName: "deepseek-v4-flash" },
     mode: "plan",
     pendingConfirmation: null,
     pendingQuestion: null,
@@ -43,6 +44,12 @@ function apiWithFolder(folderPath: string | null, tree: WorkspaceTreeNode[]): {
         return state();
       },
       getWorkspaceTree: async () => tree,
+      getWorkspaceEnvironment: async () => ({
+        rootPath: folderPath,
+        branchName: null,
+        changeCount: null,
+        hasGit: false,
+      }),
       changeTheme: () => {},
     },
     initializeCalls,

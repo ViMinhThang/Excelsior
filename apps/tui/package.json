@@ -13,6 +13,8 @@
   "dependencies": {
     "@excelsior/agent-host": "1.0.0",
     "@excelsior/client": "1.0.0",
-    "@excelsior/core": "1.0.0"
+    "@excelsior/core": "1.0.0",
+    "@opentui/core": "^0.3.2",
+    "@opentui/react": "^0.3.2"
   }
 }

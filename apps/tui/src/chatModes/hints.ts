@@ -21,7 +21,10 @@ export function inputHint(ctx: ChatModeHintContext): string {
   if (ctx.isLoading) {
     return "Esc twice cancel";
   }
-  return `Ctrl+K command palette`;
+  if (ctx.toolCallCount > 0) {
+    return `Ctrl+O ${ctx.toolsExpanded ? "collapse" : "expand"} tools`;
+  }
+  return "Shift+Tab switch mode";
 }
 
 export function modeHint(ctx: ChatModeHintContext, hint: string): string {

@@ -3,7 +3,8 @@ import {
   applyTextInputKey,
   getSingleLineInputPreview,
   shouldIgnoreTextInputKey,
-} from "../src/components/chat/SafeTextInput.js";
+} from "../src/lib/input/textInput.js";
+import { keyEventToTuiKey } from "../src/platform/opentui/keyAdapter.js";
 
 describe("SafeTextInput", () => {
   it("ignores ctrl-letter input so shortcuts do not leak into chat text", () => {
@@ -36,15 +37,30 @@ describe("SafeTextInput", () => {
     expect(preview.text).toContain("...");
   });
 
+  it("maps the space key to a literal space character", () => {
+    expect(keyEventToTuiKey({ name: "space", ctrl: false, meta: false, shift: false } as never).input).toBe(" ");
+  });
+
   it("clamps cursor movement after applying arrow keys", () => {
-    expect(applyTextInputKey("abc", 0, "", { leftArrow: true }, true)).toEqual({
+    expect(applyTextInputKey("abc", 0, null, "", { leftArrow: true }, true)).toEqual({
       value: "abc",
       cursorOffset: 0,
+      selectionAnchor: null,
       cursorWidth: 0,
     });
-    expect(applyTextInputKey("abc", 3, "", { rightArrow: true }, true)).toEqual({
+    expect(applyTextInputKey("abc", 3, null, "", { rightArrow: true }, true)).toEqual({
       value: "abc",
       cursorOffset: 3,
+      selectionAnchor: null,
+      cursorWidth: 0,
+    });
+  });
+
+  it("extends selection with shift+arrow keys", () => {
+    expect(applyTextInputKey("abc", 2, null, "", { leftArrow: true, shift: true }, true)).toEqual({
+      value: "abc",
+      cursorOffset: 1,
+      selectionAnchor: 2,
       cursorWidth: 0,
     });
   });

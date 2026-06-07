@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   completeCommandInput,
   getSubmittedCommand,
+  shouldAllowChatInputSubmit,
 } from "../src/lib/commandSubmission.js";
 import type { CommandDefinition } from "@excelsior/core";
 
@@ -31,5 +32,19 @@ describe("command submission", () => {
 
   it("completes the selected autocomplete command explicitly", () => {
     expect(completeCommandInput(commands, 1)).toBe("/review-post ");
+  });
+
+  it("blocks chat input submit while slash suggestions are visible", () => {
+    expect(shouldAllowChatInputSubmit("/write-a-skill", {
+      show: true,
+      filtered: [{ name: "write-a-skill", description: "Create a skill" }],
+    })).toBe(false);
+  });
+
+  it("allows chat input submit for unmatched slash commands", () => {
+    expect(shouldAllowChatInputSubmit("/not-real", {
+      show: true,
+      filtered: [],
+    })).toBe(true);
   });
 });

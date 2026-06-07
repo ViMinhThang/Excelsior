@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
+import { buildUnifiedFileDiff, PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
 import type { HarnessTool, ToolExecutionContext, ToolResult } from "../types.js";
 import { runProcess } from "./system.js";
 
@@ -111,10 +111,13 @@ export function createWriteTool(name = "writeFile"): HarnessTool<z.infer<typeof 
       const authorization = await authorizeWrite(ctx, name, filePath);
       if (!authorization.approved) return text("Denied by user.");
       const fullPath = authorization.fullPath;
+      const oldContent = existsSync(fullPath) ? await fs.readFile(fullPath, "utf-8") : "";
       await backupFile(ctx, filePath, fullPath);
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
       await fs.writeFile(fullPath, content, "utf-8");
-      return text(`Successfully wrote ${content.length} characters to ${authorization.displayPath}`);
+      const diff = buildUnifiedFileDiff(authorization.displayPath, oldContent, content);
+      const message = `Successfully wrote ${content.length} characters to ${authorization.displayPath}`;
+      return text(diff ? `${message}\n${diff}` : message);
     },
   };
 }
@@ -141,8 +144,11 @@ export function createEditTool(name = "editFile"): HarnessTool<z.infer<typeof ed
       const occurrences = content.split(oldText).length - 1;
       if (occurrences === 0) return text("Error: oldText not found in file.", true);
       if (occurrences > 1) return text(`Error: oldText matched ${occurrences} times. Make it unique.`, true);
-      await fs.writeFile(fullPath, content.replace(oldText, newText), "utf-8");
-      return text(`Successfully replaced the block in ${authorization.displayPath}.`);
+      const newContent = content.replace(oldText, newText);
+      await fs.writeFile(fullPath, newContent, "utf-8");
+      const message = `Successfully replaced the block in ${authorization.displayPath}.`;
+      const diff = buildUnifiedFileDiff(authorization.displayPath, content, newContent);
+      return text(diff ? `${message}\n${diff}` : message);
     },
   };
 }

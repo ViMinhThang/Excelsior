@@ -69,6 +69,7 @@ describe("harness context helpers", () => {
 
     expect(instructions?.path.endsWith("AGENTS.md")).toBe(true);
     expect(context.systemPrompt).toContain("## Project Instructions");
+    expect(context.systemPrompt).toContain("Minimize emoji");
     expect(context.systemPrompt).toContain("Prefer rg before broader file scans.");
     expect(context.systemPrompt).toContain("## Available Agent Skills");
     expect(context.messages).toEqual([{ role: "user", content: "inspect the repo" }]);

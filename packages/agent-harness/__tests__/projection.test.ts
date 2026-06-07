@@ -66,6 +66,49 @@ describe("harness projector", () => {
     ]);
   });
 
+  it("does not project empty assistant blocks before or after tool-only turns", () => {
+    const events = [
+      event(1, MESSAGE_START, {
+        message: { id: "msg_assistant", role: "assistant", content: "" },
+      }),
+      event(2, TOOL_EXECUTION_START, {
+        toolCallId: "tool_1",
+        toolName: "view",
+        toolArgs: "{\"filePath\":\"README.md\"}",
+      }),
+      event(3, TOOL_EXECUTION_END, {
+        toolCallId: "tool_1",
+        toolName: "view",
+        toolArgs: "{\"filePath\":\"README.md\"}",
+        result: "ok",
+        isError: false,
+      }),
+      event(4, TOOL_EXECUTION_START, {
+        toolCallId: "tool_2",
+        toolName: "grep",
+        toolArgs: "{\"pattern\":\"foo\"}",
+      }),
+      event(5, TOOL_EXECUTION_END, {
+        toolCallId: "tool_2",
+        toolName: "grep",
+        toolArgs: "{\"pattern\":\"foo\"}",
+        result: "no matches",
+        isError: false,
+      }),
+      event(6, MESSAGE_END, {
+        message: { id: "msg_assistant", role: "assistant", content: "" },
+      }),
+    ];
+
+    const blocks = projectEventsToDisplayBlocks(events);
+
+    expect(blocks.filter((block) => block.type === "assistant")).toEqual([]);
+    expect(blocks).toMatchObject([
+      { type: "tool-call", toolName: "view", status: "completed", content: "ok" },
+      { type: "tool-call", toolName: "grep", status: "completed", content: "no matches" },
+    ]);
+  });
+
   it("projects tool and sub-agent lifecycle events into display blocks", () => {
     const events = [
       event(1, TOOL_EXECUTION_START, {

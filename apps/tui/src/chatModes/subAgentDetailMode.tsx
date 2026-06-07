@@ -1,10 +1,8 @@
-import { Box, Text } from "ink";
 import { toSubAgentViewModel } from "@excelsior/core";
-import SubAgentDetail from "../features/review/components/SubAgentDetail.js";
+import SubAgentDetail from "../components/subAgents/SubAgentDetail.js";
 import { theme } from "../theme.js";
+import { ownsModalInput } from "../lib/inputOwnership.js";
 import { modeHint } from "./hints.js";
-import { modalKeymap } from "./modalKeymaps.js";
-import { subAgentSelection } from "./selection.js";
 import type { ChatModeDefinition } from "./types.js";
 
 export const subAgentDetailMode: ChatModeDefinition<"subagent-detail"> = {
@@ -12,9 +10,9 @@ export const subAgentDetailMode: ChatModeDefinition<"subagent-detail"> = {
     const selectedSubAgent = ctx.subAgents.blocks[ctx.subAgents.selectedIndex];
     if (!selectedSubAgent) {
       return (
-        <Box marginTop={1} paddingLeft={1}>
-          <Text color={theme.colors.muted}>No sub-agent detail is available yet.</Text>
-        </Box>
+        <box marginTop={1} paddingLeft={1}>
+          <text fg={theme.colors.muted}>No sub-agent detail is available yet.</text>
+        </box>
       );
     }
 
@@ -25,7 +23,7 @@ export const subAgentDetailMode: ChatModeDefinition<"subagent-detail"> = {
           selectedSubAgent.id,
           selectedSubAgent.role,
         )}
-        showToolCalls={ctx.commandsExpanded}
+        showToolCalls={ctx.toolsExpanded}
       />
     );
   },
@@ -35,9 +33,12 @@ export const subAgentDetailMode: ChatModeDefinition<"subagent-detail"> = {
       "Esc back to list",
     );
   },
-  getSelection: subAgentSelection,
-  getKeymaps: (ctx) => modalKeymap(ctx.isPaletteOpen, {
-    escape: () => ctx.setChatMode("subagent-picker"),
-    "ctrl+o": () => ctx.toggleCommandsExpanded(),
-  }),
+  getKeymaps: (ctx) => [{
+    map: {
+      escape: () => ctx.setChatMode("subagent-picker"),
+      "ctrl+o": () => ctx.toggleToolsExpanded(),
+    },
+    enabled: ownsModalInput(ctx.isPaletteOpen),
+    priority: 80,
+  }],
 };

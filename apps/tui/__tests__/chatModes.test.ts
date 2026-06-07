@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildChatModeKeymapContext,
-  ChatModeView,
   chatModeRegistry,
-  getChatModeHint,
   getChatModeKeymaps,
-  getChatModeSelection,
-  type BuildChatModeKeymapContextInput,
 } from "../src/chatModes/registry.js";
 import {
   chatModeIds,
@@ -14,7 +9,11 @@ import {
   type ChatModeKeymapContext,
   type ChatModeRenderContext,
 } from "../src/chatModes/types.js";
-import { buildModeViewContext } from "../src/hooks/chatScreenModelBuilders.js";
+import {
+  buildChatModeKeymapContext,
+  buildModeViewContext,
+  type BuildChatModeKeymapContextInput,
+} from "../src/hooks/chatScreenViewModel.js";
 
 function makeKeymapContext(chatMode: ChatMode): ChatModeKeymapContext {
   const noop = () => {};
@@ -33,14 +32,15 @@ function makeKeymapContext(chatMode: ChatMode): ChatModeKeymapContext {
       prev: noop,
     },
     setInput: noop,
+    submit: noop,
     setChatMode: noop,
     cancel: noop,
     toggleMode: () => undefined,
     openSubAgent: noop,
     subAgentCount: 0,
-    commandCount: 0,
-    commandsExpanded: false,
-    toggleCommandsExpanded: noop,
+    toolCallCount: 0,
+    toolsExpanded: false,
+    toggleToolsExpanded: noop,
     nextSubAgent: noop,
     prevSubAgent: noop,
     navigateUp: noop,
@@ -71,8 +71,8 @@ function makeRenderContext(chatMode: ChatMode): ChatModeRenderContext {
     },
     subAgents: [],
     subAgentIndex: 0,
-    commandsExpanded: false,
-    historyResetKey: 0,
+    toolsExpanded: false,
+    viewportKey: "none:0",
   });
 }
 
@@ -94,7 +94,8 @@ function makeLegacyWideRenderContext(chatMode: ChatMode) {
     },
     transcript: {
       blocks: [],
-      commandsExpanded: false,
+      toolsExpanded: false,
+      viewportKey: "none:0",
     },
     subAgents: {
       blocks: [],
@@ -123,27 +124,23 @@ describe("chat mode registry", () => {
     expect(Object.keys(chatModeRegistry).sort()).toEqual([...chatModeIds].sort());
   });
 
-  it("provides render, hint, selection, and keymap behavior for every mode", () => {
+  it("provides render, hint, and keymap behavior for every mode", () => {
     for (const chatMode of chatModeIds) {
-      const rendered = ChatModeView({ context: makeRenderContext(chatMode) });
-      const hint = getChatModeHint({
+      const context = makeRenderContext(chatMode);
+      const rendered = chatModeRegistry[chatMode].render(context);
+      const hint = chatModeRegistry[chatMode].getHint({
         chatMode,
         isLoading: false,
         hasPending: false,
         activePanelId: null,
         subAgentCount: 0,
-        commandCount: 0,
-        commandsExpanded: false,
-      });
-      const selection = getChatModeSelection(chatMode, {
-        subAgents: [],
-        subAgentIndex: 0,
+        toolCallCount: 0,
+        toolsExpanded: false,
       });
       const keymaps = getChatModeKeymaps(makeKeymapContext(chatMode));
 
       expect(rendered).toBeTruthy();
       expect(hint.length).toBeGreaterThan(0);
-      expect(Object.keys(selection).sort()).toEqual(["selectedSubAgentId"]);
       expect(keymaps.length).toBeGreaterThan(0);
       expect(keymaps[0]?.map).toBeTruthy();
     }

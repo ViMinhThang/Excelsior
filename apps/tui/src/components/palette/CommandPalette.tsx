@@ -1,7 +1,13 @@
-import { memo, type Dispatch, type FC, type SetStateAction } from "react";
-import { Box, Text, useInput, useStdout } from "ink";
+import { memo, useCallback, type Dispatch, type FC, type SetStateAction } from "react";
+import { decodePasteBytes } from "@opentui/core";
+import { usePaste, useRenderer, useTerminalDimensions } from "@opentui/react";
 import type { CommandDefinition } from "@excelsior/core";
 import { theme } from "../../theme.js";
+import { textAttrs } from "../../platform/opentui/textAttributes.js";
+import { useKeyboardInput } from "../../platform/opentui/useKeyboardInput.js";
+import { useKeymap } from "../../hooks/useKeymap.js";
+import { isClipboardShortcut, sanitizeSingleLinePaste } from "../../lib/input/textInput.js";
+import { copyTextToClipboard, readTextFromClipboard } from "../../platform/clipboard.js";
 
 export interface CommandPaletteProps {
   search: string;
@@ -25,17 +31,6 @@ function groupCommands(commands: CommandDefinition[]): Map<string, CommandDefini
   return groups;
 }
 
-const LEFT_BORDER_STYLE = {
-  top: "",
-  bottom: "",
-  left: theme.glyphs.output,
-  right: "",
-  topLeft: "",
-  topRight: "",
-  bottomLeft: "",
-  bottomRight: ""
-};
-
 const CommandPalette: FC<CommandPaletteProps> = ({
   search,
   setSearch,
@@ -47,13 +42,38 @@ const CommandPalette: FC<CommandPaletteProps> = ({
   insertCommand,
   close,
 }) => {
-  const { stdout } = useStdout();
-  const width = stdout?.columns || 80;
+  const renderer = useRenderer();
+  const { width } = useTerminalDimensions();
   const isSplit = width >= 80;
 
-  const totalCommands = total;
+  const applyPaste = useCallback((rawText: string) => {
+    const text = sanitizeSingleLinePaste(rawText);
+    if (!text) return;
+    setSearch((previous) => previous + text);
+  }, [setSearch]);
 
-  useInput((input, key) => {
+  useKeymap(
+    {
+      "ctrl+c": () => copyTextToClipboard(search, renderer),
+      "ctrl+v": () => {
+        void readTextFromClipboard().then(applyPaste);
+      },
+      "meta+c": () => copyTextToClipboard(search, renderer),
+      "meta+v": () => {
+        void readTextFromClipboard().then(applyPaste);
+      },
+    },
+    { priority: 150 },
+  );
+
+  usePaste(useCallback((event) => {
+    applyPaste(decodePasteBytes(event.bytes));
+  }, [applyPaste]));
+
+  useKeyboardInput(useCallback((input, key) => {
+    if (isClipboardShortcut(input, key)) {
+      return;
+    }
     if (key.escape) {
       close();
       return;
@@ -71,7 +91,7 @@ const CommandPalette: FC<CommandPaletteProps> = ({
       return;
     }
     if (key.backspace || key.delete) {
-      setSearch((prev) => prev.slice(0, -1));
+      setSearch((previous) => previous.slice(0, -1));
       return;
     }
     if (key.tab && filtered.length > 0) {
@@ -80,116 +100,151 @@ const CommandPalette: FC<CommandPaletteProps> = ({
       return;
     }
     if (input && !key.ctrl && !key.meta) {
-      setSearch((prev) => prev + input);
+      setSearch((previous) => previous + input);
     }
-  });
+  }, [
+    close,
+    insertCommand,
+    prev,
+    next,
+    setSearch,
+    filtered,
+    selectedIndex,
+  ]));
 
   const groups = groupCommands(filtered);
   let flatIndex = 0;
   const selectedCommand = filtered[selectedIndex];
 
   return (
-    <Box flexDirection="column" marginTop={1} paddingX={1} borderStyle="single" borderColor={theme.colors.border}>
-      <Box flexDirection="row" gap={1}>
-        <Text color={theme.colors.highlightBrand} bold>Commands</Text>
-        <Text color={theme.colors.muted}>{theme.glyphs.section}</Text>
-        <Text color={theme.colors.highlightBrand}>{">"}</Text>
-        <Text color={theme.colors.text}>/{search}</Text>
-        <Text color={theme.colors.muted} dimColor>
-          ({filtered.length}/{totalCommands})
-        </Text>
-      </Box>
+    <box
+      flexDirection="column"
+      marginTop={1}
+      paddingX={1}
+      border
+      borderStyle="single"
+      borderColor={theme.colors.border}
+    >
+      <box flexDirection="row" gap={1}>
+        <text fg={theme.colors.highlightBrand} attributes={textAttrs({ bold: true })}>
+          Commands
+        </text>
+        <text fg={theme.colors.muted}>{theme.glyphs.section}</text>
+        <text fg={theme.colors.highlightBrand}>{">"}</text>
+        <text fg={theme.colors.text}>/{search}</text>
+        <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
+          ({filtered.length}/{total})
+        </text>
+      </box>
 
-      <Box flexDirection="row" marginTop={1} width="100%">
-        {/* Left Column - Commands List */}
-        <Box flexDirection="column" flexGrow={1} flexBasis={0} marginRight={isSplit ? 1 : 0}>
+      <box flexDirection="row" marginTop={1} width="100%">
+        <box
+          flexDirection="column"
+          flexGrow={1}
+          flexBasis={0}
+          marginRight={isSplit ? 1 : 0}
+        >
           {filtered.length === 0 ? (
-            <Box paddingLeft={1}>
-              <Text color={theme.colors.muted} italic>No commands found</Text>
-            </Box>
+            <box paddingLeft={1}>
+              <text fg={theme.colors.muted} attributes={textAttrs({ italic: true })}>
+                No commands found
+              </text>
+            </box>
           ) : (
             Array.from(groups.entries()).map(([category, cmds]) => (
-              <Box key={category} flexDirection="column">
-                <Text color={theme.colors.highlightHeading} bold>
+              <box key={category} flexDirection="column">
+                <text fg={theme.colors.highlightHeading} attributes={textAttrs({ bold: true })}>
                   {category}:
-                </Text>
+                </text>
                 {cmds.map((cmd) => {
                   const isSelected = flatIndex === selectedIndex;
-                  flatIndex++;
+                  flatIndex += 1;
 
-                  // Truncate descriptions to preserve layout
                   const descLimit = isSplit ? 45 : 30;
                   const cleanDesc = cmd.description.length > descLimit
-                    ? cmd.description.substring(0, descLimit - 3) + "..."
+                    ? `${cmd.description.substring(0, descLimit - 3)}...`
                     : cmd.description;
 
                   return (
-                    <Box
+                    <box
                       key={cmd.name}
                       flexDirection="row"
                       gap={1}
                       paddingLeft={1}
                       backgroundColor={isSelected ? theme.colors.panel : undefined}
                     >
-                      <Text color={isSelected ? theme.colors.highlightSelected : theme.colors.border}>
+                      <text fg={isSelected ? theme.colors.highlightSelected : theme.colors.border}>
                         {isSelected ? ">" : " "}
-                      </Text>
-                      <Text
-                        color={isSelected ? theme.colors.highlightSelected : theme.colors.text}
-                        bold={isSelected}
+                      </text>
+                      <text
+                        fg={isSelected ? theme.colors.highlightSelected : theme.colors.text}
+                        attributes={textAttrs({ bold: isSelected })}
                       >
                         /{cmd.name}
-                      </Text>
-                      <Text color={isSelected ? theme.colors.secondary : theme.colors.muted} dimColor={!isSelected}>
+                      </text>
+                      <text
+                        fg={isSelected ? theme.colors.secondary : theme.colors.muted}
+                        attributes={textAttrs({ dim: !isSelected })}
+                      >
                         {cleanDesc}
-                      </Text>
-                    </Box>
+                      </text>
+                    </box>
                   );
                 })}
-              </Box>
+              </box>
             ))
           )}
-        </Box>
+        </box>
 
-        {/* Right Column - selection Preview Panel */}
-        {isSplit && selectedCommand && (
-          <Box
+        {isSplit && selectedCommand ? (
+          <box
             flexDirection="column"
             flexGrow={1}
             flexBasis={0}
             paddingLeft={2}
-            borderStyle={LEFT_BORDER_STYLE}
+            border={["left"]}
             borderColor={theme.colors.border}
           >
-            <Box flexDirection="row" gap={1}>
-              <Text color={theme.colors.highlightHeading} bold>/{selectedCommand.name}</Text>
-              <Text color={theme.colors.muted} dimColor>·</Text>
-              <Text color={theme.colors.activity} italic>{selectedCommand.category || "general"}</Text>
-            </Box>
+            <box flexDirection="row" gap={1}>
+              <text fg={theme.colors.highlightHeading} attributes={textAttrs({ bold: true })}>
+                /{selectedCommand.name}
+              </text>
+              <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
+                {"\u00b7"}
+              </text>
+              <text fg={theme.colors.activity} attributes={textAttrs({ italic: true })}>
+                {selectedCommand.category || "general"}
+              </text>
+            </box>
 
-            <Box flexDirection="column" marginTop={1}>
-              <Text color={theme.colors.highlightBrand} bold>Description:</Text>
-              <Text color={theme.colors.text}>{selectedCommand.description}</Text>
-            </Box>
+            <box flexDirection="column" marginTop={1}>
+              <text fg={theme.colors.highlightBrand} attributes={textAttrs({ bold: true })}>
+                Description:
+              </text>
+              <text fg={theme.colors.text}>{selectedCommand.description}</text>
+            </box>
 
-            {selectedCommand.usage && (
-              <Box flexDirection="column" marginTop={1}>
-                <Text color={theme.colors.highlightBrand} bold>Usage:</Text>
-                <Text color={theme.colors.highlightInline} italic>{selectedCommand.usage}</Text>
-              </Box>
-            )}
-          </Box>
-        )}
-      </Box>
+            {selectedCommand.usage ? (
+              <box flexDirection="column" marginTop={1}>
+                <text fg={theme.colors.highlightBrand} attributes={textAttrs({ bold: true })}>
+                  Usage:
+                </text>
+                <text fg={theme.colors.highlightInline} attributes={textAttrs({ italic: true })}>
+                  {selectedCommand.usage}
+                </text>
+              </box>
+            ) : null}
+          </box>
+        ) : null}
+      </box>
 
-      <Box marginTop={1}>
-        <Text color={theme.colors.muted} dimColor>
+      <box marginTop={1}>
+        <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
           Type to filter - Up/Down navigate - Enter insert - Esc close - Tab autocomplete
-        </Text>
-      </Box>
-    </Box>
+        </text>
+      </box>
+    </box>
   );
 };
 
 export default memo(CommandPalette);
-

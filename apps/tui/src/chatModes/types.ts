@@ -25,27 +25,6 @@ export interface CommandSuggestionState {
   prev: () => void;
 }
 
-export interface ChatModeSelection {
-  selectedSubAgentId: string | null;
-}
-
-export interface ChatModeSelectionSource {
-  subAgents: SubAgentBlock[];
-  subAgentIndex: number;
-}
-
-export interface ChatModeSelectionContextMap {
-  input: Record<string, never>;
-  "subagent-picker": {
-    subAgents: SubAgentBlock[];
-    subAgentIndex: number;
-  };
-  "subagent-detail": {
-    subAgents: SubAgentBlock[];
-    subAgentIndex: number;
-  };
-}
-
 export interface ChatModeHintContext {
   chatMode: ChatMode;
   isLoading: boolean;
@@ -53,8 +32,8 @@ export interface ChatModeHintContext {
   pendingKind?: "confirmation" | "question" | null;
   activePanelId?: string | null;
   subAgentCount: number;
-  commandCount: number;
-  commandsExpanded: boolean;
+  toolCallCount: number;
+  toolsExpanded: boolean;
 }
 
 export interface ConversationRenderContext {
@@ -73,8 +52,8 @@ export interface ConversationRenderContext {
   };
   transcript: {
     blocks: ProjectedBlock[];
-    commandsExpanded: boolean;
-    historyResetKey: number;
+    toolsExpanded: boolean;
+    viewportKey: string;
   };
   panel: {
     active: TuiPanelDefinition | undefined;
@@ -96,7 +75,7 @@ export interface SubAgentPickerModeRenderContext extends ConversationRenderConte
 
 export interface SubAgentDetailModeRenderContext {
   chatMode: "subagent-detail";
-  commandsExpanded: boolean;
+  toolsExpanded: boolean;
   subAgents: {
     blocks: SubAgentBlock[];
     selectedIndex: number;
@@ -119,16 +98,16 @@ export interface InputModeKeymapContext {
   isLoading: boolean;
   suggestion: CommandSuggestionState;
   setInput: (value: string) => void;
+  submit: () => void;
   cancel: () => void;
   toggleMode: () => "plan" | "act" | undefined;
   openSubAgent: () => void;
   subAgentCount: number;
-  commandCount: number;
-  commandsExpanded: boolean;
-  toggleCommandsExpanded: () => void;
+  toolCallCount: number;
+  toolsExpanded: boolean;
+  toggleToolsExpanded: () => void;
   navigateUp: () => void;
   navigateDown: () => void;
-  openPalette?: () => void;
 }
 
 export interface SubAgentPickerModeKeymapContext {
@@ -137,15 +116,15 @@ export interface SubAgentPickerModeKeymapContext {
   setChatMode: (mode: ChatMode) => void;
   nextSubAgent: () => void;
   prevSubAgent: () => void;
-  commandsExpanded: boolean;
-  toggleCommandsExpanded: () => void;
+  toolsExpanded: boolean;
+  toggleToolsExpanded: () => void;
 }
 
 export interface SubAgentDetailModeKeymapContext {
   chatMode: "subagent-detail";
   isPaletteOpen: boolean;
   setChatMode: (mode: ChatMode) => void;
-  toggleCommandsExpanded: () => void;
+  toggleToolsExpanded: () => void;
 }
 
 export interface ChatModeKeymapContextMap {
@@ -165,7 +144,6 @@ export interface ChatModeKeymapSpec {
 export interface ChatModeDefinition<TMode extends ChatMode> {
   render(ctx: ChatModeRenderContextMap[TMode]): ReactNode;
   getHint(ctx: ChatModeHintContext): string;
-  getSelection(ctx: ChatModeSelectionContextMap[TMode]): ChatModeSelection;
   getKeymaps(ctx: ChatModeKeymapContextMap[TMode]): ChatModeKeymapSpec[];
 }
 
