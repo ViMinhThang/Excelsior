@@ -24,6 +24,17 @@ export interface ToolDisplay {
   showCompletion?: boolean;
   tone: ToolTone;
   risk?: ToolRisk;
+  isFileAction?: boolean;
+  isWriteAction?: boolean;
+  isReadOnlyBrowse?: boolean;
+  activityLabel?: string;
+  expandedDetail?: string;
+  progressStats?: WritingProgressStats;
+}
+
+export interface WritingProgressStats {
+  added: number;
+  removed: number;
 }
 
 export interface FileChangePreview {

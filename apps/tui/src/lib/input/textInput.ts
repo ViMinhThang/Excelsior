@@ -2,7 +2,7 @@ import { truncateVisible } from "../textFormat.js";
 import type { TuiKey } from "../tuiKey.js";
 
 export function isCopyShortcut(input: string, key: TuiKey): boolean {
-  return Boolean((key.ctrl || key.meta) && input.toLowerCase() === "c");
+  return Boolean(key.ctrl && key.shift && input.toLowerCase() === "c");
 }
 
 export function isPasteShortcut(input: string, key: TuiKey): boolean {

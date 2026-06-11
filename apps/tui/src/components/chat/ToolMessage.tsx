@@ -4,12 +4,6 @@ import StatusIndicator from "./StatusIndicator.js";
 import { textAttrs } from "../../platform/opentui/textAttributes.js";
 import { theme } from "../../theme.js";
 import { FileChangePreviewView } from "../diff/FileChangePreviewView.js";
-import {
-  buildWritingProgressLines,
-  estimateWriteProgressStats,
-  isFileActionTool,
-  isWriteTool,
-} from "../../lib/toolMessage/progress.js";
 
 interface ToolMessageProps {
   toolName?: string;
@@ -161,21 +155,15 @@ function formatDiffStats(preview: NonNullable<ToolDisplay["fileChangePreview"]>)
   return `+${preview.added} -${preview.removed}`;
 }
 
-function isReadOnlyBrowseTool(toolName?: string): boolean {
-  return toolName === "view" || toolName === "ls" || toolName === "glob";
-}
-
 function hasExpandableBody(
   display: ToolDisplay,
-  toolName: string | undefined,
   status: ToolMessageProps["status"],
-  isPendingFileAction: boolean,
 ): boolean {
-  if (display.fileChangePreview && isFileActionTool(toolName) && status === "completed") {
+  if (display.fileChangePreview && display.isFileAction && status === "completed") {
     return true;
   }
-  if (isPendingFileAction) return true;
-  if (isReadOnlyBrowseTool(toolName)) return Boolean(display.summaryLine);
+  if (display.activityLabel) return true;
+  if (display.isReadOnlyBrowse) return Boolean(display.summaryLine);
   return Boolean(
     display.detail
     || display.resultPreview?.length
@@ -195,23 +183,9 @@ const ToolMessage: FC<ToolMessageProps> = ({
 }) => {
   const display = createToolDisplay({ toolName, toolArgs, status, content });
   const cmd = display.command;
-  const isPendingFileAction = status === "pending" && isFileActionTool(toolName);
-  const isPendingWrite = status === "pending" && isWriteTool(toolName);
-  const isPendingEdit = isPendingFileAction && !isPendingWrite;
-  const progressLines = isPendingEdit && expanded ? buildWritingProgressLines(toolArgs) : [];
-  const writeProgressStats = isPendingWrite && expanded
-    ? estimateWriteProgressStats(toolArgs)
-    : undefined;
-  const activity = isPendingFileAction ? "Writing..." : undefined;
   const hasFileChangePreview = Boolean(
-    display.fileChangePreview && isFileActionTool(toolName) && status === "completed",
+    display.fileChangePreview && display.isFileAction && status === "completed",
   );
-
-  if (isPendingEdit && expanded) {
-    display.detail = progressLines.join("\n");
-    display.fileChangePreview = undefined;
-    display.showCompletion = false;
-  }
 
   const toolShell = (body: ReactNode, fullWidth = false) => (
     <box
@@ -228,7 +202,7 @@ const ToolMessage: FC<ToolMessageProps> = ({
     </box>
   );
 
-  const expandable = !nested && hasExpandableBody(display, toolName, status, isPendingFileAction);
+  const expandable = !nested && hasExpandableBody(display, status);
   const diffStats = hasFileChangePreview && display.fileChangePreview
     ? formatDiffStats(display.fileChangePreview)
     : undefined;
@@ -263,7 +237,7 @@ const ToolMessage: FC<ToolMessageProps> = ({
         <ToolHeader
           status={status}
           cmd={cmd}
-          activity={activity}
+          activity={display.activityLabel}
           expandable={expandable}
           subAgent={nested}
         />
@@ -271,30 +245,30 @@ const ToolMessage: FC<ToolMessageProps> = ({
     );
   }
 
-  if (isPendingWrite && writeProgressStats) {
+  if (display.progressStats) {
     return toolShell(
       <box flexDirection="column" width="100%">
         <ToolHeader
           status={status}
           cmd={cmd}
-          activity={activity}
+          activity={display.activityLabel}
           subAgent={nested}
         />
         <WritingProgressStats
-          added={writeProgressStats.added}
-          removed={writeProgressStats.removed}
+          added={display.progressStats.added}
+          removed={display.progressStats.removed}
         />
       </box>,
     );
   }
 
-  if (isReadOnlyBrowseTool(toolName)) {
+  if (display.isReadOnlyBrowse) {
     return toolShell(
       <box flexDirection="column" width="100%">
         <ToolHeader
           status={status}
           cmd={cmd}
-          activity={activity}
+          activity={display.activityLabel}
           subAgent={nested}
         />
         {display.summaryLine ? (
@@ -310,24 +284,24 @@ const ToolMessage: FC<ToolMessageProps> = ({
 
   const showCompletion = display.showCompletion !== false;
   const hasDetail = Boolean(
-    display.detail || display.resultPreview?.length || display.fileChangePreview,
+    display.expandedDetail || display.detail || display.resultPreview?.length || display.fileChangePreview,
   );
   const showBody = Boolean(
-    isPendingEdit
-      || (hasDetail || (status === "completed" && showCompletion)),
+    hasDetail || (status === "completed" && showCompletion),
   );
+  const detail = display.expandedDetail ?? display.detail;
 
   return toolShell(
     <box flexDirection="column" width="100%">
-      <ToolHeader status={status} cmd={cmd} activity={activity} subAgent={nested} />
+      <ToolHeader status={status} cmd={cmd} activity={display.activityLabel} subAgent={nested} />
       {showBody ? (
         <box flexDirection="column" paddingLeft={2} width="100%">
-          {display.detail ? (
+          {detail ? (
             <text fg={theme.colors.muted} attributes={textAttrs({ dim: nested })}>
-              {theme.glyphs.branch} {display.detail}
+              {theme.glyphs.branch} {detail}
             </text>
           ) : null}
-          {!display.detail && !display.fileChangePreview ? (
+          {!detail && !display.fileChangePreview ? (
             normalizeToolText(content).split(/\r?\n/).map((line, index) => {
               const prefix = index === 0 ? "↳ " : "  ";
               return <text key={`preview_line_${index}`} fg={theme.colors.muted}>{prefix}{line}</text>;
