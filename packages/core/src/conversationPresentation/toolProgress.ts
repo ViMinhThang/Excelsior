@@ -1,3 +1,6 @@
+import { parseToolArgs, stringifyToolArgValue } from "./toolArgs.js";
+import type { WritingProgressStats } from "./types.js";
+
 const MAX_PROGRESS_LINES = 8;
 const MAX_PROGRESS_LINE_LENGTH = 120;
 
@@ -12,13 +15,12 @@ export function isWriteTool(toolName?: string): boolean {
   return toolName === "write" || toolName === "writeFile";
 }
 
-export interface WritingProgressStats {
-  added: number;
-  removed: number;
+export function isReadOnlyBrowseTool(toolName?: string): boolean {
+  return toolName === "view" || toolName === "ls" || toolName === "glob";
 }
 
 export function estimateWriteProgressStats(rawArgs?: string): WritingProgressStats {
-  const content = extractJsonString(rawArgs ?? "", "content");
+  const content = extractToolArgString(rawArgs, "content");
   return {
     added: countTextLines(content),
     removed: 0,
@@ -27,8 +29,8 @@ export function estimateWriteProgressStats(rawArgs?: string): WritingProgressSta
 
 export function buildWritingProgressLines(rawArgs?: string): string[] {
   const raw = rawArgs ?? "";
-  const filePath = extractJsonString(raw, "filePath") || extractJsonString(raw, "path");
-  const body = extractJsonString(raw, "content") || extractJsonString(raw, "newText");
+  const filePath = extractToolArgString(rawArgs, "filePath") || extractToolArgString(rawArgs, "path");
+  const body = extractToolArgString(rawArgs, "content") || extractToolArgString(rawArgs, "newText");
   const lines = ["Writing..."];
 
   if (filePath) lines.push(`target: ${filePath}`);
@@ -51,7 +53,14 @@ export function buildWritingProgressLines(rawArgs?: string): string[] {
   return lines;
 }
 
-function extractJsonString(raw: string, key: string): string {
+function extractToolArgString(rawArgs: string | undefined, key: string): string {
+  const parsed = parseToolArgs(rawArgs);
+  const parsedValue = stringifyToolArgValue(parsed?.[key]);
+  if (parsedValue) return parsedValue;
+  return extractPartialJsonString(rawArgs ?? "", key);
+}
+
+function extractPartialJsonString(raw: string, key: string): string {
   const keyIndex = raw.indexOf(`"${key}"`);
   if (keyIndex === -1) return "";
   const colonIndex = raw.indexOf(":", keyIndex);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateWriteProgressStats } from "../src/lib/toolMessage/progress.js";
+import { estimateWriteProgressStats } from "@excelsior/core";
 
 describe("estimateWriteProgressStats", () => {
   it("counts streamed write content lines as added lines", () => {
