@@ -1,5 +1,5 @@
 import type { AgentMessage, ProjectedBlock, ProjectedSubAgent, ProjectedTurn } from "@excelsior/core";
-import type { AnyHarnessEvent } from "../events.js";
+import type { AnyHarnessEvent, HarnessMessage } from "../events.js";
 import type { ProjectionContext, ProjectionHandler } from "./types.js";
 import { AiHistory } from "./AiHistory.js";
 import { LiveDrafts } from "./LiveDrafts.js";
@@ -28,7 +28,7 @@ export class TranscriptProjection implements ProjectionContext {
     updateAssistant: (input: { id: string; delta: string; turnId?: string; timestamp: string }) => {
       this.drafts.updateAssistant(input, input.turnId);
     },
-    finishUser: (input: { message: import("../events.js").HarnessMessage; turnId?: string; timestamp: string }) => {
+    finishUser: (input: { message: HarnessMessage; turnId?: string; timestamp: string }) => {
       this.drafts.flushAll(true, input.turnId);
       this.turns.upsertBlock(input.turnId, {
         type: "user",
@@ -39,7 +39,7 @@ export class TranscriptProjection implements ProjectionContext {
       });
       this.history.appendMessage(input.message);
     },
-    finishAssistant: (input: { message: import("../events.js").HarnessMessage; turnId?: string; timestamp: string }) => {
+    finishAssistant: (input: { message: HarnessMessage; turnId?: string; timestamp: string }) => {
       this.drafts.finishAssistant({
         id: input.message.id,
         content: input.message.content,
@@ -50,7 +50,7 @@ export class TranscriptProjection implements ProjectionContext {
         this.history.appendMessage(input.message);
       }
     },
-    finishToolMessage: (input: { message: import("../events.js").HarnessMessage }) => {
+    finishToolMessage: (input: { message: HarnessMessage }) => {
       this.history.appendMessage(input.message);
     },
   };

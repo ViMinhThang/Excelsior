@@ -5,52 +5,81 @@ import type {
   ConfirmResponse,
 } from "@excelsior/core";
 
-export class ConfirmationRouter {
-  public pendingConfirmation: ConfirmRequest | null = null;
-  public pendingQuestion: AskQuestionRequest | null = null;
-  public readonly confirmationResolvers = new Map<string, (response: ConfirmResponse) => void>();
-  public readonly questionResolvers = new Map<string, (response: AskQuestionResponse) => void>();
+class PendingRequestRoute<TRequest, TResponse> {
+  public pending: TRequest | null = null;
+  private readonly resolvers = new Map<string, (response: TResponse) => void>();
 
-  addConfirmationResolver(callId: string, resolver: (response: ConfirmResponse) => void): void {
-    this.confirmationResolvers.set(callId, resolver);
+  constructor(
+    private readonly cancelResponse: (callId: string) => TResponse,
+  ) {}
+
+  add(callId: string, request: TRequest, resolver: (response: TResponse) => void): void {
+    this.pending = request;
+    this.resolvers.set(callId, resolver);
   }
 
-  addQuestionResolver(callId: string, resolver: (response: AskQuestionResponse) => void): void {
-    this.questionResolvers.set(callId, resolver);
-  }
-
-  resolveConfirmation(callId: string, approved: boolean): void {
-    const resolver = this.confirmationResolvers.get(callId);
-    if (resolver) {
-      this.confirmationResolvers.delete(callId);
-      resolver({ callId, approved });
-    }
-  }
-
-  resolveQuestion(response: AskQuestionResponse): void {
-    const resolver = this.questionResolvers.get(response.callId);
-    if (resolver) {
-      this.questionResolvers.delete(response.callId);
-      resolver(response);
-    }
+  resolve(callId: string, response: TResponse): void {
+    const resolver = this.resolvers.get(callId);
+    if (!resolver) return;
+    this.resolvers.delete(callId);
+    this.pending = null;
+    resolver(response);
   }
 
   cancelAll(): void {
-    for (const [callId, resolve] of this.confirmationResolvers.entries()) {
-      resolve({ callId, approved: false });
+    for (const [callId, resolve] of this.resolvers.entries()) {
+      resolve(this.cancelResponse(callId));
     }
-    this.confirmationResolvers.clear();
-    this.pendingConfirmation = null;
+    this.resolvers.clear();
+    this.pending = null;
+  }
+}
 
-    for (const [callId, resolve] of this.questionResolvers.entries()) {
-      resolve({
-        callId,
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      });
-    }
-    this.questionResolvers.clear();
-    this.pendingQuestion = null;
+export class ConfirmationRouter {
+  private readonly confirmations = new PendingRequestRoute<ConfirmRequest, ConfirmResponse>(
+    (callId) => ({ callId, approved: false }),
+  );
+  private readonly questions = new PendingRequestRoute<AskQuestionRequest, AskQuestionResponse>(
+    (callId) => ({
+      callId,
+      answer: "",
+      isManual: true,
+      cancelled: true,
+    }),
+  );
+
+  get pendingConfirmation(): ConfirmRequest | null {
+    return this.confirmations.pending;
+  }
+
+  get pendingQuestion(): AskQuestionRequest | null {
+    return this.questions.pending;
+  }
+
+  addConfirmation(
+    request: ConfirmRequest,
+    resolver: (response: ConfirmResponse) => void,
+  ): void {
+    this.confirmations.add(request.callId, request, resolver);
+  }
+
+  addQuestion(
+    request: AskQuestionRequest,
+    resolver: (response: AskQuestionResponse) => void,
+  ): void {
+    this.questions.add(request.callId, request, resolver);
+  }
+
+  resolveConfirmation(callId: string, approved: boolean): void {
+    this.confirmations.resolve(callId, { callId, approved });
+  }
+
+  resolveQuestion(response: AskQuestionResponse): void {
+    this.questions.resolve(response.callId, response);
+  }
+
+  cancelAll(): void {
+    this.confirmations.cancelAll();
+    this.questions.cancelAll();
   }
 }

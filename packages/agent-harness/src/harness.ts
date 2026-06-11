@@ -484,9 +484,7 @@ class HarnessStore implements AgentHarness {
       const turnId = active?.turnId;
       const sessionId = active?.sessionId ?? this.sessionManager.currentSession()?.id;
       const confirmRequest = { callId, ...request };
-      this.confirmRouter.pendingConfirmation = confirmRequest;
-      this.confirmRouter.addConfirmationResolver(callId, (response) => {
-        this.confirmRouter.pendingConfirmation = null;
+      this.confirmRouter.addConfirmation(confirmRequest, (response) => {
         if (sessionId) {
           this.eventBus.emit(runId, CONFIRMATION_ANSWERED, { response }, { sessionId, turnId });
         }
@@ -508,9 +506,7 @@ class HarnessStore implements AgentHarness {
       const turnId = active?.turnId;
       const sessionId = active?.sessionId ?? this.sessionManager.currentSession()?.id;
       const request = { callId, ...input };
-      this.confirmRouter.pendingQuestion = request;
-      this.confirmRouter.addQuestionResolver(callId, (response) => {
-        this.confirmRouter.pendingQuestion = null;
+      this.confirmRouter.addQuestion(request, (response) => {
         if (sessionId) {
           this.eventBus.emit(runId, QUESTION_ANSWERED, { response }, { sessionId, turnId });
         }
