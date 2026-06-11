@@ -34,13 +34,13 @@ import { copyHarnessEvents, replayHarnessEvents } from "./inspector.js";
 import { createDeepSeekProvider } from "./provider.js";
 import { projectHarnessState, ProjectionCache } from "./projection.js";
 import { CommandRegistry, ExtensionRegistry, ProviderRegistry, ToolRegistry } from "./registries.js";
-import { RunController } from "./runController.js";
+import { RunController } from "./run/RunController.js";
 import { FileHarnessStorage } from "./storage.js";
 import { SessionManager } from "./SessionManager.js";
 import { EventStore } from "./EventStore.js";
 import { SettingsStore } from "./SettingsStore.js";
 import { ConfirmationRouter } from "./ConfirmationRouter.js";
-import { ActiveRunManager } from "./activeRun.js";
+import { ActiveRunManager } from "./run/ActiveRunManager.js";
 import { createBuiltInTools } from "./tools/index.js";
 import type {
   AgentHarness,
@@ -586,4 +586,3 @@ function parseCommandInput(input: string): { name: string; args: string[] } | nu
   const [name, ...args] = text.split(/\s+/);
   return { name: name.toLowerCase(), args };
 }
-

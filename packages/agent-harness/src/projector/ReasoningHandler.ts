@@ -3,26 +3,21 @@ import {
   type AnyHarnessEvent,
   type HarnessEventType,
 } from "../events.js";
-import type { ProjectionHandler, ProjectionState } from "./types.js";
-import {
-  flushAll,
-  upsertReasoningBlock,
-} from "./utils.js";
+import type { ProjectionContext, ProjectionHandler } from "./types.js";
 
 export class ReasoningHandler implements ProjectionHandler {
   public handles = new Set<HarnessEventType>([
     REASONING_END,
   ]);
 
-  public apply(event: AnyHarnessEvent, state: ProjectionState): void {
+  public apply(event: AnyHarnessEvent, projection: ProjectionContext): void {
     if (event.type === REASONING_END) {
-      flushAll(state, true, event.turnId);
-      upsertReasoningBlock(state, {
+      projection.reasoning.finish({
         id: event.data.messageId,
         content: event.data.content,
+        turnId: event.turnId,
         timestamp: event.timestamp || new Date().toISOString(),
-        frozen: true,
-      }, true, event.turnId);
+      });
     }
   }
 }

@@ -1,4 +1,4 @@
-import type { ProjectedBlock, ProjectedTurn } from "@excelsior/core";
+import type { ProjectedTurn } from "@excelsior/core";
 import {
   ERROR,
   MESSAGE_END,

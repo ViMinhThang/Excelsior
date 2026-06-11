@@ -4,7 +4,6 @@ import type {
   AskQuestionRequest,
   CommandDefinition,
   ConfirmRequest,
-  ProjectedBlock,
   ProjectedTurn,
 } from "@excelsior/core";
 import type { AppHeaderProps } from "../components/shared/AppHeader.js";

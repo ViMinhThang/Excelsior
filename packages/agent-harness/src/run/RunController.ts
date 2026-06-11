@@ -20,14 +20,14 @@ import {
   TURN_END,
   TURN_START,
   type HarnessEventEmitter,
-} from "./events.js";
-import { RunEventWriter } from "./context/RunEventWriter.js";
+} from "../events.js";
+import { RunEventWriter } from "../context/RunEventWriter.js";
 import { runModelStep } from "./runModelStep.js";
-import type { ProviderRegistry, ToolRegistry } from "./registries.js";
+import type { ProviderRegistry, ToolRegistry } from "../registries.js";
 import type {
   HarnessSettings,
   ToolExecutionContext,
-} from "./types.js";
+} from "../types.js";
 
 export class RunController {
   async run(input: {

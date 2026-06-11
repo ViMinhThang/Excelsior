@@ -13,7 +13,7 @@ function commandFor(toolName: string, args: Record<string, unknown>): string {
 
 describe("ToolMessage command formatting", () => {
   it("shows view calls with the full path", () => {
-    const filePath = ["packages", "agent-harness", "src", "runController.ts"].join("/");
+    const filePath = ["packages", "agent-harness", "src", "run", "RunController.ts"].join("/");
     expect(commandFor(
       "view",
       { filePath },

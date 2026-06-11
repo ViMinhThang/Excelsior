@@ -1,4 +1,4 @@
-import type { ProjectedBlock, ProjectedTurn } from "@excelsior/core";
+import type { ProjectedTurn } from "@excelsior/core";
 
 export interface OptimisticTranscriptOptions {
   turns: ProjectedTurn[];

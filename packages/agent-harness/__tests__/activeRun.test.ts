@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ActiveRunManager, type ActiveRunIdentity } from "../src/activeRun.js";
+import { ActiveRunManager, type ActiveRunIdentity } from "../src/run/ActiveRunManager.js";
 import {
   AGENT_END,
   makeHarnessEvent,
