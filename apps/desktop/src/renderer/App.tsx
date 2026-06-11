@@ -65,7 +65,7 @@ export default function App() {
   const contextRail = useDesktopContextRail({
     workspacePath,
     sessionId: currentSessionId,
-    blocks: state?.displayBlocks ?? [],
+    turns: state?.turns ?? [],
   });
 
   useEffect(() => {

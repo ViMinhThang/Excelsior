@@ -34,7 +34,7 @@ export function createBuiltInCommands(input: {
     command("mode", "core", "Switch between Plan and Act modes", "/mode [plan|act]", modeCommand),
     command("compact", "runtime", "Compact current conversation context", "/compact", async (_args, harness) => {
       await harness.compactCurrentSession("manual");
-      return ok("Conversation compacted.");
+      return { handled: true, clearInput: true };
     }),
     command("revert", "runtime", "Revert the last completed turn", "/revert", async (_args, harness) => harness.revertLastTurn()),
     command("trace", "runtime", "Inspect harness event timeline", "/trace [all|<turnIdPrefix>]", traceCommand),

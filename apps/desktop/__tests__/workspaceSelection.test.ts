@@ -8,7 +8,7 @@ import { selectWorkspaceFolder } from "../src/renderer/hooks/workspaceSelection.
 
 function state(): AgentClientState {
   return {
-    displayBlocks: [],
+    turns: [],
     isLoading: false,
     sessions: [],
     currentSessionId: null,

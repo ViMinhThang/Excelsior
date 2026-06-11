@@ -56,7 +56,8 @@ describe("HarnessAgentHost", () => {
       result: { message: expect.stringContaining("Replay:") },
     });
     expect(state.mode).toBe("plan");
-    expect(state.displayBlocks).toEqual(
+    const blocks = state.turns.flatMap((t) => t.blocks);
+    expect(blocks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: "user", content: "hello" }),
         expect.objectContaining({ type: "assistant", content: expect.stringContaining("DEEPSEEK_API_KEY") }),

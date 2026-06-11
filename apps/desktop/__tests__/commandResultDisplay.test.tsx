@@ -6,7 +6,7 @@ import { ChatPanel } from "../src/renderer/components/ChatPanel.js";
 
 function state(): AgentClientState {
   return {
-    displayBlocks: [],
+    turns: [],
     isLoading: false,
     sessions: [],
     currentSessionId: null,

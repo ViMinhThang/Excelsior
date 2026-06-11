@@ -3,6 +3,7 @@ import type {
   AgentMode,
   CommandDefinition,
   ProjectedBlock,
+  ProjectedTurn,
 } from "@excelsior/core";
 import type { KeyMap } from "../lib/keymapRegistry.js";
 import type { TuiPanelContext, TuiPanelDefinition } from "../lib/panels.js";
@@ -51,7 +52,7 @@ export interface ConversationRenderContext {
     agentMode: AgentMode;
   };
   transcript: {
-    blocks: ProjectedBlock[];
+    turns: ProjectedTurn[];
     toolsExpanded: boolean;
     viewportKey: string;
   };

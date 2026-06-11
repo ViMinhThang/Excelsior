@@ -43,7 +43,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
   const { navigate } = useNavigation();
   const agent = useAgentHostClient();
   const {
-    displayBlocks,
+    turns,
     isLoading,
     sessions,
     currentSessionId,
@@ -62,16 +62,16 @@ export function useChatInteractionController(): ChatScreenViewModel {
     agent.send(content);
   }, [agent.send]);
 
-  const derivedDisplayBlocks = useMemo(() => buildOptimisticTranscript({
-    displayBlocks,
+  const derivedTurns = useMemo(() => buildOptimisticTranscript({
+    turns,
     optimisticUserMessage,
-  }), [displayBlocks, optimisticUserMessage]);
+  }), [turns, optimisticUserMessage]);
 
   useEffect(() => {
-    if (shouldClearOptimisticMessage(displayBlocks, optimisticUserMessage)) {
+    if (shouldClearOptimisticMessage(turns, optimisticUserMessage)) {
       setOptimisticUserMessage(null);
     }
-  }, [displayBlocks, optimisticUserMessage]);
+  }, [turns, optimisticUserMessage]);
 
   useEffect(() => {
     setOptimisticUserMessage(null);
@@ -87,14 +87,14 @@ export function useChatInteractionController(): ChatScreenViewModel {
     }
   }, [isLoading, wasLoading]);
 
-  const inputHistory = useInputHistory(derivedDisplayBlocks);
-  const subAgentNav = useSubAgentNavigation(derivedDisplayBlocks);
+  const inputHistory = useInputHistory(derivedTurns);
+  const subAgentNav = useSubAgentNavigation(derivedTurns);
   const [toolsExpanded, setToolsExpanded] = useState(false);
   const [historyResetKey, setHistoryResetKey] = useState(0);
   const historyResetSnapshot = useMemo(() => createHistoryResetSnapshot({
     sessionId: currentSessionId,
-    blocks: derivedDisplayBlocks,
-  }), [currentSessionId, derivedDisplayBlocks]);
+    turns: derivedTurns,
+  }), [currentSessionId, derivedTurns]);
   const prevHistoryResetSnapshotRef = useRef(historyResetSnapshot);
 
   useEffect(() => {
@@ -163,7 +163,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
   const submitRef = useRef<() => void>(() => {});
 
   const interactionState = buildChatInteractionState({
-    displayBlocks: derivedDisplayBlocks,
+    turns: derivedTurns,
     chatMode: subAgentNav.chatMode,
     isLoading,
     pendingConfirmation: confirmation.pending,
@@ -192,10 +192,17 @@ export function useChatInteractionController(): ChatScreenViewModel {
     setToolsExpanded(false);
   }, [interactionState.pending, subAgentNav.setChatMode]);
 
+  const executeCommand = useCallback((input: string) => {
+    if (input === "/compact" || input.startsWith("/compact ")) {
+      setOptimisticUserMessage(null);
+    }
+    return agent.executeCommand(input);
+  }, [agent.executeCommand]);
+
   const handleSubmit = useChatSubmission({
     isLoading,
     inputRef: inputHistory.inputRef,
-    executeCommand: agent.executeCommand,
+    executeCommand,
     send: customSend,
     resetInput: inputHistory.resetInput,
     setCommandResult: command.setCommandResult,
@@ -231,8 +238,8 @@ export function useChatInteractionController(): ChatScreenViewModel {
   });
 
   const totalTokens = useMemo(
-    () => estimateTranscriptTokens(derivedDisplayBlocks),
-    [derivedDisplayBlocks],
+    () => estimateTranscriptTokens(derivedTurns.flatMap((t) => t.blocks)),
+    [derivedTurns],
   );
 
   return {
@@ -243,7 +250,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
     },
     modeView: buildModeViewContext({
       chatMode: subAgentNav.chatMode,
-      displayBlocks: derivedDisplayBlocks,
+      turns: derivedTurns,
       inputValue: inputHistory.input,
       setInput: inputHistory.setInput,
       handleSubmit,

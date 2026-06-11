@@ -68,9 +68,10 @@ Mock instructions detail.
     expect(result.message).toContain("Starting skill: TestSkill...");
 
     const snapshot = harness.getSnapshot();
-    expect(snapshot.displayBlocks.length).toBeGreaterThan(0);
+    const blocks = snapshot.turns.flatMap((t) => t.blocks);
+    expect(blocks.length).toBeGreaterThan(0);
     // The displayContent was customized to "Running skill: TestSkill"
-    const userBlock = snapshot.displayBlocks.find((b) => b.type === "user");
+    const userBlock = blocks.find((b) => b.type === "user");
     expect(userBlock).toBeDefined();
     expect(userBlock?.content).toBe("Running skill: TestSkill");
   });

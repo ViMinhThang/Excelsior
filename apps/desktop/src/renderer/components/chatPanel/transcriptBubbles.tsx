@@ -153,6 +153,19 @@ function ReasoningBubble({ block }: { block: Extract<ProjectedBlock, { type: "re
   );
 }
 
+function CompactionBoundaryBubble({ block }: { block: Extract<ProjectedBlock, { type: "compaction-boundary" }> }) {
+  return (
+    <div className="my-4 flex items-center justify-center gap-4 text-xs font-semibold text-brand-text-muted select-none">
+      <div className="h-[1px] flex-1 bg-brand-border/40" />
+      <div className="flex flex-col items-center gap-1">
+        <span>History Compacted</span>
+        <span className="font-normal text-brand-text-muted/70">{block.summary}</span>
+      </div>
+      <div className="h-[1px] flex-1 bg-brand-border/40" />
+    </div>
+  );
+}
+
 import { memo } from "react";
 
 export const MessageBlock = memo(function MessageBlock({ block, isToolOpen, onToggleToolCall }: MessageBlockProps) {
@@ -161,6 +174,9 @@ export const MessageBlock = memo(function MessageBlock({ block, isToolOpen, onTo
   if (block.type === "reasoning") return <ReasoningBubble block={block} />;
   if (block.type === "tool-call") {
     return <ToolBubble block={block} isOpen={isToolOpen} onToggle={onToggleToolCall} />;
+  }
+  if (block.type === "compaction-boundary") {
+    return <CompactionBoundaryBubble block={block} />;
   }
   return <SubAgentBubble block={block} />;
 });

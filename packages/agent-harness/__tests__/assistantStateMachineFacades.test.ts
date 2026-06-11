@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { ProjectionAssistantState, RunAssistantState } from "../src/context/AssistantStateMachine.js";
+import { Projector } from "../src/projector/Projector.js";
+import { RunEventWriter } from "../src/context/RunEventWriter.js";
 import {
   MESSAGE_END,
   MESSAGE_START,
@@ -51,15 +52,18 @@ function createEmitter(): { emitted: AnyHarnessEvent[]; emit: HarnessEventEmitte
 }
 
 describe("assistant state machine facades", () => {
-  it("lets projection replay and read without exposing active-stream methods", () => {
-    const state = new ProjectionAssistantState();
+  it("lets projector replay and read without exposing active-stream methods", () => {
+    const projector = new Projector();
 
-    state.applyEvent(event(1, MESSAGE_END, {
-      message: { id: "msg_user", role: "user", content: "hello", modelContent: "hello model" },
-    }));
+    const events = [
+      event(1, MESSAGE_END, {
+        message: { id: "msg_user", role: "user", content: "hello", modelContent: "hello model" },
+      }),
+    ];
+    projector.project(events);
 
-    expect(state.getCanonicalReadModel()).toMatchObject({
-      displayBlocks: [{ type: "user", content: "hello", isFrozen: true }],
+    expect(projector.project(events)).toMatchObject({
+      turns: [{ id: "turn_test", status: "in-progress", blocks: [{ type: "user", content: "hello", isFrozen: true }] }],
       aiHistory: [{ role: "user", content: "hello model" }],
     });
     for (const method of [
@@ -74,24 +78,24 @@ describe("assistant state machine facades", () => {
       "finalizeIncompleteTools",
       "emitNotice",
     ]) {
-      expect(method in state).toBe(false);
+      expect(method in projector).toBe(false);
     }
   });
 
   it("lets active runs stream and emit without exposing projection replay/read methods", () => {
     const { emitted, emit } = createEmitter();
-    const state = new RunAssistantState(emit);
+    const writer = new RunEventWriter(emit);
 
-    state.startMessage("msg_run");
-    state.updateMessage("msg_run", "hello");
-    state.endMessage("msg_run");
+    writer.startMessage("msg_run");
+    writer.updateMessage("msg_run", "hello");
+    writer.endMessage("msg_run");
 
     expect(emitted).toMatchObject([
       { type: MESSAGE_START, data: { message: { id: "msg_run", role: "assistant", content: "" } } },
       { type: MESSAGE_UPDATE, data: { messageId: "msg_run", role: "assistant", delta: "hello" } },
       { type: MESSAGE_END, data: { message: { id: "msg_run", role: "assistant", content: "hello" } } },
     ]);
-    expect("applyEvent" in state).toBe(false);
-    expect("getCanonicalReadModel" in state).toBe(false);
+    expect("project" in writer).toBe(false);
+    expect("reset" in writer).toBe(false);
   });
 });

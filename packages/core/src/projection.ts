@@ -47,7 +47,23 @@ export type ProjectedBlock =
       state: ProjectedSubAgent;
       timestamp: string;
       isFrozen?: true;
+    }
+  | {
+      type: "compaction-boundary";
+      id: string;
+      summary: string;
+      timestamp: string;
     };
+
+export interface ProjectedTurn {
+  id: string;
+  status: "in-progress" | "completed" | "interrupted" | "failed";
+  blocks: ProjectedBlock[];
+  error?: { message: string };
+  startTime?: string;
+  endTime?: string;
+  sawCompaction?: boolean;
+}
 
 export interface ProjectedSubAgent {
   status: "running" | "done" | "error";

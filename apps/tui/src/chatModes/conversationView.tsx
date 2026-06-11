@@ -105,7 +105,7 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
   useEffect(() => {
     scheduleScrollStateRefresh();
   }, [
-    ctx.transcript.blocks,
+    ctx.transcript.turns,
     ctx.transcript.toolsExpanded,
     ctx.transcript.viewportKey,
     scheduleScrollStateRefresh,
@@ -139,7 +139,7 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
         >
           <box flexDirection="column" width="100%">
             <ChatHistory
-              blocks={ctx.transcript.blocks}
+              turns={ctx.transcript.turns}
               toolsExpanded={ctx.transcript.toolsExpanded}
             />
 

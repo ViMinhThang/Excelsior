@@ -40,7 +40,7 @@ export function ChatPanel({
   onSend,
   onToggleToolCall,
 }: ChatPanelProps) {
-  const blocks = state?.displayBlocks ?? [];
+  const turns = state?.turns ?? [];
   const isLoading = state?.isLoading ?? false;
   const hasPendingConfirmation = Boolean(state?.pendingConfirmation);
   const hasPendingQuestion = Boolean(state?.pendingQuestion);
@@ -103,12 +103,12 @@ export function ChatPanel({
       return;
     }
 
-    if (blocks.length > 0 || isLoading || hasPendingAction) {
+    if (turns.length > 0 || isLoading || hasPendingAction) {
       setHasUnreadMessages(true);
     }
-  }, [blocks, isLoading, hasPendingAction]);
+  }, [turns, isLoading, hasPendingAction]);
 
-  const showScrollToBottom = !isAtBottom && blocks.length > 0;
+  const showScrollToBottom = !isAtBottom && turns.length > 0;
 
   return (
     <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-brand-bg">
@@ -120,7 +120,7 @@ export function ChatPanel({
             }`}
         >
           <ChatTranscript
-            blocks={blocks}
+            turns={turns}
             isLoading={isLoading}
             messagesEndRef={messagesEndRef}
             openToolCalls={openToolCalls}

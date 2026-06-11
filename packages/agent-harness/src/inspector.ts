@@ -1,4 +1,4 @@
-import type { ProjectedBlock } from "@excelsior/core";
+import type { ProjectedBlock, ProjectedTurn } from "@excelsior/core";
 import {
   ERROR,
   MESSAGE_END,
@@ -90,7 +90,7 @@ export function replayHarnessEvents(input: HarnessInspectionSnapshot): HarnessRe
 
   const validation = validateEvents(input);
   const readModel = projectEvents(input.events);
-  const projectionIssues = validateProjection(readModel.displayBlocks, input.snapshot.displayBlocks);
+  const projectionIssues = validateProjection(readModel.turns, input.snapshot.turns);
   const errors = [...validation.errors, ...projectionIssues];
   const partial = validation.partialIssues.length > 0;
   const turnCount = groupTurns(input.events).length;
@@ -100,7 +100,7 @@ export function replayHarnessEvents(input: HarnessInspectionSnapshot): HarnessRe
     partial,
     eventCount: input.events.length,
     turnCount,
-    blockCount: readModel.displayBlocks.length,
+    blockCount: readModel.turns.reduce((sum, turn) => sum + turn.blocks.length, 0),
     historyCount: readModel.aiHistory.length,
     issues: [...errors, ...validation.partialIssues],
   };
@@ -337,12 +337,12 @@ function moveActiveOpenItemsToPartial(input: {
 }
 
 function validateProjection(
-  replayedBlocks: readonly ProjectedBlock[],
-  snapshotBlocks: readonly ProjectedBlock[],
+  replayedTurns: readonly ProjectedTurn[],
+  snapshotTurns: readonly ProjectedTurn[],
 ): string[] {
-  if (JSON.stringify(replayedBlocks) === JSON.stringify(snapshotBlocks)) return [];
+  if (JSON.stringify(replayedTurns) === JSON.stringify(snapshotTurns)) return [];
   return [
-    `Projection mismatch: replayed ${replayedBlocks.length} display blocks, snapshot has ${snapshotBlocks.length}`,
+    `Projection mismatch: replayed ${replayedTurns.length} turns, snapshot has ${snapshotTurns.length}`,
   ];
 }
 

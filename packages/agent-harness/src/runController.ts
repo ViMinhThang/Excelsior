@@ -36,18 +36,12 @@ import {
   AGENT_END,
   AGENT_START,
   ERROR,
-  MESSAGE_END,
-  MESSAGE_START,
-  MESSAGE_UPDATE,
-  TOOL_EXECUTION_END,
-  TOOL_EXECUTION_START,
-  TOOL_EXECUTION_UPDATE,
   TURN_END,
   TURN_START,
   REASONING_END,
   type HarnessEventEmitter,
 } from "./events.js";
-import { RunAssistantState } from "./context/AssistantStateMachine.js";
+import { RunEventWriter } from "./context/RunEventWriter.js";
 import { toModelMessages } from "./context/index.js";
 import type { ProviderRegistry, ToolRegistry } from "./registries.js";
 import type {
@@ -60,15 +54,6 @@ type StepToolResult = {
   toolName: string;
   content: string;
 };
-
-type ToolInputUpdateBuffer = {
-  toolName: string;
-  delta: string;
-  lastEmittedAt: number;
-};
-
-const TOOL_INPUT_UPDATE_INTERVAL_MS = 250;
-const TOOL_INPUT_UPDATE_CHARS = 2048;
 
 export class RunController {
   async run(input: {
@@ -88,7 +73,7 @@ export class RunController {
     let cancelled = false;
     let failed = false;
     const runPrefix = randomUUID().slice(0, 8);
-    const state = new RunAssistantState(input.emit);
+    const state = new RunEventWriter(input.emit);
 
     let stepLimit: number | undefined;
     const rawSteps = input.settings.agentToolLoopSteps;
