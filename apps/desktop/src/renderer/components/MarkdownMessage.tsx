@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
-import type { ProjectedBlock } from "@excelsior/core";
 import {
   parseInlineMarkdown,
   parseMarkdown,

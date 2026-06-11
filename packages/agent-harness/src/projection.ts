@@ -1,4 +1,4 @@
-import type { AgentLlmInfo, AgentMessage, ProjectedBlock, ProjectedTurn, Session, Workspace } from "@excelsior/core";
+import type { AgentLlmInfo, AgentMessage, ProjectedTurn, Session, Workspace } from "@excelsior/core";
 import type { AnyHarnessEvent } from "./events.js";
 import type { HarnessSnapshot } from "./types.js";
 import { Projector } from "./projector/Projector.js";

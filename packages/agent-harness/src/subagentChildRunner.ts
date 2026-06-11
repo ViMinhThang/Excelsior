@@ -11,7 +11,7 @@ import {
 } from "./events.js";
 import { createDeepSeekProvider } from "./provider.js";
 import { ProviderRegistry, ToolRegistry } from "./registries.js";
-import { RunController } from "./runController.js";
+import { RunController } from "./run/RunController.js";
 import {
   createGlobTool,
   createLsTool,

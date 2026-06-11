@@ -1,7 +1,7 @@
 import type { TextStreamPart, ToolSet } from "ai";
 import type { AgentMessage } from "@excelsior/core";
-import { ERROR, REASONING_END, type HarnessEventEmitter } from "./events.js";
-import { RunEventWriter } from "./context/RunEventWriter.js";
+import { ERROR, REASONING_END, type HarnessEventEmitter } from "../events.js";
+import { RunEventWriter } from "../context/RunEventWriter.js";
 
 type StepToolCall = {
   id: string;
@@ -23,7 +23,6 @@ export interface RunStepResult {
   status: RunStepStatus;
   hasToolCalls: boolean;
   messages: AgentMessage[];
-  failureMessage?: string;
 }
 
 export class RunStepRecorder {
@@ -77,13 +76,13 @@ export class RunStepRecorder {
         this.recordToolCall(part.toolCallId, part.toolName, part.input);
         break;
       case "tool-result":
-        this.recordToolResult(part.toolCallId, part.toolName, part.input, part.output, false);
+        this.recordToolResult(part.toolCallId, part.input, part.output, false);
         break;
       case "tool-error":
-        this.recordToolResult(part.toolCallId, part.toolName, part.input, part.error, true);
+        this.recordToolResult(part.toolCallId, part.input, part.error, true);
         break;
       case "tool-output-denied":
-        this.recordDeniedToolOutput(part.toolCallId, part.toolName);
+        this.recordDeniedToolOutput(part.toolCallId);
         break;
       case "abort":
         this.status = "cancelled";
@@ -121,7 +120,6 @@ export class RunStepRecorder {
       status: this.status,
       hasToolCalls: this.hasToolCalls,
       messages: this.toMessages(),
-      failureMessage: this.failureMessage,
     };
   }
 
@@ -137,7 +135,6 @@ export class RunStepRecorder {
 
   private recordToolResult(
     toolCallId: string,
-    toolName: string,
     input: unknown,
     output: unknown,
     isError: boolean,
@@ -151,7 +148,7 @@ export class RunStepRecorder {
     });
   }
 
-  private recordDeniedToolOutput(toolCallId: string, toolName: string): void {
+  private recordDeniedToolOutput(toolCallId: string): void {
     const toolArgs = this.input.writer.endToolInput(toolCallId);
     const resultText = "Tool output denied.";
     this.input.writer.completeTool(toolCallId, toolArgs, resultText, true);

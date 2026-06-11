@@ -5,7 +5,7 @@ export { SettingsStore } from "./SettingsStore.js";
 export { ConfirmationRouter } from "./ConfirmationRouter.js";
 export { EventStore } from "./EventStore.js";
 export { SessionManager } from "./SessionManager.js";
-export { RunController } from "./runController.js";
+export { RunController } from "./run/RunController.js";
 export { createDeepSeekProvider } from "./provider.js";
 export { createBuiltInTools } from "./tools/index.js";
 export { createBuiltInCommands } from "./commands.js";

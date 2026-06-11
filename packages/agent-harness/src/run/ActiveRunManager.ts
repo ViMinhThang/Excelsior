@@ -1,5 +1,5 @@
-import type { AnyHarnessEvent, HarnessEventEmitter } from "./events.js";
-import { emitRunFinalization, findIncompleteEvents } from "./history/runFinalizer.js";
+import type { AnyHarnessEvent, HarnessEventEmitter } from "../events.js";
+import { emitRunFinalization, findIncompleteEvents } from "../history/runFinalizer.js";
 
 export interface ActiveRunIdentity {
   runId: string;

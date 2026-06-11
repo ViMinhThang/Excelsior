@@ -5,19 +5,19 @@ import {
   type ToolSet,
 } from "ai";
 import type { AgentMessage } from "@excelsior/core";
-import { RunEventWriter } from "./context/RunEventWriter.js";
-import { toModelMessages } from "./context/index.js";
-import type { HarnessEventEmitter } from "./events.js";
-import type { ProviderRegistry, ToolRegistry } from "./registries.js";
+import { RunEventWriter } from "../context/RunEventWriter.js";
+import { toModelMessages } from "../context/index.js";
+import type { HarnessEventEmitter } from "../events.js";
+import type { ProviderRegistry, ToolRegistry } from "../registries.js";
 import type {
   HarnessSettings,
   ToolExecutionContext,
-} from "./types.js";
+} from "../types.js";
 import {
   RunStepRecorder,
   stringifyError,
   type RunStepResult,
-} from "./runStepRecorder.js";
+} from "./RunStepRecorder.js";
 
 export async function runModelStep(input: {
   messages: readonly AgentMessage[];

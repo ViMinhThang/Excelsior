@@ -19,7 +19,7 @@ import {
   type HarnessEventEmitter,
 } from "../src/events.js";
 import { ProviderRegistry, ToolRegistry } from "../src/registries.js";
-import { RunController } from "../src/runController.js";
+import { RunController } from "../src/run/RunController.js";
 
 describe("RunController", () => {
   it("emits a complete run lifecycle for streamed assistant text", async () => {
