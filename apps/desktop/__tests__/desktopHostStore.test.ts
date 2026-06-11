@@ -11,7 +11,7 @@ import {
 
 function state(id: string): AgentClientState {
   return {
-    displayBlocks: [],
+    turns: [],
     isLoading: false,
     sessions: [],
     currentSessionId: null,

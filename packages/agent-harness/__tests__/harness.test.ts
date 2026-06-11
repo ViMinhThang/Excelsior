@@ -73,7 +73,7 @@ describe("AgentHarness", () => {
     // only when the user types and submits (via ensureSession in send).
     expect(secondState.currentSessionId).toBeNull();
     expect(secondState.sessions.map((session) => session.id)).toEqual([firstSessionId]);
-    expect(secondState.displayBlocks).toEqual([]);
+    expect(secondState.turns).toEqual([]);
   });
 
   it("executes core commands and projects session state", async () => {
@@ -124,7 +124,7 @@ describe("AgentHarness", () => {
       toolArgs: "{\"filePath\":\"packages/core/package.json\"}",
     }, { sessionId, turnId: "turn_notify", relatedToolCallId: "call_notify_2" });
 
-    expect(harness.getSnapshot().displayBlocks).toHaveLength(2);
+    expect(harness.getSnapshot().turns.flatMap(t => t.blocks)).toHaveLength(2);
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
@@ -166,7 +166,7 @@ describe("AgentHarness", () => {
     expect(sessionRecords).toHaveLength(1);
     expect(messageUpdates).toHaveLength(2);
     expect(messageUpdates.every((event) => !("content" in event.data))).toBe(true);
-    expect(harness.getSnapshot().displayBlocks).toMatchObject([
+    expect(harness.getSnapshot().turns.flatMap(t => t.blocks)).toMatchObject([
       { type: "assistant", content: "Hello world" },
     ]);
   });

@@ -7,7 +7,7 @@ import type {
 import type { ExcelsiorApi } from "../../main/preload.js";
 
 const emptyState: AgentClientState = {
-  displayBlocks: [],
+  turns: [],
   isLoading: false,
   sessions: [],
   currentSessionId: null,

@@ -5,7 +5,7 @@ import { AgentHostClient } from "@excelsior/client";
 function createHost(result: AgentHostDispatchResult): AgentHost {
   return {
     getState: () => ({
-      displayBlocks: [],
+      turns: [],
       isLoading: false,
       sessions: [],
       currentSessionId: null,

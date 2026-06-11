@@ -1,41 +1,22 @@
-import type { AgentLlmInfo, AgentMessage, ProjectedBlock, Session, Workspace } from "@excelsior/core";
+import type { AgentLlmInfo, AgentMessage, ProjectedBlock, ProjectedTurn, Session, Workspace } from "@excelsior/core";
 import type { AnyHarnessEvent } from "./events.js";
 import type { HarnessSnapshot } from "./types.js";
-import { ProjectionAssistantState } from "./context/AssistantStateMachine.js";
+import { Projector } from "./projector/Projector.js";
 
 export interface CanonicalReadModel {
-  displayBlocks: ProjectedBlock[];
+  turns: ProjectedTurn[];
   aiHistory: AgentMessage[];
 }
 
 export class ProjectionCache {
-  private stateMachine = new ProjectionAssistantState();
-  private appliedEventCount = 0;
-  private lastAppliedEventId: string | undefined;
+  private projector = new Projector();
 
   project(events: readonly AnyHarnessEvent[]): CanonicalReadModel {
-    if (!this.canApplyIncrementally(events)) {
-      this.reset();
-    }
-
-    for (let index = this.appliedEventCount; index < events.length; index++) {
-      this.stateMachine.applyEvent(events[index]!);
-    }
-    this.appliedEventCount = events.length;
-    this.lastAppliedEventId = events.at(-1)?.id;
-    return this.stateMachine.getCanonicalReadModel();
+    return this.projector.project(events);
   }
 
   reset(): void {
-    this.stateMachine = new ProjectionAssistantState();
-    this.appliedEventCount = 0;
-    this.lastAppliedEventId = undefined;
-  }
-
-  private canApplyIncrementally(events: readonly AnyHarnessEvent[]): boolean {
-    if (this.appliedEventCount === 0) return true;
-    if (this.appliedEventCount > events.length) return false;
-    return events[this.appliedEventCount - 1]?.id === this.lastAppliedEventId;
+    this.projector.reset();
   }
 }
 
@@ -53,7 +34,7 @@ export function projectHarnessState(input: {
 }): HarnessSnapshot {
   const readModel = input.readModel ?? projectEvents(input.events);
   return {
-    displayBlocks: readModel.displayBlocks,
+    turns: readModel.turns,
     isLoading: input.isLoading,
     sessions: input.sessions,
     currentSessionId: input.currentSessionId,
@@ -69,8 +50,8 @@ export function projectEventsToMessages(events: readonly AnyHarnessEvent[]): Age
   return projectEvents(events).aiHistory;
 }
 
-export function projectEventsToDisplayBlocks(events: readonly AnyHarnessEvent[]): ProjectedBlock[] {
-  return projectEvents(events).displayBlocks;
+export function projectEventsToTurns(events: readonly AnyHarnessEvent[]): ProjectedTurn[] {
+  return projectEvents(events).turns;
 }
 
 export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalReadModel {

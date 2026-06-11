@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ProjectedBlock } from "@excelsior/core";
+import type { ProjectedBlock, ProjectedTurn } from "@excelsior/core";
 import {
   buildDesktopContextSnippets,
   contextRailStorageKey,
@@ -14,7 +14,7 @@ import {
 export function useDesktopContextRail(input: {
   workspacePath: string | null;
   sessionId: string | null;
-  blocks: readonly ProjectedBlock[];
+  turns: readonly ProjectedTurn[];
 }) {
   const storageKey = useMemo(
     () => input.workspacePath ? contextRailStorageKey(input.workspacePath, input.sessionId) : null,
@@ -38,9 +38,14 @@ export function useDesktopContextRail(input: {
     writeDesktopContextState(localStorage, state);
   }, [state, storageKey]);
 
+  const blocks = useMemo(
+    () => input.turns.flatMap((t) => t.blocks),
+    [input.turns],
+  );
+
   const snippets = useMemo(
-    () => buildDesktopContextSnippets(input.blocks),
-    [input.blocks],
+    () => buildDesktopContextSnippets(blocks),
+    [blocks],
   );
 
   const pinnedSnippets = useMemo(

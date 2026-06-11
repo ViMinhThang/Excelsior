@@ -8,17 +8,25 @@ import {
   SUB_AGENT_EVENT,
   TOOL_EXECUTION_END,
   TOOL_EXECUTION_START,
+  TURN_START,
+  TURN_END,
+  HISTORY_COMPACTED,
   makeHarnessEvent,
   type AnyHarnessEvent,
   type HarnessEventDataMap,
   type HarnessEventType,
 } from "../src/events.js";
-import { ProjectionAssistantState } from "../src/context/AssistantStateMachine.js";
+import { MessageHandler } from "../src/projector/MessageHandler.js";
 import {
   ProjectionCache,
-  projectEventsToDisplayBlocks,
+  projectEventsToTurns,
   projectEventsToMessages,
 } from "../src/projection.js";
+import type { ProjectedBlock } from "@excelsior/core";
+
+function projectEventsToDisplayBlocks(events: readonly AnyHarnessEvent[]): ProjectedBlock[] {
+  return projectEventsToTurns(events).flatMap((turn) => turn.blocks);
+}
 
 function event<T extends HarnessEventType>(
   sequence: number,
@@ -412,10 +420,10 @@ describe("harness projector", () => {
       }),
     ];
 
-    expect(cache.project(events).displayBlocks).toMatchObject([
+    expect(cache.project(events).turns.flatMap(t => t.blocks)).toMatchObject([
       { type: "assistant", id: "msg_stream", content: "hel" },
     ]);
-    expect(cache.project(events).displayBlocks).toMatchObject([
+    expect(cache.project(events).turns.flatMap(t => t.blocks)).toMatchObject([
       { type: "assistant", id: "msg_stream", content: "hel" },
     ]);
 
@@ -425,7 +433,7 @@ describe("harness projector", () => {
       delta: "lo",
     }));
 
-    const blocks = cache.project(events).displayBlocks;
+    const blocks = cache.project(events).turns.flatMap(t => t.blocks);
     expect(blocks).toHaveLength(1);
     expect(blocks).toMatchObject([
       { type: "assistant", id: "msg_stream", content: "hello" },
@@ -434,7 +442,7 @@ describe("harness projector", () => {
 
   it("only applies newly appended events after the first cached projection", () => {
     const cache = new ProjectionCache();
-    const applyEvent = vi.spyOn(ProjectionAssistantState.prototype, "applyEvent");
+    const applyEvent = vi.spyOn(MessageHandler.prototype, "apply");
     const events = [
       event(1, MESSAGE_START, {
         message: { id: "msg_stream", role: "assistant", content: "" },
@@ -457,5 +465,89 @@ describe("harness projector", () => {
 
     cache.project(events);
     expect(applyEvent).toHaveBeenCalledTimes(3);
+  });
+
+  it("groups events statefully by turn", () => {
+    const events = [
+      event(1, TURN_START, {}, { turnId: "turn_1" }),
+      event(2, MESSAGE_END, {
+        message: { id: "msg_1", role: "user", content: "hello" }
+      }, { turnId: "turn_1" }),
+      event(3, TURN_END, { cancelled: false }, { turnId: "turn_1" }),
+      event(4, TURN_START, {}, { turnId: "turn_2" }),
+      event(5, MESSAGE_END, {
+        message: { id: "msg_2", role: "assistant", content: "hi" }
+      }, { turnId: "turn_2" }),
+      event(6, TURN_END, { cancelled: false }, { turnId: "turn_2" }),
+    ];
+
+    const turns = projectEventsToTurns(events);
+    expect(turns).toHaveLength(2);
+    expect(turns[0]).toMatchObject({
+      id: "turn_1",
+      status: "completed",
+      blocks: [
+        { type: "user", content: "hello" }
+      ]
+    });
+    expect(turns[1]).toMatchObject({
+      id: "turn_2",
+      status: "completed",
+      blocks: [
+        { type: "assistant", content: "hi" }
+      ]
+    });
+  });
+
+  it("handles history compaction by pruning preceding turns and inserting a compaction boundary block", () => {
+    const events = [
+      event(1, TURN_START, {}, { turnId: "turn_1" }),
+      event(2, MESSAGE_END, {
+        message: { id: "msg_1", role: "user", content: "hello" }
+      }, { turnId: "turn_1" }),
+      event(3, TURN_END, { cancelled: false }, { turnId: "turn_1" }),
+      event(4, HISTORY_COMPACTED, {
+        summary: "Previous messages pruned",
+        compactedEventCount: 3,
+        triggerMode: "auto",
+      }, { turnId: "turn_compaction" }),
+    ];
+
+    const turns = projectEventsToTurns(events);
+    expect(turns).toHaveLength(1);
+    expect(turns[0]).toMatchObject({
+      id: "turn_compaction",
+      status: "completed",
+      blocks: [
+        {
+          type: "compaction-boundary",
+          summary: "Previous messages pruned",
+        }
+      ]
+    });
+  });
+
+  it("handles rollbacks statefully by recreating turns from replayed sequence", () => {
+    const cache = new ProjectionCache();
+    const events = [
+      event(1, TURN_START, {}, { turnId: "turn_1" }),
+      event(2, MESSAGE_END, {
+        message: { id: "msg_1", role: "user", content: "hello" }
+      }, { turnId: "turn_1" }),
+      event(3, MESSAGE_END, {
+        message: { id: "msg_2", role: "assistant", content: "hi" }
+      }, { turnId: "turn_1" }),
+    ];
+
+    const model1 = cache.project(events);
+    expect(model1.turns).toHaveLength(1);
+    expect(model1.turns[0].blocks).toHaveLength(2);
+
+    // Rollback: simulate truncating the last assistant message
+    const rolledBackEvents = events.slice(0, 2);
+    const model2 = cache.project(rolledBackEvents);
+    expect(model2.turns).toHaveLength(1);
+    expect(model2.turns[0].blocks).toHaveLength(1);
+    expect(model2.turns[0].blocks[0]).toMatchObject({ type: "user", content: "hello" });
   });
 });

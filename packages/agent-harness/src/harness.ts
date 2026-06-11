@@ -26,9 +26,8 @@ import { createBuiltInCommands } from "./commands.js";
 import {
   buildCompactionNotice,
   buildCompactionSummary,
-  buildRunContext,
-  loadProjectInstructions,
 } from "./context/index.js";
+import { buildRunAssembly } from "./context/runAssembly.js";
 import { GitHubReviewService } from "./github.js";
 import { revertLastCompletedTurn } from "./history/revert.js";
 import { copyHarnessEvents, replayHarnessEvents } from "./inspector.js";
@@ -52,7 +51,6 @@ import type {
   HarnessReplayReport,
   HarnessSettings,
   HarnessSnapshot,
-  ToolExecutionContext,
 } from "./types.js";
 
 export function createAgentHarness(config: HarnessConfig = {}): AgentHarness {
@@ -180,20 +178,33 @@ class HarnessStore implements AgentHarness {
     if (input.sessionId) await this.switchSession(input.sessionId);
 
     const session = this.ensureSession(content);
-    // load AGENTS.md
-    const projectInstructions = loadProjectInstructions(this.workspace.rootPath);
-    const runContext = buildRunContext({
-      events: this.eventStore.events,
-      userContent: content,
-      mode: this.mode,
-      skillsList: this.skillsList,
-      projectInstructions: projectInstructions?.content,
-    });
     const runId = `run_${randomUUID()}`;
     const turnId = `turn_${randomUUID()}`;
+    const runMode = input.mode;
     const run = this.activeRun.begin({ runId, turnId, sessionId: session.id });
 
-    this.mode = input.mode;
+    this.mode = runMode;
+
+    const assembly = buildRunAssembly({
+      workspaceRoot: this.workspace.rootPath,
+      storageRoot: this.storage.rootDir,
+      workspaceId: this.workspace.id,
+      sessionId: session.id,
+      runId,
+      turnId,
+      events: this.eventStore.events,
+      userContent: content,
+      mode: runMode,
+      abortSignal: run.signal,
+      settings: this.settingsStore.settings,
+      providers: this.providers,
+      tools: this.tools,
+      skillsList: this.skillsList,
+      confirm: (request) => this.requestConfirmation(request),
+      askQuestion: (request) => this.requestQuestion(request),
+      createEmitter: (activeRunId, activeSessionId, activeTurnId) =>
+        this.eventBus.createEmitter(activeRunId, activeSessionId, activeTurnId),
+    });
 
     if (!input.silent) {
       this.eventBus.emitUserMessage({
@@ -207,14 +218,14 @@ class HarnessStore implements AgentHarness {
  
     try {
       await this.runController.run({
-        messages: runContext.messages,
-        systemPrompt: runContext.systemPrompt,
+        messages: assembly.runContext.messages,
+        systemPrompt: assembly.runContext.systemPrompt,
         settings: this.settingsStore.settings,
         providers: this.providers,
         tools: this.tools,
-        toolContext: this.createToolContext(runId, session.id, turnId),
+        toolContext: assembly.toolContext,
         signal: run.signal,
-        emit: this.eventBus.createEmitter(runId, session.id, turnId),
+        emit: assembly.emit,
         getSteeringMessages: () => this.activeRun.drainSteeringMessages(),
       });
     } finally {
@@ -387,14 +398,17 @@ class HarnessStore implements AgentHarness {
   async compactCurrentSession(triggerMode: "manual" | "auto" = "manual"): Promise<void> {
     const session = this.sessionManager.currentSession();
     if (!session) return;
-    const compactedEventCount = this.eventStore.events.length;
+    const eventsToCompact = [...this.eventStore.events];
+    const compactedEventCount = eventsToCompact.length;
     if (compactedEventCount === 0) return;
 
-    const summary = await buildCompactionSummary(this.eventStore.events, {
+    this.eventStore.clear(session);
+    this.notifyNow();
+
+    const summary = await buildCompactionSummary(eventsToCompact, {
       providers: this.providers,
       settings: this.settingsStore.settings,
     });
-    this.eventStore.clear(session);
 
     const runId = `run_${randomUUID()}`;
     const turnId = `turn_${randomUUID()}`;
@@ -404,6 +418,7 @@ class HarnessStore implements AgentHarness {
       triggerMode,
     }, { sessionId: session.id, turnId });
     this.eventBus.emitAssistantMessage(runId, turnId, session.id, buildCompactionNotice(summary));
+    this.notifyNow();
   }
 
   setMode(mode: AgentMode): void {
@@ -459,28 +474,6 @@ class HarnessStore implements AgentHarness {
       session,
       this.storage.loadEvents(this.workspace.id, session.id),
     );
-  }
-
-  private createToolContext(runId?: string, sessionId?: string, turnId?: string): ToolExecutionContext {
-    const projectInstructions = loadProjectInstructions(this.workspace.rootPath);
-    return {
-      workspaceRoot: resolve(this.workspace.rootPath),
-      mode: this.mode,
-      abortSignal: this.activeRun.currentSignal(),
-      confirm: (request) => this.requestConfirmation(request),
-      askQuestion: (request) => this.requestQuestion(request),
-      sendSubAgent: async ({ role, prompt }) => {
-        const modePrefix = this.mode === "plan" ? "Plan-only analysis" : "Focused analysis";
-        return `${modePrefix} from ${role}:\n${prompt}`;
-      },
-      emit: runId && sessionId && turnId ? this.eventBus.createEmitter(runId, sessionId, turnId) : undefined,
-      settings: this.settingsStore.settings,
-      providers: this.providers,
-      tools: this.tools,
-      skillsList: this.skillsList,
-      projectInstructions: projectInstructions?.content,
-      backupDir: sessionId && turnId ? resolve(this.storage.rootDir, "backups", this.workspace.id, sessionId, turnId) : undefined,
-    };
   }
 
   private requestConfirmation(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse> {
@@ -563,6 +556,14 @@ class HarnessStore implements AgentHarness {
       this.notifyTimer = null;
       this.flushNotify();
     }, 0);
+  }
+
+  private notifyNow(): void {
+    if (this.notifyTimer) {
+      clearTimeout(this.notifyTimer);
+      this.notifyTimer = null;
+    }
+    this.flushNotify();
   }
 
   private flushPendingSnapshot(): void {

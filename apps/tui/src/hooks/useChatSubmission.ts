@@ -34,6 +34,9 @@ export function useChatSubmission({
     const command = getSubmittedCommand(trimmed);
     if (command) {
       resetInput();
+      if (command === "/compact" || command.startsWith("/compact ")) {
+        setCommandResult(null);
+      }
       executeCommand(command).then((result) => {
         if (!result.handled) return;
         if (result.message) setCommandResult(result.message);

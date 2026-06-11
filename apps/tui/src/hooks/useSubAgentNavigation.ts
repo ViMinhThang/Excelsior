@@ -1,16 +1,16 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import type { ProjectedBlock } from "@excelsior/core";
+import type { ProjectedBlock, ProjectedTurn } from "@excelsior/core";
 import type { ChatMode } from "../chatModes/types.js";
 
 type SubAgentBlock = ProjectedBlock & { type: "sub-agent" };
 
-export function useSubAgentNavigation(displayBlocks: ProjectedBlock[]) {
+export function useSubAgentNavigation(turns: ProjectedTurn[]) {
   const [chatMode, setChatMode] = useState<ChatMode>("input");
   const [subAgentIndex, setSubAgentIndex] = useState(0);
 
   const subAgentBlocks = useMemo(
-    () => displayBlocks.filter((block): block is SubAgentBlock => block.type === "sub-agent"),
-    [displayBlocks],
+    () => turns.flatMap((t) => t.blocks).filter((block): block is SubAgentBlock => block.type === "sub-agent"),
+    [turns],
   );
 
   useEffect(() => {

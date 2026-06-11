@@ -5,6 +5,7 @@ import type {
   CommandDefinition,
   ConfirmRequest,
   ProjectedBlock,
+  ProjectedTurn,
 } from "@excelsior/core";
 import type { AppHeaderProps } from "../components/shared/AppHeader.js";
 import type { FooterBarProps } from "../components/chat/FooterBar.js";
@@ -68,7 +69,7 @@ export interface BuildChatModeKeymapContextInput {
 }
 
 export interface BuildChatInteractionStateInput {
-  displayBlocks: ProjectedBlock[];
+  turns: ProjectedTurn[];
   chatMode: ChatMode;
   isLoading: boolean;
   pendingConfirmation: ConfirmRequest | null;
@@ -102,7 +103,7 @@ export interface ChatInteractionState {
 
 export interface BuildModeViewContextInput {
   chatMode: ChatMode;
-  displayBlocks: ProjectedBlock[];
+  turns: ProjectedTurn[];
   inputValue: string;
   setInput: (value: string) => void;
   handleSubmit: () => void;
@@ -149,8 +150,8 @@ export function getChatPendingState(input: {
   };
 }
 
-export function countToolCalls(blocks: ProjectedBlock[]): number {
-  return blocks.reduce((count, block) => {
+export function countToolCalls(turns: ProjectedTurn[]): number {
+  return turns.flatMap((t) => t.blocks).reduce((count, block) => {
     if (block.type === "tool-call") return count + 1;
     if (block.type === "sub-agent") return count + block.state.toolCalls.length;
     return count;
@@ -208,7 +209,7 @@ export function buildChatInteractionState(
     pendingConfirmation: input.pendingConfirmation,
     pendingQuestion: input.pendingQuestion,
   });
-  const toolCallCount = countToolCalls(input.displayBlocks);
+  const toolCallCount = countToolCalls(input.turns);
 
   const inputModeKeymap: InputModeKeymapContext = {
     chatMode: "input",
@@ -259,7 +260,7 @@ export function buildChatInteractionState(
 
 export function buildModeViewContext({
   chatMode,
-  displayBlocks,
+  turns,
   inputValue,
   setInput,
   handleSubmit,
@@ -291,7 +292,7 @@ export function buildModeViewContext({
       agentMode,
     },
     transcript: {
-      blocks: displayBlocks,
+      turns: turns,
       toolsExpanded,
       viewportKey,
     },

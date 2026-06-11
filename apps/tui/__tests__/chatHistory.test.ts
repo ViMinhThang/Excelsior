@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
-import type { ProjectedBlock } from "@excelsior/core";
+import type { ProjectedBlock, ProjectedTurn } from "@excelsior/core";
 import ChatHistory from "../src/components/chat/ChatHistory.js";
 import { renderTui } from "../src/platform/opentui/testing/renderTui.js";
 
@@ -55,7 +55,8 @@ describe("ChatHistory assistant rows", () => {
       },
     ];
 
-    const rendered = await renderTui(createElement(ChatHistory, { blocks }));
+    const turns: ProjectedTurn[] = [{ id: "turn_1", status: "completed", blocks }];
+    const rendered = await renderTui(createElement(ChatHistory, { turns }));
 
     expect(rendered.lastFrame() ?? "").toBe("");
   });
@@ -65,7 +66,8 @@ describe("ChatHistory command expansion", () => {
   it("shows collapsed summaries for tool calls and sub-agent counts by default, and expanded details when toolsExpanded is true", async () => {
     const blocks = [rootToolBlock(), subAgentBlock()];
 
-    const collapsed = await renderTui(createElement(ChatHistory, { blocks, toolsExpanded: false }));
+    const turns: ProjectedTurn[] = [{ id: "turn_1", status: "completed", blocks }];
+    const collapsed = await renderTui(createElement(ChatHistory, { turns, toolsExpanded: false }));
     const collapsedFrame = collapsed.lastFrame() ?? "";
     expect(collapsedFrame).toContain("read README.md");
     expect(collapsedFrame).toContain("(Ctrl+O to expand)");
@@ -74,7 +76,7 @@ describe("ChatHistory command expansion", () => {
     expect(collapsedFrame).toContain("Listfiles packages");
 
     const expanded = await renderTui(createElement(ChatHistory, {
-      blocks,
+      turns,
       toolsExpanded: true,
     }));
     const expandedFrame = expanded.lastFrame() ?? "";

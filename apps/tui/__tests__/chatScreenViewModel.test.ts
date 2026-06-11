@@ -225,7 +225,7 @@ describe("chat screen model builders", () => {
     };
 
     const plane = buildChatInteractionState({
-      displayBlocks: [toolBlock("tool_root"), selectedSubAgent],
+      turns: [{ id: "turn_1", status: "completed", blocks: [toolBlock("tool_root"), selectedSubAgent] }],
       chatMode: "input",
       isLoading: false,
       pendingConfirmation: null,
@@ -262,8 +262,10 @@ describe("chat screen model builders", () => {
 
   it("keeps chat control plane derivations local", () => {
     expect(countToolCalls([
-      toolBlock("tool_root"),
-      subAgentBlockWithTool("sub_tool"),
+      { id: "turn_1", status: "completed", blocks: [
+        toolBlock("tool_root"),
+        subAgentBlockWithTool("sub_tool"),
+      ] }
     ])).toBe(2);
     expect(getChatPendingState({
       pendingConfirmation: pendingRequest(),
@@ -275,10 +277,10 @@ describe("chat screen model builders", () => {
     const selectedTool = toolBlock("tool_selected");
     const otherTool = toolBlock("tool_other");
     const selectedSubAgent = subAgentBlock("sub_selected");
-    const displayBlocks: ProjectedBlock[] = [selectedSubAgent, selectedTool, otherTool];
+    const turns: ProjectedTurn[] = [{ id: "turn_1", status: "completed", blocks: [selectedSubAgent, selectedTool, otherTool] }];
     const context = buildModeViewContext({
       chatMode: "subagent-picker",
-      displayBlocks,
+      turns,
       inputValue: "/review ",
       setInput: noop,
       handleSubmit: noop,
@@ -305,7 +307,7 @@ describe("chat screen model builders", () => {
     if (context.chatMode !== "subagent-picker") throw new Error("expected sub-agent picker context");
     expect(context.input.value).toBe("/review ");
     expect(context.runtime.commandResult).toBe("done");
-    expect(context.transcript.blocks).toBe(displayBlocks);
+    expect(context.transcript.turns).toBe(turns);
     expect(context.transcript.toolsExpanded).toBe(true);
     expect(context.subAgents.blocks).toEqual([selectedSubAgent]);
     expect("tools" in context).toBe(false);
@@ -313,9 +315,10 @@ describe("chat screen model builders", () => {
 
   it("builds sub-agent detail context with only owned mode state", () => {
     const selectedSubAgent = subAgentBlock("sub_selected");
+    const turns: ProjectedTurn[] = [{ id: "turn_1", status: "completed", blocks: [selectedSubAgent] }];
     const context = buildModeViewContext({
       chatMode: "subagent-detail",
-      displayBlocks: [selectedSubAgent],
+      turns,
       inputValue: "",
       setInput: noop,
       handleSubmit: noop,

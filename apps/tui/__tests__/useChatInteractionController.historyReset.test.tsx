@@ -1,7 +1,7 @@
 import { act } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentClientState, AgentHost } from "@excelsior/client";
-import type { ProjectedBlock } from "@excelsior/core";
+import type { ProjectedBlock, ProjectedTurn } from "@excelsior/core";
 import { AgentHostProvider } from "../src/context/AgentHostContext.js";
 import { NavigationProvider } from "../src/context/NavigationContext.js";
 import { useChatInteractionController } from "../src/hooks/useChatInteractionController.js";
@@ -16,7 +16,7 @@ class MutableHost implements AgentHost {
 
   constructor(initialBlocks: ProjectedBlock[]) {
     this.state = {
-      displayBlocks: initialBlocks,
+      turns: [{ id: "turn_1", status: "completed", blocks: initialBlocks }],
       isLoading: false,
       sessions: [],
       currentSessionId: "ses_1",
@@ -116,11 +116,15 @@ describe("useChatInteractionController history reset", () => {
     rendererMocks.resize.mockClear();
     await act(async () => {
       host.setState({
-        displayBlocks: [
-          userBlock("user_1"),
-          assistantBlock("assistant_1"),
-          userBlock("user_2", "next"),
-        ],
+        turns: [{
+          id: "turn_1",
+          status: "completed",
+          blocks: [
+            userBlock("user_1"),
+            assistantBlock("assistant_1"),
+            userBlock("user_2", "next"),
+          ],
+        }],
       });
       await screen.flush();
     });
@@ -141,7 +145,7 @@ describe("useChatInteractionController history reset", () => {
     rendererMocks.requestRender.mockClear();
     rendererMocks.resize.mockClear();
     await act(async () => {
-      host.setState({ displayBlocks: [] });
+      host.setState({ turns: [] });
       await screen.flush();
     });
 
@@ -162,10 +166,14 @@ describe("useChatInteractionController history reset", () => {
     await act(async () => {
       host.setState({
         currentSessionId: "ses_2",
-        displayBlocks: [
-          userBlock("user_9"),
-          assistantBlock("assistant_9"),
-        ],
+        turns: [{
+          id: "turn_2",
+          status: "completed",
+          blocks: [
+            userBlock("user_9"),
+            assistantBlock("assistant_9"),
+          ],
+        }],
       });
       await screen.flush();
     });
