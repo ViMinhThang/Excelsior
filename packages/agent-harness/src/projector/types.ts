@@ -26,7 +26,6 @@ export interface ProjectionHandler {
 export interface ProjectionContext {
   messages: MessageProjectionActions;
   tools: ToolProjectionActions;
-  reasoning: ReasoningProjectionActions;
   lifecycle: LifecycleProjectionActions;
   subAgents: SubAgentProjectionActions;
 }
@@ -54,9 +53,7 @@ export interface ToolProjectionActions {
   }): void;
 }
 
-export interface ReasoningProjectionActions {
-  finish(input: { id: string; content: string; turnId?: string; timestamp: string }): void;
-}
+
 
 export interface LifecycleProjectionActions {
   startTurn(input: { turnId: string; timestamp: string }): void;

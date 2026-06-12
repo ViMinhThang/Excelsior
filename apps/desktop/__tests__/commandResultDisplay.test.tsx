@@ -15,6 +15,13 @@ function state(): AgentClientState {
     mode: "act",
     pendingConfirmation: null,
     pendingQuestion: null,
+    reflection: {
+      status: "idle",
+      memoryRoot: "",
+      lastRunAt: undefined,
+      lastSummary: undefined,
+      touchedFiles: [],
+    },
   };
 }
 
@@ -32,6 +39,7 @@ describe("desktop command result display", () => {
       onRespondToQuestion: vi.fn(),
       onSend: vi.fn(),
       onToggleToolCall: vi.fn(),
+      onCancelReflection: vi.fn(),
     }));
 
     expect(html).toContain("data-testid=\"command-result\"");

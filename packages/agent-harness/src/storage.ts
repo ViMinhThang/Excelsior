@@ -194,10 +194,7 @@ export class FileHarnessStorage {
   private appendSessionLines(workspaceId: string, session: Session, event: AnyHarnessEvent): void {
     const path = this.sessionPath(workspaceId, session.id);
     this.ensureDirectory(this.sessionDirectory(workspaceId));
-    const lines = [
-      JSON.stringify({ kind: "event", event } satisfies SessionFileLine),
-    ];
-    appendFileSync(path, `${lines.join("\n")}\n`, "utf-8");
+    appendFileSync(path, `${JSON.stringify({ kind: "event", event } satisfies SessionFileLine)}\n`, "utf-8");
   }
 
   private deriveSessionFromEvents(session: Session, events: readonly AnyHarnessEvent[]): Session {

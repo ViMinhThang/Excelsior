@@ -176,7 +176,8 @@ export function updateSubAgentState(
 export function appendTextPart(parts: ProjectedSubAgent["parts"], delta: string): ProjectedSubAgent["parts"] {
   const last = parts.at(-1);
   if (last?.type === "text") {
-    return [...parts.slice(0, -1), { type: "text", text: `${last.text}${delta}` }];
+    last.text = `${last.text}${delta}`;
+    return parts;
   }
   return [...parts, { type: "text", text: delta }];
 }

@@ -5,7 +5,7 @@ export { SettingsStore } from "./SettingsStore.js";
 export { ConfirmationRouter } from "./ConfirmationRouter.js";
 export { EventStore } from "./EventStore.js";
 export { SessionManager } from "./SessionManager.js";
-export { RunController } from "./run/RunController.js";
+export { runAgentLoop } from "./run/RunController.js";
 export { ReflectionMemoryStore, type ReflectionMemoryState } from "./reflection/ReflectionMemoryStore.js";
 export {
   ReflectionRunManager,
@@ -53,7 +53,6 @@ export type {
   HarnessSnapshot,
   HarnessTool,
   ReviewCommandServices,
-  ToolCapability,
   ToolExecutionContext,
   ToolResult,
 } from "./types.js";

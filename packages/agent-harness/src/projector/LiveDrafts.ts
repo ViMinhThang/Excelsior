@@ -7,20 +7,17 @@ import {
 
 export class LiveDrafts {
   private assistant: AssistantDraft | null = null;
-  private reasoning: AssistantDraft | null = null;
   private tool: ToolDraft | null = null;
-  private readonly displayIdCounts = new Map<string, number>();
 
   constructor(
     private readonly turns: TurnStore,
     private readonly subAgentStates: Map<string, ProjectedSubAgent>,
+    private readonly displayIdCounts: Map<string, number>,
   ) {}
 
   reset(): void {
     this.assistant = null;
-    this.reasoning = null;
     this.tool = null;
-    this.displayIdCounts.clear();
   }
 
   get activeTool(): ToolDraft | null {
@@ -49,12 +46,6 @@ export class LiveDrafts {
     this.flushTool(true);
     this.assistant = input;
     this.flushAssistant(true, turnId);
-  }
-
-  finishReasoning(input: AssistantDraft, turnId?: string): void {
-    this.flushAll(true, turnId);
-    this.reasoning = input;
-    this.flushReasoning(true, turnId);
   }
 
   startTool(input: ToolDraft, turnId?: string): void {
@@ -100,22 +91,9 @@ export class LiveDrafts {
     this.tool = null;
   }
 
-  flushReasoning(forceFrozen?: boolean, turnId?: string): void {
-    if (!this.reasoning) return;
-    this.turns.upsertBlock(turnId, {
-      type: "reasoning",
-      id: this.reasoning.id,
-      content: this.reasoning.content,
-      timestamp: this.reasoning.timestamp,
-      ...(forceFrozen || this.reasoning.frozen ? { isFrozen: true as const } : {}),
-    });
-    this.reasoning = null;
-  }
-
   flushAll(forceFrozen?: boolean, turnId?: string): void {
     this.flushAssistant(forceFrozen, turnId);
     this.flushTool(forceFrozen);
-    this.flushReasoning(forceFrozen, turnId);
   }
 
   upsertTool(draft: ToolDraft, forceFrozen?: boolean): void {
@@ -138,15 +116,7 @@ export class LiveDrafts {
       });
     }
 
-    if (this.reasoning) {
-      activeTurn.blocks = upsertSnapshotBlock(activeTurn.blocks, {
-        type: "reasoning",
-        id: this.snapshotBlockId(this.reasoning.id, activeTurn.blocks),
-        content: this.reasoning.content,
-        timestamp: this.reasoning.timestamp,
-        ...(this.reasoning.frozen ? { isFrozen: true as const } : {}),
-      });
-    }
+
 
     if (this.tool) {
       activeTurn.blocks = upsertSnapshotBlock(
@@ -161,7 +131,7 @@ export class LiveDrafts {
   private ensureMaterializedActiveTurn(turns: ProjectedTurn[]): ProjectedTurn | null {
     let activeTurnId = this.turns.currentId;
     if (!activeTurnId) {
-      if (turns.length === 0 && !this.assistant && !this.reasoning && !this.tool) {
+      if (turns.length === 0 && !this.assistant && !this.tool) {
         return null;
       }
       activeTurnId = this.turns.list().at(-1)?.id ?? "turn_default";

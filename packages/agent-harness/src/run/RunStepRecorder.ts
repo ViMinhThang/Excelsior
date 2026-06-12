@@ -1,6 +1,6 @@
 import type { TextStreamPart, ToolSet } from "ai";
 import type { AgentMessage } from "@excelsior/core";
-import { ERROR, REASONING_END, type HarnessEventEmitter } from "../events.js";
+import { ERROR, type HarnessEventEmitter } from "../events.js";
 import { RunEventWriter } from "../context/RunEventWriter.js";
 
 type StepToolCall = {
@@ -27,8 +27,6 @@ export interface RunStepResult {
 
 export class RunStepRecorder {
   private stepText = "";
-  private stepReasoning = "";
-  private reasoningId = "";
   private hasToolCalls = false;
   private failureMessage: string | undefined;
   private status: RunStepStatus = "completed";
@@ -56,15 +54,8 @@ export class RunStepRecorder {
         this.input.writer.endMessage(this.input.messageIdForTextPart(part.id));
         break;
       case "reasoning-start":
-        this.reasoningId = part.id;
-        this.input.writer.startReasoning(part.id);
-        break;
       case "reasoning-delta":
-        this.stepReasoning += part.text;
-        this.input.writer.updateReasoning(part.id, part.text);
-        break;
       case "reasoning-end":
-        this.finishReasoning(part.id);
         break;
       case "tool-input-start":
         this.input.writer.startTool(part.id, part.toolName);
@@ -113,7 +104,6 @@ export class RunStepRecorder {
           ? "Tool execution was cancelled before the tool input completed."
           : `Tool input failed before execution.${this.failureMessage ? ` ${this.failureMessage}` : ""}`,
       );
-      this.flushReasoning();
     }
 
     return {
@@ -158,25 +148,7 @@ export class RunStepRecorder {
     });
   }
 
-  private finishReasoning(messageId: string): void {
-    this.input.writer.endReasoning();
-    if (this.stepReasoning) {
-      this.input.emit(REASONING_END, { messageId, content: this.stepReasoning });
-    }
-    this.stepReasoning = "";
-    this.reasoningId = "";
-  }
 
-  private flushReasoning(): void {
-    if (this.stepReasoning && this.reasoningId) {
-      this.input.emit(REASONING_END, {
-        messageId: this.reasoningId,
-        content: this.stepReasoning,
-      });
-    }
-    this.stepReasoning = "";
-    this.reasoningId = "";
-  }
 
   private toMessages(): AgentMessage[] {
     const messages: AgentMessage[] = [];

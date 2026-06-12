@@ -18,13 +18,7 @@ import type { ProviderRegistry, ToolRegistry } from "./registries.js";
 export type HarnessSettings = AppSettings;
 export type HarnessSnapshot = AgentClientState;
 
-export type ToolCapability =
-  | "fs:read"
-  | "fs:write"
-  | "shell"
-  | "network"
-  | "git"
-  | "sub-agent";
+
 
 export interface HarnessProvider {
   id: string;
@@ -66,7 +60,6 @@ export interface HarnessTool<TInput = unknown> {
   name: string;
   description: string;
   inputSchema: z.ZodType<TInput>;
-  capabilities: ToolCapability[];
   execute(input: TInput, ctx: ToolExecutionContext, options?: ToolExecuteOptions): Promise<ToolResult>;
 }
 

@@ -4,6 +4,7 @@ import type {
   CommandDefinition,
   ProjectedBlock,
   ProjectedTurn,
+  Workspace,
 } from "@excelsior/core";
 import type { KeyMap } from "../lib/keymapRegistry.js";
 import type { TuiPanelContext, TuiPanelDefinition } from "../lib/panels.js";
@@ -38,6 +39,8 @@ export interface ChatModeHintContext {
 }
 
 export interface ConversationRenderContext {
+  workspace: Workspace;
+  sessionId: string | null;
   input: {
     value: string;
     setValue: (value: string) => void;

@@ -22,7 +22,6 @@ function createListMemoryTool(store: ReflectionMemoryStore): HarnessTool<z.infer
     name: "listMemory",
     description: "List markdown files in the Excelsior reflection memory root.",
     inputSchema: emptySchema,
-    capabilities: ["fs:read"],
     async execute() {
       const files = store.listMemoryFiles();
       return text(files.length === 0 ? "Memory is empty." : files.join("\n"));
@@ -39,7 +38,6 @@ function createReadMemoryTool(store: ReflectionMemoryStore): HarnessTool<z.infer
     name: "readMemory",
     description: "Read a markdown file from the Excelsior reflection memory root.",
     inputSchema: readMemorySchema,
-    capabilities: ["fs:read"],
     async execute({ filePath }) {
       return text(store.readMemoryFile(filePath));
     },
@@ -59,7 +57,6 @@ function createWriteMemoryTool(
     name: "writeMemory",
     description: "Create or overwrite a markdown file inside the Excelsior reflection memory root.",
     inputSchema: writeMemorySchema,
-    capabilities: ["fs:write"],
     async execute({ filePath, content }) {
       const touched = store.writeMemoryFile(filePath, content);
       onTouchedFile(touched);

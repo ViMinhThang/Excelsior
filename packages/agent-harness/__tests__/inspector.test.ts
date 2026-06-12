@@ -66,6 +66,13 @@ function inspection(events: AnyHarnessEvent[], isLoading = false): HarnessInspec
       mode: "act",
       pendingConfirmation: null,
       pendingQuestion: null,
+      reflection: {
+        status: "idle",
+        memoryRoot: "",
+        lastRunAt: undefined,
+        lastSummary: undefined,
+        touchedFiles: [],
+      },
     }),
   };
 }

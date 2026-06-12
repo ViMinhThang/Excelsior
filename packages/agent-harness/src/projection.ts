@@ -48,14 +48,6 @@ export function projectHarnessState(input: {
   };
 }
 
-export function projectEventsToMessages(events: readonly AnyHarnessEvent[]): AgentMessage[] {
-  return projectEvents(events).aiHistory;
-}
-
-export function projectEventsToTurns(events: readonly AnyHarnessEvent[]): ProjectedTurn[] {
-  return projectEvents(events).turns;
-}
-
 export function projectEvents(events: readonly AnyHarnessEvent[]): CanonicalReadModel {
   return new ProjectionCache().project(events);
 }

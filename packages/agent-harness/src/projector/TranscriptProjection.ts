@@ -19,7 +19,8 @@ export class TranscriptProjection implements ProjectionContext {
   private readonly turns = new TurnStore();
   private readonly history = new AiHistory();
   private readonly subAgentStates = new Map<string, ProjectedSubAgent>();
-  private readonly drafts = new LiveDrafts(this.turns, this.subAgentStates);
+  private readonly displayIdCounts = new Map<string, number>();
+  private readonly drafts = new LiveDrafts(this.turns, this.subAgentStates, this.displayIdCounts);
 
   public readonly messages = {
     startAssistant: (input: { id: string; content: string; turnId?: string; timestamp: string }) => {
@@ -95,17 +96,6 @@ export class TranscriptProjection implements ProjectionContext {
         startTimestamp: input.timestamp,
         endTimestamp: input.timestamp,
       });
-    },
-  };
-
-  public readonly reasoning = {
-    finish: (input: { id: string; content: string; turnId?: string; timestamp: string }) => {
-      this.drafts.finishReasoning({
-        id: input.id,
-        content: input.content,
-        timestamp: input.timestamp,
-        frozen: true,
-      }, input.turnId);
     },
   };
 
@@ -202,7 +192,7 @@ export class TranscriptProjection implements ProjectionContext {
     },
   };
 
-  private displayIdCounts = new Map<string, number>();
+
 
   apply(event: AnyHarnessEvent, handlers: Map<string, ProjectionHandler>): void {
     handlers.get(event.type)?.apply(event, this);

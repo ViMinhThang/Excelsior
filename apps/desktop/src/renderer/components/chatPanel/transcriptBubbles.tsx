@@ -140,18 +140,7 @@ function SubAgentBubble({ block }: { block: Extract<ProjectedBlock, { type: "sub
   );
 }
 
-function ReasoningBubble({ block }: { block: Extract<ProjectedBlock, { type: "reasoning" }> }) {
-  return (
-    <div className="flex gap-3 pr-14 animate-fade-in-snappy opacity-70 pl-11">
-      <div className="flex-1 min-w-0 max-w-[82ch] select-text italic text-brand-text-muted">
-        <div className="text-[11px] font-bold tracking-wide uppercase not-italic mb-1 text-brand-text-muted/80">
-          Thinking Process
-        </div>
-        <MarkdownMessage block={block} />
-      </div>
-    </div>
-  );
-}
+
 
 function CompactionBoundaryBubble({ block }: { block: Extract<ProjectedBlock, { type: "compaction-boundary" }> }) {
   return (
@@ -171,7 +160,7 @@ import { memo } from "react";
 export const MessageBlock = memo(function MessageBlock({ block, isToolOpen, onToggleToolCall }: MessageBlockProps) {
   if (block.type === "user") return <UserBubble block={block} />;
   if (block.type === "assistant") return <AssistantBubble block={block} />;
-  if (block.type === "reasoning") return <ReasoningBubble block={block} />;
+
   if (block.type === "tool-call") {
     return <ToolBubble block={block} isOpen={isToolOpen} onToggle={onToggleToolCall} />;
   }

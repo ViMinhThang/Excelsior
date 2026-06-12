@@ -4,6 +4,7 @@ import type {
   CommandDefinition,
   ConfirmRequest,
   ProjectedBlock,
+  ProjectedTurn,
 } from "@excelsior/core";
 import {
   buildChatInteractionState,
@@ -279,6 +280,8 @@ describe("chat screen model builders", () => {
     const selectedSubAgent = subAgentBlock("sub_selected");
     const turns: ProjectedTurn[] = [{ id: "turn_1", status: "completed", blocks: [selectedSubAgent, selectedTool, otherTool] }];
     const context = buildModeViewContext({
+      workspace: { id: "ws", name: "Workspace", rootPath: "C:/repo" },
+      sessionId: "ses",
       chatMode: "subagent-picker",
       turns,
       inputValue: "/review ",
@@ -317,6 +320,8 @@ describe("chat screen model builders", () => {
     const selectedSubAgent = subAgentBlock("sub_selected");
     const turns: ProjectedTurn[] = [{ id: "turn_1", status: "completed", blocks: [selectedSubAgent] }];
     const context = buildModeViewContext({
+      workspace: { id: "ws", name: "Workspace", rootPath: "C:/repo" },
+      sessionId: "ses",
       chatMode: "subagent-detail",
       turns,
       inputValue: "",

@@ -34,7 +34,7 @@ import { copyHarnessEvents, replayHarnessEvents } from "./inspector.js";
 import { createDeepSeekProvider } from "./provider.js";
 import { projectHarnessState, ProjectionCache } from "./projection.js";
 import { CommandRegistry, ExtensionRegistry, ProviderRegistry, ToolRegistry } from "./registries.js";
-import { RunController } from "./run/RunController.js";
+import { runAgentLoop } from "./run/RunController.js";
 import { FileHarnessStorage } from "./storage.js";
 import { SessionManager } from "./SessionManager.js";
 import { EventStore } from "./EventStore.js";
@@ -63,7 +63,7 @@ class HarnessStore implements AgentHarness {
   private readonly providers = new ProviderRegistry();
   private readonly tools = new ToolRegistry();
   private readonly commands = new CommandRegistry();
-  private readonly runController = new RunController();
+
   private readonly extensions: ExtensionRegistry;
   private readonly listeners = new Set<() => void>();
   private readonly workspace: Workspace;
@@ -202,7 +202,7 @@ class HarnessStore implements AgentHarness {
       sessionId: session.id,
       runId,
       turnId,
-      events: this.eventStore.events,
+      priorMessages: this.projectionCache.project(this.eventStore.events).aiHistory,
       userContent: content,
       mode: runMode,
       abortSignal: run.signal,
@@ -227,7 +227,7 @@ class HarnessStore implements AgentHarness {
     }
  
     try {
-      await this.runController.run({
+      await runAgentLoop({
         messages: assembly.runContext.messages,
         systemPrompt: assembly.runContext.systemPrompt,
         settings: this.settingsStore.settings,
@@ -426,10 +426,13 @@ class HarnessStore implements AgentHarness {
     this.eventStore.clear(session);
     this.notifyNow();
 
-    const summary = await buildCompactionSummary(eventsToCompact, {
-      providers: this.providers,
-      settings: this.settingsStore.settings,
-    });
+    const summary = await buildCompactionSummary(
+      this.projectionCache.project(eventsToCompact).aiHistory,
+      {
+        providers: this.providers,
+        settings: this.settingsStore.settings,
+      },
+    );
 
     const runId = `run_${randomUUID()}`;
     const turnId = `turn_${randomUUID()}`;
@@ -472,17 +475,9 @@ class HarnessStore implements AgentHarness {
       return token;
     });
     return createBuiltInCommands({
-      getDefinitions: () => this.commandsForHelp(),
+      getDefinitions: () => this.commands.list(),
       reviewServices,
     });
-  }
-
-  private commandsForHelp(): readonly HarnessCommand[] {
-    const definitions = this.commands.list();
-    return definitions.map((definition) => ({
-      definition,
-      execute: () => ({ handled: true }),
-    }));
   }
 
   private loadCurrentSessionEvents(): void {
@@ -554,7 +549,7 @@ class HarnessStore implements AgentHarness {
     this.snapshot = projectHarnessState({
       events: this.eventStore.events,
       readModel: this.projectionCache.project(this.eventStore.events),
-      isLoading: this.activeRun.isLoading(),
+      isLoading: this.activeRun.isActive(),
       sessions: this.sessionManager.sessions,
       currentSessionId: this.sessionManager.currentSessionId,
       workspace: this.workspace,

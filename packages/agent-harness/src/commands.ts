@@ -1,4 +1,4 @@
-import { SESSION_PICKER_PANEL_ID, type CommandResult } from "@excelsior/core";
+import { SESSION_PICKER_PANEL_ID, type CommandResult, type CommandDefinition } from "@excelsior/core";
 import {
   formatHarnessReplayReport,
   formatHarnessTrace,
@@ -7,13 +7,13 @@ import {
 import type { AgentHarness, HarnessCommand, ReviewCommandServices } from "./types.js";
 
 export function createBuiltInCommands(input: {
-  getDefinitions: () => readonly HarnessCommand[];
+  getDefinitions: () => readonly CommandDefinition[];
   reviewServices?: ReviewCommandServices;
 }): HarnessCommand[] {
   return [
     command("help", "core", "Show available commands", "/help", async () => ({
       handled: true,
-      message: formatHelp(input.getDefinitions().map((item) => item.definition)),
+      message: formatHelp(input.getDefinitions()),
       clearInput: true,
     })),
     command("clear", "core", "Clear chat messages from the screen", "/clear", async (_args, harness) => {

@@ -3,7 +3,6 @@ import type { AnyHarnessEvent, HarnessEventType } from "../events.js";
 import { MessageHandler } from "./MessageHandler.js";
 import { ToolHandler } from "./ToolHandler.js";
 import { SubAgentHandler } from "./SubAgentHandler.js";
-import { ReasoningHandler } from "./ReasoningHandler.js";
 import { LifecycleHandler } from "./LifecycleHandler.js";
 import type { ProjectionHandler } from "./types.js";
 import { TranscriptProjection } from "./TranscriptProjection.js";
@@ -20,7 +19,6 @@ export class Projector {
       new MessageHandler(),
       new ToolHandler(),
       new SubAgentHandler(),
-      new ReasoningHandler(),
       new LifecycleHandler(),
     ]);
   }

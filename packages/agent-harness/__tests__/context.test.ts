@@ -14,6 +14,7 @@ import {
   ToolRegistry,
   type HarnessSettings,
 } from "@excelsior/agent-harness";
+import { projectEvents } from "../src/projection.js";
 import { buildRunAssembly, type RunAssemblyInput } from "../src/context/runAssembly.js";
 import {
   type HarnessEventEmitter,
@@ -66,7 +67,7 @@ describe("harness context helpers", () => {
 
     const instructions = loadProjectInstructions(workspaceRoot);
     const context = buildRunContext({
-      events: [],
+      priorMessages: [],
       userContent: "inspect the repo",
       mode: "plan",
       skillsList: "- diagnose: Debug failures",
@@ -93,6 +94,7 @@ describe("harness context helpers", () => {
       deepseekApiKey: "",
       githubToken: "",
       agentToolLoopSteps: "unlimited",
+      autoReflectionEnabled: false,
     };
     const createEmitter = (runId: string, sessionId: string, turnId: string): HarnessEventEmitter =>
       (type, data, options) =>
@@ -115,7 +117,7 @@ describe("harness context helpers", () => {
       sessionId: "ses_test",
       runId: "run_test",
       turnId: "turn_test",
-      events: [],
+      priorMessages: [],
       userContent: "inspect the repo",
       mode: "plan" satisfies AgentMode,
       settings,
@@ -161,7 +163,8 @@ describe("harness context helpers", () => {
       }),
     ];
 
-    const summary = await buildCompactionSummary(events);
+    const messages = projectEvents(events).aiHistory;
+    const summary = await buildCompactionSummary(messages);
 
     expect(summary).toContain("USER: original request");
     expect(summary).toContain("ASSISTANT: final answer");
@@ -219,7 +222,7 @@ describe("harness context helpers", () => {
     ];
 
     const context = buildRunContext({
-      events,
+      priorMessages: projectEvents(events).aiHistory,
       userContent: "now summarize it",
       mode: "act",
     });
