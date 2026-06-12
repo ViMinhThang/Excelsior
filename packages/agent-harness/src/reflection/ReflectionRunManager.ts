@@ -9,9 +9,9 @@ import {
   type HarnessEventEmitter,
   type HarnessEventType,
 } from "../events.js";
-import { projectEventsToMessages } from "../projection.js";
+import { ProjectionCache } from "../projection.js";
 import type { ProviderRegistry } from "../registries.js";
-import { RunController } from "../run/RunController.js";
+import { runAgentLoop } from "../run/RunController.js";
 import type { FileHarnessStorage } from "../storage.js";
 import type { SessionManager } from "../SessionManager.js";
 import type { SettingsStore } from "../SettingsStore.js";
@@ -59,7 +59,6 @@ export function shouldStartAutoReflection(input: {
 
 export class ReflectionRunManager {
   private readonly store: ReflectionMemoryStore;
-  private readonly runController = new RunController();
   private currentRun: { controller: AbortController; promise: Promise<void> } | null = null;
   private status: ReflectionClientState["status"] = "idle";
   private failedSummary: string | undefined;
@@ -165,7 +164,7 @@ export class ReflectionRunManager {
       sessionCorpus: corpus.text,
     });
 
-    await this.runController.run({
+    await runAgentLoop({
       messages: [{ role: "user", content: prompt }],
       systemPrompt: "You are Excelsior's private background reflection worker. Use only memory tools.",
       settings,
@@ -248,12 +247,15 @@ export class ReflectionRunManager {
     const sessionIds: string[] = [];
     let totalChars = 0;
 
+    const cache = new ProjectionCache();
+
     for (const session of this.input.sessionManager.sessions.slice(0, RECENT_SESSION_LIMIT)) {
       if (totalChars >= TOTAL_CORPUS_CHAR_LIMIT) break;
 
-      const messages = projectEventsToMessages(
+      cache.reset();
+      const messages = cache.project(
         this.input.storage.loadEvents(this.input.workspace.id, session.id),
-      );
+      ).aiHistory;
       if (messages.length === 0) continue;
 
       const transcript = messages.map(formatMessage).join("\n\n");

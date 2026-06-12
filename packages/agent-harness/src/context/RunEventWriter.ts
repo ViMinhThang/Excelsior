@@ -63,19 +63,6 @@ export class RunEventWriter {
     this.assistant = null;
   }
 
-  startReasoning(_id?: string): void {
-    // Reasoning events (start/update) are not emitted.
-    // They are only accumulated in the active controller and emitted as REASONING_END.
-  }
-
-  updateReasoning(_id: string, _delta: string): void {
-    // Reasoning events (start/update) are not emitted.
-  }
-
-  endReasoning(): void {
-    // Reasoning events (start/update) are not emitted.
-  }
-
   startTool(callId: string, toolName: string): void {
     this.endMessage();
 

@@ -10,7 +10,6 @@ import {
   type ToolExecutionContext,
 } from "@excelsior/agent-harness";
 import {
-  AGENT_START,
   MESSAGE_END,
   MESSAGE_START,
   MESSAGE_UPDATE,
@@ -106,7 +105,6 @@ describe("AgentHarness", () => {
     harness.subscribe(listener);
 
     const store = harness as any;
-    store.eventBus.emit("run_notify", AGENT_START, {}, { sessionId, turnId: "turn_notify" });
     store.eventBus.emit("run_notify", TURN_START, {}, { sessionId, turnId: "turn_notify" });
     store.eventBus.emit("run_notify", TOOL_EXECUTION_START, {
       toolCallId: "call_notify",

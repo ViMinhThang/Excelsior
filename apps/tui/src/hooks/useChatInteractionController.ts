@@ -72,6 +72,8 @@ export function useChatInteractionController(): ChatScreenViewModel {
       modelLabel: `${llm.providerName} · ${llm.modelName}`,
     },
     modeView: buildModeViewContext({
+      workspace,
+      sessionId: currentSessionId,
       chatMode: runtime.subAgentNav.chatMode,
       turns: runtime.derivedTurns,
       inputValue: runtime.inputHistory.input,

@@ -40,10 +40,6 @@ export class ActiveRunManager {
     return this.current !== null;
   }
 
-  isLoading(): boolean {
-    return this.isActive();
-  }
-
   currentIdentity(): ActiveRunIdentity | null {
     if (!this.current) return null;
     const { runId, turnId, sessionId } = this.current;

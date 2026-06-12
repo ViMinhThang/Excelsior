@@ -16,7 +16,6 @@ export function registerSkills(
       name: entry.toolName,
       description: entry.skill.description,
       inputSchema: z.object({}),
-      capabilities: [],
       execute: async () => {
         const body = catalog.getSkillBody(entry.skill.name);
         return { content: body || `Skill ${entry.skill.name} not found.` };

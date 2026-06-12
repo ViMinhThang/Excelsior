@@ -1,10 +1,8 @@
 import type { AgentMessage, AgentMode } from "@excelsior/core";
-import type { AnyHarnessEvent } from "../events.js";
-import { projectEventsToMessages } from "../projection.js";
 import { buildSystemPrompt } from "./systemPrompt.js";
 
 export interface RunContextInput {
-  events: readonly AnyHarnessEvent[];
+  priorMessages: readonly AgentMessage[];
   userContent: string;
   mode: AgentMode;
   skillsList?: string;
@@ -17,7 +15,7 @@ export interface RunContext {
 }
 
 export function buildRunContext(input: RunContextInput): RunContext {
-  const priorMessages = projectEventsToMessages(input.events);
+  const priorMessages = input.priorMessages;
   const modeMessage: AgentMessage = {
     role: "system",
     content: `current mode: ${input.mode} timestamp: ${new Date().toISOString()}`,

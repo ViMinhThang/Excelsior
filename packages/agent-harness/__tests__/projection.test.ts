@@ -4,7 +4,6 @@ import {
   MESSAGE_END,
   MESSAGE_START,
   MESSAGE_UPDATE,
-  REASONING_END,
   SUB_AGENT_EVENT,
   TOOL_EXECUTION_END,
   TOOL_EXECUTION_START,
@@ -19,13 +18,12 @@ import {
 import { MessageHandler } from "../src/projector/MessageHandler.js";
 import {
   ProjectionCache,
-  projectEventsToTurns,
-  projectEventsToMessages,
+  projectEvents,
 } from "../src/projection.js";
 import type { ProjectedBlock } from "@excelsior/core";
 
 function projectEventsToDisplayBlocks(events: readonly AnyHarnessEvent[]): ProjectedBlock[] {
-  return projectEventsToTurns(events).flatMap((turn) => turn.blocks);
+  return projectEvents(events).turns.flatMap((turn) => turn.blocks);
 }
 
 function event<T extends HarnessEventType>(
@@ -68,7 +66,7 @@ describe("harness projector", () => {
       { type: "user", content: "shown", isFrozen: true },
       { type: "assistant", content: "hello", isFrozen: true },
     ]);
-    expect(projectEventsToMessages(events)).toMatchObject([
+    expect(projectEvents(events).aiHistory).toMatchObject([
       { role: "user", content: "model" },
       { role: "assistant", content: "hello" },
     ]);
@@ -389,24 +387,6 @@ describe("harness projector", () => {
     ]);
   });
 
-  it("projects reasoning blocks from reasoning events", () => {
-    const events = [
-      event(1, REASONING_END, {
-        messageId: "reasoning_0",
-        content: "I should check the folder structure first.",
-      }),
-      event(2, MESSAGE_END, {
-        message: { id: "msg_assistant", role: "assistant", content: "Hello!" },
-      }),
-    ];
-
-    const blocks = projectEventsToDisplayBlocks(events);
-    expect(blocks).toMatchObject([
-      { type: "reasoning", content: "I should check the folder structure first.", isFrozen: true },
-      { type: "assistant", content: "Hello!", isFrozen: true },
-    ]);
-  });
-
   it("incrementally projects appended events without duplicating active drafts", () => {
     const cache = new ProjectionCache();
     const events = [
@@ -481,7 +461,7 @@ describe("harness projector", () => {
       event(6, TURN_END, { cancelled: false }, { turnId: "turn_2" }),
     ];
 
-    const turns = projectEventsToTurns(events);
+    const turns = projectEvents(events).turns;
     expect(turns).toHaveLength(2);
     expect(turns[0]).toMatchObject({
       id: "turn_1",
@@ -513,7 +493,7 @@ describe("harness projector", () => {
       }, { turnId: "turn_compaction" }),
     ];
 
-    const turns = projectEventsToTurns(events);
+    const turns = projectEvents(events).turns;
     expect(turns).toHaveLength(1);
     expect(turns[0]).toMatchObject({
       id: "turn_compaction",

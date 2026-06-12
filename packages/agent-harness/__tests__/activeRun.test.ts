@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ActiveRunManager, type ActiveRunIdentity } from "../src/run/ActiveRunManager.js";
 import {
-  AGENT_END,
   makeHarnessEvent,
   MESSAGE_END,
   MESSAGE_START,
@@ -72,7 +71,7 @@ describe("ActiveRunManager", () => {
     });
 
     expect(activeRun.isActive()).toBe(true);
-    expect(activeRun.isLoading()).toBe(true);
+    expect(activeRun.isActive()).toBe(true);
     expect(activeRun.currentIdentity()).toEqual({
       runId: "run_1",
       turnId: "turn_1",
@@ -96,7 +95,7 @@ describe("ActiveRunManager", () => {
 
     activeRun.finish(stale);
 
-    expect(activeRun.isLoading()).toBe(true);
+    expect(activeRun.isActive()).toBe(true);
     expect(activeRun.currentIdentity()).toEqual({
       runId: "run_current",
       turnId: "turn_current",
@@ -105,7 +104,7 @@ describe("ActiveRunManager", () => {
 
     activeRun.finish(current);
 
-    expect(activeRun.isLoading()).toBe(false);
+    expect(activeRun.isActive()).toBe(false);
     expect(activeRun.currentIdentity()).toBeNull();
   });
 
@@ -149,7 +148,7 @@ describe("ActiveRunManager", () => {
 
     activeRun.clear(handle);
 
-    expect(activeRun.isLoading()).toBe(false);
+    expect(activeRun.isActive()).toBe(false);
     expect(activeRun.currentIdentity()).toBeNull();
   });
 
@@ -215,16 +214,12 @@ describe("ActiveRunManager", () => {
         type: TURN_END,
         data: { cancelled: true },
       }),
-      expect.objectContaining({
-        type: AGENT_END,
-        data: { cancelled: true },
-      }),
     ]));
     expect(activeRun.isRunFinalized("run_cancel")).toBe(true);
 
     activeRun.clear(handle);
 
-    expect(activeRun.isLoading()).toBe(false);
+    expect(activeRun.isActive()).toBe(false);
     expect(activeRun.isRunFinalized("run_cancel")).toBe(true);
 
     activeRun.finish(handle);

@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
-import type { AgentMode } from "@excelsior/core";
-import type { AnyHarnessEvent, HarnessEventEmitter } from "../events.js";
+import type { AgentMessage, AgentMode } from "@excelsior/core";
+import type { HarnessEventEmitter } from "../events.js";
 import type { ProviderRegistry, ToolRegistry } from "../registries.js";
 import type { HarnessSettings, ToolExecutionContext } from "../types.js";
 import { buildRunContext, type RunContext } from "./contextBuilder.js";
@@ -13,7 +13,7 @@ export interface RunAssemblyInput {
   sessionId: string;
   runId: string;
   turnId: string;
-  events: readonly AnyHarnessEvent[];
+  priorMessages: readonly AgentMessage[];
   userContent: string;
   mode: AgentMode;
   abortSignal?: AbortSignal;
@@ -39,7 +39,7 @@ export function buildRunAssembly(input: RunAssemblyInput): RunAssembly {
   const emit = input.createEmitter(input.runId, input.sessionId, input.turnId);
 
   const runContext = buildRunContext({
-    events: input.events,
+    priorMessages: input.priorMessages,
     userContent: input.userContent,
     mode,
     skillsList: input.skillsList,

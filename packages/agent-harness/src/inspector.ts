@@ -340,9 +340,14 @@ function validateProjection(
   replayedTurns: readonly ProjectedTurn[],
   snapshotTurns: readonly ProjectedTurn[],
 ): string[] {
+  if (replayedTurns.length !== snapshotTurns.length) {
+    return [
+      `Projection mismatch: replayed ${replayedTurns.length} turns, snapshot has ${snapshotTurns.length}`,
+    ];
+  }
   if (JSON.stringify(replayedTurns) === JSON.stringify(snapshotTurns)) return [];
   return [
-    `Projection mismatch: replayed ${replayedTurns.length} turns, snapshot has ${snapshotTurns.length}`,
+    `Projection mismatch: replayed ${replayedTurns.length} turns, snapshot has ${snapshotTurns.length} (content mismatch)`,
   ];
 }
 

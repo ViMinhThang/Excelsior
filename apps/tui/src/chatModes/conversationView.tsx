@@ -3,6 +3,7 @@ import type { MouseEvent, ScrollBoxRenderable } from "@opentui/core";
 import { formatAgentMode } from "@excelsior/core";
 import ChatHistory from "../components/chat/ChatHistory.js";
 import ChatInput from "../components/chat/ChatInput.js";
+import TaskList from "../components/chat/TaskList.js";
 import SubAgentPickerPanel from "../components/subAgents/SubAgentPickerPanel.js";
 import ThinkingIndicator from "../components/chat/ThinkingIndicator.js";
 import { textAttrs } from "../platform/opentui/textAttributes.js";
@@ -170,6 +171,7 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
         </box>
       ) : (
         <box flexShrink={0} flexDirection="column" width="100%">
+          <TaskList workspace={ctx.workspace} sessionId={ctx.sessionId} />
           <ChatInput
             value={ctx.input.value}
             onChange={ctx.input.setValue}

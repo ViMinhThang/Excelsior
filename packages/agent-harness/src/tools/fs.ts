@@ -19,7 +19,6 @@ export function createLsTool(): HarnessTool<z.infer<typeof lsSchema>> {
     name: "ls",
     description: "List directory contents.",
     inputSchema: lsSchema,
-    capabilities: ["fs:read"],
     async execute({ directoryPath }, ctx) {
       const targetDir = await resolveWorkspacePath(directoryPath ?? ".", ctx);
       const entries = await fs.readdir(targetDir, { withFileTypes: true });
@@ -40,7 +39,6 @@ export function createViewTool(): HarnessTool<z.infer<typeof viewSchema>> {
     name: "view",
     description: "Read file contents with optional 1-based line range.",
     inputSchema: viewSchema,
-    capabilities: ["fs:read"],
     async execute({ filePath, lineStart, lineEnd }, ctx) {
       const fullPath = await resolveWorkspacePath(filePath, ctx);
       const content = await fs.readFile(fullPath, "utf-8");
@@ -66,7 +64,6 @@ export function createGlobTool(): HarnessTool<z.infer<typeof globSchema>> {
     name: "glob",
     description: "Find files by a simple glob pattern under the workspace.",
     inputSchema: globSchema,
-    capabilities: ["fs:read"],
     async execute({ pattern }, ctx) {
       validateWorkspacePattern(pattern);
       const files = await listFiles(ctx.workspaceRoot);
@@ -87,7 +84,6 @@ export function createRipgrepTool(): HarnessTool<z.infer<typeof ripgrepSchema>> 
     name: "ripgrep",
     description: "Search file contents with ripgrep.",
     inputSchema: ripgrepSchema,
-    capabilities: ["fs:read"],
     async execute({ pattern, path: searchPath }, ctx) {
       const target = searchPath ? await resolveWorkspacePath(searchPath, ctx) : ctx.workspaceRoot;
       return text(await runProcess("rg", ["-n", pattern, target], ctx));
@@ -105,7 +101,6 @@ export function createWriteTool(name = "writeFile"): HarnessTool<z.infer<typeof 
     name,
     description: "Create or overwrite an entire file.",
     inputSchema: writeSchema,
-    capabilities: ["fs:write"],
     async execute({ filePath, content }, ctx) {
       if (ctx.mode === "plan") return text(PLAN_MODE_BLOCKED_MESSAGE, true);
       const authorization = await authorizeWrite(ctx, name, filePath);
@@ -133,7 +128,6 @@ export function createEditTool(name = "editFile"): HarnessTool<z.infer<typeof ed
     name,
     description: "Replace one exact text block in a file.",
     inputSchema: editSchema,
-    capabilities: ["fs:write"],
     async execute({ filePath, oldText, newText }, ctx) {
       if (ctx.mode === "plan") return text(PLAN_MODE_BLOCKED_MESSAGE, true);
       const authorization = await authorizeWrite(ctx, name, filePath);

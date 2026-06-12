@@ -5,6 +5,7 @@ import type {
   CommandDefinition,
   ConfirmRequest,
   ProjectedTurn,
+  Workspace,
 } from "@excelsior/core";
 import type { AppHeaderProps } from "../components/shared/AppHeader.js";
 import type { FooterBarProps } from "../components/chat/FooterBar.js";
@@ -101,6 +102,8 @@ export interface ChatInteractionState {
 }
 
 export interface BuildModeViewContextInput {
+  workspace: Workspace;
+  sessionId: string | null;
   chatMode: ChatMode;
   turns: ProjectedTurn[];
   inputValue: string;
@@ -258,6 +261,8 @@ export function buildChatInteractionState(
 }
 
 export function buildModeViewContext({
+  workspace,
+  sessionId,
   chatMode,
   turns,
   inputValue,
@@ -277,6 +282,8 @@ export function buildModeViewContext({
   viewportKey,
 }: BuildModeViewContextInput): ChatModeRenderContext {
   const conversation = {
+    workspace,
+    sessionId,
     input: {
       value: inputValue,
       setValue: setInput,

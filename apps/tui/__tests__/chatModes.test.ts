@@ -51,8 +51,10 @@ function makeKeymapContext(chatMode: ChatMode): ChatModeKeymapContext {
 function makeRenderContext(chatMode: ChatMode): ChatModeRenderContext {
   const noop = () => {};
   return buildModeViewContext({
+    workspace: { id: "ws", name: "Workspace", rootPath: "C:/repo" },
+    sessionId: "ses",
     chatMode,
-    displayBlocks: [],
+    turns: [],
     inputValue: "",
     setInput: noop,
     handleSubmit: noop,
@@ -127,7 +129,7 @@ describe("chat mode registry", () => {
   it("provides render, hint, and keymap behavior for every mode", () => {
     for (const chatMode of chatModeIds) {
       const context = makeRenderContext(chatMode);
-      const rendered = chatModeRegistry[chatMode].render(context);
+      const rendered = chatModeRegistry[chatMode].render(context as any);
       const hint = chatModeRegistry[chatMode].getHint({
         chatMode,
         isLoading: false,

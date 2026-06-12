@@ -1,12 +1,12 @@
+export type ToolCallStatus = "pending" | "completed" | "error";
+
 export interface ToolCallInfo {
   toolName: string;
   toolArgs: string;
   toolCallId: string;
-  status: "pending" | "completed" | "error";
+  status: ToolCallStatus;
   content?: string;
 }
-
-export type ToolCallStatus = "pending" | "completed" | "error";
 
 export type ProjectedBlock =
   | {
@@ -18,13 +18,6 @@ export type ProjectedBlock =
     }
   | {
       type: "assistant";
-      id: string;
-      content: string;
-      timestamp: string;
-      isFrozen?: true;
-    }
-  | {
-      type: "reasoning";
       id: string;
       content: string;
       timestamp: string;
@@ -77,14 +70,14 @@ export interface ProjectedSubAgent {
 
 export type SubAgentProjectionPart =
   | { type: "text"; text: string }
-  | {
-      type: "tool-call";
-      toolName: string;
-      toolArgs: string;
-      toolCallId: string;
-      status: "pending" | "completed" | "error";
-      content?: string;
-    };
+    | {
+        type: "tool-call";
+        toolName: string;
+        toolArgs: string;
+        toolCallId: string;
+        status: ToolCallStatus;
+        content?: string;
+      };
 
 export interface SubAgentViewModel {
   toolCallId: string;

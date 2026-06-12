@@ -23,7 +23,6 @@ function fakeTool(name = "fakeTool"): HarnessTool<{ value: string }> {
     name,
     description: "Fake tool",
     inputSchema: z.object({ value: z.string() }),
-    capabilities: [],
     execute: async (input) => ({ content: input.value }),
   };
 }

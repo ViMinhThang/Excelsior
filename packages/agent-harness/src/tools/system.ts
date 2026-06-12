@@ -17,7 +17,6 @@ export function createRunCommandTool(): HarnessTool<z.infer<typeof runCommandSch
     name: "runCommand",
     description: "Run an executable with distinct arguments in the workspace.",
     inputSchema: runCommandSchema,
-    capabilities: ["shell"],
     async execute({ command, args }, ctx) {
       const normalizedArgs = args ?? [];
       const risk = classifyCommandRisk(command, normalizedArgs);
