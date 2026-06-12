@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ProjectedBlock } from "@excelsior/core";
 import { createToolDisplay } from "@excelsior/core";
 import {
@@ -140,8 +141,6 @@ function SubAgentBubble({ block }: { block: Extract<ProjectedBlock, { type: "sub
   );
 }
 
-
-
 function CompactionBoundaryBubble({ block }: { block: Extract<ProjectedBlock, { type: "compaction-boundary" }> }) {
   return (
     <div className="my-4 flex items-center justify-center gap-4 text-xs font-semibold text-brand-text-muted select-none">
@@ -154,8 +153,6 @@ function CompactionBoundaryBubble({ block }: { block: Extract<ProjectedBlock, { 
     </div>
   );
 }
-
-import { memo } from "react";
 
 export const MessageBlock = memo(function MessageBlock({ block, isToolOpen, onToggleToolCall }: MessageBlockProps) {
   if (block.type === "user") return <UserBubble block={block} />;

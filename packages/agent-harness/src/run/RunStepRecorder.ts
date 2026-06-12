@@ -148,8 +148,6 @@ export class RunStepRecorder {
     });
   }
 
-
-
   private toMessages(): AgentMessage[] {
     const messages: AgentMessage[] = [];
     if (this.stepText.trim() || this.toolCalls.length > 0) {

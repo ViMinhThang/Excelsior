@@ -33,7 +33,6 @@ export function modeResultOrUndefined(
   return result.type === "mode" ? result.mode : undefined;
 }
 
-
 export class AgentHostClient {
   constructor(private readonly host: AgentHost) {}
 

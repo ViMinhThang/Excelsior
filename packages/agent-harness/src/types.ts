@@ -18,8 +18,6 @@ import type { ProviderRegistry, ToolRegistry } from "./registries.js";
 export type HarnessSettings = AppSettings;
 export type HarnessSnapshot = AgentClientState;
 
-
-
 export interface HarnessProvider {
   id: string;
   displayName: string;

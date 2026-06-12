@@ -251,7 +251,6 @@ This is the core block-to-component mapping:
 ```txt
 user                -> UserMessage
 assistant           -> AgentMessage
-reasoning           -> ReasoningMessage
 tool-call           -> ToolMessage
 sub-agent           -> SubAgentRow + nested ToolMessage rows
 compaction-boundary -> inline bordered compaction notice
@@ -313,25 +312,6 @@ Otherwise it renders:
 
 Markdown rendering is handled by `apps/tui/src/components/shared/MarkdownRenderer.tsx`.
 
-## Reasoning Blocks
-
-Reasoning blocks render through `apps/tui/src/components/chat/ReasoningMessage.tsx`.
-
-`ChatHistory` passes:
-
-```tsx
-<ReasoningMessage
-  key={block.id}
-  content={block.content}
-  timestamp={block.timestamp}
-/>
-```
-
-`ReasoningMessage` renders:
-
-- a dim, styled `Thinking Process` label
-- the content through `MarkdownRenderer`
-- dim/italic styling for the reasoning body
 
 ## Tool Blocks
 
@@ -490,7 +470,7 @@ Assistant and reasoning messages both use `MarkdownRenderer`.
 The relevant path is:
 
 ```txt
-AgentMessage / ReasoningMessage
+AgentMessage
   -> MarkdownRenderer
   -> markdown parsing/highlighting helpers
 ```
@@ -521,7 +501,7 @@ Harness projection
   -> ConversationView
   -> ChatHistory
   -> renderBlock(block)
-  -> UserMessage / AgentMessage / ReasoningMessage / ToolMessage / SubAgentRow / compaction UI
+  -> UserMessage / AgentMessage / ToolMessage / SubAgentRow / compaction UI
 ```
 
 ## Where To Start Reading
@@ -543,7 +523,6 @@ The leaf renderers are:
 
 - `apps/tui/src/components/chat/UserMessage.tsx`
 - `apps/tui/src/components/chat/AgentMessage.tsx`
-- `apps/tui/src/components/chat/ReasoningMessage.tsx`
 - `apps/tui/src/components/chat/ToolMessage.tsx`
 - `apps/tui/src/components/subAgents/SubAgentRow.tsx`
 

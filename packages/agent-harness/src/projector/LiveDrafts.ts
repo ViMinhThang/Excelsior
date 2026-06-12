@@ -116,8 +116,6 @@ export class LiveDrafts {
       });
     }
 
-
-
     if (this.tool) {
       activeTurn.blocks = upsertSnapshotBlock(
         activeTurn.blocks,

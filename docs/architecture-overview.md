@@ -153,7 +153,7 @@ Event emitted
   -> harness.updateSnapshot()
   -> ProjectionCache.project(events)
   -> Projector replays events through handlers
-  -> MessageHandler, ToolHandler, ReasoningHandler, LifecycleHandler, SubAgentHandler
+  -> MessageHandler, ToolHandler, LifecycleHandler, SubAgentHandler
   -> Each handler calls TranscriptProjection actions
   -> TurnStore (finalized blocks) + LiveDrafts (streaming blocks)
   -> snapshot() returns ProjectedTurn[]

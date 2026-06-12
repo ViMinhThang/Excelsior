@@ -111,7 +111,6 @@ this.registerHandlers([
   new MessageHandler(),
   new ToolHandler(),
   new SubAgentHandler(),
-  new ReasoningHandler(),
   new LifecycleHandler(),
 ]);
 ```
@@ -138,7 +137,6 @@ The handlers live in `packages/agent-harness/src/projector/`:
 
 - `MessageHandler.ts`
 - `ToolHandler.ts`
-- `ReasoningHandler.ts`
 - `LifecycleHandler.ts`
 - `SubAgentHandler.ts`
 
@@ -414,7 +412,6 @@ Then read the handlers:
 
 - `packages/agent-harness/src/projector/MessageHandler.ts`
 - `packages/agent-harness/src/projector/ToolHandler.ts`
-- `packages/agent-harness/src/projector/ReasoningHandler.ts`
 - `packages/agent-harness/src/projector/LifecycleHandler.ts`
 - `packages/agent-harness/src/projector/SubAgentHandler.ts`
 
