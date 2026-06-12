@@ -192,8 +192,6 @@ export class TranscriptProjection implements ProjectionContext {
     },
   };
 
-
-
   apply(event: AnyHarnessEvent, handlers: Map<string, ProjectionHandler>): void {
     handlers.get(event.type)?.apply(event, this);
   }

@@ -70,14 +70,14 @@ export interface ProjectedSubAgent {
 
 export type SubAgentProjectionPart =
   | { type: "text"; text: string }
-    | {
-        type: "tool-call";
-        toolName: string;
-        toolArgs: string;
-        toolCallId: string;
-        status: ToolCallStatus;
-        content?: string;
-      };
+  | {
+      type: "tool-call";
+      toolName: string;
+      toolArgs: string;
+      toolCallId: string;
+      status: ToolCallStatus;
+      content?: string;
+    };
 
 export interface SubAgentViewModel {
   toolCallId: string;
