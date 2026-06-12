@@ -78,7 +78,10 @@ describe("harness context helpers", () => {
     expect(context.systemPrompt).toContain("Minimize emoji");
     expect(context.systemPrompt).toContain("Prefer rg before broader file scans.");
     expect(context.systemPrompt).toContain("## Available Agent Skills");
-    expect(context.messages).toEqual([{ role: "user", content: "inspect the repo" }]);
+    expect(context.messages).toEqual([
+      { role: "system", content: expect.stringMatching(/^current mode: plan timestamp:/) },
+      { role: "user", content: "inspect the repo" },
+    ]);
   });
 
   it("assembles run and tool context from the same run inputs", async () => {
@@ -126,7 +129,11 @@ describe("harness context helpers", () => {
     const assembly = buildRunAssembly(assemblyInput);
     assemblyInput.mode = "act";
 
-    expect(assembly.runContext.systemPrompt).toContain("CURRENT MODE: Plan");
+    expect(assembly.runContext.systemPrompt).not.toContain("CURRENT MODE:");
+    expect(assembly.runContext.messages).toContainEqual({
+      role: "system",
+      content: expect.stringMatching(/^current mode: plan timestamp:/),
+    });
     expect(assembly.runContext.systemPrompt).toContain("Keep context assembly boring.");
     expect(assembly.toolContext.mode).toBe("plan");
     expect(assembly.toolContext.projectInstructions).toBe("Keep context assembly boring.");

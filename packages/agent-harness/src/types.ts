@@ -141,6 +141,8 @@ export interface AgentHarness {
   subscribe(listener: () => void): () => void;
   send(input: { content: string; mode: AgentMode; sessionId?: string } & SendOptions): Promise<void>;
   cancel(): void;
+  startReflection(trigger: "manual" | "auto"): Promise<CommandResult>;
+  cancelReflection(): void;
   clear(): void;
   createSession(title?: string): Session;
   switchSession(sessionId: string): Promise<void>;

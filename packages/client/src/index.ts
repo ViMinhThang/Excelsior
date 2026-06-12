@@ -21,6 +21,7 @@ export type {
   CommandResult,
   ConfirmRequest,
   ConfirmResponse,
+  ReflectionClientState,
   SendOptions,
   Session,
 } from "@excelsior/core";

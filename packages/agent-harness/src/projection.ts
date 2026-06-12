@@ -1,4 +1,4 @@
-import type { AgentLlmInfo, AgentMessage, ProjectedTurn, Session, Workspace } from "@excelsior/core";
+import type { AgentLlmInfo, AgentMessage, ProjectedTurn, ReflectionClientState, Session, Workspace } from "@excelsior/core";
 import type { AnyHarnessEvent } from "./events.js";
 import type { HarnessSnapshot } from "./types.js";
 import { Projector } from "./projector/Projector.js";
@@ -31,6 +31,7 @@ export function projectHarnessState(input: {
   mode: HarnessSnapshot["mode"];
   pendingConfirmation: HarnessSnapshot["pendingConfirmation"];
   pendingQuestion: HarnessSnapshot["pendingQuestion"];
+  reflection: ReflectionClientState;
 }): HarnessSnapshot {
   const readModel = input.readModel ?? projectEvents(input.events);
   return {
@@ -43,6 +44,7 @@ export function projectHarnessState(input: {
     mode: input.mode,
     pendingConfirmation: input.pendingConfirmation,
     pendingQuestion: input.pendingQuestion,
+    reflection: input.reflection,
   };
 }
 

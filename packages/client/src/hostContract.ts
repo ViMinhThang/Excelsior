@@ -17,6 +17,7 @@ export interface AgentHostCatalog {
 export type AgentHostIntent =
   | { type: "send"; content: string; options?: SendOptions }
   | { type: "cancel" }
+  | { type: "cancel-reflection" }
   | { type: "execute-command"; input: string }
   | { type: "create-session"; title?: string }
   | { type: "switch-session"; sessionId: string }

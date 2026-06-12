@@ -32,6 +32,7 @@ export default function App() {
     switchWorkspace,
     send,
     cancel,
+    cancelReflection,
     executeCommand,
     createSession,
     switchSession,
@@ -164,6 +165,7 @@ export default function App() {
           openToolCalls={openToolCalls}
           state={state}
           onCancel={cancel}
+          onCancelReflection={cancelReflection}
           onInputChange={handleInputChange}
           onModeChange={(mode) => {
             void setMode(mode);

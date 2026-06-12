@@ -15,6 +15,7 @@ export interface UseAgentHostClientReturn {
   state: AgentClientState;
   send: (content: string, options?: SendOptions) => void;
   cancel: () => void;
+  cancelReflection: () => void;
   clear: () => void;
   executeCommand: (input: string) => Promise<CommandResult>;
   getCommands: () => CommandDefinition[];
@@ -50,6 +51,9 @@ export function useAgentHostClient(): UseAgentHostClientReturn {
     ),
     cancel: useCallback(() => {
       void client.cancel();
+    }, [client]),
+    cancelReflection: useCallback(() => {
+      void client.cancelReflection();
     }, [client]),
     clear: useCallback(() => {
       void client.clear();

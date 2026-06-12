@@ -32,6 +32,11 @@ class MutableHost implements AgentHost {
       mode: "act",
       pendingConfirmation: null,
       pendingQuestion: null,
+      reflection: {
+        status: "idle",
+        touchedFiles: [],
+        memoryRoot: "C:/memory",
+      },
     };
   }
 
@@ -51,6 +56,7 @@ class MutableHost implements AgentHost {
         deepseekApiKey: "",
         githubToken: "",
         agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
       },
     };
   }
