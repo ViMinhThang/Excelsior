@@ -20,6 +20,11 @@ function state(id: string): AgentClientState {
     mode: "plan",
     pendingConfirmation: null,
     pendingQuestion: null,
+    reflection: {
+      status: "idle",
+      touchedFiles: [],
+      memoryRoot: "C:/memory",
+    },
   };
 }
 
@@ -46,6 +51,7 @@ function apiWithState(initialState: AgentClientState): {
           deepseekApiKey: "",
           githubToken: "",
           agentToolLoopSteps: "unlimited",
+          autoReflectionEnabled: false,
         },
       }),
       dispatch: async (_intent: AgentHostIntent) => ({ type: "none" }),
@@ -94,6 +100,7 @@ describe("desktop host store", () => {
         deepseekApiKey: "key",
         githubToken: "token",
         agentToolLoopSteps: "200",
+        autoReflectionEnabled: false,
       },
     });
 

@@ -58,6 +58,7 @@ export function SettingsDialog({
   const [toolLoopStepInput, setToolLoopStepInput] = useState(
     DEFAULT_FINITE_TOOL_LOOP_STEPS,
   );
+  const [autoReflectionEnabled, setAutoReflectionEnabled] = useState(false);
   const [themeInput, setThemeInput] = useState<DesktopTheme>(theme);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => isThemeDark(theme));
   const [fontInput, setFontInput] = useState(font);
@@ -69,6 +70,7 @@ export function SettingsDialog({
     setGithubTokenInput(settings?.githubToken ?? "");
     setToolLoopUnlimited(isUnlimitedToolLoopSetting(toolLoopSteps));
     setToolLoopStepInput(getFiniteToolLoopSteps(toolLoopSteps));
+    setAutoReflectionEnabled(settings?.autoReflectionEnabled ?? false);
     setThemeInput(theme);
     setIsDarkMode(isThemeDark(theme));
     setFontInput(font);
@@ -160,8 +162,10 @@ export function SettingsDialog({
               <RuntimeTab
                 toolLoopUnlimited={toolLoopUnlimited}
                 toolLoopStepInput={toolLoopStepInput}
+                autoReflectionEnabled={autoReflectionEnabled}
                 onToolLoopUnlimitedChange={setToolLoopUnlimited}
                 onToolLoopStepInputChange={setToolLoopStepInput}
+                onAutoReflectionEnabledChange={setAutoReflectionEnabled}
               />
             )}
 
@@ -198,6 +202,7 @@ export function SettingsDialog({
                     agentToolLoopSteps: toolLoopUnlimited
                       ? DEFAULT_AGENT_TOOL_LOOP_STEPS
                       : getFiniteToolLoopSteps(toolLoopStepInput),
+                    autoReflectionEnabled,
                   },
                   themeInput,
                   fontInput,

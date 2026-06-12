@@ -52,6 +52,7 @@ export async function runModelStep(input: {
       stopWhen: stepCountIs(1),
       abortSignal: input.signal,
       maxRetries: 3,
+      allowSystemInMessages: true,
     });
 
     for await (const part of result.fullStream as AsyncIterable<TextStreamPart<ToolSet>>) {

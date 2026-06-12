@@ -123,6 +123,10 @@ export function useAgentHost() {
     void client.cancel();
   }, [client]);
 
+  const cancelReflection = useCallback(() => {
+    void client.cancelReflection();
+  }, [client]);
+
   const executeCommand = useCallback(
     (input: string): Promise<CommandResult> =>
       client.executeCommand(input),
@@ -232,6 +236,7 @@ export function useAgentHost() {
     switchWorkspace,
     send,
     cancel,
+    cancelReflection,
     executeCommand,
     createSession,
     switchSession,

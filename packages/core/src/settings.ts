@@ -21,4 +21,5 @@ export interface AppSettings {
   deepseekApiKey: string;
   githubToken: string;
   agentToolLoopSteps: string;
+  autoReflectionEnabled: boolean;
 }

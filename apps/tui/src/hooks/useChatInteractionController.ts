@@ -28,6 +28,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
     mode,
     pendingConfirmation,
     pendingQuestion,
+    reflection,
   } = agent.state;
   const branchName = useGitBranch(workspace.rootPath);
 
@@ -106,6 +107,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
     palette: buildPaletteModel(runtime.palette),
     footer: {
       ...runtime.interactionState.footer,
+      reflection,
       totalTokens,
     },
   };

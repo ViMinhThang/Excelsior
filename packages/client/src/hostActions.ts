@@ -61,6 +61,10 @@ export class AgentHostClient {
     await this.host.dispatch({ type: "cancel" });
   }
 
+  async cancelReflection(): Promise<void> {
+    await this.host.dispatch({ type: "cancel-reflection" });
+  }
+
   async clear(): Promise<void> {
     await this.host.dispatch({ type: "clear-messages" });
   }

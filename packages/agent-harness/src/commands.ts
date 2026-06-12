@@ -36,6 +36,7 @@ export function createBuiltInCommands(input: {
       await harness.compactCurrentSession("manual");
       return { handled: true, clearInput: true };
     }),
+    command("reflect", "runtime", "Run or manage background reflection memory", "/reflect [status|stop|on|off]", reflectCommand),
     command("revert", "runtime", "Revert the last completed turn", "/revert", async (_args, harness) => harness.revertLastTurn()),
     command("trace", "runtime", "Inspect harness event timeline", "/trace [all|<turnIdPrefix>]", traceCommand),
     command("replay", "runtime", "Replay and validate current harness events", "/replay", async (_args, harness) => {
@@ -93,6 +94,37 @@ function traceCommand(args: string[], harness: AgentHarness): CommandResult {
       : { mode: "turn", turnIdPrefix: target };
 
   return ok(formatHarnessTrace(harness.inspectCurrentSession(), options));
+}
+
+async function reflectCommand(args: string[], harness: AgentHarness): Promise<CommandResult> {
+  const subcommand = args[0]?.toLowerCase();
+  if (!subcommand) return harness.startReflection("manual");
+
+  if (subcommand === "status") {
+    const state = harness.getSnapshot().reflection;
+    const settings = harness.getCatalog().settings;
+    return ok([
+      `Reflection: ${state.status}`,
+      `Auto: ${settings.autoReflectionEnabled ? "on" : "off"}`,
+      `Memory root: ${state.memoryRoot}`,
+      `Last run: ${state.lastRunAt ?? "never"}`,
+      `Last summary: ${state.lastSummary ?? "none"}`,
+      `Touched files: ${state.touchedFiles.length > 0 ? state.touchedFiles.join(", ") : "none"}`,
+    ].join("\n"));
+  }
+
+  if (subcommand === "stop") {
+    harness.cancelReflection();
+    return ok("Reflection cancellation requested.");
+  }
+
+  if (subcommand === "on" || subcommand === "off") {
+    const enabled = subcommand === "on";
+    harness.saveSettings({ autoReflectionEnabled: enabled });
+    return ok(`Auto reflection ${enabled ? "enabled" : "disabled"}.`);
+  }
+
+  return ok("Usage: /reflect [status|stop|on|off]");
 }
 
 async function sessionCommand(args: string[], harness: AgentHarness): Promise<CommandResult> {

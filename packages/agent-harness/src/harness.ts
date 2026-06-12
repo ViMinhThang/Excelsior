@@ -41,6 +41,7 @@ import { EventStore } from "./EventStore.js";
 import { SettingsStore } from "./SettingsStore.js";
 import { ConfirmationRouter } from "./ConfirmationRouter.js";
 import { ActiveRunManager } from "./run/ActiveRunManager.js";
+import { ReflectionRunManager, type ReflectionTrigger } from "./reflection/ReflectionRunManager.js";
 import { createBuiltInTools } from "./tools/index.js";
 import type {
   AgentHarness,
@@ -72,6 +73,7 @@ class HarnessStore implements AgentHarness {
   private readonly settingsStore: SettingsStore;
   private readonly confirmRouter: ConfirmationRouter;
   private readonly activeRun = new ActiveRunManager();
+  private readonly reflectionRun: ReflectionRunManager;
 
   private mode: AgentMode = "act";
   private snapshot!: HarnessSnapshot;
@@ -91,6 +93,14 @@ class HarnessStore implements AgentHarness {
     this.eventStore = new EventStore(this.storage, this.workspace.id);
     this.settingsStore = new SettingsStore(this.storage);
     this.confirmRouter = new ConfirmationRouter();
+    this.reflectionRun = new ReflectionRunManager({
+      workspace: this.workspace,
+      storage: this.storage,
+      sessionManager: this.sessionManager,
+      settingsStore: this.settingsStore,
+      providers: this.providers,
+      onChange: () => this.notify(),
+    });
     this.extensions = new ExtensionRegistry(this.providers, this.tools, this.commands);
 
     this.eventBus = new EventBus(
@@ -232,6 +242,9 @@ class HarnessStore implements AgentHarness {
       this.activeRun.finish(run);
       this.sessionManager.refreshSessions();
       this.notify();
+      if (!input.silent) {
+        this.reflectionRun.maybeStartAutoReflection();
+      }
     }
   }
 
@@ -248,6 +261,14 @@ class HarnessStore implements AgentHarness {
     this.activeRun.clear(run);
     this.sessionManager.refreshSessions();
     this.notify();
+  }
+
+  startReflection(trigger: ReflectionTrigger): Promise<CommandResult> {
+    return this.reflectionRun.startReflection(trigger);
+  }
+
+  cancelReflection(): void {
+    this.reflectionRun.cancelReflection();
   }
 
   clear(): void {
@@ -433,6 +454,7 @@ class HarnessStore implements AgentHarness {
   }
 
   dispose(): void {
+    this.cancelReflection();
     this.cancel();
     if (this.notifyTimer) {
       clearTimeout(this.notifyTimer);
@@ -543,6 +565,7 @@ class HarnessStore implements AgentHarness {
       mode: this.mode,
       pendingConfirmation: this.confirmRouter.pendingConfirmation,
       pendingQuestion: this.confirmRouter.pendingQuestion,
+      reflection: this.reflectionRun.snapshot(),
     });
   }
 

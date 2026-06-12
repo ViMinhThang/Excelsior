@@ -16,12 +16,18 @@ const emptyState: AgentClientState = {
   mode: "plan",
   pendingConfirmation: null,
   pendingQuestion: null,
+  reflection: {
+    status: "idle",
+    touchedFiles: [],
+    memoryRoot: "",
+  },
 };
 
 const emptySettings: AppSettings = {
   deepseekApiKey: "",
   githubToken: "",
   agentToolLoopSteps: "unlimited",
+  autoReflectionEnabled: false,
 };
 
 export interface IpcStateStore {

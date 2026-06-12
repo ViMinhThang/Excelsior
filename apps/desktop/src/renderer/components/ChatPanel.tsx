@@ -3,6 +3,7 @@ import type {
   AgentClientState,
   AgentMode,
   AskQuestionResponse,
+  ReflectionClientState,
 } from "@excelsior/core";
 import {
   ChatTranscript,
@@ -17,6 +18,7 @@ type ChatPanelProps = {
   openToolCalls: Record<string, boolean>;
   state: AgentClientState | null;
   onCancel: () => void;
+  onCancelReflection: () => void;
   onInputChange: (value: string) => void;
   onModeChange: (mode: AgentMode) => void;
   onRespondToConfirmation: (callId: string, approved: boolean) => void;
@@ -33,6 +35,7 @@ export function ChatPanel({
   openToolCalls,
   state,
   onCancel,
+  onCancelReflection,
   onInputChange,
   onModeChange,
   onRespondToConfirmation,
@@ -46,6 +49,7 @@ export function ChatPanel({
   const hasPendingQuestion = Boolean(state?.pendingQuestion);
   const hasPendingAction = hasPendingConfirmation || hasPendingQuestion;
   const mode = state?.mode ?? "plan";
+  const reflection = state?.reflection ?? null;
   const currentSessionId = state?.currentSessionId ?? null;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -119,6 +123,12 @@ export function ChatPanel({
           className={`h-full overflow-y-auto px-8 pt-6 ${hasPendingAction ? "pb-96" : "pb-56"
             }`}
         >
+          {reflection && (
+            <ReflectionStatusRow
+              reflection={reflection}
+              onCancelReflection={onCancelReflection}
+            />
+          )}
           <ChatTranscript
             turns={turns}
             isLoading={isLoading}
@@ -184,5 +194,46 @@ export function ChatPanel({
         </div>
       </section>
     </main>
+  );
+}
+
+function ReflectionStatusRow({
+  reflection,
+  onCancelReflection,
+}: {
+  reflection: ReflectionClientState;
+  onCancelReflection: () => void;
+}) {
+  const visible = reflection.status !== "idle" || Boolean(reflection.lastSummary);
+  if (!visible) return null;
+
+  const label = reflection.status === "running"
+    ? "Reflection running"
+    : reflection.status === "failed"
+      ? "Reflection failed"
+      : "Last reflection";
+
+  return (
+    <div
+      data-testid="reflection-status"
+      className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-brand-border bg-brand-surface/80 px-3 py-2 text-xs text-brand-text-light"
+      title={reflection.memoryRoot}
+    >
+      <div className="min-w-0">
+        <div className="font-medium text-brand-text-strong">{label}</div>
+        {reflection.lastSummary && (
+          <div className="truncate text-brand-text-muted">{reflection.lastSummary}</div>
+        )}
+      </div>
+      {reflection.status === "running" && (
+        <button
+          type="button"
+          onClick={onCancelReflection}
+          className="shrink-0 rounded-md border border-brand-border px-2 py-1 text-brand-text-muted transition-snappy-colors hover:bg-brand-panel hover:text-brand-text-strong"
+        >
+          Stop
+        </button>
+      )}
+    </div>
   );
 }

@@ -18,9 +18,14 @@ export interface RunContext {
 
 export function buildRunContext(input: RunContextInput): RunContext {
   const priorMessages = projectEventsToMessages(input.events);
+  const modeMessage: AgentMessage = {
+    role: "system",
+    content: `current mode: ${input.mode} timestamp: ${new Date().toISOString()}`,
+  };
   return {
     messages: [
       ...priorMessages,
+      modeMessage,
       { role: "user", content: input.userContent },
     ],
     systemPrompt: buildSystemPrompt({

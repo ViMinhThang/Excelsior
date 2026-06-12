@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS: HarnessSettings = {
   deepseekApiKey: "",
   githubToken: "",
   agentToolLoopSteps: DEFAULT_AGENT_TOOL_LOOP_STEPS,
+  autoReflectionEnabled: false,
 };
 
 type SessionFileLine =
@@ -36,6 +37,7 @@ export class FileHarnessStorage {
       agentToolLoopSteps: normalizeAgentToolLoopSteps(
         raw.agentToolLoopSteps ?? process.env[AGENT_TOOL_LOOP_STEPS_SETTING] ?? DEFAULT_SETTINGS.agentToolLoopSteps,
       ),
+      autoReflectionEnabled: raw.autoReflectionEnabled ?? DEFAULT_SETTINGS.autoReflectionEnabled,
     };
   }
 
@@ -45,6 +47,7 @@ export class FileHarnessStorage {
       ...current,
       ...settings,
       agentToolLoopSteps: normalizeAgentToolLoopSteps(settings.agentToolLoopSteps ?? current.agentToolLoopSteps),
+      autoReflectionEnabled: settings.autoReflectionEnabled ?? current.autoReflectionEnabled,
     };
     this.writeJson(this.settingsPath(), next);
     return next;
@@ -170,6 +173,12 @@ export class FileHarnessStorage {
     for (const file of readdirSync(dir)) {
       if (file.endsWith(".jsonl")) unlinkSync(join(dir, file));
     }
+  }
+
+  reflectionMemoryDirectory(workspaceId: string): string {
+    const dir = join(this.rootDir, "memory", workspaceId);
+    this.ensureDirectory(dir);
+    return dir;
   }
 
   private writeSessionFile(workspaceId: string, session: Session, events: readonly AnyHarnessEvent[]): void {

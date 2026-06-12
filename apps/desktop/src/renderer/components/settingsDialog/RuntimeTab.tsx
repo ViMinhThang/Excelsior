@@ -1,17 +1,21 @@
-import { Hash, Infinity as InfinityIcon } from "lucide-react";
+import { Hash, Infinity as InfinityIcon, ToggleLeft, ToggleRight } from "lucide-react";
 
 type RuntimeTabProps = {
   toolLoopUnlimited: boolean;
   toolLoopStepInput: string;
+  autoReflectionEnabled: boolean;
   onToolLoopUnlimitedChange: (enabled: boolean) => void;
   onToolLoopStepInputChange: (value: string) => void;
+  onAutoReflectionEnabledChange: (enabled: boolean) => void;
 };
 
 export function RuntimeTab({
   toolLoopUnlimited,
   toolLoopStepInput,
+  autoReflectionEnabled,
   onToolLoopUnlimitedChange,
   onToolLoopStepInputChange,
+  onAutoReflectionEnabledChange,
 }: RuntimeTabProps) {
   return (
     <div className="settings-form space-y-5">
@@ -52,6 +56,28 @@ export function RuntimeTab({
           className="settings-control transition-snappy-colors"
         />
       </label>
+
+      <div className="settings-field">
+        <span className="settings-label">Auto Reflection</span>
+        <div className="theme-toggle-segmented">
+          <button
+            type="button"
+            onClick={() => onAutoReflectionEnabledChange(false)}
+            className={`theme-toggle-btn transition-snappy-colors ${!autoReflectionEnabled ? "active" : ""}`}
+          >
+            <ToggleLeft className="w-4 h-4 mr-2" />
+            Off
+          </button>
+          <button
+            type="button"
+            onClick={() => onAutoReflectionEnabledChange(true)}
+            className={`theme-toggle-btn transition-snappy-colors ${autoReflectionEnabled ? "active" : ""}`}
+          >
+            <ToggleRight className="w-4 h-4 mr-2" />
+            On
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

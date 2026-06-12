@@ -1,14 +1,13 @@
-import { formatAgentMode, type AgentMode } from "@excelsior/core";
+import type { AgentMode } from "@excelsior/core";
 
 export interface SystemPromptInput {
-  mode: AgentMode;
+  mode?: AgentMode;
   skillsList?: string;
   projectInstructions?: string;
 }
 
 export function buildSystemPrompt(input: SystemPromptInput): string {
   let prompt = `
-CURRENT MODE: ${formatAgentMode(input.mode)}
 - Plan mode: inspect, reason, and draft plans only. Do not write files or run write-like commands.
 - Act mode: you may apply edits after the normal confirmation flow.
 - If a task is unclear or a high-impact decision is missing, ask the user before continuing.

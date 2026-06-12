@@ -1,4 +1,5 @@
 import type { FC } from "react";
+import type { ReflectionClientState } from "@excelsior/core";
 import { theme } from "../../theme.js";
 import { chatModeRegistry } from "../../chatModes/registry.js";
 import type { ChatMode } from "../../chatModes/types.js";
@@ -14,6 +15,7 @@ export interface FooterBarProps {
   toolCallCount: number;
   toolsExpanded: boolean;
   totalTokens?: number;
+  reflection?: ReflectionClientState;
 }
 
 const FooterBar: FC<FooterBarProps> = ({
@@ -26,6 +28,7 @@ const FooterBar: FC<FooterBarProps> = ({
   toolCallCount,
   toolsExpanded,
   totalTokens,
+  reflection,
 }) => {
   const footerHint = chatModeRegistry[chatMode].getHint({
     chatMode,
@@ -37,11 +40,13 @@ const FooterBar: FC<FooterBarProps> = ({
     toolCallCount,
     toolsExpanded,
   });
+  const reflectionHint = getReflectionHint(reflection);
+  const displayHint = reflectionHint ? `${footerHint} | ${reflectionHint}` : footerHint;
 
   return (
     <box flexDirection="row" width="100%">
       <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })} truncate>
-        {footerHint}
+        {displayHint}
       </text>
       {totalTokens !== undefined && (
         <>
@@ -56,3 +61,10 @@ const FooterBar: FC<FooterBarProps> = ({
 };
 
 export default FooterBar;
+
+function getReflectionHint(reflection?: ReflectionClientState): string | null {
+  if (!reflection) return null;
+  if (reflection.status === "running") return "reflecting | /reflect stop";
+  if (reflection.status === "failed") return "reflection failed";
+  return null;
+}

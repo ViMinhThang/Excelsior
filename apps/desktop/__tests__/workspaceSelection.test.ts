@@ -17,6 +17,11 @@ function state(): AgentClientState {
     mode: "plan",
     pendingConfirmation: null,
     pendingQuestion: null,
+    reflection: {
+      status: "idle",
+      touchedFiles: [],
+      memoryRoot: "C:/memory",
+    },
   };
 }
 
@@ -35,6 +40,7 @@ function apiWithFolder(folderPath: string | null, tree: WorkspaceTreeNode[]): {
           deepseekApiKey: "",
           githubToken: "",
           agentToolLoopSteps: "unlimited",
+          autoReflectionEnabled: false,
         },
       }),
       dispatch: async (_intent: AgentHostIntent) => ({ type: "none" }),

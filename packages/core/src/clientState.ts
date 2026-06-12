@@ -9,6 +9,14 @@ export interface AgentLlmInfo {
   modelName: string;
 }
 
+export interface ReflectionClientState {
+  status: "idle" | "running" | "failed";
+  lastRunAt?: string;
+  lastSummary?: string;
+  touchedFiles: string[];
+  memoryRoot: string;
+}
+
 export interface AgentClientState {
   turns: ProjectedTurn[];
   isLoading: boolean;
@@ -19,4 +27,5 @@ export interface AgentClientState {
   mode: AgentMode;
   pendingConfirmation: ConfirmRequest | null;
   pendingQuestion: AskQuestionRequest | null;
+  reflection: ReflectionClientState;
 }

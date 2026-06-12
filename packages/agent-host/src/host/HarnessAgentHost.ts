@@ -42,6 +42,9 @@ export class HarnessAgentHost implements AgentHost {
       case "cancel":
         this.harness.cancel();
         return none();
+      case "cancel-reflection":
+        this.harness.cancelReflection();
+        return none();
       case "execute-command":
         return { type: "command-result", result: await this.harness.executeCommand(intent.input) };
       case "create-session":
