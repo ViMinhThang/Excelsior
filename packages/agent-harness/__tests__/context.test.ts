@@ -8,6 +8,7 @@ import {
   buildCompactionSummary,
   buildRunContext,
   loadProjectInstructions,
+  type LspClient,
   ProviderRegistry,
   revertLastCompletedTurn,
   toModelMessages,
@@ -109,6 +110,10 @@ describe("harness context helpers", () => {
           relatedToolCallId: options?.relatedToolCallId,
           parentEventId: options?.parentEventId,
         });
+    const lsp: LspClient = {
+      syncTouchedFile: async () => null,
+      dispose: () => {},
+    };
 
     const assemblyInput: RunAssemblyInput = {
       workspaceRoot,
@@ -123,6 +128,7 @@ describe("harness context helpers", () => {
       settings,
       providers: new ProviderRegistry(),
       tools: new ToolRegistry(),
+      lsp,
       confirm: async (request) => ({ callId: request.toolName, approved: true }),
       askQuestion: async () => ({ callId: "question", answer: "", isManual: true, cancelled: true }),
       createEmitter,
@@ -138,6 +144,7 @@ describe("harness context helpers", () => {
     });
     expect(assembly.runContext.systemPrompt).toContain("Keep context assembly boring.");
     expect(assembly.toolContext.mode).toBe("plan");
+    expect(assembly.toolContext.lsp).toBe(lsp);
     expect(assembly.toolContext.projectInstructions).toBe("Keep context assembly boring.");
     expect(assembly.toolContext.backupDir).toBe(join(storageRoot, "backups", "ws_test", "ses_test", "turn_test"));
     await expect(assembly.toolContext.sendSubAgent({

@@ -38,6 +38,7 @@ export {
   type HarnessTraceOptions,
 } from "./inspector.js";
 export { GitHubReviewService } from "./github.js";
+export { LspManager, TypeScriptLspAdapter, type LspClient, type LspDiagnostic, type LspLanguageAdapter, type LspSyncResult } from "./lsp/LspManager.js";
 export type {
   AgentHarness,
   HarnessCatalog,

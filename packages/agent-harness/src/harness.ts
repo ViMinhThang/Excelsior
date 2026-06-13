@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { resolve } from "node:path";
 import { SkillCatalog } from "./skills/SkillCatalog.js";
 import type {
   AgentMode,
@@ -30,7 +28,9 @@ import {
 import { buildRunAssembly } from "./context/runAssembly.js";
 import { GitHubReviewService } from "./github.js";
 import { revertLastCompletedTurn } from "./history/revert.js";
+import { restoreTurnBackups } from "./history/turnBackups.js";
 import { copyHarnessEvents, replayHarnessEvents } from "./inspector.js";
+import { LspManager } from "./lsp/LspManager.js";
 import { createDeepSeekProvider } from "./provider.js";
 import { projectHarnessState, ProjectionCache } from "./projection.js";
 import { CommandRegistry, ExtensionRegistry, ProviderRegistry, ToolRegistry } from "./registries.js";
@@ -74,6 +74,7 @@ class HarnessStore implements AgentHarness {
   private readonly confirmRouter: ConfirmationRouter;
   private readonly activeRun = new ActiveRunManager();
   private readonly reflectionRun: ReflectionRunManager;
+  private readonly lsp: LspManager;
 
   private mode: AgentMode = "act";
   private snapshot!: HarnessSnapshot;
@@ -93,6 +94,7 @@ class HarnessStore implements AgentHarness {
     this.eventStore = new EventStore(this.storage, this.workspace.id);
     this.settingsStore = new SettingsStore(this.storage);
     this.confirmRouter = new ConfirmationRouter();
+    this.lsp = LspManager.create(this.workspace.rootPath);
     this.reflectionRun = new ReflectionRunManager({
       workspace: this.workspace,
       storage: this.storage,
@@ -209,6 +211,7 @@ class HarnessStore implements AgentHarness {
       settings: this.settingsStore.settings,
       providers: this.providers,
       tools: this.tools,
+      lsp: this.lsp,
       skillsList: this.skillsList,
       confirm: (request) => this.requestConfirmation(request),
       askQuestion: (request) => this.requestQuestion(request),
@@ -385,39 +388,18 @@ class HarnessStore implements AgentHarness {
       return { handled: true, message: "No completed turn to revert.", clearInput: true };
     }
 
-    await this.restoreBackups(session.id, result.revertedTurnId);
+    restoreTurnBackups({
+      storageRoot: this.storage.rootDir,
+      workspaceRoot: this.workspace.rootPath,
+      workspaceId: this.workspace.id,
+      sessionId: session.id,
+      turnId: result.revertedTurnId,
+    });
 
     this.eventStore.replaceEvents(session, result.events);
     this.sessionManager.refreshSessions();
     this.notify();
     return { handled: true, message: "Reverted last turn.", clearInput: true };
-  }
-
-  private async restoreBackups(sessionId: string, turnId?: string): Promise<void> {
-    if (!turnId) return;
-    const backupDir = resolve(this.storage.rootDir, "backups", this.workspace.id, sessionId, turnId);
-    const manifestPath = resolve(backupDir, "manifest.json");
-    if (!existsSync(manifestPath)) return;
-
-    try {
-      const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Array<{ path: string; action: "modify" | "create" }>;
-      for (const entry of manifest) {
-        const workspacePath = resolve(this.workspace.rootPath, entry.path);
-        if (entry.action === "modify") {
-          const backupFilePath = resolve(backupDir, entry.path);
-          if (existsSync(backupFilePath)) {
-            const content = readFileSync(backupFilePath, "utf-8");
-            writeFileSync(workspacePath, content, "utf-8");
-          }
-        } else if (entry.action === "create") {
-          if (existsSync(workspacePath)) {
-            unlinkSync(workspacePath);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Failed to restore backups:", err);
-    }
   }
 
   async compactCurrentSession(triggerMode: "manual" | "auto" = "manual"): Promise<void> {
@@ -463,6 +445,7 @@ class HarnessStore implements AgentHarness {
   dispose(): void {
     this.cancelReflection();
     this.cancel();
+    this.lsp.dispose();
     if (this.notifyTimer) {
       clearTimeout(this.notifyTimer);
       this.notifyTimer = null;
