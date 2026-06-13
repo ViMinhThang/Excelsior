@@ -30,6 +30,7 @@ export function buildChatModeKeymapContext(
         isLoading: input.isLoading,
         suggestion: input.suggestion,
         setInput: input.setInput,
+        setInputFocused: input.setInputFocused,
         submit: input.submit,
         cancel: input.cancel,
         toggleMode: input.toggleMode,
@@ -40,23 +41,6 @@ export function buildChatModeKeymapContext(
         toggleToolsExpanded: input.toggleToolsExpanded,
         navigateUp: input.navigateUp,
         navigateDown: input.navigateDown,
-      };
-    case "subagent-picker":
-      return {
-        chatMode: "subagent-picker",
-        isPaletteOpen: input.isPaletteOpen,
-        setChatMode: input.setChatMode,
-        nextSubAgent: input.nextSubAgent,
-        prevSubAgent: input.prevSubAgent,
-        toolsExpanded: input.toolsExpanded,
-        toggleToolsExpanded: input.toggleToolsExpanded,
-      };
-    case "subagent-detail":
-      return {
-        chatMode: "subagent-detail",
-        isPaletteOpen: input.isPaletteOpen,
-        setChatMode: input.setChatMode,
-        toggleToolsExpanded: input.toggleToolsExpanded,
       };
   }
 }
@@ -79,6 +63,7 @@ export function buildChatInteractionState(
     isLoading: input.isLoading,
     suggestion: input.suggestion,
     setInput: input.setInput,
+    setInputFocused: input.setInputFocused,
     submit: input.submit,
     cancel: input.cancel,
     toggleMode: input.toggleMode,
@@ -94,9 +79,6 @@ export function buildChatInteractionState(
   const chatModeKeymap = buildChatModeKeymapContext({
     ...inputModeKeymap,
     chatMode: input.chatMode,
-    setChatMode: input.setChatMode,
-    nextSubAgent: input.nextSubAgent,
-    prevSubAgent: input.prevSubAgent,
   });
 
   return {

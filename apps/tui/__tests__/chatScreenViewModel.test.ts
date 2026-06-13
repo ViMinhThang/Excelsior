@@ -242,6 +242,7 @@ describe("chat screen model builders", () => {
       isPaletteOpen: false,
       suggestion,
       setInput: noop,
+      setInputFocused: noop,
       submit: noop,
       cancel: noop,
       toggleMode: () => undefined,
@@ -251,9 +252,7 @@ describe("chat screen model builders", () => {
       toggleToolsExpanded: noop,
       navigateUp: noop,
       navigateDown: noop,
-      setChatMode: noop,
-      nextSubAgent: noop,
-      prevSubAgent: noop,
+      inputFocused: false,
     });
 
     expect(plane.pendingKind).toBe("question");
@@ -279,91 +278,5 @@ describe("chat screen model builders", () => {
       pendingConfirmation: pendingRequest(),
       pendingQuestion: null,
     }).pendingKind).toBe("confirmation");
-  });
-
-  it("builds sub-agent picker context with command expansion state", () => {
-    const selectedTool = toolBlock("tool_selected");
-    const otherTool = toolBlock("tool_other");
-    const selectedSubAgent = subAgentBlock("sub_selected");
-    const turns: ProjectedTurn[] = [{ id: "turn_1", status: "completed", blocks: [selectedSubAgent, selectedTool, otherTool] }];
-    const context = buildModeViewContext({
-      workspace: { id: "ws", name: "Workspace", rootPath: "C:/repo" },
-      sessionId: "ses",
-      chatMode: "subagent-picker",
-      turns,
-      tasks: [{ id: "task_1", text: "Inspect", status: "done" }],
-      inputValue: "/review ",
-      setInput: noop,
-      handleSubmit: noop,
-      isLoading: false,
-      pending: null,
-      paletteOpen: false,
-      commandResult: "done",
-      agentMode: "act",
-      settings,
-      activePanel: undefined,
-      featureContext: {
-        sessions: [],
-        currentSessionId: null,
-        switchSession: noop,
-        deleteSession: noop,
-        closePanel: noop,
-      },
-      subAgents: [selectedSubAgent],
-      subAgentIndex: 0,
-      toolsExpanded: true,
-      viewportKey: "none:0",
-    });
-
-    expect(context.chatMode).toBe("subagent-picker");
-    if (context.chatMode !== "subagent-picker") throw new Error("expected sub-agent picker context");
-    expect(context.input.value).toBe("/review ");
-    expect(context.runtime.commandResult).toBe("done");
-    expect(context.transcript.turns).toBe(turns);
-    expect(context.transcript.tasks).toEqual([{ id: "task_1", text: "Inspect", status: "done" }]);
-    expect(context.transcript.toolsExpanded).toBe(true);
-    expect(context.runtime.settings.autoApproveWorkspaceEdits).toBe(false);
-    expect(context.subAgents.blocks).toEqual([selectedSubAgent]);
-    expect("tools" in context).toBe(false);
-  });
-
-  it("builds sub-agent detail context with only owned mode state", () => {
-    const selectedSubAgent = subAgentBlock("sub_selected");
-    const turns: ProjectedTurn[] = [{ id: "turn_1", status: "completed", blocks: [selectedSubAgent] }];
-    const context = buildModeViewContext({
-      workspace: { id: "ws", name: "Workspace", rootPath: "C:/repo" },
-      sessionId: "ses",
-      chatMode: "subagent-detail",
-      turns,
-      tasks: [],
-      inputValue: "",
-      setInput: noop,
-      handleSubmit: noop,
-      isLoading: false,
-      pending: null,
-      paletteOpen: false,
-      commandResult: null,
-      agentMode: "act",
-      settings,
-      activePanel: undefined,
-      featureContext: {
-        sessions: [],
-        currentSessionId: null,
-        switchSession: noop,
-        deleteSession: noop,
-        closePanel: noop,
-      },
-      subAgents: [selectedSubAgent],
-      subAgentIndex: 0,
-      toolsExpanded: true,
-      viewportKey: "none:0",
-    });
-
-    expect(context.chatMode).toBe("subagent-detail");
-    if (context.chatMode !== "subagent-detail") throw new Error("expected sub-agent detail context");
-    expect(context.subAgents.blocks).toEqual([selectedSubAgent]);
-    expect(context.toolsExpanded).toBe(true);
-    expect("transcript" in context).toBe(false);
-    expect("tools" in context).toBe(false);
   });
 });

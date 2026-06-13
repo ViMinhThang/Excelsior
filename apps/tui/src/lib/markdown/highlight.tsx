@@ -7,57 +7,45 @@ import {
   splitHighlightedLines,
   type AnsiTextSpan,
 } from "./ansiSpans.js";
+import { theme } from "../../theme.js";
 
 const customChalk = new Chalk({ level: 3 });
 
-/** Rosé Pine (main) — https://rosepinetheme.com/palette/ingredients/ */
-const rosePine = {
-  text: "#e0def4",
-  muted: "#6e6a86",
-  subtle: "#908caa",
-  love: "#eb6f92",
-  gold: "#f6c177",
-  rose: "#ebbcba",
-  pine: "#31748f",
-  foam: "#9ccfd8",
-  iris: "#c4a7e7",
-} as const;
-
-function rp(color: string) {
-  return customChalk.hex(color);
+function getSyntaxTheme(): Record<string, unknown> {
+  const colors = theme.colors;
+  const rp = (color: string) => customChalk.hex(color || "#c6c6c6");
+  return {
+    keyword: rp(colors.syntaxKeyword),
+    built_in: rp(colors.syntaxBuiltIn),
+    type: rp(colors.syntaxType),
+    literal: rp(colors.syntaxLiteral),
+    number: rp(colors.syntaxNumber),
+    regexp: rp(colors.syntaxRegexp),
+    string: rp(colors.syntaxString),
+    subst: rp(colors.syntaxSubst),
+    symbol: rp(colors.syntaxSymbol),
+    class: rp(colors.syntaxClass),
+    function: rp(colors.syntaxFunction),
+    title: rp(colors.syntaxTitle),
+    params: rp(colors.syntaxParams),
+    comment: rp(colors.syntaxComment).italic,
+    doctag: rp(colors.syntaxComment),
+    meta: rp(colors.syntaxComment),
+    tag: rp(colors.syntaxTag),
+    attr: rp(colors.syntaxAttr),
+    attribute: rp(colors.syntaxAttr),
+    variable: rp(colors.syntaxVariable),
+    bullet: rp(colors.syntaxSubst),
+    code: rp(colors.syntaxString),
+    emphasis: rp(colors.syntaxVariable).italic,
+    strong: rp(colors.syntaxVariable).bold,
+    formula: rp(colors.syntaxLiteral),
+    link: rp(colors.syntaxSymbol).underline,
+    quote: rp(colors.syntaxComment),
+    addition: rp(colors.syntaxFunction),
+    deletion: rp(colors.syntaxTag),
+  };
 }
-
-const rosePineSyntaxTheme = {
-  keyword: rp(rosePine.iris),
-  built_in: rp(rosePine.pine),
-  type: rp(rosePine.foam),
-  literal: rp(rosePine.gold),
-  number: rp(rosePine.gold),
-  regexp: rp(rosePine.rose),
-  string: rp(rosePine.foam),
-  subst: rp(rosePine.subtle),
-  symbol: rp(rosePine.iris),
-  class: rp(rosePine.foam),
-  function: rp(rosePine.pine),
-  title: rp(rosePine.iris),
-  params: rp(rosePine.subtle),
-  comment: rp(rosePine.muted).italic,
-  doctag: rp(rosePine.muted),
-  meta: rp(rosePine.muted),
-  tag: rp(rosePine.love),
-  attr: rp(rosePine.rose),
-  attribute: rp(rosePine.rose),
-  variable: rp(rosePine.text),
-  bullet: rp(rosePine.subtle),
-  code: rp(rosePine.foam),
-  emphasis: rp(rosePine.text).italic,
-  strong: rp(rosePine.text).bold,
-  formula: rp(rosePine.gold),
-  link: rp(rosePine.iris).underline,
-  quote: rp(rosePine.muted),
-  addition: rp(rosePine.pine),
-  deletion: rp(rosePine.love),
-};
 
 export function escapeXml(text: string): string {
   return text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -92,7 +80,7 @@ function renderAnsiSpans(
 function highlightSource(code: string, lang?: string): string {
   return highlight(code, {
     language: lang || undefined,
-    theme: rosePineSyntaxTheme,
+    theme: getSyntaxTheme(),
     ignoreIllegals: true,
   });
 }

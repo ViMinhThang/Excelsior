@@ -63,23 +63,5 @@ export function buildModeViewContext({
         chatMode,
         ...conversation,
       };
-    case "subagent-picker":
-      return {
-        chatMode,
-        ...conversation,
-        subAgents: {
-          blocks: subAgents,
-          selectedIndex: subAgentIndex,
-        },
-      };
-    case "subagent-detail":
-      return {
-        chatMode,
-        toolsExpanded,
-        subAgents: {
-          blocks: subAgents,
-          selectedIndex: subAgentIndex,
-        },
-      };
   }
 }

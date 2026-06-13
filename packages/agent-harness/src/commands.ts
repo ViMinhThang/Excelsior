@@ -30,6 +30,9 @@ export function createBuiltInCommands(input: {
       navigate: "settings",
       clearInput: true,
     })),
+    command("theme", "settings", "Open the TUI theme picker", "/theme [name]", async () =>
+      ok("Theme selection is available in the TUI with /theme."),
+    ),
     command("session", "session", "Open or manage sessions", "/session [list|new|open|rename|delete]", sessionCommand),
     command("mode", "core", "Switch between Plan and Act modes", "/mode [plan|act]", modeCommand),
     command("accept-edits", "core", "Toggle auto-approval for workspace file edits", "/accept-edits [on|off]", acceptEditsCommand),

@@ -5,6 +5,7 @@ import PendingQuestionPanel from '../components/chat/PendingQuestionPanel.js';
 import FooterBar from '../components/chat/FooterBar.js';
 import { CommandSuggestions } from '../components/chat/CommandSuggestions.js';
 import CommandPalette from '../components/palette/CommandPalette.js';
+import ThemeModal from '../components/theme/ThemeModal.js';
 import { useChatInteractionController } from '../hooks/useChatInteractionController.js';
 import { chatModeRegistry } from '../chatModes/registry.js';
 import type { ChatModeRenderContext } from '../chatModes/types.js';
@@ -14,10 +15,6 @@ function renderModeView(modeView: ChatModeRenderContext) {
   switch (modeView.chatMode) {
     case "input":
       return chatModeRegistry.input.render(modeView);
-    case "subagent-picker":
-      return chatModeRegistry["subagent-picker"].render(modeView);
-    case "subagent-detail":
-      return chatModeRegistry["subagent-detail"].render(modeView);
   }
 }
 
@@ -31,6 +28,7 @@ const ChatScreen = () => {
       width="100%"
       flexGrow={1}
       backgroundColor={theme.colors.background}
+      position="relative"
     >
       <box flexShrink={0} width="100%">
         <AppHeader {...screen.header} />
@@ -62,6 +60,10 @@ const ChatScreen = () => {
         <box flexShrink={0} width="100%">
           <CommandPalette {...screen.palette.props} />
         </box>
+      )}
+
+      {screen.themeModal.visible && (
+        <ThemeModal {...screen.themeModal.props} />
       )}
 
       <box flexShrink={0} width="100%">

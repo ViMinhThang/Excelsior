@@ -168,6 +168,7 @@ Each flow doc in `docs/` covers one mechanism end to end across layers.
 
 | Document | Covers | Key Layers |
 |---|---|---|
+| `type-system-guide.md` | Core type families and where each shape belongs | core + client + harness |
 | `active-run-flow.md` | Run lifecycle, steering, cancellation | harness (ActiveRunManager, RunController) |
 | `tui-send-flow.md` | User message from input to model step | TUI -> client -> host -> harness |
 | `projection-flow.md` | Events to transcript blocks | harness (Projector, TranscriptProjection) |
@@ -221,15 +222,16 @@ If you are new, read in this order:
 
 0. **dataflow-atlas.md** — get the complete end-to-end dataflow for every operation
 1. **architecture-overview.md** (this file) — get the lay of the land
-2. **projection-flow.md** — understand how events become transcript blocks
-3. **tui-send-flow.md** — follow one user message through all layers
-4. **active-run-flow.md** — understand run lifecycle and cancellation
-5. **confirmation-flow.md** — understand tool safety gates
-6. **tui-write-edit-tool-display-flow.md** — understand write/edit diff display
-7. **task-list-flow.md** — understand the visible implementation checklist
-8. **skills-flow.md** — understand the skill system
-9. **reflection-flow.md** — understand durable background memory
-10. **lsp-flow.md** — understand language diagnostics on file tool output
-11. Then the remaining flow docs as needed for your area
+2. **type-system-guide.md** — understand the major type families
+3. **projection-flow.md** — understand how events become transcript blocks
+4. **tui-send-flow.md** — follow one user message through all layers
+5. **active-run-flow.md** — understand run lifecycle and cancellation
+6. **confirmation-flow.md** — understand tool safety gates
+7. **tui-write-edit-tool-display-flow.md** — understand write/edit diff display
+8. **task-list-flow.md** — understand the visible implementation checklist
+9. **skills-flow.md** — understand the skill system
+10. **reflection-flow.md** — understand durable background memory
+11. **lsp-flow.md** — understand language diagnostics on file tool output
+12. Then the remaining flow docs as needed for your area
 
 If you are expanding subagents beyond the current `spawnSubAgent` tool, read `subagent-runtime-roadmap.md` before changing runtime or UI contracts.

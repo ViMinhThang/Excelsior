@@ -7,92 +7,22 @@ import TaskList from "../components/chat/TaskList.js";
 import SubAgentPickerPanel from "../components/subAgents/SubAgentPickerPanel.js";
 import ThinkingIndicator from "../components/chat/ThinkingIndicator.js";
 import { useKeymap } from "../hooks/useKeymap.js";
-import { textAttrs } from "../platform/opentui/textAttributes.js";
 import { theme } from "../theme.js";
 import type {
   InputModeRenderContext,
   SubAgentPickerModeRenderContext,
 } from "./types.js";
+import {
+  isScrolledBackFromLatest,
+  getScrollSnapshot,
+  scrollToLatest,
+  getTranscriptArrowScrollTop,
+} from "../lib/scrollUtilities.js";
+import ScrollToLatestButton from "../components/chat/ScrollToLatestButton.js";
 
 type ConversationModeContext =
   | InputModeRenderContext
   | SubAgentPickerModeRenderContext;
-
-interface ScrollSnapshot {
-  scrollTop: number;
-  scrollHeight: number;
-  viewportHeight: number;
-}
-
-const SCROLL_BOTTOM_EPSILON = 1;
-
-export function isScrolledBackFromLatest(
-  snapshot: ScrollSnapshot,
-  epsilon = SCROLL_BOTTOM_EPSILON,
-): boolean {
-  const maxScrollTop = Math.max(0, snapshot.scrollHeight - snapshot.viewportHeight);
-  return maxScrollTop > epsilon && snapshot.scrollTop < maxScrollTop - epsilon;
-}
-
-function getScrollSnapshot(scrollbox: ScrollBoxRenderable): ScrollSnapshot {
-  return {
-    scrollTop: scrollbox.scrollTop,
-    scrollHeight: scrollbox.scrollHeight,
-    viewportHeight: scrollbox.viewport.height,
-  };
-}
-
-function scrollToLatest(scrollbox: ScrollBoxRenderable): void {
-  scrollbox.scrollTo({
-    x: scrollbox.scrollLeft,
-    y: Math.max(0, scrollbox.scrollHeight - scrollbox.viewport.height),
-  });
-}
-
-export function getTranscriptArrowScrollTop(
-  snapshot: ScrollSnapshot,
-  direction: "up" | "down",
-): number {
-  const maxScrollTop = Math.max(0, snapshot.scrollHeight - snapshot.viewportHeight);
-  const delta = Math.max(1, Math.floor(snapshot.viewportHeight * 0.45));
-  const nextScrollTop = direction === "up"
-    ? snapshot.scrollTop - delta
-    : snapshot.scrollTop + delta;
-  return Math.min(maxScrollTop, Math.max(0, nextScrollTop));
-}
-
-export interface ScrollToLatestButtonProps {
-  onPress: () => void;
-}
-
-export const ScrollToLatestButton: FC<ScrollToLatestButtonProps> = ({ onPress }) => {
-  const handleMouseDown = useCallback((event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onPress();
-  }, [onPress]);
-
-  return (
-    <box
-      position="absolute"
-      left={0}
-      bottom={1}
-      width="100%"
-      justifyContent="center"
-      alignItems="center"
-      zIndex={10}
-    >
-      <box onMouseDown={handleMouseDown}>
-        <text
-          fg={theme.colors.muted}
-          attributes={textAttrs({ dim: true })}
-        >
-          {"\u2193"}
-        </text>
-      </box>
-    </box>
-  );
-};
 
 interface ConversationViewProps {
   ctx: ConversationModeContext;
