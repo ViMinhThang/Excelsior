@@ -9,11 +9,14 @@ describe("AppHeader", () => {
       workspaceName: "Excelsior",
       branchName: "codex/tui-polish",
       modelLabel: "DeepSeek · deepseek-v4-flash",
+      contextLabel: "memory on · AGENTS.md loaded · 2 skills · 14.0k transcript",
     }));
 
     const frame = screen.lastFrame() ?? "";
     expect(frame).toContain("Excelsior");
     expect(frame).toContain("codex/tui-polish");
     expect(frame).toContain("DeepSeek · deepseek-v4-flash");
+    expect(frame).toContain("memory on");
+    expect(frame).toContain("2 skills");
   });
 });

@@ -101,6 +101,7 @@ export function useChatRuntimeInteraction({
   }, [isLoading, wasLoading]);
 
   const inputHistory = useInputHistory(derivedTurns);
+  const [inputFocused, setInputFocused] = useState(true);
   const subAgentNav = useSubAgentNavigation(derivedTurns);
   const command = useCommandResult(inputHistory.input);
   const suggestion = useCommandAutocomplete(inputHistory.input);
@@ -171,6 +172,7 @@ export function useChatRuntimeInteraction({
     pendingQuestion: question.pending,
     activePanelId: panel.activePanelId,
     isPaletteOpen: palette.isOpen,
+    inputFocused,
     suggestion,
     setInput: inputHistory.setInput,
     submit: () => submitRef.current(),
@@ -247,6 +249,8 @@ export function useChatRuntimeInteraction({
     panel,
     palette,
     shouldSubmit,
+    inputFocused,
+    setInputFocused,
     subAgentNav,
     suggestion,
     toolsExpanded,

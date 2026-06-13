@@ -21,6 +21,8 @@ const DEFAULT_STATE: ReflectionMemoryState = {
   reviewedSessionIds: [],
 };
 
+const MEMORY_CONTEXT_CHAR_LIMIT = 20_000;
+
 export class ReflectionMemoryStore {
   readonly rootDir: string;
 
@@ -97,6 +99,25 @@ export class ReflectionMemoryStore {
     return relativePath;
   }
 
+  buildContext(limit = MEMORY_CONTEXT_CHAR_LIMIT): string {
+    const files = this.listMemoryFiles();
+    if (files.length === 0) return "No reflection memory files exist yet.";
+
+    const blocks: string[] = [];
+    let totalChars = 0;
+    for (const filePath of files) {
+      const content = this.readMemoryFile(filePath).trim();
+      if (!content) continue;
+      const block = [`## ${filePath}`, "", content].join("\n");
+      const remaining = limit - totalChars;
+      if (remaining <= 0) break;
+      blocks.push(clipMemoryContext(block, remaining));
+      totalChars += Math.min(block.length, remaining);
+    }
+
+    return blocks.length > 0 ? blocks.join("\n\n---\n\n") : "Reflection memory files are empty.";
+  }
+
   private ensureReady(): void {
     mkdirSync(resolve(this.rootDir, "topics"), { recursive: true });
     if (!existsSync(this.indexPath())) {
@@ -158,4 +179,9 @@ export class ReflectionMemoryStore {
   private statePath(): string {
     return resolve(this.rootDir, "state.json");
   }
+}
+
+function clipMemoryContext(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 36))}\n[truncated reflection memory context]`;
 }

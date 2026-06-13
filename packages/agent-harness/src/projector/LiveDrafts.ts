@@ -54,11 +54,13 @@ export class LiveDrafts {
     this.tool = input;
   }
 
-  updateTool(input: { id: string; delta: string; timestamp: string }): void {
+  updateTool(input: { id: string; delta: string; target?: "input" | "output"; timestamp: string }): void {
     if (!this.tool || this.tool.id !== input.id) return;
     this.tool = {
       ...this.tool,
-      toolArgs: `${this.tool.toolArgs}${input.delta}`,
+      ...(input.target === "output"
+        ? { result: `${this.tool.result}${input.delta}` }
+        : { toolArgs: `${this.tool.toolArgs}${input.delta}` }),
       timestamp: input.timestamp,
     };
   }

@@ -16,7 +16,7 @@ describe("TaskList", () => {
     const frame = screen.lastFrame() ?? "";
     expect(frame).toContain("Tasks");
     expect(frame).toContain("[x]");
-    expect(frame).toContain("[/]");
+    expect(frame).toMatch(/\[\/\]|\[>\]/);
     expect(frame).toContain("[ ]");
     expect(frame).toContain("Apply code changes");
   });

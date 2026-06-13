@@ -172,12 +172,16 @@ Each flow doc in `docs/` covers one mechanism end to end across layers.
 | `tui-send-flow.md` | User message from input to model step | TUI -> client -> host -> harness |
 | `projection-flow.md` | Events to transcript blocks | harness (Projector, TranscriptProjection) |
 | `tui-block-render-flow.md` | Blocks to terminal output | TUI (ChatHistory, leaf components) |
+| `tui-write-edit-tool-display-flow.md` | Write/edit tool diff display in the TUI | core display policy + TUI (ToolMessage, FileChangePreviewView) |
+| `task-list-flow.md` | `updateTasks` tool and sticky TUI checklist | harness (tasks tool, TaskHandler) + TUI (TaskList) |
 | `confirmation-flow.md` | Tool confirmations, Plan mode blocking | harness (tools, ConfirmationRouter) + client + TUI/Desktop |
 | `askquestion-tool-flow.md` | `askQuestion` tool end to end | harness (tools/interaction, ConfirmationRouter) + client + TUI/Desktop |
 | `subagent-tool-flow.md` | `spawnSubAgent` child process | harness (tools/subAgent, subagentProcess, SubAgentHandler) + projection |
 | `subagent-runtime-roadmap.md` | Future first-class subagent runs and background execution | harness runtime contracts + scheduler + TUI/Desktop projection |
 | `revert-turn-flow.md` | `/revert` command and file backups | harness (revert.ts, fs.ts backups) + TUI commands |
 | `skills-flow.md` | Skill discovery, tool/command registration | harness (SkillCatalog, SkillsManager, register.ts) |
+| `reflection-flow.md` | Background reflection memory and `/reflect` command | harness (ReflectionRunManager, ReflectionMemoryStore) + TUI/Desktop status |
+| `lsp-flow.md` | Language-server diagnostics attached to file tools | harness (LspManager, TypeScriptLspAdapter, fs tools) |
 | `tui-keybindings-flow.md` | Keyboard input, keymap priority, text editing | TUI (keymapRegistry, useKeymap, SafeTextInput) |
 
 ## State Architecture
@@ -207,16 +211,25 @@ The `HarnessSnapshot` combines all three for clients.
 
 **Sub-agent progress is display-only.** The parent model receives only the final tool result. Child tool calls and text deltas are UI-only progress through `sub_agent_event` events.
 
+## Supplementary Document
+
+**docs/dataflow-atlas.md** — a complete, file-by-file dataflow map of every operation from user input to pixels on screen. It covers the send flow (15 steps with every module), tool execution, projection pipeline, event bus internals, tool display rendering, confirmation/question lifecycle, cancellation, persistence, skills, reflection, and state snapshot composition. Use this document when you need to trace the exact path of any operation across all layers.
+
 ## Reading Guide
 
 If you are new, read in this order:
 
+0. **dataflow-atlas.md** — get the complete end-to-end dataflow for every operation
 1. **architecture-overview.md** (this file) — get the lay of the land
 2. **projection-flow.md** — understand how events become transcript blocks
 3. **tui-send-flow.md** — follow one user message through all layers
 4. **active-run-flow.md** — understand run lifecycle and cancellation
 5. **confirmation-flow.md** — understand tool safety gates
-6. **skills-flow.md** — understand the skill system
-7. Then the remaining flow docs as needed for your area
+6. **tui-write-edit-tool-display-flow.md** — understand write/edit diff display
+7. **task-list-flow.md** — understand the visible implementation checklist
+8. **skills-flow.md** — understand the skill system
+9. **reflection-flow.md** — understand durable background memory
+10. **lsp-flow.md** — understand language diagnostics on file tool output
+11. Then the remaining flow docs as needed for your area
 
 If you are expanding subagents beyond the current `spawnSubAgent` tool, read `subagent-runtime-roadmap.md` before changing runtime or UI contracts.

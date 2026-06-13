@@ -107,6 +107,7 @@ async function reflectCommand(args: string[], harness: AgentHarness): Promise<Co
     return ok([
       `Reflection: ${state.status}`,
       `Auto: ${settings.autoReflectionEnabled ? "on" : "off"}`,
+      `Memory context: ${settings.reflectionMemoryEnabled ? "on" : "off"}`,
       `Memory root: ${state.memoryRoot}`,
       `Last run: ${state.lastRunAt ?? "never"}`,
       `Last summary: ${state.lastSummary ?? "none"}`,
@@ -125,7 +126,17 @@ async function reflectCommand(args: string[], harness: AgentHarness): Promise<Co
     return ok(`Auto reflection ${enabled ? "enabled" : "disabled"}.`);
   }
 
-  return ok("Usage: /reflect [status|stop|on|off]");
+  if (subcommand === "memory") {
+    const value = args[1]?.toLowerCase();
+    if (value === "on" || value === "off") {
+      const enabled = value === "on";
+      harness.saveSettings({ reflectionMemoryEnabled: enabled });
+      return ok(`Reflection memory context ${enabled ? "enabled" : "disabled"}.`);
+    }
+    return ok("Usage: /reflect memory [on|off]");
+  }
+
+  return ok("Usage: /reflect [status|stop|on|off|memory on|memory off]");
 }
 
 async function sessionCommand(args: string[], harness: AgentHarness): Promise<CommandResult> {

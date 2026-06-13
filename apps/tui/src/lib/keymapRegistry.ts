@@ -37,8 +37,3 @@ export function getAction(
 ): { entry: KeymapEntry; action: KeyAction } | undefined {
   return resolveKeyAction(stack, combo);
 }
-
-/** For tests only — clears all registered entries. */
-export function resetStack(): void {
-  stack.length = 0;
-}

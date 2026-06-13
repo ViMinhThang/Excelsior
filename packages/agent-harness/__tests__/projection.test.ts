@@ -7,6 +7,7 @@ import {
   SUB_AGENT_EVENT,
   TOOL_EXECUTION_END,
   TOOL_EXECUTION_START,
+  TOOL_EXECUTION_UPDATE,
   TURN_START,
   TURN_END,
   HISTORY_COMPACTED,
@@ -89,6 +90,31 @@ describe("harness projector", () => {
       { id: "edit", text: "Apply edits", status: "in-progress" },
     ]);
     expect(model.turns.flatMap((turn) => turn.blocks)).toEqual([]);
+  });
+
+  it("projects output-targeted tool updates into pending tool result content", () => {
+    const events = [
+      event(1, TOOL_EXECUTION_START, {
+        toolCallId: "tool_1",
+        toolName: "runCommand",
+        toolArgs: "{\"command\":\"npm\",\"args\":[\"test\"]}",
+      }),
+      event(2, TOOL_EXECUTION_UPDATE, {
+        toolCallId: "tool_1",
+        toolName: "runCommand",
+        delta: "42/266 tests passed...\n",
+        target: "output",
+      }),
+    ];
+
+    expect(projectEventsToDisplayBlocks(events)).toMatchObject([
+      {
+        type: "tool-call",
+        toolName: "runCommand",
+        status: "pending",
+        content: "42/266 tests passed...\n",
+      },
+    ]);
   });
 
   it("does not project empty assistant blocks before or after tool-only turns", () => {

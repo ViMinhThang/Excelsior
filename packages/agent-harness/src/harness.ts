@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { SkillCatalog } from "./skills/SkillCatalog.js";
 import type {
   AgentMode,
   AskQuestionRequest,
@@ -18,35 +17,30 @@ import {
   QUESTION_REQUESTED,
   SESSION_CHANGED,
 } from "./events.js";
-import { EventBus } from "./EventBus.js";
-import { registerSkills } from "./skills/register.js";
-import { createBuiltInCommands } from "./commands.js";
+import type { EventBus } from "./EventBus.js";
 import {
   buildCompactionNotice,
   buildCompactionSummary,
 } from "./context/index.js";
 import { buildRunAssembly } from "./context/runAssembly.js";
-import { GitHubReviewService } from "./github.js";
 import { revertLastCompletedTurn } from "./history/revert.js";
 import { restoreTurnBackups } from "./history/turnBackups.js";
 import { copyHarnessEvents, replayHarnessEvents } from "./inspector.js";
-import { LspManager } from "./lsp/LspManager.js";
-import { createDeepSeekProvider } from "./provider.js";
+import type { LspManager } from "./lsp/LspManager.js";
 import { projectHarnessState, ProjectionCache } from "./projection.js";
-import { CommandRegistry, ExtensionRegistry, ProviderRegistry, ToolRegistry } from "./registries.js";
+import type { CommandRegistry, ProviderRegistry, ToolRegistry } from "./registries.js";
 import { runAgentLoop } from "./run/RunController.js";
-import { FileHarnessStorage } from "./storage.js";
-import { SessionManager } from "./SessionManager.js";
-import { EventStore } from "./EventStore.js";
-import { SettingsStore } from "./SettingsStore.js";
+import type { FileHarnessStorage } from "./storage.js";
+import type { SessionManager } from "./SessionManager.js";
+import type { EventStore } from "./EventStore.js";
+import type { SettingsStore } from "./SettingsStore.js";
 import { ConfirmationRouter } from "./ConfirmationRouter.js";
 import { ActiveRunManager } from "./run/ActiveRunManager.js";
-import { ReflectionRunManager, type ReflectionTrigger } from "./reflection/ReflectionRunManager.js";
-import { createBuiltInTools } from "./tools/index.js";
+import type { ReflectionRunManager, ReflectionTrigger } from "./reflection/ReflectionRunManager.js";
+import { bootstrapHarness } from "./bootstrap/HarnessBootstrap.js";
 import type {
   AgentHarness,
   HarnessCatalog,
-  HarnessCommand,
   HarnessConfig,
   HarnessInspectionSnapshot,
   HarnessReplayReport,
@@ -60,11 +54,10 @@ export function createAgentHarness(config: HarnessConfig = {}): AgentHarness {
 
 class HarnessStore implements AgentHarness {
   private readonly storage: FileHarnessStorage;
-  private readonly providers = new ProviderRegistry();
-  private readonly tools = new ToolRegistry();
-  private readonly commands = new CommandRegistry();
+  private readonly providers: ProviderRegistry;
+  private readonly tools: ToolRegistry;
+  private readonly commands: CommandRegistry;
 
-  private readonly extensions: ExtensionRegistry;
   private readonly listeners = new Set<() => void>();
   private readonly workspace: Workspace;
 
@@ -78,67 +71,33 @@ class HarnessStore implements AgentHarness {
 
   private mode: AgentMode = "act";
   private snapshot!: HarnessSnapshot;
-  private skillCatalog!: SkillCatalog;
   private skillsList?: string;
   private readonly eventBus: EventBus;
   private notifyTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly projectionCache = new ProjectionCache();
 
   constructor(config: HarnessConfig) {
-    this.storage = new FileHarnessStorage(config.dataDir);
-    this.workspace = this.storage.getOrCreateWorkspace({
-      id: config.workspaceId,
-      rootPath: config.workspaceRoot,
+    const boot = bootstrapHarness({
+      config,
+      activeRun: this.activeRun,
+      notify: () => this.notify(),
+      currentMode: () => this.mode,
+      sendSkill: (input) => this.send(input),
     });
-    this.sessionManager = new SessionManager(this.storage, this.workspace.id);
-    this.eventStore = new EventStore(this.storage, this.workspace.id);
-    this.settingsStore = new SettingsStore(this.storage);
+
+    this.storage = boot.storage;
+    this.providers = boot.providers;
+    this.tools = boot.tools;
+    this.commands = boot.commands;
+    this.workspace = boot.workspace;
+    this.sessionManager = boot.sessionManager;
+    this.eventStore = boot.eventStore;
+    this.settingsStore = boot.settingsStore;
     this.confirmRouter = new ConfirmationRouter();
-    this.lsp = LspManager.create(this.workspace.rootPath);
-    this.reflectionRun = new ReflectionRunManager({
-      workspace: this.workspace,
-      storage: this.storage,
-      sessionManager: this.sessionManager,
-      settingsStore: this.settingsStore,
-      providers: this.providers,
-      onChange: () => this.notify(),
-    });
-    this.extensions = new ExtensionRegistry(this.providers, this.tools, this.commands);
-
-    this.eventBus = new EventBus(
-      this.workspace.id,
-      this.sessionManager,
-      this.eventStore,
-      this.extensions,
-      () => this.notify(),
-      (runId) => this.activeRun.isRunFinalized(runId),
-    );
-
-    this.providers.register(createDeepSeekProvider());
-    for (const tool of createBuiltInTools()) this.tools.register(tool);
-
-    this.skillCatalog = SkillCatalog.discover(this.workspace.rootPath, { reader: config.skillsReader });
-    const skills = this.skillCatalog.getSkills();
-    if (skills.length > 0) {
-      this.skillsList = skills.map((s) => `- ${s.name}: ${s.description}`).join("\n");
-      registerSkills(
-        this.skillCatalog,
-        this.tools,
-        this.commands,
-        async (body, name) => {
-          await this.send({
-            content: body,
-            mode: this.mode,
-            displayContent: `Running skill: ${name}`,
-          });
-        },
-      );
-    }
-
-    for (const command of this.createCommands(config)) this.commands.register(command);
-
-    this.extensions.load(config.extensions ?? []);
-    this.loadCurrentSessionEvents();
+    this.lsp = boot.lsp;
+    this.reflectionRun = boot.reflectionRun;
+    this.eventBus = boot.eventBus;
+    this.skillsList = boot.skillsList;
     this.updateSnapshot();
   }
 
@@ -213,6 +172,9 @@ class HarnessStore implements AgentHarness {
       tools: this.tools,
       lsp: this.lsp,
       skillsList: this.skillsList,
+      reflectionMemoryContext: this.reflectionRun.buildMemoryContext(
+        this.settingsStore.settings.reflectionMemoryEnabled ?? false,
+      ),
       confirm: (request) => this.requestConfirmation(request),
       askQuestion: (request) => this.requestQuestion(request),
       createEmitter: (activeRunId, activeSessionId, activeTurnId) =>
@@ -451,33 +413,6 @@ class HarnessStore implements AgentHarness {
       this.notifyTimer = null;
     }
     this.listeners.clear();
-  }
-
-  private createCommands(config: HarnessConfig): HarnessCommand[] {
-    const reviewServices = config.reviewServices ?? new GitHubReviewService(() => {
-      const token = this.settingsStore.settings.githubToken || process.env.GITHUB_TOKEN;
-      if (!token) {
-        throw new Error("GITHUB_TOKEN is not configured.");
-      }
-      return token;
-    });
-    return createBuiltInCommands({
-      getDefinitions: () => this.commands.list(),
-      reviewServices,
-    });
-  }
-
-  private loadCurrentSessionEvents(): void {
-    const session = this.sessionManager.currentSession();
-    if (!session) {
-      this.eventStore.replaceEvents(null, []);
-      return;
-    }
-
-    this.eventStore.replaceEvents(
-      session,
-      this.storage.loadEvents(this.workspace.id, session.id),
-    );
   }
 
   private requestConfirmation(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse> {

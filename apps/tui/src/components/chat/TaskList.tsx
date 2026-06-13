@@ -1,4 +1,4 @@
-import type { FC } from "react";
+import { useEffect, useState, type FC } from "react";
 import type { ProjectedTask } from "@excelsior/core";
 import { theme } from "../../theme.js";
 import { textAttrs } from "../../platform/opentui/textAttributes.js";
@@ -9,6 +9,16 @@ export interface TaskListProps {
 }
 
 export const TaskList: FC<TaskListProps> = ({ tasks }) => {
+  const [frameIndex, setFrameIndex] = useState(0);
+
+  useEffect(() => {
+    if (!tasks.some((task) => task.status === "in-progress")) return;
+    const timer = setInterval(() => {
+      setFrameIndex((previous) => (previous + 1) % 2);
+    }, 520);
+    return () => clearInterval(timer);
+  }, [tasks]);
+
   if (tasks.length === 0) return null;
 
   return (
@@ -26,7 +36,7 @@ export const TaskList: FC<TaskListProps> = ({ tasks }) => {
           let color: string = theme.colors.muted;
 
           if (task.status === "in-progress") {
-            prefix = "[/] ";
+            prefix = frameIndex === 0 ? "[/] " : "[>] ";
             color = theme.colors.modeHintAct;
           } else if (task.status === "done") {
             prefix = "[x] ";

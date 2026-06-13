@@ -19,6 +19,14 @@ function buildBody(
   if (display.progressStats) {
     return { kind: "progressStats", stats: display.progressStats };
   }
+  if (display.taskPreview) {
+    return {
+      kind: "taskPreview",
+      tasks: display.taskPreview,
+      completed: display.taskPreview.filter((task) => task.status === "done").length,
+      total: display.taskPreview.length,
+    };
+  }
   if (display.isReadOnlyBrowse) {
     return display.summaryLine
       ? { kind: "summary", text: display.summaryLine }

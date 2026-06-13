@@ -49,6 +49,7 @@ export type HarnessEventDataMap = {
     toolCallId: string;
     toolName: string;
     delta: string;
+    target?: "input" | "output";
   };
   [TOOL_EXECUTION_END]: {
     toolCallId: string;

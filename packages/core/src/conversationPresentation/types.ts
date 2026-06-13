@@ -30,11 +30,13 @@ export interface ToolDisplay {
   activityLabel?: string;
   expandedDetail?: string;
   progressStats?: WritingProgressStats;
+  taskPreview?: ToolTaskPreviewItem[];
 }
 
 export type ToolDisplayBody =
   | { kind: "none" }
   | { kind: "progressStats"; stats: WritingProgressStats }
+  | { kind: "taskPreview"; tasks: ToolTaskPreviewItem[]; completed: number; total: number }
   | { kind: "summary"; text: string }
   | { kind: "detail"; text: string }
   | { kind: "preview"; lines: string[]; omittedLines?: number }
@@ -50,6 +52,12 @@ export interface ToolDisplayPresentation {
 export interface WritingProgressStats {
   added: number;
   removed: number;
+}
+
+export interface ToolTaskPreviewItem {
+  id: string;
+  text: string;
+  status: "todo" | "in-progress" | "done";
 }
 
 export interface FileChangePreview {

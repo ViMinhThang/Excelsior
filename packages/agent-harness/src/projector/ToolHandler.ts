@@ -31,6 +31,7 @@ export class ToolHandler implements ProjectionHandler {
       projection.tools.update({
         id: toolDisplayBlockId(event),
         delta: event.data.delta,
+        target: event.data.target,
         turnId: event.turnId,
         timestamp,
       });

@@ -51,6 +51,7 @@ export interface BuildChatModeKeymapContextInput {
   pending: unknown;
   activePanelId: string | null;
   isPaletteOpen: boolean;
+  inputFocused: boolean;
   isLoading: boolean;
   suggestion: InputModeKeymapContext["suggestion"];
   setInput: (value: string) => void;
@@ -77,6 +78,7 @@ export interface BuildChatInteractionStateInput {
   pendingQuestion: AskQuestionRequest | null;
   activePanelId: string | null;
   isPaletteOpen: boolean;
+  inputFocused: boolean;
   suggestion: CommandSuggestionState;
   setInput: (value: string) => void;
   submit: () => void;
@@ -110,6 +112,8 @@ export interface BuildModeViewContextInput {
   tasks: ProjectedTask[];
   inputValue: string;
   setInput: (value: string) => void;
+  inputFocused: boolean;
+  setInputFocused: (focused: boolean) => void;
   handleSubmit: () => void;
   shouldSubmit?: (value: string) => boolean;
   isLoading: boolean;

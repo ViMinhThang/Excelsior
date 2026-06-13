@@ -48,6 +48,8 @@ export interface ConversationRenderContext {
     setValue: (value: string) => void;
     submit: () => void;
     shouldSubmit?: (value: string) => boolean;
+    focused: boolean;
+    setFocused: (focused: boolean) => void;
   };
   runtime: {
     isLoading: boolean;
@@ -103,6 +105,7 @@ export interface InputModeKeymapContext {
   pending: unknown;
   activePanelId: string | null;
   isPaletteOpen: boolean;
+  inputFocused: boolean;
   isLoading: boolean;
   suggestion: CommandSuggestionState;
   setInput: (value: string) => void;

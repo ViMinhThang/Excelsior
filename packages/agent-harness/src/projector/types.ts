@@ -41,7 +41,7 @@ export interface MessageProjectionActions {
 
 export interface ToolProjectionActions {
   start(input: { id: string; toolName: string; toolArgs: string; turnId?: string; timestamp: string }): void;
-  update(input: { id: string; delta: string; turnId?: string; timestamp: string }): void;
+  update(input: { id: string; delta: string; target?: "input" | "output"; turnId?: string; timestamp: string }): void;
   finish(input: {
     id: string;
     toolCallId: string;

@@ -27,6 +27,7 @@ function makeKeymapContext(
     pending: null,
     activePanelId: null,
     isPaletteOpen: false,
+    inputFocused: true,
     isLoading: false,
     suggestion: {
       show: false,
@@ -63,6 +64,7 @@ function makeInputKeymapContext(
     pending: null,
     activePanelId: null,
     isPaletteOpen: false,
+    inputFocused: true,
     isLoading: false,
     suggestion: {
       show: false,
@@ -141,6 +143,14 @@ describe("chat keymap gating", () => {
       chatMode: "subagent-picker",
       isPaletteOpen: false,
     })).toBe("chat-mode");
+
+    expect(getTuiInputOwner({
+      pending: null,
+      activePanelId: null,
+      chatMode: "input",
+      isPaletteOpen: false,
+      inputFocused: false,
+    })).toBe("chat-mode");
   });
 
   it("disables lower-priority modal keymaps while command palette is open", () => {
@@ -164,6 +174,16 @@ describe("chat keymap gating", () => {
       chatMode: "input",
       isPaletteOpen: false,
     })).toBe(true);
+  });
+
+  it("disables normal chat input keymaps when the transcript owns focus", () => {
+    expect(ownsChatInput({
+      pending: null,
+      activePanelId: null,
+      chatMode: "input",
+      isPaletteOpen: false,
+      inputFocused: false,
+    })).toBe(false);
   });
 
   it("disables normal chat input keymaps while a question is pending", () => {
@@ -233,6 +253,9 @@ describe("chat mode keymap registry", () => {
     }))[0]?.enabled).toBe(false);
     expect(getChatModeKeymaps(makeKeymapContext("input", {
       activePanelId: "session.picker",
+    }))[0]?.enabled).toBe(false);
+    expect(getChatModeKeymaps(makeKeymapContext("input", {
+      inputFocused: false,
     }))[0]?.enabled).toBe(false);
   });
 

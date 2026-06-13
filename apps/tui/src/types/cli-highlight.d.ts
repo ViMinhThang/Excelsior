@@ -6,6 +6,4 @@ declare module "cli-highlight" {
   }
 
   export function highlight(code: string, options?: HighlightOptions): string;
-  export function listLanguages(): string[];
-  export function hasLanguage(lang: string): boolean;
 }

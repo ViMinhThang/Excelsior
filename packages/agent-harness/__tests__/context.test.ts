@@ -86,6 +86,32 @@ describe("harness context helpers", () => {
     ]);
   });
 
+  it("appends reflection memory context as a per-turn system message", () => {
+    const enabled = buildRunContext({
+      priorMessages: [{ role: "assistant", content: "prior" }],
+      userContent: "continue",
+      mode: "act",
+      reflectionMemoryContext: "Reflection memory context: on.\nRemember the repo preference.",
+    });
+    const disabled = buildRunContext({
+      priorMessages: [{ role: "assistant", content: "prior" }],
+      userContent: "continue",
+      mode: "act",
+      reflectionMemoryContext: "Reflection memory context: off. Do not use stored reflection memory for this turn.",
+    });
+
+    expect(enabled.messages).toMatchObject([
+      { role: "assistant", content: "prior" },
+      { role: "system", content: expect.stringMatching(/^current mode: act timestamp:/) },
+      { role: "system", content: "Reflection memory context: on.\nRemember the repo preference." },
+      { role: "user", content: "continue" },
+    ]);
+    expect(disabled.messages).toContainEqual({
+      role: "system",
+      content: "Reflection memory context: off. Do not use stored reflection memory for this turn.",
+    });
+  });
+
   it("assembles run and tool context from the same run inputs", async () => {
     const workspaceRoot = await makeTempDir();
     const storageRoot = await makeTempDir();
