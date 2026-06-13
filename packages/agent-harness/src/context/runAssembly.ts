@@ -3,6 +3,7 @@ import type { AgentMessage, AgentMode } from "@excelsior/core";
 import type { HarnessEventEmitter } from "../events.js";
 import type { ProviderRegistry, ToolRegistry } from "../registries.js";
 import type { HarnessSettings, ToolExecutionContext } from "../types.js";
+import type { LspClient } from "../lsp/LspManager.js";
 import { buildRunContext, type RunContext } from "./contextBuilder.js";
 import { loadProjectInstructions } from "./projectInstructions.js";
 
@@ -21,6 +22,7 @@ export interface RunAssemblyInput {
   providers: ProviderRegistry;
   tools: ToolRegistry;
   skillsList?: string;
+  lsp?: LspClient;
   confirm: ToolExecutionContext["confirm"];
   askQuestion: ToolExecutionContext["askQuestion"];
   createEmitter(runId: string, sessionId: string, turnId: string): HarnessEventEmitter;
@@ -66,6 +68,7 @@ export function buildRunAssembly(input: RunAssemblyInput): RunAssembly {
       skillsList: input.skillsList,
       projectInstructions: projectInstructions?.content,
       backupDir: resolve(input.storageRoot, "backups", input.workspaceId, input.sessionId, input.turnId),
+      lsp: input.lsp,
     },
   };
 }

@@ -14,6 +14,7 @@ import {
   MESSAGE_START,
   MESSAGE_UPDATE,
   TOOL_EXECUTION_START,
+  TURN_END,
   TURN_START,
 } from "../src/events.js";
 
@@ -259,7 +260,8 @@ describe("AgentHarness", () => {
     await writeFile(existingFile, "original content", "utf-8");
 
     const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
-    const sessionId = "ses_test";
+    const session = harness.createSession("Revert Test");
+    const sessionId = session.id;
     const turnId = "turn_test";
 
     // Mock ToolExecutionContext
@@ -285,10 +287,14 @@ describe("AgentHarness", () => {
     expect(await readFile(existingFile, "utf-8")).toBe("modified content");
     expect(await readFile(join(workspaceRoot, "new.txt"), "utf-8")).toBe("new content");
 
-    // Perform restore backups
-    await (harness as any).restoreBackups(sessionId, turnId);
+    const store = harness as any;
+    store.eventBus.emit("run_revert", TURN_START, {}, { sessionId, turnId });
+    store.eventBus.emit("run_revert", TURN_END, { cancelled: false }, { sessionId, turnId });
+
+    const result = await harness.revertLastTurn();
 
     // Verify files were reverted
+    expect(result.message).toBe("Reverted last turn.");
     expect(await readFile(existingFile, "utf-8")).toBe("original content");
     expect(existsSync(join(workspaceRoot, "new.txt"))).toBe(false);
   });

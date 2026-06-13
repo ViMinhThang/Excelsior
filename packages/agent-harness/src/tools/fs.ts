@@ -4,6 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 import { buildUnifiedFileDiff, PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
 import type { HarnessTool, ToolExecutionContext, ToolResult } from "../types.js";
+import { recordTurnBackup } from "../history/turnBackups.js";
 import { runProcess } from "./system.js";
 
 export function text(content: string, isError?: boolean): ToolResult {
@@ -47,10 +48,11 @@ export function createViewTool(): HarnessTool<z.infer<typeof viewSchema>> {
       const end = Math.min(lines.length, lineEnd ?? lines.length);
       if (start > lines.length) return text(`File only has ${lines.length} lines. Requested start was ${start}.`);
       const padLength = String(end).length;
-      return text(lines.slice(start - 1, end).map((line, index) => {
+      const output = lines.slice(start - 1, end).map((line, index) => {
         const lineNumber = start + index;
         return `${String(lineNumber).padStart(padLength)}: ${line}`;
-      }).join("\n"));
+      }).join("\n");
+      return text(await appendLspDiagnostics(output, ctx, filePath, content, fullPath));
     },
   };
 }
@@ -107,12 +109,13 @@ export function createWriteTool(name = "writeFile"): HarnessTool<z.infer<typeof 
       if (!authorization.approved) return text("Denied by user.");
       const fullPath = authorization.fullPath;
       const oldContent = existsSync(fullPath) ? await fs.readFile(fullPath, "utf-8") : "";
-      await backupFile(ctx, filePath, fullPath);
+      await recordTurnBackup({ backupDir: ctx.backupDir, relativePath: filePath, fullPath });
       await fs.mkdir(path.dirname(fullPath), { recursive: true });
       await fs.writeFile(fullPath, content, "utf-8");
       const diff = buildUnifiedFileDiff(authorization.displayPath, oldContent, content);
       const message = `Successfully wrote ${content.length} characters to ${authorization.displayPath}`;
-      return text(diff ? `${message}\n${diff}` : message);
+      const output = diff ? `${message}\n${diff}` : message;
+      return text(await appendLspDiagnostics(output, ctx, filePath, content, fullPath));
     },
   };
 }
@@ -133,7 +136,7 @@ export function createEditTool(name = "editFile"): HarnessTool<z.infer<typeof ed
       const authorization = await authorizeWrite(ctx, name, filePath);
       if (!authorization.approved) return text("Denied by user.");
       const fullPath = authorization.fullPath;
-      await backupFile(ctx, filePath, fullPath);
+      await recordTurnBackup({ backupDir: ctx.backupDir, relativePath: filePath, fullPath });
       const content = await fs.readFile(fullPath, "utf-8");
       const occurrences = content.split(oldText).length - 1;
       if (occurrences === 0) return text("Error: oldText not found in file.", true);
@@ -142,7 +145,8 @@ export function createEditTool(name = "editFile"): HarnessTool<z.infer<typeof ed
       await fs.writeFile(fullPath, newContent, "utf-8");
       const message = `Successfully replaced the block in ${authorization.displayPath}.`;
       const diff = buildUnifiedFileDiff(authorization.displayPath, content, newContent);
-      return text(diff ? `${message}\n${diff}` : message);
+      const output = diff ? `${message}\n${diff}` : message;
+      return text(await appendLspDiagnostics(output, ctx, filePath, newContent, fullPath));
     },
   };
 }
@@ -185,40 +189,24 @@ async function authorizeWrite(
   return { approved: response.approved, fullPath, displayPath };
 }
 
-async function backupFile(ctx: ToolExecutionContext, relativePath: string, fullPath: string): Promise<void> {
-  if (!ctx.backupDir) return;
-
-  const manifestPath = path.join(ctx.backupDir, "manifest.json");
-  let manifest: Array<{ path: string; action: "modify" | "create" }> = [];
-  if (existsSync(manifestPath)) {
-    try {
-      manifest = JSON.parse(await fs.readFile(manifestPath, "utf-8"));
-    } catch {
-      manifest = [];
-    }
-  }
-
-  if (manifest.some((entry) => entry.path === relativePath)) {
-    return;
-  }
-
-  const exists = existsSync(fullPath);
-  if (exists) {
-    const originalContent = await fs.readFile(fullPath, "utf-8");
-    const backupPath = path.join(ctx.backupDir, relativePath);
-    await fs.mkdir(path.dirname(backupPath), { recursive: true });
-    await fs.writeFile(backupPath, originalContent, "utf-8");
-    manifest.push({ path: relativePath, action: "modify" });
-  } else {
-    manifest.push({ path: relativePath, action: "create" });
-  }
-
-  await fs.mkdir(ctx.backupDir, { recursive: true });
-  await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf-8");
-}
-
 function resolveToolPath(inputPath: string, ctx: ToolExecutionContext): string {
   return path.resolve(ctx.workspaceRoot, inputPath);
+}
+
+async function appendLspDiagnostics(
+  output: string,
+  ctx: ToolExecutionContext,
+  filePath: string,
+  content: string,
+  fullPath: string,
+): Promise<string> {
+  if (!ctx.lsp || isOutsideWorkspace(fullPath, ctx)) return output;
+  const diagnostics = await ctx.lsp.syncTouchedFile({
+    filePath,
+    content,
+    abortSignal: ctx.abortSignal,
+  });
+  return diagnostics ? `${output}\n\n${diagnostics}` : output;
 }
 
 async function resolveWorkspacePath(inputPath: string, ctx: ToolExecutionContext): Promise<string> {

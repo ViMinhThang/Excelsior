@@ -14,6 +14,7 @@ import type {
 } from "@excelsior/core";
 import type { AnyHarnessEvent, HarnessEvent, HarnessEventEmitter } from "./events.js";
 import type { ProviderRegistry, ToolRegistry } from "./registries.js";
+import type { LspClient } from "./lsp/LspManager.js";
 
 export type HarnessSettings = AppSettings;
 export type HarnessSnapshot = AgentClientState;
@@ -41,6 +42,7 @@ export interface ToolExecutionContext {
   skillsList?: string;
   projectInstructions?: string;
   backupDir?: string;
+  lsp?: LspClient;
   confirm(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse>;
   askQuestion(input: {
     question: string;
