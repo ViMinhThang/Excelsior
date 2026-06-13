@@ -10,6 +10,7 @@ import {
   TURN_START,
   TURN_END,
   HISTORY_COMPACTED,
+  TASKS_UPDATED,
   makeHarnessEvent,
   type AnyHarnessEvent,
   type HarnessEventDataMap,
@@ -70,6 +71,24 @@ describe("harness projector", () => {
       { role: "user", content: "model" },
       { role: "assistant", content: "hello" },
     ]);
+  });
+
+  it("projects realtime task checklist updates outside transcript blocks", () => {
+    const events = [
+      event(1, TASKS_UPDATED, {
+        tasks: [
+          { id: "inspect", text: "Inspect files", status: "done" },
+          { id: "edit", text: "Apply edits", status: "in-progress" },
+        ],
+      }),
+    ];
+
+    const model = projectEvents(events);
+    expect(model.tasks).toEqual([
+      { id: "inspect", text: "Inspect files", status: "done" },
+      { id: "edit", text: "Apply edits", status: "in-progress" },
+    ]);
+    expect(model.turns.flatMap((turn) => turn.blocks)).toEqual([]);
   });
 
   it("does not project empty assistant blocks before or after tool-only turns", () => {

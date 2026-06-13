@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimateWriteProgressStats } from "@excelsior/core";
+import { buildWritingProgressLines, estimateWriteProgressStats } from "@excelsior/core";
 
 describe("estimateWriteProgressStats", () => {
   it("counts streamed write content lines as added lines", () => {
@@ -20,5 +20,26 @@ describe("estimateWriteProgressStats", () => {
       added: 0,
       removed: 0,
     });
+  });
+
+  it("decodes streamed JSON string escapes without requiring closed JSON", () => {
+    const partialArgs = [
+      "{\"filePath\":\"report.html\",\"content\":\"line 1",
+      "\\nquoted: \\\"value\\\"",
+      "\\ncheck: \\u2713",
+    ].join("");
+
+    expect(estimateWriteProgressStats(partialArgs)).toEqual({
+      added: 3,
+      removed: 0,
+    });
+    expect(buildWritingProgressLines(partialArgs)).toContain("check: ✓");
+  });
+
+  it("waits for the requested key instead of reading earlier string values", () => {
+    const partialArgs = "{\"filePath\":\"report.html\",\"content\":\"actual";
+
+    expect(buildWritingProgressLines(partialArgs)).toContain("target: report.html");
+    expect(buildWritingProgressLines(partialArgs)).toContain("actual");
   });
 });

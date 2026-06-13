@@ -19,6 +19,13 @@ import {
 } from "../src/hooks/chatScreenViewModel.js";
 
 const noop = () => {};
+const settings = {
+  deepseekApiKey: "",
+  githubToken: "",
+  agentToolLoopSteps: "unlimited",
+  autoReflectionEnabled: false,
+  autoApproveWorkspaceEdits: false,
+};
 
 function toolBlock(id = "tool_1"): ProjectedBlock & { type: "tool-call" } {
   return {
@@ -284,6 +291,7 @@ describe("chat screen model builders", () => {
       sessionId: "ses",
       chatMode: "subagent-picker",
       turns,
+      tasks: [{ id: "task_1", text: "Inspect", status: "done" }],
       inputValue: "/review ",
       setInput: noop,
       handleSubmit: noop,
@@ -292,6 +300,7 @@ describe("chat screen model builders", () => {
       paletteOpen: false,
       commandResult: "done",
       agentMode: "act",
+      settings,
       activePanel: undefined,
       featureContext: {
         sessions: [],
@@ -311,7 +320,9 @@ describe("chat screen model builders", () => {
     expect(context.input.value).toBe("/review ");
     expect(context.runtime.commandResult).toBe("done");
     expect(context.transcript.turns).toBe(turns);
+    expect(context.transcript.tasks).toEqual([{ id: "task_1", text: "Inspect", status: "done" }]);
     expect(context.transcript.toolsExpanded).toBe(true);
+    expect(context.runtime.settings.autoApproveWorkspaceEdits).toBe(false);
     expect(context.subAgents.blocks).toEqual([selectedSubAgent]);
     expect("tools" in context).toBe(false);
   });
@@ -324,6 +335,7 @@ describe("chat screen model builders", () => {
       sessionId: "ses",
       chatMode: "subagent-detail",
       turns,
+      tasks: [],
       inputValue: "",
       setInput: noop,
       handleSubmit: noop,
@@ -332,6 +344,7 @@ describe("chat screen model builders", () => {
       paletteOpen: false,
       commandResult: null,
       agentMode: "act",
+      settings,
       activePanel: undefined,
       featureContext: {
         sessions: [],

@@ -5,6 +5,7 @@ import type {
   AskQuestionResponse,
   CommandDefinition,
   CommandResult,
+  AppSettings,
   SendOptions,
   Session,
 } from "@excelsior/client";
@@ -19,6 +20,7 @@ export interface UseAgentHostClientReturn {
   clear: () => void;
   executeCommand: (input: string) => Promise<CommandResult>;
   getCommands: () => CommandDefinition[];
+  getSettings: () => AppSettings;
   switchSession: (sessionId: string) => void;
   createSession: (title?: string) => Promise<Session | undefined>;
   deleteSession: (sessionId: string) => void;
@@ -60,6 +62,7 @@ export function useAgentHostClient(): UseAgentHostClientReturn {
     }, [client]),
     executeCommand: useCallback((input: string) => client.executeCommand(input), [client]),
     getCommands: useCallback(() => client.getCommands(), [client]),
+    getSettings: useCallback(() => client.getSettings(), [client]),
     switchSession: useCallback((id: string) => {
       void client.switchSession(id);
     }, [client]),

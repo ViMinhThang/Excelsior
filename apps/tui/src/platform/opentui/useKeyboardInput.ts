@@ -1,9 +1,10 @@
 import { useKeyboard } from "@opentui/react";
+import type { KeyEvent } from "@opentui/core";
 import { useRef } from "react";
 import { keyEventToTuiKey } from "./keyAdapter.js";
 import type { TuiKey } from "../../lib/tuiKey.js";
 
-type InputHandler = (input: string, key: TuiKey) => void;
+type InputHandler = (input: string, key: TuiKey, event: KeyEvent) => void;
 
 export function useKeyboardInput(
   handler: InputHandler,
@@ -17,6 +18,6 @@ export function useKeyboardInput(
     if (!isActive) return;
     if (key.eventType === "release") return;
     const mapped = keyEventToTuiKey(key);
-    handlerRef.current(mapped.input, mapped.key);
+    handlerRef.current(mapped.input, mapped.key, key);
   });
 }

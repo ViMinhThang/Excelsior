@@ -8,6 +8,7 @@ import type { ExcelsiorApi } from "../../main/preload.js";
 
 const emptyState: AgentClientState = {
   turns: [],
+  tasks: [],
   isLoading: false,
   sessions: [],
   currentSessionId: null,
@@ -28,6 +29,7 @@ const emptySettings: AppSettings = {
   githubToken: "",
   agentToolLoopSteps: "unlimited",
   autoReflectionEnabled: false,
+  autoApproveWorkspaceEdits: false,
 };
 
 export interface IpcStateStore {

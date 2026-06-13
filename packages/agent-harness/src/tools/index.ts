@@ -10,6 +10,7 @@ import {
 import { createRunCommandTool } from "./system.js";
 import { createAskQuestionTool } from "./interaction.js";
 import { createSpawnSubAgentTool } from "./subAgent.js";
+import { createUpdateTasksTool } from "./tasks.js";
 
 export {
   createLsTool,
@@ -22,6 +23,7 @@ export {
 export { createRunCommandTool } from "./system.js";
 export { createAskQuestionTool } from "./interaction.js";
 export { createSpawnSubAgentTool } from "./subAgent.js";
+export { createUpdateTasksTool } from "./tasks.js";
 
 export function createBuiltInTools(): HarnessTool[] {
   return [
@@ -34,6 +36,7 @@ export function createBuiltInTools(): HarnessTool[] {
     createEditTool(),
     createEditTool("edit"),
     createRunCommandTool(),
+    createUpdateTasksTool(),
     createAskQuestionTool(),
     createSpawnSubAgentTool(),
   ];

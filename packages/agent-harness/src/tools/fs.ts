@@ -161,6 +161,9 @@ async function authorizeWrite(
   const fullPath = resolveToolPath(filePath, ctx);
   const outsideWorkspace = isOutsideWorkspace(fullPath, ctx);
   const displayPath = outsideWorkspace ? fullPath : filePath;
+  if (!outsideWorkspace && ctx.settings?.autoApproveWorkspaceEdits) {
+    return { approved: true, fullPath, displayPath };
+  }
   const response = await ctx.confirm({
     toolName,
     args: JSON.stringify({

@@ -28,6 +28,7 @@ export interface ProjectionContext {
   tools: ToolProjectionActions;
   lifecycle: LifecycleProjectionActions;
   subAgents: SubAgentProjectionActions;
+  tasks: TaskProjectionActions;
 }
 
 export interface MessageProjectionActions {
@@ -69,4 +70,8 @@ export interface SubAgentProjectionActions {
     turnId?: string;
     timestamp: string;
   }): void;
+}
+
+export interface TaskProjectionActions {
+  replace(input: { tasks: import("@excelsior/core").ProjectedTask[] }): void;
 }

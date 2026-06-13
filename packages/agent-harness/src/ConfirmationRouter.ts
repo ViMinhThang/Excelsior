@@ -6,15 +6,20 @@ import type {
 } from "@excelsior/core";
 
 class PendingRequestRoute<TRequest, TResponse> {
-  public pending: TRequest | null = null;
+  private readonly queue: TRequest[] = [];
   private readonly resolvers = new Map<string, (response: TResponse) => void>();
 
   constructor(
     private readonly cancelResponse: (callId: string) => TResponse,
+    private readonly getCallId: (request: TRequest) => string,
   ) {}
 
+  get pending(): TRequest | null {
+    return this.queue[0] ?? null;
+  }
+
   add(callId: string, request: TRequest, resolver: (response: TResponse) => void): void {
-    this.pending = request;
+    this.queue.push(request);
     this.resolvers.set(callId, resolver);
   }
 
@@ -22,8 +27,16 @@ class PendingRequestRoute<TRequest, TResponse> {
     const resolver = this.resolvers.get(callId);
     if (!resolver) return;
     this.resolvers.delete(callId);
-    this.pending = null;
+    const queueIndex = this.queue.findIndex((request) => this.getCallId(request) === callId);
+    if (queueIndex !== -1) this.queue.splice(queueIndex, 1);
     resolver(response);
+  }
+
+  resolveAll(responseFor: (callId: string) => TResponse): void {
+    const callIds = this.queue.map((request) => this.getCallId(request));
+    for (const callId of callIds) {
+      this.resolve(callId, responseFor(callId));
+    }
   }
 
   cancelAll(): void {
@@ -31,13 +44,14 @@ class PendingRequestRoute<TRequest, TResponse> {
       resolve(this.cancelResponse(callId));
     }
     this.resolvers.clear();
-    this.pending = null;
+    this.queue.length = 0;
   }
 }
 
 export class ConfirmationRouter {
   private readonly confirmations = new PendingRequestRoute<ConfirmRequest, ConfirmResponse>(
     (callId) => ({ callId, approved: false }),
+    (request) => request.callId,
   );
   private readonly questions = new PendingRequestRoute<AskQuestionRequest, AskQuestionResponse>(
     (callId) => ({
@@ -46,6 +60,7 @@ export class ConfirmationRouter {
       isManual: true,
       cancelled: true,
     }),
+    (request) => request.callId,
   );
 
   get pendingConfirmation(): ConfirmRequest | null {
@@ -72,6 +87,10 @@ export class ConfirmationRouter {
 
   resolveConfirmation(callId: string, approved: boolean): void {
     this.confirmations.resolve(callId, { callId, approved });
+  }
+
+  approveAllConfirmations(): void {
+    this.confirmations.resolveAll((callId) => ({ callId, approved: true }));
   }
 
   resolveQuestion(response: AskQuestionResponse): void {

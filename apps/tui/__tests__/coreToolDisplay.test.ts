@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createToolDisplay, getCommandRisk } from "@excelsior/core";
+import {
+  createToolDisplay,
+  createToolDisplayPresentation,
+  getCommandRisk,
+} from "@excelsior/core";
 
 describe("tool display model", () => {
   it("summarizes runCommand risk, result, and errors", () => {
@@ -182,6 +186,64 @@ describe("tool display model", () => {
       action: "create",
       oldLines: [""],
       newLines: ["new"],
+    });
+  });
+
+  it("centralizes completed file-change presentation policy", () => {
+    const display = createToolDisplay({
+      toolName: "edit",
+      toolArgs: JSON.stringify({ filePath: "demo.ts" }),
+      status: "completed",
+      content: [
+        "Successfully replaced the block in demo.ts.",
+        "--- demo.ts",
+        "+++ demo.ts",
+        "@@ -1,1 +1,1 @@",
+        "-old",
+        "+new",
+      ].join("\n"),
+    });
+
+    expect(createToolDisplayPresentation({
+      display,
+      status: "completed",
+    })).toMatchObject({
+      expandable: true,
+      hasFileChangePreview: true,
+      diffStats: "+1 -1",
+      body: { kind: "detail", text: "demo.ts (+1 -1 lines)" },
+    });
+  });
+
+  it("centralizes read-only and generic body presentation", () => {
+    const readDisplay = createToolDisplay({
+      toolName: "view",
+      toolArgs: JSON.stringify({ filePath: "package.json" }),
+      status: "completed",
+      content: "1: {\n2:   \"name\": \"excelsior\"",
+    });
+    const genericDisplay = createToolDisplay({
+      toolName: "fetch",
+      toolArgs: JSON.stringify({ url: "https://example.com" }),
+      status: "completed",
+      content: "line one\nline two",
+    });
+
+    expect(createToolDisplayPresentation({
+      display: readDisplay,
+      status: "completed",
+    })).toMatchObject({
+      expandable: true,
+      hasFileChangePreview: false,
+      body: { kind: "summary", text: "Read 2 lines" },
+    });
+    expect(createToolDisplayPresentation({
+      display: genericDisplay,
+      status: "completed",
+      content: "line one\nline two",
+    })).toMatchObject({
+      expandable: true,
+      body: { kind: "detail", text: "line one\nline two" },
     });
   });
 });

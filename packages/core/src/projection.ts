@@ -1,5 +1,13 @@
 export type ToolCallStatus = "pending" | "completed" | "error";
 
+export type ProjectedTaskStatus = "todo" | "in-progress" | "done";
+
+export interface ProjectedTask {
+  id: string;
+  text: string;
+  status: ProjectedTaskStatus;
+}
+
 export interface ToolCallInfo {
   toolName: string;
   toolArgs: string;

@@ -368,6 +368,10 @@ class HarnessStore implements AgentHarness {
     this.confirmRouter.resolveConfirmation(callId, approved);
   }
 
+  approveAllConfirmations(): void {
+    this.confirmRouter.approveAllConfirmations();
+  }
+
   respondToQuestion(response: AskQuestionResponse): void {
     this.confirmRouter.resolveQuestion(response);
   }
