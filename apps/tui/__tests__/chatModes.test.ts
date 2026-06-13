@@ -55,6 +55,7 @@ function makeRenderContext(chatMode: ChatMode): ChatModeRenderContext {
     sessionId: "ses",
     chatMode,
     turns: [],
+    tasks: [],
     inputValue: "",
     setInput: noop,
     handleSubmit: noop,
@@ -63,6 +64,13 @@ function makeRenderContext(chatMode: ChatMode): ChatModeRenderContext {
     paletteOpen: false,
     commandResult: null,
     agentMode: "act",
+    settings: {
+      deepseekApiKey: "",
+      githubToken: "",
+      agentToolLoopSteps: "unlimited",
+      autoReflectionEnabled: false,
+      autoApproveWorkspaceEdits: false,
+    },
     activePanel: undefined,
     featureContext: {
       sessions: [],
@@ -96,6 +104,7 @@ function makeLegacyWideRenderContext(chatMode: ChatMode) {
     },
     transcript: {
       blocks: [],
+      tasks: [],
       toolsExpanded: false,
       viewportKey: "none:0",
     },

@@ -38,7 +38,7 @@ export function buildWritingProgressLines(rawArgs?: string): string[] {
 
   const previewSource = body || raw;
   const previewLines = previewSource
-    ? normalizeProgressText(previewSource).split(/\r?\n/).filter(Boolean)
+    ? previewSource.split(/\r?\n/).filter(Boolean)
     : [];
   if (previewLines.length > 0) {
     lines.push("preview:");
@@ -57,47 +57,118 @@ function extractToolArgString(rawArgs: string | undefined, key: string): string 
   const parsed = parseToolArgs(rawArgs);
   const parsedValue = stringifyToolArgValue(parsed?.[key]);
   if (parsedValue) return parsedValue;
-  return extractPartialJsonString(rawArgs ?? "", key);
+  return extractPartialStringToolArg(rawArgs ?? "", key);
 }
 
-function extractPartialJsonString(raw: string, key: string): string {
-  const keyIndex = raw.indexOf(`"${key}"`);
-  if (keyIndex === -1) return "";
-  const colonIndex = raw.indexOf(":", keyIndex);
-  if (colonIndex === -1) return "";
-  const quoteIndex = raw.indexOf("\"", colonIndex + 1);
-  if (quoteIndex === -1) return "";
+interface StringTokenResult {
+  value: string;
+  nextIndex: number;
+  closed: boolean;
+}
 
-  let escaped = false;
+function extractPartialStringToolArg(raw: string, key: string): string {
+  let index = 0;
+  while (index < raw.length) {
+    if (raw[index] !== "\"") {
+      index += 1;
+      continue;
+    }
+
+    const keyToken = readJsonStringToken(raw, index);
+    if (!keyToken.closed) return "";
+
+    index = skipWhitespace(raw, keyToken.nextIndex);
+    if (raw[index] !== ":") {
+      index += 1;
+      continue;
+    }
+    index = skipWhitespace(raw, index + 1);
+
+    if (keyToken.value === key) {
+      const valueToken = readJsonStringToken(raw, index, { allowUnclosed: true });
+      return valueToken.value;
+    }
+
+    index = skipJsonValue(raw, index);
+  }
+
+  return "";
+}
+
+function skipJsonValue(raw: string, index: number): number {
+  if (raw[index] === "\"") {
+    const token = readJsonStringToken(raw, index, { allowUnclosed: true });
+    return token.nextIndex;
+  }
+  while (index < raw.length && raw[index] !== ",") index += 1;
+  return index + 1;
+}
+
+function readJsonStringToken(
+  raw: string,
+  startIndex: number,
+  options: { allowUnclosed?: boolean } = {},
+): StringTokenResult {
+  if (raw[startIndex] !== "\"") {
+    return { value: "", nextIndex: startIndex, closed: false };
+  }
+
   let value = "";
-  for (let index = quoteIndex + 1; index < raw.length; index++) {
+  for (let index = startIndex + 1; index < raw.length; index++) {
     const char = raw[index];
-    if (escaped) {
-      value += `\\${char}`;
-      escaped = false;
-      continue;
-    }
     if (char === "\\") {
-      escaped = true;
+      const escapeResult = readJsonEscape(raw, index + 1);
+      value += escapeResult.value;
+      index = escapeResult.nextIndex - 1;
       continue;
     }
-    if (char === "\"") break;
+    if (char === "\"") {
+      return { value, nextIndex: index + 1, closed: true };
+    }
     value += char;
   }
 
-  return normalizeProgressText(value);
+  return {
+    value: options.allowUnclosed ? value : "",
+    nextIndex: raw.length,
+    closed: Boolean(options.allowUnclosed),
+  };
 }
 
-function normalizeProgressText(value: string): string {
-  try {
-    const parsed = JSON.parse(`"${value.replace(/"/g, "\\\"")}"`);
-    if (typeof parsed === "string") return parsed;
-  } catch {
+function readJsonEscape(raw: string, escapedIndex: number): { value: string; nextIndex: number } {
+  const escaped = raw[escapedIndex];
+  if (escaped === undefined) return { value: "\\", nextIndex: escapedIndex };
+
+  switch (escaped) {
+    case "\"":
+    case "\\":
+    case "/":
+      return { value: escaped, nextIndex: escapedIndex + 1 };
+    case "b":
+      return { value: "\b", nextIndex: escapedIndex + 1 };
+    case "f":
+      return { value: "\f", nextIndex: escapedIndex + 1 };
+    case "n":
+      return { value: "\n", nextIndex: escapedIndex + 1 };
+    case "r":
+      return { value: "\r", nextIndex: escapedIndex + 1 };
+    case "t":
+      return { value: "\t", nextIndex: escapedIndex + 1 };
+    case "u": {
+      const hex = raw.slice(escapedIndex + 1, escapedIndex + 5);
+      if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+        return { value: String.fromCharCode(Number.parseInt(hex, 16)), nextIndex: escapedIndex + 5 };
+      }
+      return { value: "\\u", nextIndex: escapedIndex + 1 };
+    }
+    default:
+      return { value: `\\${escaped}`, nextIndex: escapedIndex + 1 };
   }
-  return value
-    .replace(/\\r\\n/g, "\n")
-    .replace(/\\n/g, "\n")
-    .replace(/\\t/g, "\t");
+}
+
+function skipWhitespace(raw: string, index: number): number {
+  while (/\s/.test(raw[index] ?? "")) index += 1;
+  return index;
 }
 
 function truncateProgressLine(line: string): string {

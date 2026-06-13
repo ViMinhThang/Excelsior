@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { ProjectedBlock } from "@excelsior/core";
-import { createToolDisplay } from "@excelsior/core";
+import { createToolDisplay, createToolDisplayPresentation } from "@excelsior/core";
 import {
   ChevronDown,
   ChevronRight,
@@ -62,8 +62,12 @@ function ToolBubble({
     status: block.status,
     content: block.content,
   });
+  const presentation = createToolDisplayPresentation({
+    display,
+    status: block.status,
+    content: block.content,
+  });
   const fileChange = display.fileChangePreview;
-  const resultLines = display.resultPreview ?? [];
   const isRunning = block.status === "pending";
 
   return (
@@ -92,11 +96,18 @@ function ToolBubble({
           }}
         >
           <div className="overflow-hidden ml-5 pl-3 border-l border-brand-border/30 space-y-2 text-sm text-brand-text-muted select-text">
-            {display.summaryLine && (
-              <p className="font-medium text-brand-text-light">{display.summaryLine}</p>
+            {presentation.body.kind === "summary" && (
+              <p className="font-medium text-brand-text-light">{presentation.body.text}</p>
             )}
-            {display.detail && (
-              <p className="leading-5">{display.detail}</p>
+            {presentation.body.kind === "detail" && (
+              <p className="leading-5">{presentation.body.text}</p>
+            )}
+            {presentation.body.kind === "progressStats" && (
+              <div className="font-mono text-xs">
+                <span className="text-emerald-400">+{presentation.body.stats.added}</span>
+                <span className="ml-1 text-red-400">-{presentation.body.stats.removed}</span>
+                <span className="ml-1">lines</span>
+              </div>
             )}
             {fileChange && (
               <div className="font-mono text-xs text-brand-text-light">
@@ -105,16 +116,15 @@ function ToolBubble({
                 <span className="ml-1 text-red-400">-{fileChange.removed}</span>
               </div>
             )}
-            {resultLines.length > 0 && (
+            {presentation.body.kind === "preview" && (
               <pre className="max-h-56 overflow-auto font-mono text-xs">
-                {resultLines.join("\n")}
-                {display.omittedResultLines ? `\n... ${display.omittedResultLines} more lines` : ""}
+                {presentation.body.lines.join("\n")}
+                {presentation.body.omittedLines ? `\n... ${presentation.body.omittedLines} more lines` : ""}
               </pre>
             )}
-            {resultLines.length === 0 && !display.detail && !fileChange && block.content && (
-              <pre className="max-h-56 overflow-auto font-mono text-xs">{block.content}</pre>
+            {presentation.body.kind === "completion" && (
+              <p className="leading-5">{presentation.body.text}</p>
             )}
-            {block.toolArgs && <pre className="max-h-48 overflow-auto font-mono text-xs">{block.toolArgs}</pre>}
           </div>
         </div>
       </div>

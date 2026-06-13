@@ -20,4 +20,24 @@ describe("CommandSuggestions", () => {
     expect(frame).toContain("/settings");
     expect(frame).toContain("Open settings");
   });
+
+  it("keeps the selected command inside the visible window", async () => {
+    const screen = await renderTui(createElement(CommandSuggestions, {
+      commands: [
+        { name: "help", description: "List commands" },
+        { name: "settings", description: "Open settings" },
+        { name: "session", description: "Open sessions" },
+        { name: "model", description: "Change model" },
+        { name: "accept-edits", description: "Toggle edit approval" },
+      ],
+      selectedIndex: 4,
+      maxVisibleCount: 3,
+    }));
+
+    const frame = screen.lastFrame() ?? "";
+    expect(frame).not.toContain("/help");
+    expect(frame).toContain("/accept-edits");
+    expect(frame).toContain("Toggle edit approval");
+    expect(frame).toContain("more above");
+  });
 });

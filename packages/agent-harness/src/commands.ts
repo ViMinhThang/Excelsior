@@ -32,6 +32,7 @@ export function createBuiltInCommands(input: {
     })),
     command("session", "session", "Open or manage sessions", "/session [list|new|open|rename|delete]", sessionCommand),
     command("mode", "core", "Switch between Plan and Act modes", "/mode [plan|act]", modeCommand),
+    command("accept-edits", "core", "Toggle auto-approval for workspace file edits", "/accept-edits [on|off]", acceptEditsCommand),
     command("compact", "runtime", "Compact current conversation context", "/compact", async (_args, harness) => {
       await harness.compactCurrentSession("manual");
       return { handled: true, clearInput: true };
@@ -167,6 +168,14 @@ function modeCommand(args: string[], harness: AgentHarness): CommandResult {
   }
   const nextMode = harness.toggleMode();
   return ok(`Mode set to ${nextMode}.`);
+}
+
+function acceptEditsCommand(args: string[], harness: AgentHarness): CommandResult {
+  const arg = args[0]?.toLowerCase();
+  const current = harness.getCatalog().settings.autoApproveWorkspaceEdits;
+  const enabled = arg === "on" ? true : arg === "off" ? false : !current;
+  harness.saveSettings({ autoApproveWorkspaceEdits: enabled });
+  return ok(`Auto-approve workspace edits ${enabled ? "enabled" : "disabled"}.`);
 }
 
 function formatHelp(definitions: ReadonlyArray<{ name: string; description: string; usage?: string }>): string {

@@ -1,6 +1,6 @@
 import type { AgentMode } from "./agent.js";
 import type { ConfirmRequest } from "./confirmation.js";
-import type { ProjectedTurn } from "./projection.js";
+import type { ProjectedTask, ProjectedTurn } from "./projection.js";
 import type { AskQuestionRequest } from "./question.js";
 import type { Session, Workspace } from "./session.js";
 
@@ -19,6 +19,7 @@ export interface ReflectionClientState {
 
 export interface AgentClientState {
   turns: ProjectedTurn[];
+  tasks?: ProjectedTask[];
   isLoading: boolean;
   sessions: Session[];
   currentSessionId: string | null;

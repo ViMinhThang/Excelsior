@@ -32,6 +32,21 @@ export interface ToolDisplay {
   progressStats?: WritingProgressStats;
 }
 
+export type ToolDisplayBody =
+  | { kind: "none" }
+  | { kind: "progressStats"; stats: WritingProgressStats }
+  | { kind: "summary"; text: string }
+  | { kind: "detail"; text: string }
+  | { kind: "preview"; lines: string[]; omittedLines?: number }
+  | { kind: "completion"; text: string };
+
+export interface ToolDisplayPresentation {
+  expandable: boolean;
+  hasFileChangePreview: boolean;
+  diffStats?: string;
+  body: ToolDisplayBody;
+}
+
 export interface WritingProgressStats {
   added: number;
   removed: number;

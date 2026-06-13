@@ -175,6 +175,7 @@ Each flow doc in `docs/` covers one mechanism end to end across layers.
 | `confirmation-flow.md` | Tool confirmations, Plan mode blocking | harness (tools, ConfirmationRouter) + client + TUI/Desktop |
 | `askquestion-tool-flow.md` | `askQuestion` tool end to end | harness (tools/interaction, ConfirmationRouter) + client + TUI/Desktop |
 | `subagent-tool-flow.md` | `spawnSubAgent` child process | harness (tools/subAgent, subagentProcess, SubAgentHandler) + projection |
+| `subagent-runtime-roadmap.md` | Future first-class subagent runs and background execution | harness runtime contracts + scheduler + TUI/Desktop projection |
 | `revert-turn-flow.md` | `/revert` command and file backups | harness (revert.ts, fs.ts backups) + TUI commands |
 | `skills-flow.md` | Skill discovery, tool/command registration | harness (SkillCatalog, SkillsManager, register.ts) |
 | `tui-keybindings-flow.md` | Keyboard input, keymap priority, text editing | TUI (keymapRegistry, useKeymap, SafeTextInput) |
@@ -217,3 +218,5 @@ If you are new, read in this order:
 5. **confirmation-flow.md** — understand tool safety gates
 6. **skills-flow.md** — understand the skill system
 7. Then the remaining flow docs as needed for your area
+
+If you are expanding subagents beyond the current `spawnSubAgent` tool, read `subagent-runtime-roadmap.md` before changing runtime or UI contracts.

@@ -16,6 +16,7 @@ export interface FooterBarProps {
   toolsExpanded: boolean;
   totalTokens?: number;
   reflection?: ReflectionClientState;
+  autoApproveWorkspaceEdits?: boolean;
 }
 
 const FooterBar: FC<FooterBarProps> = ({
@@ -29,6 +30,7 @@ const FooterBar: FC<FooterBarProps> = ({
   toolsExpanded,
   totalTokens,
   reflection,
+  autoApproveWorkspaceEdits,
 }) => {
   const footerHint = chatModeRegistry[chatMode].getHint({
     chatMode,
@@ -41,7 +43,8 @@ const FooterBar: FC<FooterBarProps> = ({
     toolsExpanded,
   });
   const reflectionHint = getReflectionHint(reflection);
-  const displayHint = reflectionHint ? `${footerHint} | ${reflectionHint}` : footerHint;
+  const editHint = autoApproveWorkspaceEdits ? "accept edits: on" : null;
+  const displayHint = [footerHint, reflectionHint, editHint].filter(Boolean).join(" | ");
 
   return (
     <box flexDirection="row" width="100%">

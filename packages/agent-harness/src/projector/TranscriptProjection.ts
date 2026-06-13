@@ -1,4 +1,4 @@
-import type { AgentMessage, ProjectedBlock, ProjectedSubAgent, ProjectedTurn } from "@excelsior/core";
+import type { AgentMessage, ProjectedBlock, ProjectedSubAgent, ProjectedTask, ProjectedTurn } from "@excelsior/core";
 import type { AnyHarnessEvent, HarnessMessage } from "../events.js";
 import type { ProjectionContext, ProjectionHandler } from "./types.js";
 import { AiHistory } from "./AiHistory.js";
@@ -12,6 +12,7 @@ import {
 
 export interface ProjectionSnapshot {
   turns: ProjectedTurn[];
+  tasks: ProjectedTask[];
   aiHistory: AgentMessage[];
 }
 
@@ -20,6 +21,7 @@ export class TranscriptProjection implements ProjectionContext {
   private readonly history = new AiHistory();
   private readonly subAgentStates = new Map<string, ProjectedSubAgent>();
   private readonly displayIdCounts = new Map<string, number>();
+  private taskItems: ProjectedTask[] = [];
   private readonly drafts = new LiveDrafts(this.turns, this.subAgentStates, this.displayIdCounts);
 
   public readonly messages = {
@@ -192,6 +194,12 @@ export class TranscriptProjection implements ProjectionContext {
     },
   };
 
+  public readonly tasks = {
+    replace: (input: { tasks: ProjectedTask[] }) => {
+      this.taskItems = input.tasks;
+    },
+  };
+
   apply(event: AnyHarnessEvent, handlers: Map<string, ProjectionHandler>): void {
     handlers.get(event.type)?.apply(event, this);
   }
@@ -200,6 +208,7 @@ export class TranscriptProjection implements ProjectionContext {
     this.turns.reset();
     this.history.reset();
     this.subAgentStates.clear();
+    this.taskItems = [];
     this.drafts.reset();
     this.displayIdCounts.clear();
   }
@@ -207,6 +216,7 @@ export class TranscriptProjection implements ProjectionContext {
   snapshot(): ProjectionSnapshot {
     return {
       turns: this.drafts.materialize(),
+      tasks: this.taskItems,
       aiHistory: this.history.snapshot(),
     };
   }

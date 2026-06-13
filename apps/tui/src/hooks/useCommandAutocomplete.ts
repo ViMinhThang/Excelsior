@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useAgentHostClient } from "./useAgentHostClient.js";
 
+const MAX_VISIBLE_COMMAND_SUGGESTIONS = 6;
+
 export function useCommandAutocomplete(input: string) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const { getCommands } = useAgentHostClient();
@@ -36,7 +38,7 @@ export function useCommandAutocomplete(input: string) {
     show,
     filtered,
     selectedIndex,
-    maxVisibleCount: commands.length,
+    maxVisibleCount: MAX_VISIBLE_COMMAND_SUGGESTIONS,
     next,
     prev,
   };

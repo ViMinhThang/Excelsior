@@ -143,6 +143,7 @@ export interface AgentHarness {
   executeCommand(input: string): Promise<CommandResult>;
   saveSettings(settings: Partial<HarnessSettings>): void;
   respondToConfirmation(callId: string, approved: boolean): void;
+  approveAllConfirmations(): void;
   respondToQuestion(response: AskQuestionResponse): void;
   revertLastTurn(): Promise<CommandResult>;
   compactCurrentSession(triggerMode?: "manual" | "auto"): Promise<void>;

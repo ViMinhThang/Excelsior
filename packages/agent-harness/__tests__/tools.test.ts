@@ -138,6 +138,68 @@ describe("built-in harness tools", () => {
     expect(overwritten?.content).toContain("+export const x = 2;");
   });
 
+  it("auto-approves workspace edits when the workspace toggle is enabled", async () => {
+    const workspaceRoot = await makeTempDir();
+    const confirm = vi.fn();
+    const ctx: ToolExecutionContext = {
+      workspaceRoot,
+      mode: "act",
+      settings: {
+        deepseekApiKey: "",
+        githubToken: "",
+        agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
+        autoApproveWorkspaceEdits: true,
+      },
+      confirm,
+      askQuestion: async () => ({
+        callId: "question",
+        answer: "",
+        isManual: true,
+        cancelled: true,
+      }),
+      sendSubAgent: async () => "sub-agent result",
+    };
+    const write = createBuiltInTools().find((tool) => tool.name === "write");
+
+    const result = await write?.execute({
+      filePath: "inside.txt",
+      content: "inside",
+    }, ctx);
+
+    expect(result?.content).toContain("Successfully wrote");
+    expect(await readFile(join(workspaceRoot, "inside.txt"), "utf-8")).toBe("inside");
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("emits task updates from the updateTasks tool", async () => {
+    const workspaceRoot = await makeTempDir();
+    const emit = vi.fn();
+    const ctx: ToolExecutionContext = {
+      workspaceRoot,
+      mode: "act",
+      emit,
+      confirm: async () => ({ callId: "confirm", approved: true }),
+      askQuestion: async () => ({
+        callId: "question",
+        answer: "",
+        isManual: true,
+        cancelled: true,
+      }),
+      sendSubAgent: async () => "sub-agent result",
+    };
+    const updateTasks = createBuiltInTools().find((tool) => tool.name === "updateTasks");
+
+    const result = await updateTasks?.execute({
+      tasks: [{ id: "one", text: "Do one thing", status: "in-progress" }],
+    }, ctx);
+
+    expect(result?.content).toBe("Updated 1 tasks.");
+    expect(emit).toHaveBeenCalledWith("tasks_updated", {
+      tasks: [{ id: "one", text: "Do one thing", status: "in-progress" }],
+    });
+  });
+
   it("returns a unified diff for completed edits", async () => {
     const workspaceRoot = await makeTempDir();
     const target = join(workspaceRoot, "test.txt");

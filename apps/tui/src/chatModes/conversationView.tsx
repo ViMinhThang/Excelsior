@@ -171,7 +171,7 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
         </box>
       ) : (
         <box flexShrink={0} flexDirection="column" width="100%">
-          <TaskList workspace={ctx.workspace} sessionId={ctx.sessionId} />
+          <TaskList tasks={ctx.transcript.tasks} />
           <ChatInput
             value={ctx.input.value}
             onChange={ctx.input.setValue}

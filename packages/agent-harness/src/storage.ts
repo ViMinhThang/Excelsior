@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS: HarnessSettings = {
   githubToken: "",
   agentToolLoopSteps: DEFAULT_AGENT_TOOL_LOOP_STEPS,
   autoReflectionEnabled: false,
+  autoApproveWorkspaceEdits: false,
 };
 
 type SessionFileLine =
@@ -38,6 +39,7 @@ export class FileHarnessStorage {
         raw.agentToolLoopSteps ?? process.env[AGENT_TOOL_LOOP_STEPS_SETTING] ?? DEFAULT_SETTINGS.agentToolLoopSteps,
       ),
       autoReflectionEnabled: raw.autoReflectionEnabled ?? DEFAULT_SETTINGS.autoReflectionEnabled,
+      autoApproveWorkspaceEdits: raw.autoApproveWorkspaceEdits ?? DEFAULT_SETTINGS.autoApproveWorkspaceEdits,
     };
   }
 
@@ -48,6 +50,7 @@ export class FileHarnessStorage {
       ...settings,
       agentToolLoopSteps: normalizeAgentToolLoopSteps(settings.agentToolLoopSteps ?? current.agentToolLoopSteps),
       autoReflectionEnabled: settings.autoReflectionEnabled ?? current.autoReflectionEnabled,
+      autoApproveWorkspaceEdits: settings.autoApproveWorkspaceEdits ?? current.autoApproveWorkspaceEdits,
     };
     this.writeJson(this.settingsPath(), next);
     return next;

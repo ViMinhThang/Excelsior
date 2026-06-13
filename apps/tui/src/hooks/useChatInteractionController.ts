@@ -20,6 +20,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
   const agent = useAgentHostClient();
   const {
     turns,
+    tasks,
     isLoading,
     sessions,
     currentSessionId,
@@ -30,6 +31,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
     pendingQuestion,
     reflection,
   } = agent.state;
+  const settings = agent.getSettings();
   const branchName = useGitBranch(workspace.rootPath);
 
   const confirmation = useToolConfirmation(
@@ -76,6 +78,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
       sessionId: currentSessionId,
       chatMode: runtime.subAgentNav.chatMode,
       turns: runtime.derivedTurns,
+      tasks: tasks ?? [],
       inputValue: runtime.inputHistory.input,
       setInput: runtime.inputHistory.setInput,
       handleSubmit: runtime.handleSubmit,
@@ -85,6 +88,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
       paletteOpen: runtime.palette.isOpen,
       commandResult: runtime.command.commandResult,
       agentMode: runtime.mode,
+      settings,
       activePanel: runtime.panel.activePanel,
       featureContext: runtime.panel.panelContext,
       subAgents: runtime.subAgentNav.subAgentBlocks,
@@ -111,6 +115,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
       ...runtime.interactionState.footer,
       reflection,
       totalTokens,
+      autoApproveWorkspaceEdits: settings.autoApproveWorkspaceEdits ?? false,
     },
   };
 }

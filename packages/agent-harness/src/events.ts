@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AskQuestionRequest, AskQuestionResponse, ConfirmRequest, ConfirmResponse } from "@excelsior/core";
+import type { AskQuestionRequest, AskQuestionResponse, ConfirmRequest, ConfirmResponse, ProjectedTask } from "@excelsior/core";
 
 export const TURN_START = "turn_start";
 export const TURN_END = "turn_end";
@@ -16,6 +16,7 @@ export const QUESTION_REQUESTED = "question_requested";
 export const QUESTION_ANSWERED = "question_answered";
 export const HISTORY_COMPACTED = "history_compacted";
 export const SESSION_CHANGED = "session_changed";
+export const TASKS_UPDATED = "tasks_updated";
 export const ERROR = "error";
 
 export interface HarnessMessage {
@@ -79,6 +80,7 @@ export type HarnessEventDataMap = {
     sessionId: string | null;
     reason: "created" | "switched" | "deleted" | "renamed" | "reset";
   };
+  [TASKS_UPDATED]: { tasks: ProjectedTask[] };
   [ERROR]: { message: string };
 };
 

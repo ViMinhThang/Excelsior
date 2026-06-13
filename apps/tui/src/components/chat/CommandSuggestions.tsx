@@ -16,10 +16,24 @@ function CommandSuggestionsInner({
 }: CommandSuggestionsProps) {
   if (cmds.length === 0) return null;
 
+  const visibleCount = Math.max(1, Math.min(maxVisibleCount, cmds.length));
+  const maxStart = Math.max(0, cmds.length - visibleCount);
+  const preferredStart = selectedIndex - Math.floor(visibleCount / 2);
+  const startIndex = Math.min(Math.max(0, preferredStart), maxStart);
+  const visibleCommands = cmds.slice(startIndex, startIndex + visibleCount);
+  const hasHiddenBefore = startIndex > 0;
+  const hasHiddenAfter = startIndex + visibleCount < cmds.length;
+
   return (
     <box marginTop={1} flexDirection="column">
-      {cmds.slice(0, maxVisibleCount).map((cmd, index) => {
-        const isSelected = index === selectedIndex;
+      {hasHiddenBefore ? (
+        <text fg={theme.colors.muted}>
+          {`... ${startIndex} more above`}
+        </text>
+      ) : null}
+      {visibleCommands.map((cmd, visibleIndex) => {
+        const commandIndex = startIndex + visibleIndex;
+        const isSelected = commandIndex === selectedIndex;
         const nameStr = `/${cmd.name}`;
         const paddedName = nameStr.length < 20
           ? nameStr.padEnd(20, " ")
@@ -36,6 +50,11 @@ function CommandSuggestionsInner({
           </box>
         );
       })}
+      {hasHiddenAfter ? (
+        <text fg={theme.colors.muted}>
+          {`... ${cmds.length - startIndex - visibleCount} more below`}
+        </text>
+      ) : null}
     </box>
   );
 }

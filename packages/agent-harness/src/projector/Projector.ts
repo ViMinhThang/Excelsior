@@ -1,9 +1,10 @@
-import type { AgentMessage, ProjectedTurn } from "@excelsior/core";
+import type { AgentMessage, ProjectedTask, ProjectedTurn } from "@excelsior/core";
 import type { AnyHarnessEvent, HarnessEventType } from "../events.js";
 import { MessageHandler } from "./MessageHandler.js";
 import { ToolHandler } from "./ToolHandler.js";
 import { SubAgentHandler } from "./SubAgentHandler.js";
 import { LifecycleHandler } from "./LifecycleHandler.js";
+import { TaskHandler } from "./TaskHandler.js";
 import type { ProjectionHandler } from "./types.js";
 import { TranscriptProjection } from "./TranscriptProjection.js";
 
@@ -20,6 +21,7 @@ export class Projector {
       new ToolHandler(),
       new SubAgentHandler(),
       new LifecycleHandler(),
+      new TaskHandler(),
     ]);
   }
 
@@ -43,7 +45,7 @@ export class Projector {
     return events[this.appliedCount - 1]?.id === this.lastEventId;
   }
 
-  public project(events: readonly AnyHarnessEvent[]): { turns: ProjectedTurn[]; aiHistory: AgentMessage[] } {
+  public project(events: readonly AnyHarnessEvent[]): { turns: ProjectedTurn[]; tasks: ProjectedTask[]; aiHistory: AgentMessage[] } {
     if (!this.canApplyIncrementally(events)) {
       this.reset();
     }

@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
 import type {
   AgentMode,
+  AppSettings,
   CommandDefinition,
   ProjectedBlock,
+  ProjectedTask,
   ProjectedTurn,
   Workspace,
 } from "@excelsior/core";
@@ -53,9 +55,11 @@ export interface ConversationRenderContext {
     paletteOpen: boolean;
     commandResult: string | null;
     agentMode: AgentMode;
+    settings: AppSettings;
   };
   transcript: {
     turns: ProjectedTurn[];
+    tasks: ProjectedTask[];
     toolsExpanded: boolean;
     viewportKey: string;
   };

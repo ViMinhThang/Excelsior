@@ -1,10 +1,11 @@
-import type { AgentLlmInfo, AgentMessage, ProjectedTurn, ReflectionClientState, Session, Workspace } from "@excelsior/core";
+import type { AgentLlmInfo, AgentMessage, ProjectedTask, ProjectedTurn, ReflectionClientState, Session, Workspace } from "@excelsior/core";
 import type { AnyHarnessEvent } from "./events.js";
 import type { HarnessSnapshot } from "./types.js";
 import { Projector } from "./projector/Projector.js";
 
 export interface CanonicalReadModel {
   turns: ProjectedTurn[];
+  tasks: ProjectedTask[];
   aiHistory: AgentMessage[];
 }
 
@@ -36,6 +37,7 @@ export function projectHarnessState(input: {
   const readModel = input.readModel ?? projectEvents(input.events);
   return {
     turns: readModel.turns,
+    tasks: readModel.tasks,
     isLoading: input.isLoading,
     sessions: input.sessions,
     currentSessionId: input.currentSessionId,
