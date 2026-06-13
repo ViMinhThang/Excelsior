@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  createDoubleEscapeCancelState,
-  handleDoubleEscapeCancel,
-  resetDoubleEscapeCancel,
   type CommandDefinition,
   type CommandResult,
   type ProjectedTurn,
@@ -10,18 +7,9 @@ import {
 } from "@excelsior/core";
 import { getCommandInputWithSelection } from "../chatModes/inputMode.js";
 import { shouldAllowChatInputSubmit } from "../lib/commandSubmission.js";
-import { useViewportReset } from "../platform/opentui/useViewportReset.js";
 import {
   buildChatInteractionState,
 } from "./chatScreenViewModel.js";
-import {
-  createHistoryResetSnapshot,
-  shouldResetHistory,
-} from "./historyReset.js";
-import {
-  buildOptimisticTranscript,
-  shouldClearOptimisticMessage,
-} from "./optimisticTranscript.js";
 import { useChatKeymaps } from "./useChatKeymaps.js";
 import { useChatPanel } from "./useChatPanel.js";
 import { useChatSubmission } from "./useChatSubmission.js";
@@ -29,9 +17,14 @@ import { useCommandAutocomplete } from "./useCommandAutocomplete.js";
 import { useCommandPalette } from "./useCommandPalette.js";
 import { useCommandResult } from "./useCommandResult.js";
 import { useInputHistory } from "./useInputHistory.js";
-import { useSubAgentNavigation } from "./useSubAgentNavigation.js";
-import type { useQuestionResponse } from "./useQuestionResponse.js";
+import { useOptimisticTranscript } from "./useOptimisticTranscript.js";
+import { useDoubleEscapeCancel } from "./useDoubleEscapeCancel.js";
+import { useTranscriptViewportReset } from "./useTranscriptViewportReset.js";
 import type { useToolConfirmation } from "./useToolConfirmation.js";
+import type { useQuestionResponse } from "./useQuestionResponse.js";
+import { useMemo } from "react";
+import type { SubAgentBlock } from "../chatModes/types.js";
+import { getActiveThemeName, setTheme, themes } from "../theme.js";
 
 interface UseChatRuntimeInteractionOptions {
   turns: ProjectedTurn[];
@@ -68,41 +61,18 @@ export function useChatRuntimeInteraction({
   toggleMode,
   navigate,
 }: UseChatRuntimeInteractionOptions) {
-  const [optimisticUserMessage, setOptimisticUserMessage] = useState<string | null>(null);
-
-  const sendWithOptimisticMessage = useCallback((content: string) => {
-    setOptimisticUserMessage(content);
-    send(content);
-  }, [send]);
-
-  const derivedTurns = useMemo(() => buildOptimisticTranscript({
-    turns,
-    optimisticUserMessage,
-  }), [turns, optimisticUserMessage]);
-
-  useEffect(() => {
-    if (shouldClearOptimisticMessage(turns, optimisticUserMessage)) {
-      setOptimisticUserMessage(null);
-    }
-  }, [turns, optimisticUserMessage]);
-
-  useEffect(() => {
-    setOptimisticUserMessage(null);
-  }, [currentSessionId]);
-
-  const [wasLoading, setWasLoading] = useState(false);
-  useEffect(() => {
-    if (isLoading) {
-      setWasLoading(true);
-    } else if (wasLoading) {
-      setOptimisticUserMessage(null);
-      setWasLoading(false);
-    }
-  }, [isLoading, wasLoading]);
+  const {
+    derivedTurns,
+    sendWithOptimisticMessage,
+    clearOptimisticMessage,
+  } = useOptimisticTranscript(turns, isLoading, currentSessionId, send);
 
   const inputHistory = useInputHistory(derivedTurns);
   const [inputFocused, setInputFocused] = useState(true);
-  const subAgentNav = useSubAgentNavigation(derivedTurns);
+  const subAgentBlocks = useMemo(
+    () => derivedTurns.flatMap((t) => t.blocks).filter((block): block is SubAgentBlock => block.type === "sub-agent"),
+    [derivedTurns],
+  );
   const command = useCommandResult(inputHistory.input);
   const suggestion = useCommandAutocomplete(inputHistory.input);
   const palette = useCommandPalette({
@@ -119,88 +89,81 @@ export function useChatRuntimeInteraction({
   });
 
   const [toolsExpanded, setToolsExpanded] = useState(false);
-  const [historyResetKey, setHistoryResetKey] = useState(0);
-  const historyResetSnapshot = useMemo(() => createHistoryResetSnapshot({
-    sessionId: currentSessionId,
-    turns: derivedTurns,
-  }), [currentSessionId, derivedTurns]);
-  const prevHistoryResetSnapshotRef = useRef(historyResetSnapshot);
+  const [themeModalOpen, setThemeModalOpen] = useState(false);
+  const [selectedThemeIndex, setSelectedThemeIndex] = useState(() => {
+    const index = Object.keys(themes).indexOf(getActiveThemeName());
+    return index >= 0 ? index : 0;
+  });
+  const [themeRenderKey, setThemeRenderKey] = useState(0);
 
-  useEffect(() => {
-    if (shouldResetHistory(prevHistoryResetSnapshotRef.current, historyResetSnapshot)) {
-      setHistoryResetKey((k) => k + 1);
-    }
-    prevHistoryResetSnapshotRef.current = historyResetSnapshot;
-  }, [historyResetSnapshot]);
-
-  useViewportReset(historyResetKey);
+  const { historyResetKey } = useTranscriptViewportReset(currentSessionId, derivedTurns);
 
   const toggleToolsExpanded = useCallback(() => {
     setToolsExpanded((expanded) => !expanded);
   }, []);
 
-  const escapeCancelState = useRef(createDoubleEscapeCancelState());
-  const requestTurnCancel = useCallback(() => {
-    handleDoubleEscapeCancel({
-      state: escapeCancelState.current,
-      isLoading,
-      now: Date.now(),
-      cancel,
-    });
-  }, [cancel, isLoading]);
-
-  useEffect(() => {
-    if (!isLoading) resetDoubleEscapeCancel(escapeCancelState.current);
-  }, [isLoading]);
-
-  const setChatMode = useCallback((nextMode: typeof subAgentNav.chatMode) => {
-    subAgentNav.setChatMode(nextMode);
-    if (nextMode === "input") setToolsExpanded(false);
-  }, [subAgentNav.setChatMode]);
-
-  const openSubAgent = useCallback(() => {
-    setToolsExpanded(true);
-    subAgentNav.openSubAgent();
-  }, [subAgentNav.openSubAgent]);
+  const { requestTurnCancel } = useDoubleEscapeCancel(isLoading, cancel);
 
   const submitRef = useRef<() => void>(() => {});
   const interactionState = buildChatInteractionState({
     turns: derivedTurns,
-    chatMode: subAgentNav.chatMode,
+    chatMode: "input",
     isLoading,
     pendingConfirmation: confirmation.pending,
     pendingQuestion: question.pending,
     activePanelId: panel.activePanelId,
-    isPaletteOpen: palette.isOpen,
+    isPaletteOpen: palette.isOpen || themeModalOpen,
     inputFocused,
     suggestion,
     setInput: inputHistory.setInput,
+    setInputFocused,
     submit: () => submitRef.current(),
     cancel,
     toggleMode,
-    openSubAgent,
-    subAgentBlocks: subAgentNav.subAgentBlocks,
+    openSubAgent: () => {},
+    subAgentBlocks,
     toolsExpanded,
     toggleToolsExpanded,
     navigateUp: inputHistory.navigateUp,
     navigateDown: inputHistory.navigateDown,
-    setChatMode,
-    nextSubAgent: subAgentNav.nextSubAgent,
-    prevSubAgent: subAgentNav.prevSubAgent,
   });
 
   useEffect(() => {
     if (!interactionState.pending) return;
-    subAgentNav.setChatMode("input");
     setToolsExpanded(false);
-  }, [interactionState.pending, subAgentNav.setChatMode]);
+  }, [interactionState.pending]);
 
-  const executeCommand = useCallback((input: string) => {
+  const executeCommand = useCallback(async (input: string) => {
     if (input === "/compact" || input.startsWith("/compact ")) {
-      setOptimisticUserMessage(null);
+      clearOptimisticMessage();
+    }
+    if (input === "/theme" || input.startsWith("/theme ")) {
+      const parts = input.trim().split(/\s+/);
+      const name = parts[1];
+      if (!name) {
+        setSelectedThemeIndex(Math.max(0, Object.keys(themes).indexOf(getActiveThemeName())));
+        setThemeModalOpen(true);
+        return {
+          handled: true,
+          clearInput: true,
+        };
+      }
+      if (setTheme(name)) {
+        setSelectedThemeIndex(Math.max(0, Object.keys(themes).indexOf(name)));
+        setThemeRenderKey((key) => key + 1);
+        return {
+          handled: true,
+          message: `Theme set to: ${name}`,
+        };
+      } else {
+        return {
+          handled: true,
+          message: `Theme '${name}' not found. Available: ${Object.keys(themes).join(", ")}`,
+        };
+      }
     }
     return executeAgentCommand(input);
-  }, [executeAgentCommand]);
+  }, [executeAgentCommand, clearOptimisticMessage]);
 
   const handleSubmit = useChatSubmission({
     isLoading,
@@ -240,6 +203,33 @@ export function useChatRuntimeInteraction({
     requestTurnCancel,
   });
 
+  const themeNames = useMemo(() => Object.keys(themes), []);
+  const switchThemeByIndex = useCallback((index: number) => {
+    const name = themeNames[index];
+    if (!name) return;
+    if (setTheme(name)) {
+      setSelectedThemeIndex(index);
+      setThemeRenderKey((key) => key + 1);
+    }
+  }, [themeNames]);
+  const closeThemeModal = useCallback(() => {
+    setThemeModalOpen(false);
+  }, []);
+  const nextTheme = useCallback(() => {
+    const nextIndex = (selectedThemeIndex + 1) % themeNames.length;
+    switchThemeByIndex(nextIndex);
+  }, [selectedThemeIndex, switchThemeByIndex, themeNames.length]);
+  const prevTheme = useCallback(() => {
+    const nextIndex = selectedThemeIndex > 0 ? selectedThemeIndex - 1 : themeNames.length - 1;
+    switchThemeByIndex(nextIndex);
+  }, [selectedThemeIndex, switchThemeByIndex, themeNames.length]);
+  const applySelectedTheme = useCallback(() => {
+    const name = themeNames[selectedThemeIndex];
+    if (!name) return;
+    setThemeModalOpen(false);
+    command.setCommandResult(`Theme set to: ${name}`);
+  }, [command, selectedThemeIndex, themeNames]);
+
   return {
     command,
     derivedTurns,
@@ -248,13 +238,21 @@ export function useChatRuntimeInteraction({
     interactionState,
     panel,
     palette,
+    themeModal: {
+      isOpen: themeModalOpen,
+      selectedIndex: selectedThemeIndex,
+      activeThemeName: getActiveThemeName(),
+      next: nextTheme,
+      prev: prevTheme,
+      apply: applySelectedTheme,
+      close: closeThemeModal,
+    },
     shouldSubmit,
     inputFocused,
     setInputFocused,
-    subAgentNav,
     suggestion,
     toolsExpanded,
-    viewportKey: `${currentSessionId ?? "none"}:${historyResetKey}`,
+    viewportKey: `${currentSessionId ?? "none"}:${historyResetKey}:${getActiveThemeName()}:${themeRenderKey}`,
     mode,
   };
 }

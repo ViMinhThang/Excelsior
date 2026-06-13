@@ -13,6 +13,7 @@
     "dev:desktop": "npm run --workspace=apps/desktop dev",
     "start": "node dist/apps/tui/src/index.js",
     "build": "node scripts/build.mjs",
+    "build:linux": "npx bun build apps/tui/src/index.ts --compile --outfile release/excelsior-tui --external @opentui/core-linux-x64-musl --external @opentui/core-linux-arm64-gnu --external @opentui/core-linux-arm64-musl --external @opentui/core-darwin-x64 --external @opentui/core-darwin-arm64 --external @opentui/core-win32-x64-msvc",
     "build:tui:exe": "bun build apps/tui/src/index.ts --compile --outfile release/excelsior-tui.exe",
     "build:desktop": "npm run --workspace=apps/desktop build",
     "check": "npm run typecheck && npm run typecheck:test && npm run check:unused && npm run check:test-unused && npm test && npm run build",

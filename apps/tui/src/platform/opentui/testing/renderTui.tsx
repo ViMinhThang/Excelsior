@@ -51,6 +51,11 @@ export async function renderTui(
     captureCharFrame: () => extractText(testRenderer.root),
     lastFrame: () => extractText(testRenderer.root),
     destroy: () => renderer.destroy(),
+    rerender: (newNode: ReactNode) => {
+      act(() => {
+        testRenderer.update(newNode as ReactElement);
+      });
+    },
     renderer,
   };
 }

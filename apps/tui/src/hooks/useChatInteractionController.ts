@@ -1,12 +1,12 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 import { useMemo } from "react";
+import { checkAgentsMetadataLoaded } from "../platform/workspace.js";
 import {
   buildModeViewContext,
   buildPaletteModel,
   buildPendingActionModel,
   buildPendingQuestionModel,
   buildSuggestionsModel,
+  buildThemeModalModel,
   type ChatScreenViewModel,
 } from "./chatScreenViewModel.js";
 import { useNavigation } from "../context/NavigationContext.js";
@@ -71,7 +71,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
   );
   const contextLabel = useMemo(() => {
     const memory = settings.reflectionMemoryEnabled ? "memory on" : "memory off";
-    const agents = existsSync(join(workspace.rootPath, "AGENTS.md")) ? "AGENTS.md loaded" : "no AGENTS.md";
+    const agents = checkAgentsMetadataLoaded(workspace.rootPath) ? "AGENTS.md loaded" : "no AGENTS.md";
     const skillCount = commands.filter((command) => command.category === "skills").length;
     const skills = `${skillCount} skill${skillCount === 1 ? "" : "s"}`;
     return `${memory} · ${agents} · ${skills} · ${(totalTokens / 1000).toFixed(1)}k transcript`;
@@ -87,7 +87,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
     modeView: buildModeViewContext({
       workspace,
       sessionId: currentSessionId,
-      chatMode: runtime.subAgentNav.chatMode,
+      chatMode: "input",
       turns: runtime.derivedTurns,
       tasks: tasks ?? [],
       inputValue: runtime.inputHistory.input,
@@ -104,8 +104,6 @@ export function useChatInteractionController(): ChatScreenViewModel {
       settings,
       activePanel: runtime.panel.activePanel,
       featureContext: runtime.panel.panelContext,
-      subAgents: runtime.subAgentNav.subAgentBlocks,
-      subAgentIndex: runtime.subAgentNav.subAgentIndex,
       toolsExpanded: runtime.toolsExpanded,
       viewportKey: runtime.viewportKey,
     }),
@@ -122,8 +120,19 @@ export function useChatInteractionController(): ChatScreenViewModel {
       submitAnswer: question.submit,
       shouldSubmitAnswer: question.shouldSubmit,
     }),
-    suggestions: buildSuggestionsModel(runtime.suggestion, runtime.palette.isOpen),
+    suggestions: buildSuggestionsModel(
+      runtime.suggestion,
+      runtime.palette.isOpen || runtime.themeModal.isOpen,
+    ),
     palette: buildPaletteModel(runtime.palette),
+    themeModal: buildThemeModalModel(runtime.themeModal.isOpen, {
+      selectedIndex: runtime.themeModal.selectedIndex,
+      activeThemeName: runtime.themeModal.activeThemeName,
+      onNext: runtime.themeModal.next,
+      onPrev: runtime.themeModal.prev,
+      onApply: runtime.themeModal.apply,
+      onClose: runtime.themeModal.close,
+    }),
     footer: {
       ...runtime.interactionState.footer,
       reflection,

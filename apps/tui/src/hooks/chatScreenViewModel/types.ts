@@ -14,6 +14,7 @@ import type { PendingActionPanelProps } from "../../components/chat/PendingActio
 import type { PendingQuestionPanelProps } from "../../components/chat/PendingQuestionPanel.js";
 import type { CommandSuggestionsProps } from "../../components/chat/CommandSuggestions.js";
 import type { CommandPaletteProps } from "../../components/palette/CommandPalette.js";
+import type { ThemeModalProps } from "../../components/theme/ThemeModal.js";
 import type { TuiPanelContext, TuiPanelDefinition } from "../../lib/panels.js";
 import type {
   ChatMode,
@@ -36,6 +37,7 @@ export interface ChatScreenViewModel {
   pendingQuestion: PendingQuestionPanelProps | null;
   suggestions: VisibilityModel<CommandSuggestionsProps>;
   palette: VisibilityModel<CommandPaletteProps>;
+  themeModal: VisibilityModel<ThemeModalProps>;
   footer: FooterBarProps;
 }
 
@@ -55,8 +57,8 @@ export interface BuildChatModeKeymapContextInput {
   isLoading: boolean;
   suggestion: InputModeKeymapContext["suggestion"];
   setInput: (value: string) => void;
+  setInputFocused: (focused: boolean) => void;
   submit: () => void;
-  setChatMode: (mode: ChatMode) => void;
   cancel: () => void;
   toggleMode: () => "plan" | "act" | undefined;
   openSubAgent: () => void;
@@ -64,8 +66,6 @@ export interface BuildChatModeKeymapContextInput {
   toolCallCount: number;
   toolsExpanded: boolean;
   toggleToolsExpanded: () => void;
-  nextSubAgent: () => void;
-  prevSubAgent: () => void;
   navigateUp: () => void;
   navigateDown: () => void;
 }
@@ -81,6 +81,7 @@ export interface BuildChatInteractionStateInput {
   inputFocused: boolean;
   suggestion: CommandSuggestionState;
   setInput: (value: string) => void;
+  setInputFocused: (focused: boolean) => void;
   submit: () => void;
   cancel: () => void;
   toggleMode: () => AgentMode | undefined;
@@ -90,9 +91,6 @@ export interface BuildChatInteractionStateInput {
   toggleToolsExpanded: () => void;
   navigateUp: () => void;
   navigateDown: () => void;
-  setChatMode: (mode: ChatMode) => void;
-  nextSubAgent: () => void;
-  prevSubAgent: () => void;
 }
 
 export interface ChatInteractionState {
@@ -124,8 +122,6 @@ export interface BuildModeViewContextInput {
   settings: AppSettings;
   activePanel: TuiPanelDefinition | undefined;
   featureContext: TuiPanelContext;
-  subAgents: SubAgentBlock[];
-  subAgentIndex: number;
   toolsExpanded: boolean;
   viewportKey: string;
 }

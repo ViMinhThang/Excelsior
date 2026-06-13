@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   getTranscriptArrowScrollTop,
   isScrolledBackFromLatest,
-  ScrollToLatestButton,
-} from "../src/chatModes/conversationView.js";
+} from "../src/lib/scrollUtilities.js";
+import { ScrollToLatestButton } from "../src/components/chat/ScrollToLatestButton.js";
 import { renderTui } from "../src/platform/opentui/testing/renderTui.js";
 
 describe("scroll to latest affordance", () => {

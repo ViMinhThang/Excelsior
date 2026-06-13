@@ -101,24 +101,42 @@ export function parseFileChangePreview({
   filePath: string;
   content: string;
 }): FileChangePreview | undefined {
+  // Split the output content into individual lines
   const lines = content.split(/\r?\n/);
+  
+  // Find where the actual unified diff begins by looking for the '--- ' line
   const diffStart = lines.findIndex((line) => line.startsWith("--- "));
   if (diffStart === -1) return undefined;
 
+  // Initialize arrays to store the final aligned rows for old (left) and new (right) views
   const oldRows: FileChangeRow[] = [];
   const newRows: FileChangeRow[] = [];
+  
+  // Buffers to hold consecutive removed/added lines before flushing/aligning them
   const oldBuffer: string[] = [];
   const newBuffer: string[] = [];
+  
+  // Keeps track of the current line numbers in the original and modified files
   const lineState = { oldLine: 1, newLine: 1 };
+  
+  // Stores the index in oldRows/newRows where each diff hunk starts
   const hunkIndices: number[] = [];
+  
   let added = 0;
   let removed = 0;
   let sawHunk = false;
 
+  // Process the diff content line by line, skipping '--- filename' and '+++ filename' headers
   for (const line of lines.slice(diffStart + 2)) {
+    // 1. Check for hunk headers (e.g., '@@ -oldStart,oldLen +newStart,newLen @@')
     if (line.startsWith("@@")) {
+      // Flush any accumulated changes in the buffers first
       flushChangedRows(oldBuffer, newBuffer, oldRows, newRows, lineState);
+      
+      // Store the current row index as the start of a new hunk
       hunkIndices.push(oldRows.length);
+      
+      // Parse the starting line numbers for this hunk and update our line state trackers
       const starts = parseHunkStarts(line);
       if (starts) {
         lineState.oldLine = starts.oldLine;
@@ -127,40 +145,56 @@ export function parseFileChangePreview({
       sawHunk = true;
       continue;
     }
+    
+    // Skip any content before we encounter the first hunk header
     if (!sawHunk) continue;
+    
+    // Ignore duplicate or misplaced header lines
     if (line.startsWith("--- ") || line.startsWith("+++ ")) continue;
 
+    // 2. Check for unchanged context lines (starts with a space ' ')
     if (line.startsWith(" ")) {
+      // Flush any accumulated edits in the buffers before aligning the context row
       flushChangedRows(oldBuffer, newBuffer, oldRows, newRows, lineState);
+      
       const text = stripDiffPrefix(line);
+      
+      // Push matching context row to both the old and new files at their current line numbers
       oldRows.push({ marker: " ", text, tone: "context", lineNumber: lineState.oldLine });
       newRows.push({ marker: " ", text, tone: "context", lineNumber: lineState.newLine });
+      
       lineState.oldLine++;
       lineState.newLine++;
       continue;
     }
 
+    // 3. Check for removed lines (starts with '-')
     if (line.startsWith("-")) {
       oldBuffer.push(stripDiffPrefix(line));
       removed++;
       continue;
     }
 
+    // 4. Check for added lines (starts with '+')
     if (line.startsWith("+")) {
       newBuffer.push(stripDiffPrefix(line));
       added++;
       continue;
     }
 
+    // Flush changes if we hit an unrecognized line type
     flushChangedRows(oldBuffer, newBuffer, oldRows, newRows, lineState);
   }
 
+  // Ensure any trailing changes left in the buffers are flushed
   flushChangedRows(oldBuffer, newBuffer, oldRows, newRows, lineState);
 
+  // Return undefined if no hunks were parsed or no modifications actually occurred
   if (!sawHunk || (added === 0 && removed === 0)) return undefined;
 
   return {
     filePath,
+    // Infers action (e.g. 'edit', 'create', or 'overwrite' based on toolName and removals)
     action: inferAction(toolName, removed),
     oldTitle: "old",
     newTitle: "new",

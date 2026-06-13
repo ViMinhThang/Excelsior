@@ -13,8 +13,6 @@ import type { TuiPanelContext, TuiPanelDefinition } from "../lib/panels.js";
 
 export const chatModeIds = [
   "input",
-  "subagent-picker",
-  "subagent-detail",
 ] as const;
 
 export type ChatMode = (typeof chatModeIds)[number];
@@ -75,27 +73,8 @@ export interface InputModeRenderContext extends ConversationRenderContext {
   chatMode: "input";
 }
 
-export interface SubAgentPickerModeRenderContext extends ConversationRenderContext {
-  chatMode: "subagent-picker";
-  subAgents: {
-    blocks: SubAgentBlock[];
-    selectedIndex: number;
-  };
-}
-
-export interface SubAgentDetailModeRenderContext {
-  chatMode: "subagent-detail";
-  toolsExpanded: boolean;
-  subAgents: {
-    blocks: SubAgentBlock[];
-    selectedIndex: number;
-  };
-}
-
 export interface ChatModeRenderContextMap {
   input: InputModeRenderContext;
-  "subagent-picker": SubAgentPickerModeRenderContext;
-  "subagent-detail": SubAgentDetailModeRenderContext;
 }
 
 export type ChatModeRenderContext = ChatModeRenderContextMap[ChatMode];
@@ -109,6 +88,7 @@ export interface InputModeKeymapContext {
   isLoading: boolean;
   suggestion: CommandSuggestionState;
   setInput: (value: string) => void;
+  setInputFocused: (focused: boolean) => void;
   submit: () => void;
   cancel: () => void;
   toggleMode: () => "plan" | "act" | undefined;
@@ -121,27 +101,8 @@ export interface InputModeKeymapContext {
   navigateDown: () => void;
 }
 
-export interface SubAgentPickerModeKeymapContext {
-  chatMode: "subagent-picker";
-  isPaletteOpen: boolean;
-  setChatMode: (mode: ChatMode) => void;
-  nextSubAgent: () => void;
-  prevSubAgent: () => void;
-  toolsExpanded: boolean;
-  toggleToolsExpanded: () => void;
-}
-
-export interface SubAgentDetailModeKeymapContext {
-  chatMode: "subagent-detail";
-  isPaletteOpen: boolean;
-  setChatMode: (mode: ChatMode) => void;
-  toggleToolsExpanded: () => void;
-}
-
 export interface ChatModeKeymapContextMap {
   input: InputModeKeymapContext;
-  "subagent-picker": SubAgentPickerModeKeymapContext;
-  "subagent-detail": SubAgentDetailModeKeymapContext;
 }
 
 export type ChatModeKeymapContext = ChatModeKeymapContextMap[ChatMode];

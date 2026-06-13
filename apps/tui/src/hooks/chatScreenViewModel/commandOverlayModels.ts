@@ -1,5 +1,6 @@
 import type { CommandPaletteProps } from "../../components/palette/CommandPalette.js";
 import type { CommandSuggestionsProps } from "../../components/chat/CommandSuggestions.js";
+import type { ThemeModalProps } from "../../components/theme/ThemeModal.js";
 import type { CommandSuggestionState } from "../../chatModes/types.js";
 import type { CommandPaletteState, VisibilityModel } from "./types.js";
 
@@ -33,5 +34,15 @@ export function buildPaletteModel(
       insertCommand: palette.insertCommand,
       close: palette.close,
     },
+  };
+}
+
+export function buildThemeModalModel(
+  visible: boolean,
+  props: ThemeModalProps,
+): VisibilityModel<ThemeModalProps> {
+  return {
+    visible,
+    props,
   };
 }

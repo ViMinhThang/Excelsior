@@ -1,7 +1,6 @@
 import type { FC } from "react";
 import type { ToolDisplay } from "@excelsior/core";
 import { theme } from "../../theme.js";
-import { FileChangePreviewView } from "../diff/FileChangePreviewView.js";
 import Panel from "../shared/Panel.js";
 import { textAttrs } from "../../platform/opentui/textAttributes.js";
 
@@ -50,17 +49,6 @@ const PendingActionPanel: FC<PendingActionPanelProps> = ({
             </box>
           ) : null}
         </box>
-        {display.fileChangePreview ? (
-          <box marginTop={1} width="100%">
-            <FileChangePreviewView
-              preview={display.fileChangePreview}
-              scrollOffset={scrollOffset}
-              activeHunkIndex={activeHunkIndex}
-              hunkCount={hunkCount}
-              pending
-            />
-          </box>
-        ) : null}
       </box>
     </Panel>
   );
