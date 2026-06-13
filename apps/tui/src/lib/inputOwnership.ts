@@ -12,6 +12,7 @@ export interface TuiInputOwnershipState {
   activePanelId: string | null;
   chatMode: ChatMode;
   isPaletteOpen: boolean;
+  inputFocused?: boolean;
 }
 
 export function getTuiInputOwner(
@@ -20,7 +21,7 @@ export function getTuiInputOwner(
   if (state.isPaletteOpen) return "command-palette";
   if (state.pending) return "pending-prompt";
   if (state.activePanelId) return "feature-panel";
-  if (state.chatMode === "input") return "chat-input";
+  if (state.chatMode === "input" && state.inputFocused !== false) return "chat-input";
   return "chat-mode";
 }
 

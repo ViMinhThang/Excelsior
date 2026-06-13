@@ -246,4 +246,34 @@ describe("tool display model", () => {
       body: { kind: "detail", text: "line one\nline two" },
     });
   });
+
+  it("formats updateTasks as a checklist preview", () => {
+    const display = createToolDisplay({
+      toolName: "updateTasks",
+      toolArgs: JSON.stringify({
+        tasks: [
+          { id: "inspect", text: "Inspect files", status: "done" },
+          { id: "edit", text: "Apply edits", status: "in-progress" },
+          { id: "verify", text: "Run tests", status: "todo" },
+        ],
+      }),
+      status: "completed",
+      content: "Updated 3 tasks.",
+    });
+
+    expect(display.command).toBe("Tasks(update)");
+    expect(display.label).toBe("Tasks");
+    expect(display.summary).toBe("1/3 complete");
+    expect(createToolDisplayPresentation({
+      display,
+      status: "completed",
+    })).toMatchObject({
+      expandable: true,
+      body: {
+        kind: "taskPreview",
+        completed: 1,
+        total: 3,
+      },
+    });
+  });
 });

@@ -7,6 +7,7 @@ export interface RunContextInput {
   mode: AgentMode;
   skillsList?: string;
   projectInstructions?: string;
+  reflectionMemoryContext?: string;
 }
 
 export interface RunContext {
@@ -24,6 +25,9 @@ export function buildRunContext(input: RunContextInput): RunContext {
     messages: [
       ...priorMessages,
       modeMessage,
+      ...(input.reflectionMemoryContext
+        ? [{ role: "system" as const, content: input.reflectionMemoryContext }]
+        : []),
       { role: "user", content: input.userContent },
     ],
     systemPrompt: buildSystemPrompt({

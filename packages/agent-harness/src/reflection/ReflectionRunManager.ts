@@ -28,6 +28,8 @@ const RECENT_SESSION_LIMIT = 10;
 const PER_SESSION_CHAR_LIMIT = 8_000;
 const TOTAL_CORPUS_CHAR_LIMIT = 30_000;
 const REFLECTION_TOOL_LOOP_STEPS = "12";
+const REFLECTION_MEMORY_OFF_CONTEXT =
+  "Reflection memory context: off. Do not use stored reflection memory for this turn.";
 
 export function shouldStartAutoReflection(input: {
   enabled: boolean;
@@ -78,6 +80,16 @@ export class ReflectionRunManager {
 
   snapshot(): ReflectionClientState {
     return this.store.snapshot(this.status, this.failedSummary);
+  }
+
+  buildMemoryContext(enabled: boolean): string {
+    if (!enabled) return REFLECTION_MEMORY_OFF_CONTEXT;
+    return [
+      "Reflection memory context: on.",
+      "Use the durable reflection memory below as background context when it is relevant.",
+      "",
+      this.store.buildContext(),
+    ].join("\n");
   }
 
   maybeStartAutoReflection(): void {

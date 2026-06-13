@@ -9,6 +9,8 @@ export function buildModeViewContext({
   tasks,
   inputValue,
   setInput,
+  inputFocused,
+  setInputFocused,
   handleSubmit,
   shouldSubmit,
   isLoading,
@@ -32,6 +34,8 @@ export function buildModeViewContext({
       setValue: setInput,
       submit: handleSubmit,
       shouldSubmit,
+      focused: inputFocused,
+      setFocused: setInputFocused,
     },
     runtime: {
       isLoading,

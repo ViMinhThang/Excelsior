@@ -22,5 +22,6 @@ export interface AppSettings {
   githubToken: string;
   agentToolLoopSteps: string;
   autoReflectionEnabled: boolean;
+  reflectionMemoryEnabled?: boolean;
   autoApproveWorkspaceEdits?: boolean;
 }

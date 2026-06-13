@@ -17,13 +17,19 @@ const StatusIndicator: FC<StatusIndicatorProps> = ({ status }) => {
     return () => clearInterval(timer);
   }, [status]);
 
-  const isBeat = status === "pending" && (frameIndex === 1 || frameIndex === 2);
+  const isBeat = status === "pending" && frameIndex % 2 === 1;
   const color =
     status === "completed"
       ? theme.colors.success
       : status === "error"
         ? theme.colors.error
         : theme.colors.activity;
+  const glyph =
+    status === "completed"
+      ? "✓"
+      : status === "error"
+        ? "×"
+        : isBeat ? "◆" : "◇";
 
   return (
     <text
@@ -33,7 +39,7 @@ const StatusIndicator: FC<StatusIndicatorProps> = ({ status }) => {
         bold: status !== "pending" || isBeat,
       })}
     >
-      {"●"}
+      {glyph}
     </text>
   );
 };

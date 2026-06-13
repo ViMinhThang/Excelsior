@@ -7,6 +7,7 @@ import {
 import {
   gitDiffDisplayConfig,
   spawnSubAgentDisplayConfig,
+  updateTasksDisplayConfig,
 } from "./miscToolDisplays.js";
 import {
   globDisplayConfig,
@@ -41,4 +42,5 @@ export const toolDisplayRegistry = new ToolDisplayRegistry()
   .on("run_command", runCommandDisplayConfig)
   .on("spawnSubAgent", spawnSubAgentDisplayConfig)
   .on("browser_subagent", spawnSubAgentDisplayConfig)
+  .on("updateTasks", updateTasksDisplayConfig)
   .on("gitDiff", gitDiffDisplayConfig);

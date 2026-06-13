@@ -22,6 +22,7 @@ export interface RunAssemblyInput {
   providers: ProviderRegistry;
   tools: ToolRegistry;
   skillsList?: string;
+  reflectionMemoryContext?: string;
   lsp?: LspClient;
   confirm: ToolExecutionContext["confirm"];
   askQuestion: ToolExecutionContext["askQuestion"];
@@ -46,6 +47,7 @@ export function buildRunAssembly(input: RunAssemblyInput): RunAssembly {
     mode,
     skillsList: input.skillsList,
     projectInstructions: projectInstructions?.content,
+    reflectionMemoryContext: input.reflectionMemoryContext,
   });
 
   return {

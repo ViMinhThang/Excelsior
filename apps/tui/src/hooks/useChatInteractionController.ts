@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { useMemo } from "react";
 import {
   buildModeViewContext,
@@ -32,6 +34,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
     reflection,
   } = agent.state;
   const settings = agent.getSettings();
+  const commands = agent.getCommands();
   const branchName = useGitBranch(workspace.rootPath);
 
   const confirmation = useToolConfirmation(
@@ -50,7 +53,7 @@ export function useChatInteractionController(): ChatScreenViewModel {
     currentSessionId,
     mode,
     sessions,
-    commands: agent.getCommands(),
+    commands,
     confirmation,
     question,
     switchSession: agent.switchSession,
@@ -66,12 +69,20 @@ export function useChatInteractionController(): ChatScreenViewModel {
     () => estimateTranscriptTokens(runtime.derivedTurns.flatMap((t) => t.blocks)),
     [runtime.derivedTurns],
   );
+  const contextLabel = useMemo(() => {
+    const memory = settings.reflectionMemoryEnabled ? "memory on" : "memory off";
+    const agents = existsSync(join(workspace.rootPath, "AGENTS.md")) ? "AGENTS.md loaded" : "no AGENTS.md";
+    const skillCount = commands.filter((command) => command.category === "skills").length;
+    const skills = `${skillCount} skill${skillCount === 1 ? "" : "s"}`;
+    return `${memory} · ${agents} · ${skills} · ${(totalTokens / 1000).toFixed(1)}k transcript`;
+  }, [commands, settings.reflectionMemoryEnabled, totalTokens, workspace.rootPath]);
 
   return {
     header: {
       workspaceName: workspace.name,
       branchName,
       modelLabel: `${llm.providerName} · ${llm.modelName}`,
+      contextLabel,
     },
     modeView: buildModeViewContext({
       workspace,
@@ -81,6 +92,8 @@ export function useChatInteractionController(): ChatScreenViewModel {
       tasks: tasks ?? [],
       inputValue: runtime.inputHistory.input,
       setInput: runtime.inputHistory.setInput,
+      inputFocused: runtime.inputFocused,
+      setInputFocused: runtime.setInputFocused,
       handleSubmit: runtime.handleSubmit,
       shouldSubmit: runtime.shouldSubmit,
       isLoading,
