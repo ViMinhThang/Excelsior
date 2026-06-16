@@ -18,9 +18,12 @@ export function RuntimeTab({
   onAutoReflectionEnabledChange,
 }: RuntimeTabProps) {
   return (
-    <div className="settings-form space-y-5">
+    <div className="settings-form">
       <div className="settings-field">
-        <span className="settings-label">Agent Run Budget</span>
+        <span className="settings-label-row">
+          <span className="settings-label">Agent Run Budget</span>
+          <span className="settings-field-meta">{toolLoopUnlimited ? "Unlimited" : "Finite"}</span>
+        </span>
         <div className="theme-toggle-segmented">
           <button
             type="button"
@@ -42,7 +45,10 @@ export function RuntimeTab({
       </div>
 
       <label className="settings-field" htmlFor="agent-tool-loop-steps">
-        <span className="settings-label">Tool Loop Steps</span>
+        <span className="settings-label-row">
+          <span className="settings-label">Tool Loop Steps</span>
+          <span className="settings-field-meta">{toolLoopUnlimited ? "Paused" : "Active"}</span>
+        </span>
         <input
           id="agent-tool-loop-steps"
           type="number"
@@ -58,7 +64,10 @@ export function RuntimeTab({
       </label>
 
       <div className="settings-field">
-        <span className="settings-label">Auto Reflection</span>
+        <span className="settings-label-row">
+          <span className="settings-label">Auto Reflection</span>
+          <span className="settings-field-meta">{autoReflectionEnabled ? "On" : "Off"}</span>
+        </span>
         <div className="theme-toggle-segmented">
           <button
             type="button"

@@ -40,7 +40,6 @@ body::before {
   -webkit-app-region: drag;
   align-items: center;
   background-color: var(--titlebar-bg);
-  border-bottom: 1px solid var(--brand-border);
   color: var(--titlebar-text);
   display: flex;
   font-size: 12px;

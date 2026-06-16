@@ -9,6 +9,7 @@ import {
 
 describe("settings theme options", () => {
   it("maps themes to their visual mode", () => {
+    expect(isThemeDark("excelsior")).toBe(true);
     expect(isThemeDark("one-dark-pro")).toBe(true);
     expect(isThemeDark("tokyo-night")).toBe(true);
     expect(isThemeDark("nordic-blue")).toBe(true);
@@ -19,9 +20,10 @@ describe("settings theme options", () => {
   });
 
   it("selects mode defaults and visible options", () => {
-    expect(defaultThemeForMode(true)).toBe("one-dark-pro");
+    expect(defaultThemeForMode(true)).toBe("excelsior");
     expect(defaultThemeForMode(false)).toBe("gruvbox");
     expect(themeOptionsForMode(true).map((option) => option.id)).toEqual([
+      "excelsior",
       "one-dark-pro",
       "tokyo-night",
       "nordic-blue",
@@ -35,12 +37,17 @@ describe("settings theme options", () => {
   });
 
   it("validates stored theme ids from the theme option list", () => {
+    expect(isDesktopTheme("excelsior")).toBe(true);
     expect(isDesktopTheme("one-dark-pro")).toBe(true);
     expect(isDesktopTheme("missing-theme")).toBe(false);
     expect(isDesktopTheme(null)).toBe(false);
   });
 
   it("exposes color metadata for selected swatches", () => {
+    expect(getThemeOption("excelsior")).toMatchObject({
+      name: "Excelsior",
+      valueHash: "#A89468",
+    });
     expect(getThemeOption("tokyo-night-light")).toMatchObject({
       name: "Tokyo Night Light",
       valueHash: "#385AF6",
