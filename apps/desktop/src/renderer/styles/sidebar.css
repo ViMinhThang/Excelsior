@@ -29,7 +29,7 @@
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   color: var(--brand-text-light);
   display: flex;
   font: inherit;
@@ -44,15 +44,15 @@
 }
 
 .sidebar-nav-action:hover {
-  background: color-mix(in srgb, var(--brand-panel) 60%, transparent);
+  background: color-mix(in srgb, var(--brand-panel) 44%, transparent);
   color: var(--brand-text-strong);
 }
 
 .sidebar-search-field {
   align-items: center;
-  background: color-mix(in srgb, var(--brand-bg) 70%, var(--brand-surface));
-  border: 1px solid var(--brand-border);
-  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-sidebar-footer) 74%, var(--brand-panel));
+  border: 0;
+  border-radius: var(--radius-control);
   display: flex;
   gap: 8px;
   height: 40px;
@@ -61,7 +61,7 @@
 }
 
 .sidebar-search-field:focus-within {
-  border-color: var(--brand-accent);
+  background: color-mix(in srgb, var(--brand-sidebar-footer) 62%, var(--brand-panel));
   box-shadow: 0 0 12px var(--gold-glow);
 }
 
@@ -85,7 +85,7 @@
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-control);
   color: var(--brand-text-muted);
   display: flex;
   flex: 0 0 auto;
@@ -96,7 +96,7 @@
 
 .sidebar-search-close:hover,
 .sidebar-session-tool:hover {
-  background: var(--brand-panel);
+  background: color-mix(in srgb, var(--brand-panel) 44%, transparent);
   color: var(--brand-text-strong);
 }
 
@@ -125,7 +125,7 @@
 
 .sidebar-session-row {
   align-items: center;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   color: var(--brand-text-light);
   display: flex;
   gap: 4px;
@@ -136,11 +136,12 @@
 
 .sidebar-session-row:hover,
 .sidebar-session-row-active {
-  background: color-mix(in srgb, var(--brand-panel) 66%, transparent);
+  background: color-mix(in srgb, var(--brand-panel) 44%, transparent);
   color: var(--brand-text-strong);
 }
 
 .sidebar-session-row-active {
+  background: color-mix(in srgb, var(--brand-panel) 54%, transparent);
   font-weight: 600;
 }
 
@@ -160,9 +161,9 @@
 }
 
 .sidebar-session-input {
-  background: var(--brand-bg);
-  border: 1px solid var(--brand-border);
-  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-panel) 54%, transparent);
+  border: 0;
+  border-radius: var(--radius-control);
   color: var(--brand-text-strong);
   flex: 1;
   font: inherit;

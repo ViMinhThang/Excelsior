@@ -14,7 +14,10 @@ export function CredentialsTab({
   return (
     <div className="settings-form">
       <label className="settings-field">
-        <span className="settings-label">DeepSeek API Key</span>
+        <span className="settings-label-row">
+          <span className="settings-label">DeepSeek API Key</span>
+          <span className="settings-field-meta">Required</span>
+        </span>
         <input
           type="password"
           value={apiKeyInput}
@@ -25,7 +28,10 @@ export function CredentialsTab({
       </label>
 
       <label className="settings-field">
-        <span className="settings-label">GitHub Token</span>
+        <span className="settings-label-row">
+          <span className="settings-label">GitHub Token</span>
+          <span className="settings-field-meta">Optional</span>
+        </span>
         <input
           type="password"
           value={githubTokenInput}

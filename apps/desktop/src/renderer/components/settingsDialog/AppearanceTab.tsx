@@ -33,9 +33,12 @@ export function AppearanceTab({
   const themeOptions = themeOptionsForMode(isDarkMode);
 
   return (
-    <div className="settings-form space-y-5">
+    <div className="settings-form">
       <div className="settings-field">
-        <span className="settings-label">Theme Mode</span>
+        <span className="settings-label-row">
+          <span className="settings-label">Theme Mode</span>
+          <span className="settings-field-meta">{isDarkMode ? "Dark" : "Light"}</span>
+        </span>
         <div className="theme-toggle-segmented">
           <button
             type="button"
@@ -57,9 +60,12 @@ export function AppearanceTab({
       </div>
 
       <div className="settings-field">
-        <label className="settings-label" htmlFor="theme">
-          Theme Scheme
-        </label>
+        <span className="settings-label-row">
+          <label className="settings-label" htmlFor="theme">
+            Theme Scheme
+          </label>
+          <span className="settings-field-meta">{selectedThemeConfig?.name ?? "Theme"}</span>
+        </span>
         <Select value={themeInput} onValueChange={(val) => onThemeChange(val as DesktopTheme)}>
           <SelectTrigger className="w-full settings-control transition-snappy-colors text-brand-text-strong">
             <SelectValue placeholder="Select theme" />
@@ -79,9 +85,11 @@ export function AppearanceTab({
       </div>
 
       <div className="settings-field">
-        <label className="settings-label" htmlFor="font">
-          Font Family
-        </label>
+        <span className="settings-label-row">
+          <label className="settings-label" htmlFor="font">
+            Font Family
+          </label>
+        </span>
         <Select value={fontInput} onValueChange={(val) => onFontChange(val)}>
           <SelectTrigger className="w-full settings-control transition-snappy-colors text-brand-text-strong">
             <SelectValue placeholder="Select font" />
@@ -104,9 +112,12 @@ export function AppearanceTab({
       </div>
 
       {selectedThemeConfig && (
-        <div className="mt-5 pt-3 border-t border-brand-border/10">
-          <span className="settings-label mb-2 block">Color Palette Swatches</span>
-          <div className="relative h-9.5 w-36 flex rounded-md overflow-hidden border border-brand-border/50 shadow-md">
+        <div className="settings-field settings-palette-field">
+          <span className="settings-label-row">
+            <span className="settings-label">Color Palette</span>
+            <span className="settings-field-meta">{selectedThemeConfig.valueHash}</span>
+          </span>
+          <div className="relative flex h-9 w-full overflow-hidden rounded-8 shadow-md">
             {selectedThemeConfig.swatches.map((color, idx) => (
               <div
                 key={idx}
@@ -114,7 +125,7 @@ export function AppearanceTab({
                 style={{ backgroundColor: color }}
               />
             ))}
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-2 py-0.5 rounded bg-brand-surface/95 border border-brand-border/80 font-mono text-[9px] font-bold text-brand-text-strong shadow-md tracking-tight select-text">
+            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-8 border border-brand-border/80 bg-brand-surface/95 px-2 py-0.5 font-mono text-[9px] font-bold tracking-normal text-brand-text-strong shadow-md select-text">
               {selectedThemeConfig.valueHash}
             </span>
           </div>

@@ -26,8 +26,8 @@ function StatusDot({ isLoading }: { isLoading: boolean }) {
 
 function UserBubble({ block }: { block: Extract<ProjectedBlock, { type: "user" }> }) {
   return (
-    <div className="flex justify-end animate-fade-in-snappy">
-      <div className="user-message-bubble rounded-12">
+    <div className="flex justify-end">
+      <div className="user-message-bubble">
         {block.content}
       </div>
     </div>
@@ -36,8 +36,8 @@ function UserBubble({ block }: { block: Extract<ProjectedBlock, { type: "user" }
 
 function AssistantBubble({ block }: { block: Extract<ProjectedBlock, { type: "assistant" }> }) {
   return (
-    <div className="flex gap-3 pr-14 animate-fade-in-snappy">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-surface text-brand-accent shadow-sm">
+    <div className="message-row flex gap-3 pr-10">
+      <div className="surface-icon mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center text-brand-accent">
         <Compass className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0 max-w-[82ch] select-text">
@@ -71,18 +71,18 @@ function ToolBubble({
   const isRunning = block.status === "pending";
 
   return (
-    <div className={`flex gap-3 pr-14 ${isRunning ? "animate-pulse" : ""}`}>
-      <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center text-brand-text-muted">
-        <Code className="h-4 w-4" />
+    <div className={`message-row flex gap-3 pr-10 ${isRunning ? "tool-row-running" : ""}`}>
+      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-8 text-brand-text-muted">
+        <Code className="h-3.5 w-3.5" />
       </div>
 
       <div className="min-w-0 flex-1">
         <button
           type="button"
           onClick={() => onToggle(block.id)}
-          className="flex h-5 items-center gap-2 text-left text-base font-mono text-brand-text-muted hover:text-brand-text-light transition-colors"
+          className="flex min-h-6 max-w-full items-center gap-2 rounded-[var(--radius-control)] px-1.5 text-left text-[13px] font-mono text-brand-text-muted transition-snappy-colors hover:bg-[var(--surface-hover)] hover:text-brand-text-light"
         >
-          <span className="truncate">{display.command}</span>
+          <span className="min-w-0 truncate">{display.command}</span>
           <span className="text-xs opacity-60">({block.status})</span>
           {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
@@ -95,7 +95,7 @@ function ToolBubble({
             marginTop: isOpen ? "0.375rem" : "0px",
           }}
         >
-          <div className="overflow-hidden ml-5 pl-3 border-l border-brand-border/30 space-y-2 text-sm text-brand-text-muted select-text">
+          <div className="overflow-hidden ml-5 pl-3 border-l border-brand-border/30 space-y-2 text-[13px] leading-5 text-brand-text-muted select-text">
             {presentation.body.kind === "summary" && (
               <p className="font-medium text-brand-text-light">{presentation.body.text}</p>
             )}
@@ -135,7 +135,7 @@ function ToolBubble({
 function SubAgentBubble({ block }: { block: Extract<ProjectedBlock, { type: "sub-agent" }> }) {
   const isRunning = block.state.status === "running";
   return (
-    <div className={`flex gap-3 pr-14 py-1 ${isRunning ? "animate-pulse" : ""}`}>
+    <div className={`message-row flex gap-3 pr-10 py-1 ${isRunning ? "tool-row-running" : ""}`}>
       <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-brand-text-muted">
         <Compass className="h-4 w-4" />
       </div>
@@ -179,11 +179,11 @@ export const MessageBlock = memo(function MessageBlock({ block, isToolOpen, onTo
 
 export function ThinkingRow() {
   return (
-    <div className="flex gap-3 pr-14 animate-fade-in-snappy">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-surface text-brand-accent shadow-sm">
+    <div className="message-row flex gap-3 pr-10 animate-fade-in-snappy">
+      <div className="surface-icon mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center text-brand-accent">
         <Compass className="h-4 w-4" />
       </div>
-      <div className="flex h-10 items-center gap-3 rounded-xl border border-brand-border/60 bg-brand-surface/80 px-4 text-xs text-brand-text-muted shadow-sm select-none">
+      <div className="surface-pill flex h-9 items-center gap-3 px-3.5 text-xs text-brand-text-muted select-none">
         <div className="flex gap-1.5 items-center h-full pt-1">
           <span className="thinking-dot h-2.5 w-2.5 rounded-full bg-brand-accent" />
           <span className="thinking-dot h-2.5 w-2.5 rounded-full bg-brand-accent" />

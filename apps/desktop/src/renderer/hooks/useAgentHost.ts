@@ -10,14 +10,12 @@ import type {
 } from "@excelsior/client";
 import { AgentHostClient } from "@excelsior/client";
 import type { ExcelsiorApi } from "../../main/preload";
-import type { WorkspaceEnvironmentInfo } from "../../main/preload";
-import type { WorkspaceTreeNode } from "../../main/preload";
 import {
   createDesktopHostAdapter,
   createIpcStateStore,
   type IpcStateStore,
 } from "./desktopHostStore.js";
-import { selectWorkspaceFolder } from "./workspaceSelection.js";
+import { useDesktopWorkspaceHost } from "./useDesktopWorkspaceHost.js";
 
 // Extend global window type
 declare global {
@@ -27,14 +25,19 @@ declare global {
 }
 
 export function useAgentHost() {
-  const [workspacePath, setWorkspacePath] = useState<string | null>(null);
   const [commands, setCommands] = useState<CommandDefinition[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [workspaceTree, setWorkspaceTree] = useState<WorkspaceTreeNode[]>([]);
-  const [workspaceEnvironment, setWorkspaceEnvironment] = useState<WorkspaceEnvironmentInfo | null>(null);
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
-
+  const workspaceHost = useDesktopWorkspaceHost(window.api);
+  const {
+    refreshWorkspaceEnvironment,
+    selectWorkspace,
+    switchWorkspace,
+    workspaceEnvironment,
+    workspaceError,
+    workspacePath,
+    workspaceTree,
+    isInitializing,
+  } = workspaceHost;
   const storeRef = useRef<IpcStateStore | null>(null);
 
   useEffect(() => {
@@ -48,8 +51,6 @@ export function useAgentHost() {
       setCommands(catalog.commands);
       setSettings(catalog.settings);
     });
-    window.api.getWorkspaceTree().then(setWorkspaceTree);
-    window.api.getWorkspaceEnvironment().then(setWorkspaceEnvironment);
 
     return () => {
       store.dispose();
@@ -79,10 +80,10 @@ export function useAgentHost() {
 
     const isLoading = state?.isLoading ?? false;
     if (wasLoadingRef.current && !isLoading) {
-      window.api.getWorkspaceEnvironment().then(setWorkspaceEnvironment);
+      void refreshWorkspaceEnvironment();
     }
     wasLoadingRef.current = isLoading;
-  }, [state?.isLoading, workspacePath]);
+  }, [refreshWorkspaceEnvironment, state?.isLoading, workspacePath]);
 
   const client = useMemo(() => {
     const hostAdapter = createDesktopHostAdapter({
@@ -93,27 +94,6 @@ export function useAgentHost() {
     });
     return new AgentHostClient(hostAdapter);
   }, [commands, settings]);
-
-
-  const selectWorkspace = useCallback(async () => {
-    setIsInitializing(true);
-    setWorkspaceError(null);
-    try {
-      const result = await selectWorkspaceFolder(window.api);
-      if (result.workspacePath) {
-        setWorkspacePath(result.workspacePath);
-        setWorkspaceTree(result.workspaceTree);
-        setWorkspaceEnvironment(await window.api.getWorkspaceEnvironment());
-      }
-    } catch (err) {
-      console.error("Workspace selection failed:", err);
-      setWorkspaceError(
-        err instanceof Error ? err.message : "Workspace selection failed.",
-      );
-    } finally {
-      setIsInitializing(false);
-    }
-  }, []);
 
   const send = useCallback((content: string, options?: SendOptions) => {
     void client.send(content, options);
@@ -197,26 +177,6 @@ export function useAgentHost() {
   const clearMessages = useCallback(() => {
     void client.clear();
   }, [client]);
-
-  const switchWorkspace = useCallback(async (path: string) => {
-    setIsInitializing(true);
-    setWorkspaceError(null);
-    try {
-      await window.api.initializeWorkspace(path);
-      const tree = await window.api.getWorkspaceTree();
-      const environment = await window.api.getWorkspaceEnvironment();
-      setWorkspacePath(path);
-      setWorkspaceTree(tree);
-      setWorkspaceEnvironment(environment);
-    } catch (err) {
-      console.error("Failed to switch workspace:", err);
-      setWorkspaceError(
-        err instanceof Error ? err.message : "Failed to switch workspace.",
-      );
-    } finally {
-      setIsInitializing(false);
-    }
-  }, []);
 
   const revertLastTurn = useCallback(
     (): Promise<CommandResult> => client.revertLastTurn(),
