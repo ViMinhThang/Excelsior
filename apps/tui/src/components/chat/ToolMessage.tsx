@@ -1,15 +1,15 @@
 import { memo, type FC, type ReactNode } from "react";
-import { createToolDisplay, normalizeToolText, type ToolDisplay } from "@excelsior/core";
-import StatusIndicator from "./StatusIndicator.js";
+import {
+  createToolDisplay,
+  createToolDisplayPresentation,
+  type ToolDisplayBody,
+} from "@excelsior/core";
 import { textAttrs } from "../../platform/opentui/textAttributes.js";
 import { theme } from "../../theme.js";
 import { FileChangePreviewView } from "../diff/FileChangePreviewView.js";
-import {
-  buildWritingProgressLines,
-  estimateWriteProgressStats,
-  isFileActionTool,
-  isWriteTool,
-} from "../../lib/toolMessage/progress.js";
+import { ToolHeader, FileChangeToolHeader } from "./toolMessage/ToolHeader.js";
+import { TaskPreviewBody } from "./toolMessage/TaskPreviewBody.js";
+import { WritingProgressStats } from "./toolMessage/WritingProgressStats.js";
 
 interface ToolMessageProps {
   toolName?: string;
@@ -21,167 +21,54 @@ interface ToolMessageProps {
   expanded?: boolean;
 }
 
-interface ToolHeaderProps {
-  status: "pending" | "completed" | "error";
-  cmd: string;
-  activity?: string;
-  expandable?: boolean;
-  subAgent?: boolean;
-  diffStats?: string;
-}
-
-interface FileChangeToolHeaderProps {
-  label: string;
-  filePath: string;
-  expandable?: boolean;
-  subAgent?: boolean;
-  diffStats?: string;
-}
-
-const ToolHeader: FC<ToolHeaderProps> = ({
-  status,
-  cmd,
-  activity,
-  expandable,
-  subAgent = false,
-  diffStats,
-}) => {
-  const match = cmd.match(/^([a-zA-Z0-9_-]+)\((.*)\)$/);
-  const commandColor = subAgent ? theme.colors.muted : theme.colors.toolCommand;
-  const commandAttributes = textAttrs({ dim: true });
-
-  return (
-    <box flexDirection="row" gap={1}>
-      {subAgent ? (
-        <text fg={theme.colors.subAgentToolBorder}>
-          {theme.glyphs.branch}
-        </text>
-      ) : null}
-      <StatusIndicator status={status} />
-      {match ? (
-        <box flexDirection="row">
-          <text
-            fg={commandColor}
-            attributes={commandAttributes}
-          >
-            {match[1]}
+function renderBody(body: ToolDisplayBody, nested: boolean): ReactNode {
+  switch (body.kind) {
+    case "none":
+      return null;
+    case "progressStats":
+      return (
+        <WritingProgressStats
+          added={body.stats.added}
+          removed={body.stats.removed}
+        />
+      );
+    case "taskPreview":
+      return (
+        <TaskPreviewBody
+          tasks={body.tasks}
+          completed={body.completed}
+          total={body.total}
+          nested={nested}
+        />
+      );
+    case "summary":
+    case "detail":
+      return (
+        <box flexDirection="row" paddingLeft={2}>
+          <text fg={theme.colors.muted} attributes={textAttrs({ dim: nested })}>
+            {theme.glyphs.branch} {body.text}
           </text>
-          {match[2] ? (
-            <text
-              fg={subAgent ? theme.colors.muted : theme.colors.toolArgs}
-              attributes={commandAttributes}
-            >
-              {" "}{match[2]}
-            </text>
+        </box>
+      );
+    case "preview":
+      return (
+        <box flexDirection="column" paddingLeft={2} width="100%">
+          {body.lines.map((line, index) => {
+            const prefix = index === 0 ? "-> " : "   ";
+            return <text key={`preview_line_${index}`} fg={theme.colors.muted}>{prefix}{line}</text>;
+          })}
+          {body.omittedLines ? (
+            <text fg={theme.colors.muted}>{`   ... ${body.omittedLines} more lines`}</text>
           ) : null}
         </box>
-      ) : (
-        <text
-          fg={commandColor}
-          attributes={commandAttributes}
-        >
-          {cmd}
-        </text>
-      )}
-      {diffStats ? (
-        <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
-          {diffStats}
-        </text>
-      ) : null}
-      {activity ? (
-        <text fg={theme.colors.muted}>
-          {activity}
-        </text>
-      ) : null}
-      {expandable ? (
-        <text fg={theme.colors.muted}>
-          (Ctrl+O to expand)
-        </text>
-      ) : null}
-    </box>
-  );
-};
-
-const WritingProgressStats: FC<{ added: number; removed: number }> = ({
-  added,
-  removed,
-}) => (
-  <box flexDirection="row" gap={1} paddingLeft={2}>
-    <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
-      {theme.glyphs.branch}
-    </text>
-    <text fg={theme.colors.diffAddedText}>+{added}</text>
-    <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
-      lines
-    </text>
-    <text fg={theme.colors.diffRemovedText}>-{removed}</text>
-    <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
-      lines
-    </text>
-  </box>
-);
-
-const FileChangeToolHeader: FC<FileChangeToolHeaderProps> = ({
-  label,
-  filePath,
-  expandable,
-  subAgent = false,
-  diffStats,
-}) => (
-  <box flexDirection="row" gap={1}>
-    <text fg={subAgent ? theme.colors.subAgentToolBorder : theme.colors.border}>
-      {subAgent ? theme.glyphs.branch : "\u25c6"}
-    </text>
-    <text
-      fg={subAgent ? theme.colors.muted : theme.colors.text}
-      attributes={textAttrs({ bold: true })}
-    >
-      {label}
-    </text>
-    <text
-      fg={theme.colors.highlightPriority}
-      attributes={textAttrs({ bold: true })}
-    >
-      {filePath}
-    </text>
-    {diffStats ? (
-      <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
-        {diffStats}
-      </text>
-    ) : null}
-    {expandable ? (
-      <text fg={theme.colors.muted}>
-        (Ctrl+O to expand)
-      </text>
-    ) : null}
-  </box>
-);
-
-function formatDiffStats(preview: NonNullable<ToolDisplay["fileChangePreview"]>): string {
-  return `+${preview.added} -${preview.removed}`;
-}
-
-function isReadOnlyBrowseTool(toolName?: string): boolean {
-  return toolName === "view" || toolName === "ls" || toolName === "glob";
-}
-
-function hasExpandableBody(
-  display: ToolDisplay,
-  toolName: string | undefined,
-  status: ToolMessageProps["status"],
-  isPendingFileAction: boolean,
-): boolean {
-  if (display.fileChangePreview && isFileActionTool(toolName) && status === "completed") {
-    return true;
+      );
+    case "completion":
+      return (
+        <box flexDirection="column" paddingLeft={2} width="100%">
+          <text fg={theme.colors.muted}>{"-> "}{body.text}</text>
+        </box>
+      );
   }
-  if (isPendingFileAction) return true;
-  if (isReadOnlyBrowseTool(toolName)) return Boolean(display.summaryLine);
-  return Boolean(
-    display.detail
-    || display.resultPreview?.length
-    || display.fileChangePreview
-    || (status === "completed" && display.showCompletion !== false),
-  );
 }
 
 const ToolMessage: FC<ToolMessageProps> = ({
@@ -194,24 +81,9 @@ const ToolMessage: FC<ToolMessageProps> = ({
   expanded = false,
 }) => {
   const display = createToolDisplay({ toolName, toolArgs, status, content });
-  const cmd = display.command;
-  const isPendingFileAction = status === "pending" && isFileActionTool(toolName);
-  const isPendingWrite = status === "pending" && isWriteTool(toolName);
-  const isPendingEdit = isPendingFileAction && !isPendingWrite;
-  const progressLines = isPendingEdit && expanded ? buildWritingProgressLines(toolArgs) : [];
-  const writeProgressStats = isPendingWrite && expanded
-    ? estimateWriteProgressStats(toolArgs)
-    : undefined;
-  const activity = isPendingFileAction ? "Writing..." : undefined;
-  const hasFileChangePreview = Boolean(
-    display.fileChangePreview && isFileActionTool(toolName) && status === "completed",
-  );
-
-  if (isPendingEdit && expanded) {
-    display.detail = progressLines.join("\n");
-    display.fileChangePreview = undefined;
-    display.showCompletion = false;
-  }
+  const presentation = createToolDisplayPresentation({ display, status, content });
+  const expandable = !nested && presentation.expandable;
+  const showCollapsedBody = status === "pending" && toolName === "runCommand";
 
   const toolShell = (body: ReactNode, fullWidth = false) => (
     <box
@@ -228,12 +100,7 @@ const ToolMessage: FC<ToolMessageProps> = ({
     </box>
   );
 
-  const expandable = !nested && hasExpandableBody(display, toolName, status, isPendingFileAction);
-  const diffStats = hasFileChangePreview && display.fileChangePreview
-    ? formatDiffStats(display.fileChangePreview)
-    : undefined;
-
-  if (hasFileChangePreview && display.fileChangePreview) {
+  if (presentation.hasFileChangePreview && display.fileChangePreview) {
     return toolShell(
       <box flexDirection="column" width="100%">
         <box paddingLeft={nested ? 0 : theme.spacing.indent}>
@@ -242,7 +109,7 @@ const ToolMessage: FC<ToolMessageProps> = ({
             filePath={display.fileChangePreview.filePath}
             expandable={expandable && !expanded}
             subAgent={nested}
-            diffStats={!expanded ? diffStats : undefined}
+            diffStats={!expanded ? presentation.diffStats : undefined}
           />
         </box>
         <box width="100%">
@@ -262,82 +129,25 @@ const ToolMessage: FC<ToolMessageProps> = ({
       <box flexDirection="column" width="100%">
         <ToolHeader
           status={status}
-          cmd={cmd}
-          activity={activity}
+          cmd={display.command}
+          activity={display.activityLabel}
           expandable={expandable}
           subAgent={nested}
         />
+        {showCollapsedBody ? renderBody(presentation.body, nested) : null}
       </box>,
     );
   }
-
-  if (isPendingWrite && writeProgressStats) {
-    return toolShell(
-      <box flexDirection="column" width="100%">
-        <ToolHeader
-          status={status}
-          cmd={cmd}
-          activity={activity}
-          subAgent={nested}
-        />
-        <WritingProgressStats
-          added={writeProgressStats.added}
-          removed={writeProgressStats.removed}
-        />
-      </box>,
-    );
-  }
-
-  if (isReadOnlyBrowseTool(toolName)) {
-    return toolShell(
-      <box flexDirection="column" width="100%">
-        <ToolHeader
-          status={status}
-          cmd={cmd}
-          activity={activity}
-          subAgent={nested}
-        />
-        {display.summaryLine ? (
-          <box flexDirection="row" paddingLeft={2}>
-            <text fg={theme.colors.muted} attributes={textAttrs({ dim: nested })}>
-              {theme.glyphs.branch} {display.summaryLine}
-            </text>
-          </box>
-        ) : null}
-      </box>,
-    );
-  }
-
-  const showCompletion = display.showCompletion !== false;
-  const hasDetail = Boolean(
-    display.detail || display.resultPreview?.length || display.fileChangePreview,
-  );
-  const showBody = Boolean(
-    isPendingEdit
-      || (hasDetail || (status === "completed" && showCompletion)),
-  );
 
   return toolShell(
     <box flexDirection="column" width="100%">
-      <ToolHeader status={status} cmd={cmd} activity={activity} subAgent={nested} />
-      {showBody ? (
-        <box flexDirection="column" paddingLeft={2} width="100%">
-          {display.detail ? (
-            <text fg={theme.colors.muted} attributes={textAttrs({ dim: nested })}>
-              {theme.glyphs.branch} {display.detail}
-            </text>
-          ) : null}
-          {!display.detail && !display.fileChangePreview ? (
-            normalizeToolText(content).split(/\r?\n/).map((line, index) => {
-              const prefix = index === 0 ? "↳ " : "  ";
-              return <text key={`preview_line_${index}`} fg={theme.colors.muted}>{prefix}{line}</text>;
-            })
-          ) : null}
-          {status === "completed" && !hasDetail && showCompletion ? (
-            <text fg={theme.colors.muted}>↳ Completed</text>
-          ) : null}
-        </box>
-      ) : null}
+      <ToolHeader
+        status={status}
+        cmd={display.command}
+        activity={display.activityLabel}
+        subAgent={nested}
+      />
+      {renderBody(presentation.body, nested)}
     </box>,
   );
 };

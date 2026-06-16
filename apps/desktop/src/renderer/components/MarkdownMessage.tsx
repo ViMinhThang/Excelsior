@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
-import type { ProjectedBlock } from "@excelsior/core";
 import {
   parseInlineMarkdown,
   parseMarkdown,
@@ -302,10 +301,18 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
 }
 
 type MarkdownMessageProps = {
-  block: { content: string };
+  block: { content: string; isFrozen?: true };
 };
 
 export function MarkdownMessage({ block }: MarkdownMessageProps) {
+  if (!block.isFrozen) {
+    return (
+      <div className="w-full whitespace-pre-wrap break-words text-[13.5px] leading-6 text-brand-text-light select-text">
+        {block.content}
+      </div>
+    );
+  }
+
   const parts = parseMarkdown(block.content);
 
   return (

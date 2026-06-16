@@ -16,14 +16,14 @@ export function ScrollToBottomButton({
   return (
     <div className="relative">
       {badgeLabel && (
-        <span className="pointer-events-none absolute -right-3 -top-3 rounded-md border border-brand-border bg-brand-surface px-1.5 py-0.5 text-[10px] font-semibold text-brand-text-light shadow-lg">
+        <span className="surface-pill pointer-events-none absolute -right-3 -top-3 px-1.5 py-0.5 text-[10px] font-semibold text-brand-text-light">
           {badgeLabel}
         </span>
       )}
       <button
         type="button"
         onClick={onClick}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-border bg-brand-composer text-brand-text-light shadow-xl backdrop-blur hover:border-brand-accent hover:text-brand-text-strong transition-snappy-colors"
+        className="surface-pill flex h-9 w-9 items-center justify-center text-brand-text-light backdrop-blur hover:text-brand-text-strong transition-snappy-colors"
         title="Scroll to bottom"
         aria-label="Scroll to bottom"
       >

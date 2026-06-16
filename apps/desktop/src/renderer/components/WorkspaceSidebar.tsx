@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronRight,
-  FilePlus,
   FolderClosed,
   FolderOpen,
   Plus,
@@ -84,7 +83,7 @@ export function WorkspaceSidebar({
   };
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col overflow-hidden border-r border-brand-border bg-brand-surface select-none">
+    <aside className="flex w-72 shrink-0 flex-col overflow-hidden bg-brand-sidebar-footer select-none">
       <div className="workspace-sidebar-body">
         <div className="workspace-sidebar-brand">
           <FolderOpen className="h-5 w-5 shrink-0 text-brand-accent" />

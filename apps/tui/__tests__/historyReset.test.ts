@@ -26,7 +26,7 @@ function assistantBlock(id: string, content = id): ProjectedBlock {
 }
 
 function snapshot(sessionId: string | null, blocks: ProjectedBlock[]) {
-  return createHistoryResetSnapshot({ sessionId, blocks });
+  return createHistoryResetSnapshot({ sessionId, turns: [{ id: "turn_mock", status: "completed", blocks }] });
 }
 
 describe("history reset decisions", () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   AgentClientState,
   AgentHostIntent,
@@ -9,9 +9,9 @@ import {
   createIpcStateStore,
 } from "../src/renderer/hooks/desktopHostStore.js";
 
-function state(id: string): AgentClientState {
+function state(id: string, overrides: Partial<AgentClientState> = {}): AgentClientState {
   return {
-    displayBlocks: [],
+    turns: [],
     isLoading: false,
     sessions: [],
     currentSessionId: null,
@@ -20,6 +20,12 @@ function state(id: string): AgentClientState {
     mode: "plan",
     pendingConfirmation: null,
     pendingQuestion: null,
+    reflection: {
+      status: "idle",
+      touchedFiles: [],
+      memoryRoot: "C:/memory",
+    },
+    ...overrides,
   };
 }
 
@@ -46,6 +52,7 @@ function apiWithState(initialState: AgentClientState): {
           deepseekApiKey: "",
           githubToken: "",
           agentToolLoopSteps: "unlimited",
+          autoReflectionEnabled: false,
         },
       }),
       dispatch: async (_intent: AgentHostIntent) => ({ type: "none" }),
@@ -66,6 +73,11 @@ function apiWithState(initialState: AgentClientState): {
 }
 
 describe("desktop host store", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
   it("initializes from IPC state and notifies subscribers on pushed updates", async () => {
     const { api, pushState, removed } = apiWithState(state("initial"));
     const store = createIpcStateStore(api);
@@ -81,6 +93,55 @@ describe("desktop host store", () => {
     expect(removed()).toBe(true);
   });
 
+  it("coalesces loading state pushes into the next animation frame", async () => {
+    let animationFrameCallback: FrameRequestCallback | null = null;
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
+      animationFrameCallback = callback;
+      return 1;
+    }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    vi.useFakeTimers();
+    const { api, pushState } = apiWithState(state("initial"));
+    const store = createIpcStateStore(api);
+    const listener = vi.fn();
+    store.subscribe(listener);
+
+    await store.init();
+    listener.mockClear();
+
+    pushState(state("stream-1", { isLoading: true }));
+    pushState(state("stream-2", { isLoading: true }));
+    pushState(state("stream-3", { isLoading: true }));
+
+    expect(listener).not.toHaveBeenCalled();
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot()?.workspace.id).toBe("stream-3");
+
+    animationFrameCallback?.(16);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot()?.workspace.id).toBe("stream-3");
+  });
+
+  it("flushes the final non-loading state immediately", async () => {
+    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    const { api, pushState } = apiWithState(state("initial"));
+    const store = createIpcStateStore(api);
+    const listener = vi.fn();
+    store.subscribe(listener);
+
+    await store.init();
+    listener.mockClear();
+
+    pushState(state("stream", { isLoading: true }));
+    pushState(state("done", { isLoading: false }));
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot()?.workspace.id).toBe("done");
+  });
+
   it("adapts the current store and catalog to the client host interface", async () => {
     const { api } = apiWithState(state("from-store"));
     const store = createIpcStateStore(api);
@@ -94,6 +155,7 @@ describe("desktop host store", () => {
         deepseekApiKey: "key",
         githubToken: "token",
         agentToolLoopSteps: "200",
+        autoReflectionEnabled: false,
       },
     });
 

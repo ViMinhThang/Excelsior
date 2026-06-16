@@ -14,6 +14,9 @@ const DEFAULT_SETTINGS: HarnessSettings = {
   deepseekApiKey: "",
   githubToken: "",
   agentToolLoopSteps: DEFAULT_AGENT_TOOL_LOOP_STEPS,
+  autoReflectionEnabled: false,
+  reflectionMemoryEnabled: false,
+  autoApproveWorkspaceEdits: false,
 };
 
 type SessionFileLine =
@@ -36,6 +39,9 @@ export class FileHarnessStorage {
       agentToolLoopSteps: normalizeAgentToolLoopSteps(
         raw.agentToolLoopSteps ?? process.env[AGENT_TOOL_LOOP_STEPS_SETTING] ?? DEFAULT_SETTINGS.agentToolLoopSteps,
       ),
+      autoReflectionEnabled: raw.autoReflectionEnabled ?? DEFAULT_SETTINGS.autoReflectionEnabled,
+      reflectionMemoryEnabled: raw.reflectionMemoryEnabled ?? DEFAULT_SETTINGS.reflectionMemoryEnabled,
+      autoApproveWorkspaceEdits: raw.autoApproveWorkspaceEdits ?? DEFAULT_SETTINGS.autoApproveWorkspaceEdits,
     };
   }
 
@@ -45,6 +51,9 @@ export class FileHarnessStorage {
       ...current,
       ...settings,
       agentToolLoopSteps: normalizeAgentToolLoopSteps(settings.agentToolLoopSteps ?? current.agentToolLoopSteps),
+      autoReflectionEnabled: settings.autoReflectionEnabled ?? current.autoReflectionEnabled,
+      reflectionMemoryEnabled: settings.reflectionMemoryEnabled ?? current.reflectionMemoryEnabled,
+      autoApproveWorkspaceEdits: settings.autoApproveWorkspaceEdits ?? current.autoApproveWorkspaceEdits,
     };
     this.writeJson(this.settingsPath(), next);
     return next;
@@ -172,6 +181,12 @@ export class FileHarnessStorage {
     }
   }
 
+  reflectionMemoryDirectory(workspaceId: string): string {
+    const dir = join(this.rootDir, "memory", workspaceId);
+    this.ensureDirectory(dir);
+    return dir;
+  }
+
   private writeSessionFile(workspaceId: string, session: Session, events: readonly AnyHarnessEvent[]): void {
     const path = this.sessionPath(workspaceId, session.id);
     this.ensureDirectory(this.sessionDirectory(workspaceId));
@@ -185,10 +200,7 @@ export class FileHarnessStorage {
   private appendSessionLines(workspaceId: string, session: Session, event: AnyHarnessEvent): void {
     const path = this.sessionPath(workspaceId, session.id);
     this.ensureDirectory(this.sessionDirectory(workspaceId));
-    const lines = [
-      JSON.stringify({ kind: "event", event } satisfies SessionFileLine),
-    ];
-    appendFileSync(path, `${lines.join("\n")}\n`, "utf-8");
+    appendFileSync(path, `${JSON.stringify({ kind: "event", event } satisfies SessionFileLine)}\n`, "utf-8");
   }
 
   private deriveSessionFromEvents(session: Session, events: readonly AnyHarnessEvent[]): Session {

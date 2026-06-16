@@ -8,7 +8,6 @@ import {
   TOOL_EXECUTION_START,
   TOOL_EXECUTION_UPDATE,
   TOOL_EXECUTION_END,
-  AGENT_END,
 } from "../events.js";
 
 export function findIncompleteEvents(events: readonly AnyHarnessEvent[], runId: string, turnId: string) {
@@ -87,6 +86,5 @@ export function emitRunFinalization(
   }
   if (incomplete.turnOpen) {
     emit(TURN_END, { cancelled: true });
-    emit(AGENT_END, { cancelled: true });
   }
 }

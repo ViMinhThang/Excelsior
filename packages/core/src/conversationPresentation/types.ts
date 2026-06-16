@@ -24,6 +24,40 @@ export interface ToolDisplay {
   showCompletion?: boolean;
   tone: ToolTone;
   risk?: ToolRisk;
+  isFileAction?: boolean;
+  isWriteAction?: boolean;
+  isReadOnlyBrowse?: boolean;
+  activityLabel?: string;
+  expandedDetail?: string;
+  progressStats?: WritingProgressStats;
+  taskPreview?: ToolTaskPreviewItem[];
+}
+
+export type ToolDisplayBody =
+  | { kind: "none" }
+  | { kind: "progressStats"; stats: WritingProgressStats }
+  | { kind: "taskPreview"; tasks: ToolTaskPreviewItem[]; completed: number; total: number }
+  | { kind: "summary"; text: string }
+  | { kind: "detail"; text: string }
+  | { kind: "preview"; lines: string[]; omittedLines?: number }
+  | { kind: "completion"; text: string };
+
+export interface ToolDisplayPresentation {
+  expandable: boolean;
+  hasFileChangePreview: boolean;
+  diffStats?: string;
+  body: ToolDisplayBody;
+}
+
+export interface WritingProgressStats {
+  added: number;
+  removed: number;
+}
+
+export interface ToolTaskPreviewItem {
+  id: string;
+  text: string;
+  status: "todo" | "in-progress" | "done";
 }
 
 export interface FileChangePreview {

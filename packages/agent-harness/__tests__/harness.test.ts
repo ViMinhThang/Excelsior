@@ -10,11 +10,11 @@ import {
   type ToolExecutionContext,
 } from "@excelsior/agent-harness";
 import {
-  AGENT_START,
   MESSAGE_END,
   MESSAGE_START,
   MESSAGE_UPDATE,
   TOOL_EXECUTION_START,
+  TURN_END,
   TURN_START,
 } from "../src/events.js";
 
@@ -73,7 +73,7 @@ describe("AgentHarness", () => {
     // only when the user types and submits (via ensureSession in send).
     expect(secondState.currentSessionId).toBeNull();
     expect(secondState.sessions.map((session) => session.id)).toEqual([firstSessionId]);
-    expect(secondState.displayBlocks).toEqual([]);
+    expect(secondState.turns).toEqual([]);
   });
 
   it("executes core commands and projects session state", async () => {
@@ -106,7 +106,6 @@ describe("AgentHarness", () => {
     harness.subscribe(listener);
 
     const store = harness as any;
-    store.eventBus.emit("run_notify", AGENT_START, {}, { sessionId, turnId: "turn_notify" });
     store.eventBus.emit("run_notify", TURN_START, {}, { sessionId, turnId: "turn_notify" });
     store.eventBus.emit("run_notify", TOOL_EXECUTION_START, {
       toolCallId: "call_notify",
@@ -124,7 +123,7 @@ describe("AgentHarness", () => {
       toolArgs: "{\"filePath\":\"packages/core/package.json\"}",
     }, { sessionId, turnId: "turn_notify", relatedToolCallId: "call_notify_2" });
 
-    expect(harness.getSnapshot().displayBlocks).toHaveLength(2);
+    expect(harness.getSnapshot().turns.flatMap(t => t.blocks)).toHaveLength(2);
     expect(listener).toHaveBeenCalledTimes(1);
   });
 
@@ -166,7 +165,7 @@ describe("AgentHarness", () => {
     expect(sessionRecords).toHaveLength(1);
     expect(messageUpdates).toHaveLength(2);
     expect(messageUpdates.every((event) => !("content" in event.data))).toBe(true);
-    expect(harness.getSnapshot().displayBlocks).toMatchObject([
+    expect(harness.getSnapshot().turns.flatMap(t => t.blocks)).toMatchObject([
       { type: "assistant", content: "Hello world" },
     ]);
   });
@@ -261,7 +260,8 @@ describe("AgentHarness", () => {
     await writeFile(existingFile, "original content", "utf-8");
 
     const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
-    const sessionId = "ses_test";
+    const session = harness.createSession("Revert Test");
+    const sessionId = session.id;
     const turnId = "turn_test";
 
     // Mock ToolExecutionContext
@@ -287,10 +287,14 @@ describe("AgentHarness", () => {
     expect(await readFile(existingFile, "utf-8")).toBe("modified content");
     expect(await readFile(join(workspaceRoot, "new.txt"), "utf-8")).toBe("new content");
 
-    // Perform restore backups
-    await (harness as any).restoreBackups(sessionId, turnId);
+    const store = harness as any;
+    store.eventBus.emit("run_revert", TURN_START, {}, { sessionId, turnId });
+    store.eventBus.emit("run_revert", TURN_END, { cancelled: false }, { sessionId, turnId });
+
+    const result = await harness.revertLastTurn();
 
     // Verify files were reverted
+    expect(result.message).toBe("Reverted last turn.");
     expect(await readFile(existingFile, "utf-8")).toBe("original content");
     expect(existsSync(join(workspaceRoot, "new.txt"))).toBe(false);
   });

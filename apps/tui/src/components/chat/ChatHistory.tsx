@@ -2,14 +2,13 @@ import { memo, type FC, type ReactNode } from "react";
 import UserMessage from "./UserMessage.js";
 import AgentMessage from "./AgentMessage.js";
 import ToolMessage from "./ToolMessage.js";
-import ReasoningMessage from "./ReasoningMessage.js";
 import SubAgentRow from "../subAgents/SubAgentRow.js";
-import type { ProjectedBlock, SubAgentProjectionPart } from "@excelsior/core";
+import type { ProjectedBlock, ProjectedTurn, SubAgentProjectionPart } from "@excelsior/core";
 import { theme } from "../../theme.js";
 import { textAttrs } from "../../platform/opentui/textAttributes.js";
 
 interface ChatHistoryProps {
-  blocks: ProjectedBlock[];
+  turns: ProjectedTurn[];
   toolsExpanded?: boolean;
 }
 
@@ -20,15 +19,7 @@ function renderBlock(
   if (block.type === "user") {
     return <UserMessage key={block.id} content={block.content} timestamp={block.timestamp} />;
   }
-  if (block.type === "reasoning") {
-    return (
-      <ReasoningMessage
-        key={block.id}
-        content={block.content}
-        timestamp={block.timestamp}
-      />
-    );
-  }
+
   if (block.type === "assistant") {
     return (
       <AgentMessage
@@ -59,6 +50,27 @@ function renderBlock(
           isSelected={false}
         />
         {renderSubAgentTools(block, toolsExpanded)}
+      </box>
+    );
+  }
+  if (block.type === "compaction-boundary") {
+    return (
+      <box
+        key={block.id}
+        flexDirection="column"
+        marginTop={1}
+        marginBottom={1}
+        paddingLeft={1}
+        paddingRight={1}
+        borderStyle="single"
+        borderColor={theme.colors.muted}
+      >
+        <text fg={theme.colors.muted} attributes={textAttrs({ bold: true })}>
+          {"--- History Compacted ---"}
+        </text>
+        <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
+          {block.summary}
+        </text>
       </box>
     );
   }
@@ -105,12 +117,23 @@ function renderSubAgentTools(
 }
 
 const ChatHistory: FC<ChatHistoryProps> = ({
-  blocks,
+  turns,
   toolsExpanded = false,
 }) => {
   return (
     <box flexDirection="column">
-      {blocks.map((block) => renderBlock(block, toolsExpanded))}
+      {turns.map((turn) => (
+        <box key={turn.id} flexDirection="column">
+          {turn.blocks.map((block) => renderBlock(block, toolsExpanded))}
+          {turn.status === "failed" && turn.error ? (
+            <box paddingLeft={1} marginTop={1}>
+              <text fg={theme.colors.error}>
+                {`Turn failed: ${turn.error.message}`}
+              </text>
+            </box>
+          ) : null}
+        </box>
+      ))}
     </box>
   );
 };

@@ -1,4 +1,4 @@
-import type { ProjectedBlock } from "@excelsior/core";
+import type { ProjectedBlock, ProjectedTurn } from "@excelsior/core";
 
 export interface HistoryResetSnapshot {
   sessionId: string | null;
@@ -7,11 +7,12 @@ export interface HistoryResetSnapshot {
 
 export function createHistoryResetSnapshot(input: {
   sessionId: string | null;
-  blocks: readonly ProjectedBlock[];
+  turns: readonly ProjectedTurn[];
 }): HistoryResetSnapshot {
+  const blocks = input.turns.flatMap((t) => t.blocks);
   return {
     sessionId: input.sessionId,
-    staticBlockIds: getStaticHistoryBlockIds(input.blocks),
+    staticBlockIds: getStaticHistoryBlockIds(blocks),
   };
 }
 

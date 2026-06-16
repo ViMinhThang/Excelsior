@@ -66,6 +66,13 @@ function inspection(events: AnyHarnessEvent[], isLoading = false): HarnessInspec
       mode: "act",
       pendingConfirmation: null,
       pendingQuestion: null,
+      reflection: {
+        status: "idle",
+        memoryRoot: "",
+        lastRunAt: undefined,
+        lastSummary: undefined,
+        touchedFiles: [],
+      },
     }),
   };
 }
@@ -142,7 +149,7 @@ describe("harness inspector", () => {
       id: first.id,
     };
     const snapshot = inspection([first, duplicate]);
-    snapshot.snapshot = { ...snapshot.snapshot, displayBlocks: [] };
+    snapshot.snapshot = { ...snapshot.snapshot, turns: [] };
 
     const report = replayHarnessEvents(snapshot);
 

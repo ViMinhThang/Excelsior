@@ -6,7 +6,7 @@ import { renderTui } from "../src/platform/opentui/testing/renderTui.js";
 
 function createMockHost(): AgentHost {
   const state = {
-    displayBlocks: [],
+    turns: [],
     isLoading: false,
     sessions: [],
     currentSessionId: null,
@@ -22,6 +22,11 @@ function createMockHost(): AgentHost {
     mode: "plan" as const,
     pendingConfirmation: null,
     pendingQuestion: null,
+    reflection: {
+      status: "idle" as const,
+      touchedFiles: [],
+      memoryRoot: "C:/memory",
+    },
   };
 
   return {
@@ -33,6 +38,7 @@ function createMockHost(): AgentHost {
         deepseekApiKey: "",
         githubToken: "",
         agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
       },
     }),
     dispatch: async (intent) => {

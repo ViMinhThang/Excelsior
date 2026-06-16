@@ -14,17 +14,10 @@ import type {
 } from "@excelsior/core";
 import type { AnyHarnessEvent, HarnessEvent, HarnessEventEmitter } from "./events.js";
 import type { ProviderRegistry, ToolRegistry } from "./registries.js";
+import type { LspClient } from "./lsp/LspManager.js";
 
 export type HarnessSettings = AppSettings;
 export type HarnessSnapshot = AgentClientState;
-
-export type ToolCapability =
-  | "fs:read"
-  | "fs:write"
-  | "shell"
-  | "network"
-  | "git"
-  | "sub-agent";
 
 export interface HarnessProvider {
   id: string;
@@ -49,6 +42,7 @@ export interface ToolExecutionContext {
   skillsList?: string;
   projectInstructions?: string;
   backupDir?: string;
+  lsp?: LspClient;
   confirm(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse>;
   askQuestion(input: {
     question: string;
@@ -66,7 +60,6 @@ export interface HarnessTool<TInput = unknown> {
   name: string;
   description: string;
   inputSchema: z.ZodType<TInput>;
-  capabilities: ToolCapability[];
   execute(input: TInput, ctx: ToolExecutionContext, options?: ToolExecuteOptions): Promise<ToolResult>;
 }
 
@@ -141,6 +134,8 @@ export interface AgentHarness {
   subscribe(listener: () => void): () => void;
   send(input: { content: string; mode: AgentMode; sessionId?: string } & SendOptions): Promise<void>;
   cancel(): void;
+  startReflection(trigger: "manual" | "auto"): Promise<CommandResult>;
+  cancelReflection(): void;
   clear(): void;
   createSession(title?: string): Session;
   switchSession(sessionId: string): Promise<void>;
@@ -150,6 +145,7 @@ export interface AgentHarness {
   executeCommand(input: string): Promise<CommandResult>;
   saveSettings(settings: Partial<HarnessSettings>): void;
   respondToConfirmation(callId: string, approved: boolean): void;
+  approveAllConfirmations(): void;
   respondToQuestion(response: AskQuestionResponse): void;
   revertLastTurn(): Promise<CommandResult>;
   compactCurrentSession(triggerMode?: "manual" | "auto"): Promise<void>;

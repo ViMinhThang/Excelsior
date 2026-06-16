@@ -22,7 +22,7 @@ describe("chat mode hints", () => {
     expect(hint).not.toContain("command palette");
   });
 
-  it("uses panel and sub-agent mode hints", () => {
+  it("uses panel mode hints", () => {
     expect(getHint({
       chatMode: "input",
       isLoading: false,
@@ -32,40 +32,6 @@ describe("chat mode hints", () => {
       toolCallCount: 0,
       toolsExpanded: false,
     })).toBe("Up/Down select | Enter open | Esc close");
-
-    expect(getHint({
-      chatMode: "subagent-picker",
-      isLoading: false,
-      hasPending: false,
-      activePanelId: null,
-      subAgentCount: 1,
-      toolCallCount: 1,
-      toolsExpanded: false,
-    })).toBe("Enter view detail | \u2191\u2193 navigate | Esc close");
-
-    expect(getHint({
-      chatMode: "subagent-detail",
-      isLoading: false,
-      hasPending: false,
-      activePanelId: null,
-      subAgentCount: 1,
-      toolCallCount: 1,
-      toolsExpanded: true,
-    })).toBe("Esc back to list");
-  });
-
-  it("delegates mode-specific hints through the chat mode registry", () => {
-    const input = {
-      chatMode: "subagent-detail" as const,
-      isLoading: false,
-      hasPending: false,
-      activePanelId: null,
-      subAgentCount: 1,
-      toolCallCount: 1,
-      toolsExpanded: true,
-    };
-
-    expect(getHint(input)).toBe(chatModeRegistry["subagent-detail"].getHint(input));
   });
 
   it("shows question answer hints while a question is pending", () => {

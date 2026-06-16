@@ -20,7 +20,7 @@ const agentHostMock = vi.hoisted(() => ({
 
 function createState(rootPath = "") {
   return {
-    displayBlocks: [],
+    turns: [],
     isLoading: false,
     sessions: [],
     currentSessionId: null,

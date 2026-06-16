@@ -29,6 +29,11 @@ type SettingsDialogProps = {
 type SettingsTab = "credentials" | "runtime" | "appearance";
 
 const DEFAULT_FINITE_TOOL_LOOP_STEPS = "200";
+const TAB_LABELS: Record<SettingsTab, string> = {
+  credentials: "Credentials",
+  runtime: "Runtime",
+  appearance: "Appearance",
+};
 
 function getFiniteToolLoopSteps(value: string | undefined): string {
   const normalized = normalizeAgentToolLoopSteps(value);
@@ -58,6 +63,7 @@ export function SettingsDialog({
   const [toolLoopStepInput, setToolLoopStepInput] = useState(
     DEFAULT_FINITE_TOOL_LOOP_STEPS,
   );
+  const [autoReflectionEnabled, setAutoReflectionEnabled] = useState(false);
   const [themeInput, setThemeInput] = useState<DesktopTheme>(theme);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => isThemeDark(theme));
   const [fontInput, setFontInput] = useState(font);
@@ -69,6 +75,7 @@ export function SettingsDialog({
     setGithubTokenInput(settings?.githubToken ?? "");
     setToolLoopUnlimited(isUnlimitedToolLoopSetting(toolLoopSteps));
     setToolLoopStepInput(getFiniteToolLoopSteps(toolLoopSteps));
+    setAutoReflectionEnabled(settings?.autoReflectionEnabled ?? false);
     setThemeInput(theme);
     setIsDarkMode(isThemeDark(theme));
     setFontInput(font);
@@ -90,13 +97,18 @@ export function SettingsDialog({
     <Dialog open={true} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent
         showCloseButton={false}
-        className="sm:max-w-[896px] max-w-[896px] h-[640px] p-0 gap-0 overflow-hidden border-brand-border bg-brand-surface text-brand-text-strong shadow-2xl flex flex-row"
+        className="settings-dialog sm:max-w-[896px] max-w-[896px] h-[640px] p-0 gap-0 overflow-hidden border-0 bg-brand-surface text-brand-text-strong shadow-2xl flex flex-row"
       >
         <aside className="settings-sidebar">
+          <div className="settings-sidebar-heading">
+            <span className="settings-sidebar-kicker">Desktop</span>
+            <span className="settings-sidebar-title">Settings</span>
+          </div>
           <div className="settings-nav">
             <button
               type="button"
               onClick={() => setActiveTab("credentials")}
+              aria-current={activeTab === "credentials" ? "page" : undefined}
               className={`settings-tab transition-snappy-colors ${
                 activeTab === "credentials"
                   ? "settings-tab-active"
@@ -109,6 +121,7 @@ export function SettingsDialog({
             <button
               type="button"
               onClick={() => setActiveTab("runtime")}
+              aria-current={activeTab === "runtime" ? "page" : undefined}
               className={`settings-tab transition-snappy-colors ${
                 activeTab === "runtime"
                   ? "settings-tab-active"
@@ -121,6 +134,7 @@ export function SettingsDialog({
             <button
               type="button"
               onClick={() => setActiveTab("appearance")}
+              aria-current={activeTab === "appearance" ? "page" : undefined}
               className={`settings-tab transition-snappy-colors ${
                 activeTab === "appearance"
                   ? "settings-tab-active"
@@ -135,7 +149,10 @@ export function SettingsDialog({
 
         <div className="settings-main">
           <header className="settings-header">
-            <h2 className="settings-title">Settings</h2>
+            <div className="min-w-0">
+              <h2 className="settings-title">Settings</h2>
+              <div className="settings-current-tab">{TAB_LABELS[activeTab]}</div>
+            </div>
             <button
               type="button"
               onClick={onClose}
@@ -160,8 +177,10 @@ export function SettingsDialog({
               <RuntimeTab
                 toolLoopUnlimited={toolLoopUnlimited}
                 toolLoopStepInput={toolLoopStepInput}
+                autoReflectionEnabled={autoReflectionEnabled}
                 onToolLoopUnlimitedChange={setToolLoopUnlimited}
                 onToolLoopStepInputChange={setToolLoopStepInput}
+                onAutoReflectionEnabledChange={setAutoReflectionEnabled}
               />
             )}
 
@@ -184,7 +203,7 @@ export function SettingsDialog({
             <Button
               variant="outline"
               onClick={onClose}
-              className="h-9 px-4 text-brand-text-muted hover:text-brand-text-strong border-brand-border hover:bg-brand-panel"
+              className="settings-footer-button h-9 px-4 text-brand-text-muted hover:text-brand-text-strong border-brand-border hover:bg-brand-panel"
             >
               Cancel
             </Button>
@@ -198,12 +217,13 @@ export function SettingsDialog({
                     agentToolLoopSteps: toolLoopUnlimited
                       ? DEFAULT_AGENT_TOOL_LOOP_STEPS
                       : getFiniteToolLoopSteps(toolLoopStepInput),
+                    autoReflectionEnabled,
                   },
                   themeInput,
                   fontInput,
                 )
               }
-              className="h-9 px-4 bg-brand-accent hover:bg-brand-accent-hover text-brand-accent-contrast border-0"
+              className="settings-footer-button h-9 px-4 bg-brand-accent hover:bg-brand-accent-hover text-brand-accent-contrast border-0"
             >
               Save
             </Button>

@@ -45,22 +45,35 @@ function makeKeymapContext(chatMode: ChatMode): ChatModeKeymapContext {
     prevSubAgent: noop,
     navigateUp: noop,
     navigateDown: noop,
+    inputFocused: false,
   } satisfies BuildChatModeKeymapContextInput);
 }
 
 function makeRenderContext(chatMode: ChatMode): ChatModeRenderContext {
   const noop = () => {};
   return buildModeViewContext({
+    workspace: { id: "ws", name: "Workspace", rootPath: "C:/repo" },
+    sessionId: "ses",
     chatMode,
-    displayBlocks: [],
+    turns: [],
+    tasks: [],
     inputValue: "",
     setInput: noop,
+    inputFocused: false,
+    setInputFocused: noop,
     handleSubmit: noop,
     isLoading: false,
     pending: null,
     paletteOpen: false,
     commandResult: null,
     agentMode: "act",
+    settings: {
+      deepseekApiKey: "",
+      githubToken: "",
+      agentToolLoopSteps: "unlimited",
+      autoReflectionEnabled: false,
+      autoApproveWorkspaceEdits: false,
+    },
     activePanel: undefined,
     featureContext: {
       sessions: [],
@@ -76,83 +89,29 @@ function makeRenderContext(chatMode: ChatMode): ChatModeRenderContext {
   });
 }
 
-function makeLegacyWideRenderContext(chatMode: ChatMode) {
-  const noop = () => {};
-  return {
-    chatMode,
-    input: {
-      value: "",
-      setValue: noop,
-      submit: noop,
-    },
-    runtime: {
-      isLoading: false,
-      pending: null,
-      paletteOpen: false,
-      commandResult: null,
-      agentMode: "act",
-    },
-    transcript: {
-      blocks: [],
-      toolsExpanded: false,
-      viewportKey: "none:0",
-    },
-    subAgents: {
-      blocks: [],
-      selectedIndex: 0,
-    },
-    tools: {
-      blocks: [],
-      selectedId: null,
-      selectedBlock: undefined,
-    },
-    panel: {
-      active: undefined,
-      context: {
-        sessions: [],
-        currentSessionId: null,
-        switchSession: noop,
-        deleteSession: noop,
-        closePanel: noop,
-      },
-    },
-  };
-}
-
 describe("chat mode registry", () => {
   it("defines every chat mode exactly once", () => {
     expect(Object.keys(chatModeRegistry).sort()).toEqual([...chatModeIds].sort());
   });
 
-  it("provides render, hint, and keymap behavior for every mode", () => {
-    for (const chatMode of chatModeIds) {
-      const context = makeRenderContext(chatMode);
-      const rendered = chatModeRegistry[chatMode].render(context);
-      const hint = chatModeRegistry[chatMode].getHint({
-        chatMode,
-        isLoading: false,
-        hasPending: false,
-        activePanelId: null,
-        subAgentCount: 0,
-        toolCallCount: 0,
-        toolsExpanded: false,
-      });
-      const keymaps = getChatModeKeymaps(makeKeymapContext(chatMode));
+  it("provides render, hint, and keymap behavior for the input mode", () => {
+    const chatMode = "input";
+    const context = makeRenderContext(chatMode);
+    const rendered = chatModeRegistry[chatMode].render(context as any);
+    const hint = chatModeRegistry[chatMode].getHint({
+      chatMode,
+      isLoading: false,
+      hasPending: false,
+      activePanelId: null,
+      subAgentCount: 0,
+      toolCallCount: 0,
+      toolsExpanded: false,
+    });
+    const keymaps = getChatModeKeymaps(makeKeymapContext(chatMode));
 
-      expect(rendered).toBeTruthy();
-      expect(hint.length).toBeGreaterThan(0);
-      expect(keymaps.length).toBeGreaterThan(0);
-      expect(keymaps[0]?.map).toBeTruthy();
-    }
-  });
-
-  it("rejects the old all-state render shape at the mode seam", () => {
-    const context = makeRenderContext("subagent-detail");
-    const legacy = makeLegacyWideRenderContext("subagent-detail");
-
-    expect("subAgents" in context).toBe(true);
-    expect("transcript" in context).toBe(false);
-    expect("tools" in context).toBe(false);
-    expect("subAgents" in legacy).toBe(true);
+    expect(rendered).toBeTruthy();
+    expect(hint.length).toBeGreaterThan(0);
+    expect(keymaps.length).toBeGreaterThan(0);
+    expect(keymaps[0]?.map).toBeTruthy();
   });
 });

@@ -7,7 +7,8 @@ import type {
 import type { ExcelsiorApi } from "../../main/preload.js";
 
 const emptyState: AgentClientState = {
-  displayBlocks: [],
+  turns: [],
+  tasks: [],
   isLoading: false,
   sessions: [],
   currentSessionId: null,
@@ -16,12 +17,19 @@ const emptyState: AgentClientState = {
   mode: "plan",
   pendingConfirmation: null,
   pendingQuestion: null,
+  reflection: {
+    status: "idle",
+    touchedFiles: [],
+    memoryRoot: "",
+  },
 };
 
 const emptySettings: AppSettings = {
   deepseekApiKey: "",
   githubToken: "",
   agentToolLoopSteps: "unlimited",
+  autoReflectionEnabled: false,
+  autoApproveWorkspaceEdits: false,
 };
 
 export interface IpcStateStore {
@@ -31,13 +39,58 @@ export interface IpcStateStore {
   dispose: () => void;
 }
 
+const STREAM_NOTIFY_FALLBACK_MS = 16;
+
 export function createIpcStateStore(api: ExcelsiorApi): IpcStateStore {
   let snapshot: AgentClientState | null = null;
   const listeners = new Set<() => void>();
+  let frameId: number | null = null;
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const notifyListeners = () => {
+    listeners.forEach((fn) => fn());
+  };
+
+  const clearScheduledNotify = () => {
+    if (frameId !== null && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(frameId);
+    }
+    if (fallbackTimer) {
+      clearTimeout(fallbackTimer);
+    }
+    frameId = null;
+    fallbackTimer = null;
+  };
+
+  const flushScheduledNotify = () => {
+    clearScheduledNotify();
+    notifyListeners();
+  };
+
+  const scheduleStreamingNotify = () => {
+    if (frameId !== null || fallbackTimer) return;
+
+    if (typeof requestAnimationFrame === "function") {
+      frameId = requestAnimationFrame(flushScheduledNotify);
+      fallbackTimer = setTimeout(flushScheduledNotify, STREAM_NOTIFY_FALLBACK_MS);
+      return;
+    }
+
+    fallbackTimer = setTimeout(flushScheduledNotify, 0);
+  };
+
+  const notifyNow = () => {
+    clearScheduledNotify();
+    notifyListeners();
+  };
 
   const unsub = api.onStateChanged((newState) => {
     snapshot = newState;
-    listeners.forEach((fn) => fn());
+    if (newState.isLoading) {
+      scheduleStreamingNotify();
+      return;
+    }
+    notifyNow();
   });
 
   return {
@@ -48,9 +101,12 @@ export function createIpcStateStore(api: ExcelsiorApi): IpcStateStore {
     },
     init: async () => {
       snapshot = await api.getState();
-      listeners.forEach((fn) => fn());
+      notifyNow();
     },
-    dispose: unsub,
+    dispose: () => {
+      clearScheduledNotify();
+      unsub();
+    },
   };
 }
 

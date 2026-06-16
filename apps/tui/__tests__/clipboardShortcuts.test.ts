@@ -9,8 +9,10 @@ import {
 
 describe("clipboard shortcuts", () => {
   it("detects copy and paste shortcuts", () => {
-    expect(isCopyShortcut("c", { ctrl: true })).toBe(true);
-    expect(isCopyShortcut("c", { meta: true })).toBe(true);
+    expect(isCopyShortcut("c", { ctrl: true, shift: true })).toBe(true);
+    expect(isCopyShortcut("C", { ctrl: true, shift: true })).toBe(true);
+    expect(isCopyShortcut("c", { ctrl: true })).toBe(false);
+    expect(isCopyShortcut("c", { meta: true })).toBe(false);
     expect(isPasteShortcut("v", { ctrl: true })).toBe(true);
     expect(isPasteShortcut("v", { meta: true })).toBe(true);
     expect(isCopyShortcut("c", {})).toBeFalsy();

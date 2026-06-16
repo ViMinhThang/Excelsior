@@ -3,8 +3,6 @@ import { MockLanguageModelV3 } from "ai/test";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
-  AGENT_END,
-  AGENT_START,
   ERROR,
   MESSAGE_END,
   MESSAGE_START,
@@ -19,7 +17,7 @@ import {
   type HarnessEventEmitter,
 } from "../src/events.js";
 import { ProviderRegistry, ToolRegistry } from "../src/registries.js";
-import { RunController } from "../src/runController.js";
+import { runAgentLoop } from "../src/run/RunController.js";
 
 describe("RunController", () => {
   it("emits a complete run lifecycle for streamed assistant text", async () => {
@@ -71,13 +69,14 @@ describe("RunController", () => {
       }),
     });
 
-    await new RunController().run({
+    await runAgentLoop({
       messages: [{ role: "user", content: "hello" }],
       systemPrompt: "test system prompt",
       settings: {
         deepseekApiKey: "test",
         githubToken: "",
         agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
       },
       providers,
       tools: new ToolRegistry(),
@@ -98,14 +97,12 @@ describe("RunController", () => {
     });
 
     expect(events.map((event) => event.type)).toEqual([
-      AGENT_START,
       TURN_START,
       MESSAGE_START,
       MESSAGE_UPDATE,
       MESSAGE_UPDATE,
       MESSAGE_END,
       TURN_END,
-      AGENT_END,
     ]);
     expect(events.find((event) => event.type === MESSAGE_END)?.data).toMatchObject({
       message: { role: "assistant", content: "Hello world" },
@@ -206,20 +203,20 @@ describe("RunController", () => {
       name: "ls",
       description: "mock ls",
       inputSchema: z.object({}),
-      capabilities: [],
       execute: async () => ({ content: "fileA.txt, fileB.txt" }),
     });
 
     // Simulate steering message queued mid-run
     const steeringQueue = ["Wait, prioritize file B"];
 
-    await new RunController().run({
+    await runAgentLoop({
       messages: [{ role: "user", content: "do search" }],
       systemPrompt: "test system prompt",
       settings: {
         deepseekApiKey: "test",
         githubToken: "",
         agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
       },
       providers,
       tools,
@@ -316,20 +313,20 @@ describe("RunController", () => {
         filePath: z.string(),
         content: z.string(),
       }),
-      capabilities: ["fs:write"],
       execute: async () => {
         executed = true;
         return { content: "wrote file" };
       },
     });
 
-    await new RunController().run({
+    await runAgentLoop({
       messages: [{ role: "user", content: "write a report" }],
       systemPrompt: "test system prompt",
       settings: {
         deepseekApiKey: "test",
         githubToken: "",
         agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
       },
       providers,
       tools,
@@ -439,17 +436,17 @@ describe("RunController", () => {
         filePath: z.string(),
         content: z.string(),
       }),
-      capabilities: ["fs:write"],
       execute: async () => ({ content: "wrote file" }),
     });
 
-    await new RunController().run({
+    await runAgentLoop({
       messages: [{ role: "user", content: "write a report" }],
       systemPrompt: "test system prompt",
       settings: {
         deepseekApiKey: "test",
         githubToken: "",
         agentToolLoopSteps: "1",
+        autoReflectionEnabled: false,
       },
       providers,
       tools,

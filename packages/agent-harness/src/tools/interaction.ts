@@ -17,7 +17,6 @@ export function createAskQuestionTool(): HarnessTool<z.infer<typeof askQuestionS
     name: "askQuestion",
     description: "Ask the user a blocking question when a decision is required.",
     inputSchema: askQuestionSchema,
-    capabilities: [],
     async execute({ question, options, allowManual }, ctx) {
       const response = await ctx.askQuestion({
         question,

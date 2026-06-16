@@ -2,15 +2,23 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { AgentMode } from "@excelsior/core";
 import {
   buildCompactionNotice,
   buildCompactionSummary,
   buildRunContext,
   loadProjectInstructions,
+  type LspClient,
+  ProviderRegistry,
   revertLastCompletedTurn,
   toModelMessages,
+  ToolRegistry,
+  type HarnessSettings,
 } from "@excelsior/agent-harness";
+import { projectEvents } from "../src/projection.js";
+import { buildRunAssembly, type RunAssemblyInput } from "../src/context/runAssembly.js";
 import {
+  type HarnessEventEmitter,
   MESSAGE_END,
   TOOL_EXECUTION_END,
   TOOL_EXECUTION_START,
@@ -60,7 +68,7 @@ describe("harness context helpers", () => {
 
     const instructions = loadProjectInstructions(workspaceRoot);
     const context = buildRunContext({
-      events: [],
+      priorMessages: [],
       userContent: "inspect the repo",
       mode: "plan",
       skillsList: "- diagnose: Debug failures",
@@ -72,7 +80,110 @@ describe("harness context helpers", () => {
     expect(context.systemPrompt).toContain("Minimize emoji");
     expect(context.systemPrompt).toContain("Prefer rg before broader file scans.");
     expect(context.systemPrompt).toContain("## Available Agent Skills");
-    expect(context.messages).toEqual([{ role: "user", content: "inspect the repo" }]);
+    expect(context.messages).toEqual([
+      { role: "system", content: expect.stringMatching(/^current mode: plan timestamp:/) },
+      { role: "user", content: "inspect the repo" },
+    ]);
+  });
+
+  it("appends reflection memory context as a per-turn system message", () => {
+    const enabled = buildRunContext({
+      priorMessages: [{ role: "assistant", content: "prior" }],
+      userContent: "continue",
+      mode: "act",
+      reflectionMemoryContext: "Reflection memory context: on.\nRemember the repo preference.",
+    });
+    const disabled = buildRunContext({
+      priorMessages: [{ role: "assistant", content: "prior" }],
+      userContent: "continue",
+      mode: "act",
+      reflectionMemoryContext: "Reflection memory context: off. Do not use stored reflection memory for this turn.",
+    });
+
+    expect(enabled.messages).toMatchObject([
+      { role: "assistant", content: "prior" },
+      { role: "system", content: expect.stringMatching(/^current mode: act timestamp:/) },
+      { role: "system", content: "Reflection memory context: on.\nRemember the repo preference." },
+      { role: "user", content: "continue" },
+    ]);
+    expect(disabled.messages).toContainEqual({
+      role: "system",
+      content: "Reflection memory context: off. Do not use stored reflection memory for this turn.",
+    });
+  });
+
+  it("assembles run and tool context from the same run inputs", async () => {
+    const workspaceRoot = await makeTempDir();
+    const storageRoot = await makeTempDir();
+    await writeFile(join(workspaceRoot, "AGENTS.md"), "Keep context assembly boring.\n", "utf8");
+
+    const settings: HarnessSettings = {
+      deepseekApiKey: "",
+      githubToken: "",
+      agentToolLoopSteps: "unlimited",
+      autoReflectionEnabled: false,
+    };
+    const createEmitter = (runId: string, sessionId: string, turnId: string): HarnessEventEmitter =>
+      (type, data, options) =>
+        makeHarnessEvent({
+          workspaceId: "ws_test",
+          sessionId,
+          runId,
+          turnId,
+          sequence: 1,
+          type,
+          data,
+          relatedToolCallId: options?.relatedToolCallId,
+          parentEventId: options?.parentEventId,
+        });
+    const lsp: LspClient = {
+      syncTouchedFile: async () => null,
+      dispose: () => {},
+    };
+
+    const assemblyInput: RunAssemblyInput = {
+      workspaceRoot,
+      storageRoot,
+      workspaceId: "ws_test",
+      sessionId: "ses_test",
+      runId: "run_test",
+      turnId: "turn_test",
+      priorMessages: [],
+      userContent: "inspect the repo",
+      mode: "plan" satisfies AgentMode,
+      settings,
+      providers: new ProviderRegistry(),
+      tools: new ToolRegistry(),
+      lsp,
+      confirm: async (request) => ({ callId: request.toolName, approved: true }),
+      askQuestion: async () => ({ callId: "question", answer: "", isManual: true, cancelled: true }),
+      createEmitter,
+    };
+
+    const assembly = buildRunAssembly(assemblyInput);
+    assemblyInput.mode = "act";
+
+    expect(assembly.runContext.systemPrompt).not.toContain("CURRENT MODE:");
+    expect(assembly.runContext.messages).toContainEqual({
+      role: "system",
+      content: expect.stringMatching(/^current mode: plan timestamp:/),
+    });
+    expect(assembly.runContext.systemPrompt).toContain("Keep context assembly boring.");
+    expect(assembly.toolContext.mode).toBe("plan");
+    expect(assembly.toolContext.lsp).toBe(lsp);
+    expect(assembly.toolContext.projectInstructions).toBe("Keep context assembly boring.");
+    expect(assembly.toolContext.backupDir).toBe(join(storageRoot, "backups", "ws_test", "ses_test", "turn_test"));
+    await expect(assembly.toolContext.sendSubAgent({
+      role: "Explore",
+      prompt: "find coupling",
+    })).resolves.toBe("Plan-only analysis from Explore:\nfind coupling");
+
+    const emitted = assembly.emit(MESSAGE_END, {
+      message: { id: "msg_test", role: "assistant", content: "done" },
+    });
+    expect(emitted.runId).toBe("run_test");
+    expect(emitted.sessionId).toBe("ses_test");
+    expect(emitted.turnId).toBe("turn_test");
   });
 
   it("builds compaction summaries without mutating source events", async () => {
@@ -85,7 +196,8 @@ describe("harness context helpers", () => {
       }),
     ];
 
-    const summary = await buildCompactionSummary(events);
+    const messages = projectEvents(events).aiHistory;
+    const summary = await buildCompactionSummary(messages);
 
     expect(summary).toContain("USER: original request");
     expect(summary).toContain("ASSISTANT: final answer");
@@ -143,7 +255,7 @@ describe("harness context helpers", () => {
     ];
 
     const context = buildRunContext({
-      events,
+      priorMessages: projectEvents(events).aiHistory,
       userContent: "now summarize it",
       mode: "act",
     });

@@ -12,20 +12,71 @@
   --color-brand-sidebar-footer: var(--brand-sidebar-footer);
   --color-brand-user-bubble: var(--brand-user-bubble);
   --color-brand-composer: var(--brand-composer);
+  --color-brand-chat-history: var(--brand-chat-history);
+  --color-brand-context-rail: var(--brand-context-rail);
   --font-brand: var(--font-mono);
   --font-display: "DM Serif Display", serif;
   --font-mono: "JetBrains Mono", monospace;
   --font-caskaydia: "Caskaydia Cove", "Cascadia Code", "Cascadia Mono", monospace;
 }
 
+:root {
+  --radius-panel: 14px;
+  --radius-control: 10px;
+  --radius-pill: 9999px;
+  --shadow-panel: 0 18px 42px color-mix(in srgb, var(--brand-sidebar-footer) 44%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--brand-accent) 8%, transparent),
+    0 0 18px var(--gold-glow);
+  --shadow-panel-focus: 0 20px 48px color-mix(in srgb, var(--brand-sidebar-footer) 50%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--brand-accent) 24%, transparent),
+    0 0 24px var(--gold-glow-strong);
+  --shadow-card: 0 8px 22px color-mix(in srgb, var(--brand-sidebar-footer) 22%, transparent);
+  --surface-hover: color-mix(in srgb, var(--brand-panel) 72%, transparent);
+  --surface-active: color-mix(in srgb, var(--brand-accent) 8%, var(--brand-panel));
+  --surface-press-shift: translateY(1px);
+}
+
 /* ============================
-   THEME: One Dark Pro (Default Dark)
+   THEME: Excelsior (Default Dark)
    ============================ */
 :root,
+:root[data-theme="excelsior"] {
+  --brand-bg: #141414;
+  --brand-surface: #1c1c1c;
+  --brand-panel: #282828;
+  --brand-border: #4e4e4e;
+  --brand-accent: #a89468;
+  --brand-accent-hover: #b8a078;
+  --brand-accent-contrast: #141414;
+  --brand-text-muted: #919191;
+  --brand-text-light: #c6c6c6;
+  --brand-text-strong: #c6c6c6;
+  --brand-sidebar-footer: #121212;
+  --brand-chat-history: #151515;
+  --brand-context-rail: #1c1c1c;
+  --brand-user-bubble: #262626;
+  --brand-composer: rgba(28, 28, 28, 0.95);
+
+  --titlebar-bg: #121212;
+  --titlebar-text: #919191;
+  --scrollbar-track: #141414;
+  --scrollbar-thumb: #4e4e4e;
+  --scrollbar-thumb-hover: #666666;
+  --codeblock-bg: #101010;
+  --ease-snappy: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-snappy: 160ms;
+  --gold-glow: rgba(168, 148, 104, 0.12);
+  --gold-glow-strong: rgba(168, 148, 104, 0.24);
+  --bg-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+}
+
+/* ============================
+   THEME: One Dark Pro (Dark)
+   ============================ */
 :root[data-theme="one-dark-pro"] {
-  --brand-bg: #282c34;
-  --brand-surface: #21252b;
-  --brand-panel: #2c313c;
+  --brand-bg: #262a31;
+  --brand-surface: #1f232a;
+  --brand-panel: #303642;
   --brand-border: #3e4451;
   --brand-accent: #61afef;
   --brand-accent-hover: #528bff;
@@ -33,11 +84,13 @@
   --brand-text-muted: #5c6370;
   --brand-text-light: #abb2bf;
   --brand-text-strong: #abb2bf;
-  --brand-sidebar-footer: #1e2227;
-  --brand-user-bubble: #2c313c;
-  --brand-composer: rgba(33, 37, 43, 0.92);
+  --brand-sidebar-footer: #1e232a;
+  --brand-chat-history: #252a32;
+  --brand-context-rail: #2e343f;
+  --brand-user-bubble: #333a46;
+  --brand-composer: rgba(46, 52, 63, 0.94);
 
-  --titlebar-bg: #1e2227;
+  --titlebar-bg: #1e232a;
   --titlebar-text: #5c6370;
   --scrollbar-track: #282c34;
   --scrollbar-thumb: #3e4451;
@@ -54,9 +107,9 @@
    THEME: Tokyo Night (Dark)
    ============================ */
 :root[data-theme="tokyo-night"] {
-  --brand-bg: #1a1b26;
-  --brand-surface: #16161e;
-  --brand-panel: #1f2335;
+  --brand-bg: #191a24;
+  --brand-surface: #12131b;
+  --brand-panel: #242944;
   --brand-border: #3b4261;
   --brand-accent: #7aa2f7;
   --brand-accent-hover: #89ddff;
@@ -64,11 +117,13 @@
   --brand-text-muted: #565f89;
   --brand-text-light: #a9b1d6;
   --brand-text-strong: #c0caf5;
-  --brand-sidebar-footer: #13131a;
-  --brand-user-bubble: #1f2335;
-  --brand-composer: rgba(22, 22, 30, 0.92);
+  --brand-sidebar-footer: #141622;
+  --brand-chat-history: #181b29;
+  --brand-context-rail: #202438;
+  --brand-user-bubble: #29304d;
+  --brand-composer: rgba(32, 36, 56, 0.94);
 
-  --titlebar-bg: #13131a;
+  --titlebar-bg: #141622;
   --titlebar-text: #565f89;
   --scrollbar-track: #1a1b26;
   --scrollbar-thumb: #3b4261;
@@ -85,9 +140,9 @@
    THEME: Nordic Blue (Dark)
    ============================ */
 :root[data-theme="nordic-blue"] {
-  --brand-bg: #2e3440;
-  --brand-surface: #242933;
-  --brand-panel: #3b4252;
+  --brand-bg: #2b313c;
+  --brand-surface: #202631;
+  --brand-panel: #394354;
   --brand-border: #434c5e;
   --brand-accent: #88c0d0;
   --brand-accent-hover: #81a1c1;
@@ -95,11 +150,13 @@
   --brand-text-muted: #647280;
   --brand-text-light: #d8dee9;
   --brand-text-strong: #eceff4;
-  --brand-sidebar-footer: #1d212a;
-  --brand-user-bubble: #3b4252;
-  --brand-composer: rgba(36, 41, 51, 0.92);
+  --brand-sidebar-footer: #202632;
+  --brand-chat-history: #303846;
+  --brand-context-rail: #3d4654;
+  --brand-user-bubble: #465166;
+  --brand-composer: rgba(61, 70, 84, 0.94);
 
-  --titlebar-bg: #242933;
+  --titlebar-bg: #202632;
   --titlebar-text: #4c566a;
   --scrollbar-track: #2e3440;
   --scrollbar-thumb: #434c5e;
@@ -117,8 +174,8 @@
    ============================ */
 :root[data-theme="rose-pine-dark"] {
   --brand-bg: #191724;
-  --brand-surface: #1f1d2e;
-  --brand-panel: #26233a;
+  --brand-surface: #211e31;
+  --brand-panel: #302a48;
   --brand-border: #403d52;
   --brand-accent: #ebbcba;
   --brand-accent-hover: #31748f;
@@ -126,11 +183,13 @@
   --brand-text-muted: #6e6a86;
   --brand-text-light: #e0def4;
   --brand-text-strong: #e0def4;
-  --brand-sidebar-footer: #171520;
-  --brand-user-bubble: #26233a;
-  --brand-composer: rgba(31, 29, 46, 0.92);
+  --brand-sidebar-footer: #181622;
+  --brand-chat-history: #1a1826;
+  --brand-context-rail: #221e33;
+  --brand-user-bubble: #352e4d;
+  --brand-composer: rgba(34, 30, 51, 0.94);
 
-  --titlebar-bg: #171520;
+  --titlebar-bg: #181622;
   --titlebar-text: #6e6a86;
   --scrollbar-track: #191724;
   --scrollbar-thumb: #403d52;
@@ -148,8 +207,8 @@
    ============================ */
 :root[data-theme="gruvbox"] {
   --brand-bg: #fbf1c7;
-  --brand-surface: #f4e8c1;
-  --brand-panel: #ebdbb2;
+  --brand-surface: #f2e2b7;
+  --brand-panel: #e3cf9f;
   --brand-border: #d5c4a1;
   --brand-accent: #b57614;
   --brand-accent-hover: #d65d0e;
@@ -157,11 +216,13 @@
   --brand-text-muted: #928374;
   --brand-text-light: #3c3836;
   --brand-text-strong: #282828;
-  --brand-sidebar-footer: #ebdbb2;
-  --brand-user-bubble: #ebdbb2;
-  --brand-composer: rgba(244, 232, 193, 0.92);
+  --brand-sidebar-footer: #e6d2a2;
+  --brand-chat-history: #f0dfaf;
+  --brand-context-rail: #f7e9c5;
+  --brand-user-bubble: #e8d7aa;
+  --brand-composer: rgba(247, 233, 197, 0.94);
 
-  --titlebar-bg: #ebdbb2;
+  --titlebar-bg: #e6d2a2;
   --titlebar-text: #928374;
   --scrollbar-track: #fbf1c7;
   --scrollbar-thumb: #d5c4a1;
@@ -178,9 +239,9 @@
    THEME: Tokyo Night Light
    ============================ */
 :root[data-theme="tokyo-night-light"] {
-  --brand-bg: #e1e2e7;
-  --brand-surface: #d5d6db;
-  --brand-panel: #c8c9d1;
+  --brand-bg: #e7e9f1;
+  --brand-surface: #d7d9e3;
+  --brand-panel: #c3c7d6;
   --brand-border: #b2b3bd;
   --brand-accent: #385af6;
   --brand-accent-hover: #2f4dd3;
@@ -188,11 +249,13 @@
   --brand-text-muted: #9699a3;
   --brand-text-light: #4c505e;
   --brand-text-strong: #343b58;
-  --brand-sidebar-footer: #c8c9d1;
-  --brand-user-bubble: #c8c9d1;
-  --brand-composer: rgba(213, 214, 219, 0.92);
+  --brand-sidebar-footer: #c9cedc;
+  --brand-chat-history: #d2d7e5;
+  --brand-context-rail: #e2e5ef;
+  --brand-user-bubble: #ced2df;
+  --brand-composer: rgba(226, 229, 239, 0.94);
 
-  --titlebar-bg: #c8c9d1;
+  --titlebar-bg: #c9cedc;
   --titlebar-text: #9699a3;
   --scrollbar-track: #e1e2e7;
   --scrollbar-thumb: #b2b3bd;
@@ -211,7 +274,7 @@
 :root[data-theme="rose-pine-light"] {
   --brand-bg: #faf4ed;
   --brand-surface: #fffaf3;
-  --brand-panel: #f2e9e1;
+  --brand-panel: #eadfd6;
   --brand-border: #dfdad9;
   --brand-accent: #d7827e;
   --brand-accent-hover: #286983;
@@ -219,11 +282,13 @@
   --brand-text-muted: #9893a5;
   --brand-text-light: #575279;
   --brand-text-strong: #575279;
-  --brand-sidebar-footer: #f2e9e1;
-  --brand-user-bubble: #f2e9e1;
-  --brand-composer: rgba(255, 250, 243, 0.92);
+  --brand-sidebar-footer: #eaded6;
+  --brand-chat-history: #f1e7df;
+  --brand-context-rail: #f8eee7;
+  --brand-user-bubble: #eee3dc;
+  --brand-composer: rgba(248, 238, 231, 0.94);
 
-  --titlebar-bg: #f2e9e1;
+  --titlebar-bg: #eaded6;
   --titlebar-text: #9893a5;
   --scrollbar-track: #faf4ed;
   --scrollbar-thumb: #dfdad9;

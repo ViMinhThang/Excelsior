@@ -5,7 +5,13 @@ export { SettingsStore } from "./SettingsStore.js";
 export { ConfirmationRouter } from "./ConfirmationRouter.js";
 export { EventStore } from "./EventStore.js";
 export { SessionManager } from "./SessionManager.js";
-export { RunController } from "./runController.js";
+export { runAgentLoop } from "./run/RunController.js";
+export { ReflectionMemoryStore, type ReflectionMemoryState } from "./reflection/ReflectionMemoryStore.js";
+export {
+  ReflectionRunManager,
+  shouldStartAutoReflection,
+  type ReflectionTrigger,
+} from "./reflection/ReflectionRunManager.js";
 export { createDeepSeekProvider } from "./provider.js";
 export { createBuiltInTools } from "./tools/index.js";
 export { createBuiltInCommands } from "./commands.js";
@@ -32,6 +38,7 @@ export {
   type HarnessTraceOptions,
 } from "./inspector.js";
 export { GitHubReviewService } from "./github.js";
+export { LspManager, TypeScriptLspAdapter, type LspClient, type LspDiagnostic, type LspLanguageAdapter, type LspSyncResult } from "./lsp/LspManager.js";
 export type {
   AgentHarness,
   HarnessCatalog,
@@ -47,7 +54,6 @@ export type {
   HarnessSnapshot,
   HarnessTool,
   ReviewCommandServices,
-  ToolCapability,
   ToolExecutionContext,
   ToolResult,
 } from "./types.js";

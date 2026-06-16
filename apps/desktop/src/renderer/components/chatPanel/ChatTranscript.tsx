@@ -1,4 +1,4 @@
-import type { ProjectedBlock } from "@excelsior/core";
+import type { ProjectedTurn } from "@excelsior/core";
 import type { RefObject } from "react";
 import { EmptyChat } from "./EmptyChat.js";
 import {
@@ -8,7 +8,7 @@ import {
 export { ScrollToBottomButton } from "./ScrollToBottomButton.js";
 
 type ChatTranscriptProps = {
-  blocks: ProjectedBlock[];
+  turns: ProjectedTurn[];
   isLoading: boolean;
   messagesEndRef: RefObject<HTMLDivElement | null>;
   openToolCalls: Record<string, boolean>;
@@ -18,7 +18,7 @@ type ChatTranscriptProps = {
 };
 
 export function ChatTranscript({
-  blocks,
+  turns,
   isLoading,
   messagesEndRef,
   openToolCalls,
@@ -26,36 +26,48 @@ export function ChatTranscript({
   onPickPrompt,
   onToggleToolCall,
 }: ChatTranscriptProps) {
-  // Find the boundary of the last user prompt
-  let lastUserIndex = -1;
-  for (let i = blocks.length - 1; i >= 0; i--) {
-    if (blocks[i].type === "user") {
-      lastUserIndex = i;
-      break;
-    }
-  }
+  const lastTurnIndex = turns.length - 1;
+  const staticTurns = lastTurnIndex >= 0 ? turns.slice(0, lastTurnIndex) : [];
+  const dynamicTurns = lastTurnIndex >= 0 ? turns.slice(lastTurnIndex) : turns;
 
-  const staticBlocks = lastUserIndex >= 0 ? blocks.slice(0, lastUserIndex) : [];
-  const dynamicBlocks = lastUserIndex >= 0 ? blocks.slice(lastUserIndex) : blocks;
+  const totalBlocksCount = turns.reduce((sum, turn) => sum + turn.blocks.length, 0);
 
-  if (blocks.length > 0) {
+  if (totalBlocksCount > 0) {
     return (
       <div className="chat-content-rail flex flex-col gap-3">
-        {staticBlocks.map((block) => (
-          <MessageBlock
-            key={block.id}
-            block={block}
-            isToolOpen={openToolCalls[block.id] === true}
-            onToggleToolCall={onToggleToolCall}
-          />
+        {staticTurns.map((turn) => (
+          <div key={turn.id} className="flex flex-col gap-3">
+            {turn.blocks.map((block) => (
+              <MessageBlock
+                key={block.id}
+                block={block}
+                isToolOpen={openToolCalls[block.id] === true}
+                onToggleToolCall={onToggleToolCall}
+              />
+            ))}
+            {turn.status === "failed" && turn.error && (
+              <div className="pl-4 text-xs font-semibold text-red-500">
+                Turn failed: {turn.error.message}
+              </div>
+            )}
+          </div>
         ))}
-        {dynamicBlocks.map((block) => (
-          <MessageBlock
-            key={block.id}
-            block={block}
-            isToolOpen={openToolCalls[block.id] === true}
-            onToggleToolCall={onToggleToolCall}
-          />
+        {dynamicTurns.map((turn) => (
+          <div key={turn.id} className="flex flex-col gap-3">
+            {turn.blocks.map((block) => (
+              <MessageBlock
+                key={block.id}
+                block={block}
+                isToolOpen={openToolCalls[block.id] === true}
+                onToggleToolCall={onToggleToolCall}
+              />
+            ))}
+            {turn.status === "failed" && turn.error && (
+              <div className="pl-4 text-xs font-semibold text-red-500">
+                Turn failed: {turn.error.message}
+              </div>
+            )}
+          </div>
         ))}
         {isLoading && <ThinkingRow />}
         <div ref={messagesEndRef} />

@@ -221,13 +221,6 @@ export const FileChangePreviewView: FC<{
             language={language}
           />
         </box>
-
-        {frame.showScrollbar ? (
-          <DiffScrollbar
-            innerHeight={frame.scrollbarInnerHeight}
-            thumbPosition={frame.thumbPosition}
-          />
-        ) : null}
       </box>
 
       {frame.isCapped ? (

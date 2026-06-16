@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { AskQuestionRequest, AskQuestionResponse, ConfirmRequest, ConfirmResponse } from "@excelsior/core";
+import type { AskQuestionRequest, AskQuestionResponse, ConfirmRequest, ConfirmResponse, ProjectedTask } from "@excelsior/core";
 
-export const AGENT_START = "agent_start";
-export const AGENT_END = "agent_end";
 export const TURN_START = "turn_start";
 export const TURN_END = "turn_end";
 export const MESSAGE_START = "message_start";
@@ -18,8 +16,8 @@ export const QUESTION_REQUESTED = "question_requested";
 export const QUESTION_ANSWERED = "question_answered";
 export const HISTORY_COMPACTED = "history_compacted";
 export const SESSION_CHANGED = "session_changed";
+export const TASKS_UPDATED = "tasks_updated";
 export const ERROR = "error";
-export const REASONING_END = "reasoning_end";
 
 export interface HarnessMessage {
   id: string;
@@ -33,8 +31,6 @@ export interface HarnessMessage {
 }
 
 export type HarnessEventDataMap = {
-  [AGENT_START]: Record<string, never>;
-  [AGENT_END]: { cancelled: boolean };
   [TURN_START]: Record<string, never>;
   [TURN_END]: { cancelled: boolean };
   [MESSAGE_START]: { message: HarnessMessage };
@@ -53,6 +49,7 @@ export type HarnessEventDataMap = {
     toolCallId: string;
     toolName: string;
     delta: string;
+    target?: "input" | "output";
   };
   [TOOL_EXECUTION_END]: {
     toolCallId: string;
@@ -84,11 +81,8 @@ export type HarnessEventDataMap = {
     sessionId: string | null;
     reason: "created" | "switched" | "deleted" | "renamed" | "reset";
   };
+  [TASKS_UPDATED]: { tasks: ProjectedTask[] };
   [ERROR]: { message: string };
-  [REASONING_END]: {
-    messageId: string;
-    content: string;
-  };
 };
 
 export type HarnessEventType = keyof HarnessEventDataMap;

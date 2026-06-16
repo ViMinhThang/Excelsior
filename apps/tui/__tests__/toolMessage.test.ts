@@ -13,7 +13,7 @@ function commandFor(toolName: string, args: Record<string, unknown>): string {
 
 describe("ToolMessage command formatting", () => {
   it("shows view calls with the full path", () => {
-    const filePath = ["packages", "agent-harness", "src", "runController.ts"].join("/");
+    const filePath = ["packages", "agent-harness", "src", "run", "RunController.ts"].join("/");
     expect(commandFor(
       "view",
       { filePath },
@@ -96,6 +96,48 @@ describe("ToolMessage command formatting", () => {
     expect(frame).not.toContain("received");
     expect(frame).not.toContain("<html>");
     expect(frame).not.toContain("<body>");
+  });
+
+  it("renders a compact pending run command status line", async () => {
+    const screen = await renderTui(createElement(ToolMessage, {
+      toolName: "runCommand",
+      toolArgs: JSON.stringify({ command: "npm", args: ["test"] }),
+      status: "pending",
+      expanded: false,
+    }));
+
+    const frame = screen.lastFrame() ?? "";
+    expect(frame).toMatch(/[◇◆]/);
+    expect(frame).toContain("Test");
+    expect(frame).toContain("npm test");
+    expect(frame).toContain("running");
+    expect(frame).toContain("npm is running...");
+  });
+
+  it("renders updateTasks output as a checklist preview", async () => {
+    const screen = await renderTui(createElement(ToolMessage, {
+      toolName: "updateTasks",
+      toolArgs: JSON.stringify({
+        tasks: [
+          { id: "inspect", text: "Inspect files", status: "done" },
+          { id: "edit", text: "Apply edits", status: "in-progress" },
+          { id: "verify", text: "Run tests", status: "todo" },
+        ],
+      }),
+      status: "completed",
+      expanded: true,
+      content: "Updated 3 tasks.",
+    }));
+
+    const frame = screen.lastFrame() ?? "";
+    expect(frame).toContain("Tasks");
+    expect(frame).toContain("1/3");
+    expect(frame).toContain("checklist updated");
+    expect(frame).toContain("✓");
+    expect(frame).toContain("◆");
+    expect(frame).toContain("Inspect files");
+    expect(frame).toContain("Apply edits");
+    expect(frame).toContain("Run tests");
   });
 
   it("shows line-numbered changed rows for compact edits", async () => {

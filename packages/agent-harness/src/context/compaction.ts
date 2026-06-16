@@ -1,6 +1,5 @@
 import { generateText } from "ai";
-import { projectEventsToMessages } from "../projection.js";
-import type { AnyHarnessEvent } from "../events.js";
+import type { AgentMessage } from "@excelsior/core";
 import type { ProviderRegistry } from "../registries.js";
 import type { HarnessSettings } from "../types.js";
 
@@ -11,10 +10,10 @@ export interface CompactionSummaryOptions {
 }
 
 export async function buildCompactionSummary(
-  events: readonly AnyHarnessEvent[],
+  messages: readonly AgentMessage[],
   options: CompactionSummaryOptions = {},
 ): Promise<string> {
-  const localHistoryText = projectEventsToMessages(events)
+  const localHistoryText = messages
     .map((message) => `${message.role.toUpperCase()}: ${typeof message.content === "string" ? message.content : ""}`)
     .join("\n");
 

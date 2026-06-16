@@ -47,9 +47,13 @@ export function parseSkillFile(
 ): { metadata: SkillMetadata; body: string } | null {
   try {
     const content = reader.readFile(filePath);
+    // Normalize Windows CRLF newlines to LF so frontmatter parsing works
+    // consistently across platforms. The /g flag replaces every CRLF pair.
     const normalized = content.replace(/\r\n/g, "\n").trim();
     if (!normalized.startsWith("---")) return null;
 
+    // Look for the closing frontmatter divider. Starting at index 3 skips the
+    // opening "---"; requiring "\n---" avoids matching dashes inside a value.
     const secondDividerIndex = normalized.indexOf("\n---", 3);
     if (secondDividerIndex === -1) return null;
 
@@ -71,7 +75,7 @@ export function parseSkillFile(
       const key = trimmedLine.substring(0, colonIndex).trim();
       let value = trimmedLine.substring(colonIndex + 1).trim();
 
-      // Strip quotes
+      // Strip simple wrapping quotes from frontmatter values.
       if (value.startsWith('"') && value.endsWith('"')) {
         value = value.substring(1, value.length - 1);
       } else if (value.startsWith("'") && value.endsWith("'")) {

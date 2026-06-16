@@ -3,82 +3,26 @@ import type { MouseEvent, ScrollBoxRenderable } from "@opentui/core";
 import { formatAgentMode } from "@excelsior/core";
 import ChatHistory from "../components/chat/ChatHistory.js";
 import ChatInput from "../components/chat/ChatInput.js";
+import TaskList from "../components/chat/TaskList.js";
 import SubAgentPickerPanel from "../components/subAgents/SubAgentPickerPanel.js";
 import ThinkingIndicator from "../components/chat/ThinkingIndicator.js";
-import { textAttrs } from "../platform/opentui/textAttributes.js";
+import { useKeymap } from "../hooks/useKeymap.js";
 import { theme } from "../theme.js";
 import type {
   InputModeRenderContext,
   SubAgentPickerModeRenderContext,
 } from "./types.js";
+import {
+  isScrolledBackFromLatest,
+  getScrollSnapshot,
+  scrollToLatest,
+  getTranscriptArrowScrollTop,
+} from "../lib/scrollUtilities.js";
+import ScrollToLatestButton from "../components/chat/ScrollToLatestButton.js";
 
 type ConversationModeContext =
   | InputModeRenderContext
   | SubAgentPickerModeRenderContext;
-
-interface ScrollSnapshot {
-  scrollTop: number;
-  scrollHeight: number;
-  viewportHeight: number;
-}
-
-const SCROLL_BOTTOM_EPSILON = 1;
-
-export function isScrolledBackFromLatest(
-  snapshot: ScrollSnapshot,
-  epsilon = SCROLL_BOTTOM_EPSILON,
-): boolean {
-  const maxScrollTop = Math.max(0, snapshot.scrollHeight - snapshot.viewportHeight);
-  return maxScrollTop > epsilon && snapshot.scrollTop < maxScrollTop - epsilon;
-}
-
-function getScrollSnapshot(scrollbox: ScrollBoxRenderable): ScrollSnapshot {
-  return {
-    scrollTop: scrollbox.scrollTop,
-    scrollHeight: scrollbox.scrollHeight,
-    viewportHeight: scrollbox.viewport.height,
-  };
-}
-
-function scrollToLatest(scrollbox: ScrollBoxRenderable): void {
-  scrollbox.scrollTo({
-    x: scrollbox.scrollLeft,
-    y: Math.max(0, scrollbox.scrollHeight - scrollbox.viewport.height),
-  });
-}
-
-export interface ScrollToLatestButtonProps {
-  onPress: () => void;
-}
-
-export const ScrollToLatestButton: FC<ScrollToLatestButtonProps> = ({ onPress }) => {
-  const handleMouseDown = useCallback((event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    onPress();
-  }, [onPress]);
-
-  return (
-    <box
-      position="absolute"
-      left={0}
-      bottom={1}
-      width="100%"
-      justifyContent="center"
-      alignItems="center"
-      zIndex={10}
-    >
-      <box onMouseDown={handleMouseDown}>
-        <text
-          fg={theme.colors.muted}
-          attributes={textAttrs({ dim: true })}
-        >
-          {"\u2193"}
-        </text>
-      </box>
-    </box>
-  );
-};
 
 interface ConversationViewProps {
   ctx: ConversationModeContext;
@@ -105,7 +49,7 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
   useEffect(() => {
     scheduleScrollStateRefresh();
   }, [
-    ctx.transcript.blocks,
+    ctx.transcript.turns,
     ctx.transcript.toolsExpanded,
     ctx.transcript.viewportKey,
     scheduleScrollStateRefresh,
@@ -117,6 +61,40 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
     scrollToLatest(scrollbox);
     setIsScrolledBack(false);
   }, []);
+
+  const scrollTranscript = useCallback((direction: "up" | "down") => {
+    const scrollbox = scrollboxRef.current;
+    if (!scrollbox) return;
+    scrollbox.scrollTo({
+      x: scrollbox.scrollLeft,
+      y: getTranscriptArrowScrollTop(getScrollSnapshot(scrollbox), direction),
+    });
+    scheduleScrollStateRefresh();
+  }, [scheduleScrollStateRefresh]);
+
+  const transcriptOwnsArrows =
+    !ctx.input.focused &&
+    !ctx.runtime.pending &&
+    !ctx.runtime.paletteOpen &&
+    !ctx.panel.active;
+
+  useKeymap(
+    {
+      up: () => scrollTranscript("up"),
+      down: () => scrollTranscript("down"),
+    },
+    { enabled: transcriptOwnsArrows, priority: 20 },
+  );
+
+  const blurInput = useCallback((event: MouseEvent) => {
+    event.stopPropagation();
+    ctx.input.setFocused(false);
+  }, [ctx.input]);
+
+  const focusInput = useCallback((event: MouseEvent) => {
+    event.stopPropagation();
+    ctx.input.setFocused(true);
+  }, [ctx.input]);
 
   const ActiveFeaturePanel = ctx.panel.active?.component;
   const showSubAgentPicker = options.showSubAgentPicker && "subAgents" in ctx;
@@ -135,11 +113,12 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
           stickyScroll
           stickyStart="bottom"
           onMouseScroll={scheduleScrollStateRefresh}
+          onMouseDown={blurInput}
           onSizeChange={scheduleScrollStateRefresh}
         >
           <box flexDirection="column" width="100%">
             <ChatHistory
-              blocks={ctx.transcript.blocks}
+              turns={ctx.transcript.turns}
               toolsExpanded={ctx.transcript.toolsExpanded}
             />
 
@@ -170,13 +149,20 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
         </box>
       ) : (
         <box flexShrink={0} flexDirection="column" width="100%">
+          <TaskList tasks={ctx.transcript.tasks} />
           <ChatInput
             value={ctx.input.value}
             onChange={ctx.input.setValue}
             onSubmit={ctx.input.submit}
             shouldSubmit={ctx.input.shouldSubmit}
             placeholder="Type your coding task here..."
-            focus={ctx.chatMode === "input" && !ctx.runtime.pending && !ctx.runtime.paletteOpen}
+            focus={
+              ctx.input.focused &&
+              ctx.chatMode === "input" &&
+              !ctx.runtime.pending &&
+              !ctx.runtime.paletteOpen
+            }
+            onMouseDown={focusInput}
           />
           <box flexDirection="row" gap={1}>
             <text fg={theme.colors.modeHintKey} bg={theme.colors.modeHintKeyBg}>

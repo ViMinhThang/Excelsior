@@ -10,6 +10,13 @@ import {
   genericToolArgsSummary,
   parseToolArgs,
 } from "./toolArgs.js";
+import {
+  buildWritingProgressLines,
+  estimateWriteProgressStats,
+  isFileActionTool,
+  isReadOnlyBrowseTool,
+  isWriteTool,
+} from "./toolProgress.js";
 import { toolDisplayRegistry } from "./toolDisplayRegistry.js";
 import type {
   ToolDisplay,
@@ -60,11 +67,27 @@ export function createToolDisplay({
   const tone = toneFor(status, normalizedContent);
   const command = createCommand(name, args, toolArgs, filePath);
   const summaryLine = createSummaryLine(name, args, normalizedContent);
+  const isFileAction = isFileActionTool(name);
+  const isWriteAction = isWriteTool(name);
+  const isReadOnlyBrowse = isReadOnlyBrowseTool(name);
+  const isPendingFileAction = status === "pending" && isFileAction;
   const pendingFileChangePreview = parsePendingFileChangePreview({
     toolName: name,
     filePath,
     diff,
   });
+  const policy = {
+    isFileAction,
+    isWriteAction,
+    isReadOnlyBrowse,
+    activityLabel: isPendingFileAction ? "Writing..." : undefined,
+    expandedDetail: isPendingFileAction && !isWriteAction
+      ? buildWritingProgressLines(toolArgs).join("\n")
+      : undefined,
+    progressStats: isPendingFileAction && isWriteAction
+      ? estimateWriteProgressStats(toolArgs)
+      : undefined,
+  };
 
   const config = toolDisplayRegistry.get(name);
   if (config?.formatter) {
@@ -84,6 +107,7 @@ export function createToolDisplay({
       summaryLine,
       tone,
       ...result,
+      ...policy,
       fileChangePreview: result.fileChangePreview ?? pendingFileChangePreview,
     } as ToolDisplay;
   }
@@ -98,5 +122,6 @@ export function createToolDisplay({
     resultPreview: normalizedContent && normalizedContent.length >= 140 ? preview.lines : undefined,
     omittedResultLines: normalizedContent && normalizedContent.length >= 140 ? preview.omitted : undefined,
     tone,
+    ...policy,
   };
 }

@@ -1,4 +1,3 @@
-import { completeCommandInput } from "../lib/commandSubmission.js";
 import { ownsChatInput } from "../lib/inputOwnership.js";
 import { inputHint } from "./hints.js";
 import { renderConversation } from "./conversationView.js";
@@ -61,16 +60,25 @@ function inputKeymaps(ctx: InputModeKeymapContext): ChatModeKeymapSpec[] {
           else ctx.navigateDown();
         },
         tab: () => {
-          if (!hasSuggestions) return;
-          const completed = completeCommandInput(
-            ctx.suggestion.filtered,
-            ctx.suggestion.selectedIndex,
-          );
-          if (completed) ctx.setInput(completed);
+          ctx.setInputFocused(!ctx.inputFocused);
         },
         return: () => {
           if (!hasCommandSuggestions(ctx)) return;
           ctx.submit();
+        },
+      },
+    },
+    {
+      enabled: (
+        !ctx.inputFocused &&
+        !ctx.pending &&
+        !ctx.activePanelId &&
+        !ctx.isPaletteOpen
+      ),
+      priority: 10,
+      map: {
+        tab: () => {
+          ctx.setInputFocused(true);
         },
       },
     },

@@ -5,7 +5,7 @@ import {
   handleDoubleEscapeCancel,
   resetDoubleEscapeCancel,
 } from "@excelsior/core";
-import { Plus, Mic, ArrowUp, Square } from "lucide-react";
+import { ArrowUp, ChevronDown, Laptop, Mic, Plus, Square } from "lucide-react";
 
 type FloatingComposerProps = {
   inputValue: string;
@@ -31,7 +31,7 @@ function PlanToggle({
       type="button"
       aria-pressed={isPlanMode}
       onClick={() => onModeChange(isPlanMode ? "act" : "plan")}
-      className="flex h-7 items-center gap-1.5 rounded-full px-2 text-[10px] font-semibold text-brand-text-muted hover:text-brand-text-strong scale-snappy transition-snappy-colors"
+      className="composer-control"
       title={isPlanMode ? "Disable plan mode" : "Enable plan mode"}
     >
       <span
@@ -48,6 +48,7 @@ function PlanToggle({
         />
       </span>
       Plan
+      <ChevronDown className="h-3 w-3" />
     </button>
   );
 }
@@ -100,58 +101,79 @@ export function FloatingComposer({
   }, [inputValue]);
 
   return (
-    <div className="w-full max-w-[calc(100%-8px)] mx-auto rounded-2xl composer-panel select-none">
+    <div className="w-full max-w-[calc(100%-8px)] mx-auto composer-panel select-none">
       <textarea
         ref={textareaRef}
         value={inputValue}
         onChange={(event) => onInputChange(event.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Ask for follow-up changes"
-        className="w-full resize-none border-0 bg-transparent px-1 py-0 text-sm leading-6 text-brand-text-strong outline-none placeholder:text-brand-text-muted/60 placeholder:truncate select-text transition-[height] duration-150 ease-out"
+        placeholder="Ask anything, @ to mention, / for actions"
+        className="composer-textarea select-text"
       />
-      <div className="mt-1 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      <div className="composer-main-row">
+        <div className="flex min-w-0 items-center gap-2">
           <button
             type="button"
-            className="flex items-center justify-center p-1 rounded-lg text-brand-text-muted hover:text-brand-text-strong hover:bg-brand-panel transition-colors"
+            className="composer-icon-button"
             title="Add context"
             aria-label="Add context"
           >
             <Plus className="h-4 w-4" />
           </button>
+          <button
+            type="button"
+            className="composer-control min-w-0"
+            title="Current model"
+          >
+            <span className="truncate">DeepSeek V4</span>
+            <ChevronDown className="h-3 w-3 shrink-0" />
+          </button>
           <PlanToggle mode={mode} onModeChange={onModeChange} />
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            className="flex items-center justify-center p-1 rounded-lg text-brand-text-muted hover:text-brand-text-strong hover:bg-brand-panel transition-colors"
-          >
-            <Mic className="h-4 w-4" />
-          </button>
+        <div className="flex shrink-0 items-center gap-2">
           {isLoading ? (
             <button
               type="button"
               onClick={onCancel}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors shadow-sm"
+              className="composer-action-button bg-red-500 text-white hover:bg-red-600"
               title="Cancel"
               aria-label="Cancel"
             >
               <Square className="h-3 w-3 fill-current" />
             </button>
-          ) : (
+          ) : inputValue.trim() ? (
             <button
               type="button"
               onClick={onSend}
-              disabled={!inputValue.trim()}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-text-muted hover:bg-brand-text-light text-brand-bg disabled:opacity-30 disabled:pointer-events-none transition-colors shadow-sm"
+              className="composer-action-button bg-brand-accent text-brand-accent-contrast hover:bg-brand-accent-hover"
               title="Send"
               aria-label="Send"
             >
               <ArrowUp className="h-4 w-4" />
             </button>
+          ) : (
+            <button
+              type="button"
+              className="composer-action-button bg-brand-panel/70 text-brand-text-muted hover:bg-[var(--surface-hover)] hover:text-brand-text-strong"
+              title="Voice input"
+              aria-label="Voice input"
+            >
+              <Mic className="h-4 w-4" />
+            </button>
           )}
         </div>
+      </div>
+      <div className="composer-footer">
+        <button
+          type="button"
+          className="composer-control"
+          title="Local workspace"
+        >
+          <Laptop className="h-3.5 w-3.5" />
+          Local
+          <ChevronDown className="h-3 w-3" />
+        </button>
       </div>
     </div>
   );

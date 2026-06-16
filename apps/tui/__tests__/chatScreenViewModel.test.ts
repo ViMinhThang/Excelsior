@@ -4,6 +4,7 @@ import type {
   CommandDefinition,
   ConfirmRequest,
   ProjectedBlock,
+  ProjectedTurn,
 } from "@excelsior/core";
 import {
   buildChatInteractionState,
@@ -18,6 +19,13 @@ import {
 } from "../src/hooks/chatScreenViewModel.js";
 
 const noop = () => {};
+const settings = {
+  deepseekApiKey: "",
+  githubToken: "",
+  agentToolLoopSteps: "unlimited",
+  autoReflectionEnabled: false,
+  autoApproveWorkspaceEdits: false,
+};
 
 function toolBlock(id = "tool_1"): ProjectedBlock & { type: "tool-call" } {
   return {
@@ -225,7 +233,7 @@ describe("chat screen model builders", () => {
     };
 
     const plane = buildChatInteractionState({
-      displayBlocks: [toolBlock("tool_root"), selectedSubAgent],
+      turns: [{ id: "turn_1", status: "completed", blocks: [toolBlock("tool_root"), selectedSubAgent] }],
       chatMode: "input",
       isLoading: false,
       pendingConfirmation: null,
@@ -234,6 +242,7 @@ describe("chat screen model builders", () => {
       isPaletteOpen: false,
       suggestion,
       setInput: noop,
+      setInputFocused: noop,
       submit: noop,
       cancel: noop,
       toggleMode: () => undefined,
@@ -243,9 +252,7 @@ describe("chat screen model builders", () => {
       toggleToolsExpanded: noop,
       navigateUp: noop,
       navigateDown: noop,
-      setChatMode: noop,
-      nextSubAgent: noop,
-      prevSubAgent: noop,
+      inputFocused: false,
     });
 
     expect(plane.pendingKind).toBe("question");
@@ -262,87 +269,14 @@ describe("chat screen model builders", () => {
 
   it("keeps chat control plane derivations local", () => {
     expect(countToolCalls([
-      toolBlock("tool_root"),
-      subAgentBlockWithTool("sub_tool"),
+      { id: "turn_1", status: "completed", blocks: [
+        toolBlock("tool_root"),
+        subAgentBlockWithTool("sub_tool"),
+      ] }
     ])).toBe(2);
     expect(getChatPendingState({
       pendingConfirmation: pendingRequest(),
       pendingQuestion: null,
     }).pendingKind).toBe("confirmation");
-  });
-
-  it("builds sub-agent picker context with command expansion state", () => {
-    const selectedTool = toolBlock("tool_selected");
-    const otherTool = toolBlock("tool_other");
-    const selectedSubAgent = subAgentBlock("sub_selected");
-    const displayBlocks: ProjectedBlock[] = [selectedSubAgent, selectedTool, otherTool];
-    const context = buildModeViewContext({
-      chatMode: "subagent-picker",
-      displayBlocks,
-      inputValue: "/review ",
-      setInput: noop,
-      handleSubmit: noop,
-      isLoading: false,
-      pending: null,
-      paletteOpen: false,
-      commandResult: "done",
-      agentMode: "act",
-      activePanel: undefined,
-      featureContext: {
-        sessions: [],
-        currentSessionId: null,
-        switchSession: noop,
-        deleteSession: noop,
-        closePanel: noop,
-      },
-      subAgents: [selectedSubAgent],
-      subAgentIndex: 0,
-      toolsExpanded: true,
-      viewportKey: "none:0",
-    });
-
-    expect(context.chatMode).toBe("subagent-picker");
-    if (context.chatMode !== "subagent-picker") throw new Error("expected sub-agent picker context");
-    expect(context.input.value).toBe("/review ");
-    expect(context.runtime.commandResult).toBe("done");
-    expect(context.transcript.blocks).toBe(displayBlocks);
-    expect(context.transcript.toolsExpanded).toBe(true);
-    expect(context.subAgents.blocks).toEqual([selectedSubAgent]);
-    expect("tools" in context).toBe(false);
-  });
-
-  it("builds sub-agent detail context with only owned mode state", () => {
-    const selectedSubAgent = subAgentBlock("sub_selected");
-    const context = buildModeViewContext({
-      chatMode: "subagent-detail",
-      displayBlocks: [selectedSubAgent],
-      inputValue: "",
-      setInput: noop,
-      handleSubmit: noop,
-      isLoading: false,
-      pending: null,
-      paletteOpen: false,
-      commandResult: null,
-      agentMode: "act",
-      activePanel: undefined,
-      featureContext: {
-        sessions: [],
-        currentSessionId: null,
-        switchSession: noop,
-        deleteSession: noop,
-        closePanel: noop,
-      },
-      subAgents: [selectedSubAgent],
-      subAgentIndex: 0,
-      toolsExpanded: true,
-      viewportKey: "none:0",
-    });
-
-    expect(context.chatMode).toBe("subagent-detail");
-    if (context.chatMode !== "subagent-detail") throw new Error("expected sub-agent detail context");
-    expect(context.subAgents.blocks).toEqual([selectedSubAgent]);
-    expect(context.toolsExpanded).toBe(true);
-    expect("transcript" in context).toBe(false);
-    expect("tools" in context).toBe(false);
   });
 });

@@ -42,6 +42,9 @@ export class HarnessAgentHost implements AgentHost {
       case "cancel":
         this.harness.cancel();
         return none();
+      case "cancel-reflection":
+        this.harness.cancelReflection();
+        return none();
       case "execute-command":
         return { type: "command-result", result: await this.harness.executeCommand(intent.input) };
       case "create-session":
@@ -67,8 +70,7 @@ export class HarnessAgentHost implements AgentHost {
         this.harness.respondToConfirmation(intent.callId, intent.approved);
         return none();
       case "approve-all-confirmations": {
-        const pending = this.harness.getSnapshot().pendingConfirmation;
-        if (pending) this.harness.respondToConfirmation(pending.callId, true);
+        this.harness.approveAllConfirmations();
         return none();
       }
       case "respond-to-question":

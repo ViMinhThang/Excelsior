@@ -11,7 +11,7 @@ import {
 } from "./events.js";
 import { createDeepSeekProvider } from "./provider.js";
 import { ProviderRegistry, ToolRegistry } from "./registries.js";
-import { RunController } from "./runController.js";
+import { runAgentLoop } from "./run/RunController.js";
 import {
   createGlobTool,
   createLsTool,
@@ -148,7 +148,7 @@ async function main(): Promise<void> {
     });
   };
 
-  await new RunController().run({
+  await runAgentLoop({
     messages: [{ role: "user", content: request.prompt }],
     systemPrompt: buildChildSystemPrompt(request),
     settings: {

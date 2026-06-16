@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { z } from "zod";
 import { PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
+import { TOOL_EXECUTION_UPDATE } from "../events.js";
 import type { HarnessTool, ToolExecutionContext } from "../types.js";
 import { text } from "./fs.js";
 
@@ -17,8 +18,7 @@ export function createRunCommandTool(): HarnessTool<z.infer<typeof runCommandSch
     name: "runCommand",
     description: "Run an executable with distinct arguments in the workspace.",
     inputSchema: runCommandSchema,
-    capabilities: ["shell"],
-    async execute({ command, args }, ctx) {
+    async execute({ command, args }, ctx, options) {
       const normalizedArgs = args ?? [];
       const risk = classifyCommandRisk(command, normalizedArgs);
       if (risk.blocked) return text(risk.message, true);
@@ -31,12 +31,12 @@ export function createRunCommandTool(): HarnessTool<z.infer<typeof runCommandSch
         });
         if (!response.approved) return text("Denied by user.");
       }
-      return text(await runProcess(command, normalizedArgs, ctx));
+      return text(await runProcess(command, normalizedArgs, ctx, options?.toolCallId));
     },
   };
 }
 
-export function runProcess(command: string, args: string[], ctx: ToolExecutionContext): Promise<string> {
+export function runProcess(command: string, args: string[], ctx: ToolExecutionContext, toolCallId?: string): Promise<string> {
   return new Promise((resolveProcess) => {
     let stdout = "";
     let stderr = "";
@@ -47,6 +47,16 @@ export function runProcess(command: string, args: string[], ctx: ToolExecutionCo
       cwd: ctx.workspaceRoot,
       shell: false,
     });
+
+    const emitOutput = (delta: string) => {
+      if (!toolCallId || !ctx.emit || !delta) return;
+      ctx.emit(TOOL_EXECUTION_UPDATE, {
+        toolCallId,
+        toolName: "runCommand",
+        delta,
+        target: "output",
+      }, { relatedToolCallId: toolCallId });
+    };
 
     const finish = (output: string) => {
       if (settled) return;
@@ -81,6 +91,7 @@ export function runProcess(command: string, args: string[], ctx: ToolExecutionCo
       if (totalLength < MAX_OUTPUT_LENGTH) {
         stdout += chunk;
         totalLength += chunk.length;
+        emitOutput(chunk);
       }
     });
     child.stderr?.on("data", (data) => {
@@ -88,6 +99,7 @@ export function runProcess(command: string, args: string[], ctx: ToolExecutionCo
       if (totalLength < MAX_OUTPUT_LENGTH) {
         stderr += chunk;
         totalLength += chunk.length;
+        emitOutput(chunk);
       }
     });
     child.on("error", (error: NodeJS.ErrnoException) => {

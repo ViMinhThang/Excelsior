@@ -60,7 +60,7 @@ export function SessionRow({ isActive, session, onRequestDelete, onRename, onSwi
   return (
     <div
       className={`sidebar-session-row transition-snappy-colors ${
-        isActive ? "sidebar-session-row-active bg-brand-panel text-brand-text-strong" : ""
+        isActive ? "sidebar-session-row-active text-brand-text-strong" : ""
       }`}
     >
       {isEditing ? (
@@ -70,7 +70,7 @@ export function SessionRow({ isActive, session, onRequestDelete, onRename, onSwi
           onChange={(event) => setDraftTitle(event.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={commitRename}
-          className="sidebar-session-input rounded-12"
+          className="sidebar-session-input"
         />
       ) : (
         <button

@@ -67,7 +67,7 @@ const Router = () => {
   );
 
   return (
-    <box flexDirection="column" height="100%" width="100%" flexGrow={1}>
+    <box flexDirection="column" height="100%" width="100%" flexGrow={1} padding={1}>
       <ScreenDispatcher screen={currentScreen} />
     </box>
   );

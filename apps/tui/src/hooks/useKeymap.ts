@@ -31,10 +31,11 @@ export function useKeymap(
     return register(entryRef.current);
   }, []);
 
-  useKeyboardInput((input, key) => {
+  useKeyboardInput((input, key, event) => {
     const combo = parseKeyCombo(input, key);
     const winner = getAction(combo);
     if (winner && winner.entry === entryRef.current) {
+      event.preventDefault();
       winner.action();
     }
   });

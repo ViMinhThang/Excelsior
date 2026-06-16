@@ -1,12 +1,20 @@
+export type ToolCallStatus = "pending" | "completed" | "error";
+
+export type ProjectedTaskStatus = "todo" | "in-progress" | "done";
+
+export interface ProjectedTask {
+  id: string;
+  text: string;
+  status: ProjectedTaskStatus;
+}
+
 export interface ToolCallInfo {
   toolName: string;
   toolArgs: string;
   toolCallId: string;
-  status: "pending" | "completed" | "error";
+  status: ToolCallStatus;
   content?: string;
 }
-
-export type ToolCallStatus = "pending" | "completed" | "error";
 
 export type ProjectedBlock =
   | {
@@ -18,13 +26,6 @@ export type ProjectedBlock =
     }
   | {
       type: "assistant";
-      id: string;
-      content: string;
-      timestamp: string;
-      isFrozen?: true;
-    }
-  | {
-      type: "reasoning";
       id: string;
       content: string;
       timestamp: string;
@@ -47,7 +48,23 @@ export type ProjectedBlock =
       state: ProjectedSubAgent;
       timestamp: string;
       isFrozen?: true;
+    }
+  | {
+      type: "compaction-boundary";
+      id: string;
+      summary: string;
+      timestamp: string;
     };
+
+export interface ProjectedTurn {
+  id: string;
+  status: "in-progress" | "completed" | "interrupted" | "failed";
+  blocks: ProjectedBlock[];
+  error?: { message: string };
+  startTime?: string;
+  endTime?: string;
+  sawCompaction?: boolean;
+}
 
 export interface ProjectedSubAgent {
   status: "running" | "done" | "error";
@@ -66,7 +83,7 @@ export type SubAgentProjectionPart =
       toolName: string;
       toolArgs: string;
       toolCallId: string;
-      status: "pending" | "completed" | "error";
+      status: ToolCallStatus;
       content?: string;
     };
 

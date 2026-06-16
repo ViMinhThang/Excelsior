@@ -5,7 +5,7 @@ import { AgentHostClient } from "@excelsior/client";
 function createHost(result: AgentHostDispatchResult): AgentHost {
   return {
     getState: () => ({
-      displayBlocks: [],
+      turns: [],
       isLoading: false,
       sessions: [],
       currentSessionId: null,
@@ -21,6 +21,11 @@ function createHost(result: AgentHostDispatchResult): AgentHost {
       mode: "plan",
       pendingConfirmation: null,
       pendingQuestion: null,
+      reflection: {
+        status: "idle",
+        touchedFiles: [],
+        memoryRoot: "/tmp/memory",
+      },
     }),
     subscribe: () => () => {},
     getCatalog: () => ({
@@ -29,6 +34,7 @@ function createHost(result: AgentHostDispatchResult): AgentHost {
         deepseekApiKey: "",
         githubToken: "",
         agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
       },
     }),
     dispatch: vi.fn(async () => result),
@@ -49,6 +55,7 @@ describe("@excelsior/client AgentHostClient", () => {
       deepseekApiKey: "",
       githubToken: "",
       agentToolLoopSteps: "unlimited",
+      autoReflectionEnabled: false,
     });
   });
 

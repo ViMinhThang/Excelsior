@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
 import type {
   AgentClientState,
   AgentMode,
   AskQuestionResponse,
+  ReflectionClientState,
 } from "@excelsior/core";
 import {
   ChatTranscript,
@@ -10,6 +10,7 @@ import {
 } from "./chatPanel/ChatTranscript.js";
 import { FloatingComposer } from "./chatPanel/FloatingComposer.js";
 import { PendingConfirmation, PendingQuestion } from "./chatPanel/PendingPrompts.js";
+import { useChatViewport } from "../hooks/useChatViewport.js";
 
 type ChatPanelProps = {
   commandResult: string | null;
@@ -17,6 +18,7 @@ type ChatPanelProps = {
   openToolCalls: Record<string, boolean>;
   state: AgentClientState | null;
   onCancel: () => void;
+  onCancelReflection: () => void;
   onInputChange: (value: string) => void;
   onModeChange: (mode: AgentMode) => void;
   onRespondToConfirmation: (callId: string, approved: boolean) => void;
@@ -25,14 +27,13 @@ type ChatPanelProps = {
   onToggleToolCall: (id: string) => void;
 };
 
-const BOTTOM_THRESHOLD_PX = 80;
-
 export function ChatPanel({
   commandResult,
   inputValue,
   openToolCalls,
   state,
   onCancel,
+  onCancelReflection,
   onInputChange,
   onModeChange,
   onRespondToConfirmation,
@@ -40,89 +41,40 @@ export function ChatPanel({
   onSend,
   onToggleToolCall,
 }: ChatPanelProps) {
-  const blocks = state?.displayBlocks ?? [];
+  const turns = state?.turns ?? [];
   const isLoading = state?.isLoading ?? false;
   const hasPendingConfirmation = Boolean(state?.pendingConfirmation);
   const hasPendingQuestion = Boolean(state?.pendingQuestion);
   const hasPendingAction = hasPendingConfirmation || hasPendingQuestion;
   const mode = state?.mode ?? "plan";
+  const reflection = state?.reflection ?? null;
   const currentSessionId = state?.currentSessionId ?? null;
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const transcriptRef = useRef<HTMLDivElement>(null);
-  const isAtBottomRef = useRef(true);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
-
-  const setBottomState = (nextIsAtBottom: boolean) => {
-    isAtBottomRef.current = nextIsAtBottom;
-    setIsAtBottom(nextIsAtBottom);
-
-    if (nextIsAtBottom) {
-      setHasUnreadMessages(false);
-    }
-  };
-
-  const scrollToBottom = (behavior: ScrollBehavior) => {
-    const transcript = transcriptRef.current;
-    if (!transcript) return;
-
-    transcript.scrollTo({ top: transcript.scrollHeight, behavior });
-
-    if (behavior === "auto") {
-      setBottomState(true);
-      return;
-    }
-
-    setHasUnreadMessages(false);
-  };
-
-  const handleTranscriptScroll = () => {
-    const transcript = transcriptRef.current;
-    if (!transcript) return;
-
-    const distanceFromBottom =
-      transcript.scrollHeight - transcript.scrollTop - transcript.clientHeight;
-    setBottomState(distanceFromBottom <= BOTTOM_THRESHOLD_PX);
-  };
-
-  useEffect(() => {
-    isAtBottomRef.current = true;
-    setIsAtBottom(true);
-    setHasUnreadMessages(false);
-
-    requestAnimationFrame(() => {
-      scrollToBottom("auto");
-    });
-  }, [currentSessionId]);
-
-  useEffect(() => {
-    if (isAtBottomRef.current) {
-      requestAnimationFrame(() => {
-        scrollToBottom("auto");
-      });
-      return;
-    }
-
-    if (blocks.length > 0 || isLoading || hasPendingAction) {
-      setHasUnreadMessages(true);
-    }
-  }, [blocks, isLoading, hasPendingAction]);
-
-  const showScrollToBottom = !isAtBottom && blocks.length > 0;
+  const chatViewport = useChatViewport({
+    currentSessionId,
+    hasPendingAction,
+    isLoading,
+    turnCount: turns.length,
+  });
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-brand-bg">
+    <main className="chat-history-shell flex min-w-0 flex-1 flex-col overflow-hidden">
       <section className="relative min-h-0 flex-1 overflow-hidden">
         <div
-          ref={transcriptRef}
-          onScroll={handleTranscriptScroll}
-          className={`h-full overflow-y-auto px-8 pt-6 ${hasPendingAction ? "pb-96" : "pb-56"
+          ref={chatViewport.transcriptRef}
+          onScroll={chatViewport.handleTranscriptScroll}
+          className={`chat-transcript-scroll h-full overflow-y-auto px-8 pt-6 ${hasPendingAction ? "pb-96" : "pb-56"
             }`}
         >
+          {reflection && (
+            <ReflectionStatusRow
+              reflection={reflection}
+              onCancelReflection={onCancelReflection}
+            />
+          )}
           <ChatTranscript
-            blocks={blocks}
+            turns={turns}
             isLoading={isLoading}
-            messagesEndRef={messagesEndRef}
+            messagesEndRef={chatViewport.messagesEndRef}
             openToolCalls={openToolCalls}
             workspaceName={state?.workspace.name ?? "Workspace"}
             onPickPrompt={onInputChange}
@@ -130,21 +82,21 @@ export function ChatPanel({
           />
         </div>
 
-        {showScrollToBottom && (
+        {chatViewport.showScrollToBottom && (
           <div
-            className={`pointer-events-auto absolute left-1/2 z-10 -translate-x-1/2 ${hasPendingAction ? "bottom-96" : "bottom-40"
+            className={`pointer-events-auto absolute left-1/2 z-10 -translate-x-1/2 ${hasPendingAction ? "bottom-[23.5rem]" : "bottom-36"
               }`}
           >
             <ScrollToBottomButton
-              hasUnreadMessages={hasUnreadMessages}
+              hasUnreadMessages={chatViewport.hasUnreadMessages}
               isStreaming={isLoading}
-              onClick={() => scrollToBottom("auto")}
+              onClick={() => chatViewport.scrollToBottom("auto")}
             />
           </div>
         )}
 
         {hasPendingAction && (
-          <div className="chat-floating-layer pointer-events-auto absolute bottom-32 flex flex-col gap-3">
+          <div className="chat-floating-layer pointer-events-auto absolute bottom-28 flex flex-col gap-3">
             {state?.pendingConfirmation && (
               <PendingConfirmation
                 confirmation={state.pendingConfirmation}
@@ -161,17 +113,17 @@ export function ChatPanel({
         )}
 
         {commandResult && (
-          <div className={`chat-floating-layer pointer-events-auto absolute ${hasPendingAction ? "bottom-[30rem]" : "bottom-32"}`}>
+          <div className={`chat-floating-layer pointer-events-auto absolute ${hasPendingAction ? "bottom-[29rem]" : "bottom-28"}`}>
             <pre
               data-testid="command-result"
-              className="max-h-64 w-full overflow-y-auto rounded-xl border border-brand-border bg-brand-surface/95 p-4 text-xs leading-5 text-brand-text-light shadow-xl"
+              className="floating-prompt-panel max-h-64 w-full overflow-y-auto p-4 text-xs leading-5 text-brand-text-light backdrop-blur-md"
             >
               {commandResult}
             </pre>
           </div>
         )}
 
-        <div className="chat-floating-layer pointer-events-auto absolute bottom-7">
+        <div className="chat-floating-layer pointer-events-auto absolute bottom-6">
           <FloatingComposer
             inputValue={inputValue}
             isLoading={isLoading}
@@ -184,5 +136,46 @@ export function ChatPanel({
         </div>
       </section>
     </main>
+  );
+}
+
+function ReflectionStatusRow({
+  reflection,
+  onCancelReflection,
+}: {
+  reflection: ReflectionClientState;
+  onCancelReflection: () => void;
+}) {
+  const visible = reflection.status !== "idle" || Boolean(reflection.lastSummary);
+  if (!visible) return null;
+
+  const label = reflection.status === "running"
+    ? "Reflection running"
+    : reflection.status === "failed"
+      ? "Reflection failed"
+      : "Last reflection";
+
+  return (
+    <div
+      data-testid="reflection-status"
+      className="surface-card mb-4 flex items-center justify-between gap-3 px-3 py-2 text-xs text-brand-text-light"
+      title={reflection.memoryRoot}
+    >
+      <div className="min-w-0">
+        <div className="font-medium text-brand-text-strong">{label}</div>
+        {reflection.lastSummary && (
+          <div className="truncate text-brand-text-muted">{reflection.lastSummary}</div>
+        )}
+      </div>
+      {reflection.status === "running" && (
+        <button
+          type="button"
+          onClick={onCancelReflection}
+          className="shrink-0 rounded-[var(--radius-control)] px-2 py-1 text-brand-text-muted transition-snappy-colors hover:bg-[var(--surface-hover)] hover:text-brand-text-strong"
+        >
+          Stop
+        </button>
+      )}
+    </div>
   );
 }

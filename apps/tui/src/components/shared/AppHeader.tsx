@@ -6,9 +6,10 @@ export interface AppHeaderProps {
   workspaceName: string;
   branchName?: string | null;
   modelLabel: string;
+  contextLabel?: string;
 }
 
-const AppHeader: FC<AppHeaderProps> = ({ workspaceName, branchName, modelLabel }) => {
+const AppHeader: FC<AppHeaderProps> = ({ workspaceName, branchName, modelLabel, contextLabel }) => {
   return (
     <box
       flexDirection="row"
@@ -36,9 +37,16 @@ const AppHeader: FC<AppHeaderProps> = ({ workspaceName, branchName, modelLabel }
           </text>
         ) : null}
       </box>
-      <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
-        {modelLabel}
-      </text>
+      <box flexDirection="column" alignItems="flex-end" flexShrink={0}>
+        <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
+          {modelLabel}
+        </text>
+        {contextLabel ? (
+          <text fg={theme.colors.muted} attributes={textAttrs({ dim: true })}>
+            {contextLabel}
+          </text>
+        ) : null}
+      </box>
     </box>
   );
 };

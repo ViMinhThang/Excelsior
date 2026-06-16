@@ -27,6 +27,7 @@ function makeKeymapContext(
     pending: null,
     activePanelId: null,
     isPaletteOpen: false,
+    inputFocused: true,
     isLoading: false,
     suggestion: {
       show: false,
@@ -38,7 +39,6 @@ function makeKeymapContext(
     },
     setInput: noop,
     submit: noop,
-    setChatMode: noop,
     cancel: noop,
     toggleMode: () => undefined,
     openSubAgent: noop,
@@ -46,8 +46,6 @@ function makeKeymapContext(
     toolCallCount: 0,
     toolsExpanded: false,
     toggleToolsExpanded: noop,
-    nextSubAgent: noop,
-    prevSubAgent: noop,
     navigateUp: noop,
     navigateDown: noop,
     ...overrides,
@@ -63,6 +61,7 @@ function makeInputKeymapContext(
     pending: null,
     activePanelId: null,
     isPaletteOpen: false,
+    inputFocused: true,
     isLoading: false,
     suggestion: {
       show: false,
@@ -138,8 +137,9 @@ describe("chat keymap gating", () => {
     expect(getTuiInputOwner({
       pending: null,
       activePanelId: null,
-      chatMode: "subagent-picker",
+      chatMode: "input",
       isPaletteOpen: false,
+      inputFocused: false,
     })).toBe("chat-mode");
   });
 
@@ -164,6 +164,16 @@ describe("chat keymap gating", () => {
       chatMode: "input",
       isPaletteOpen: false,
     })).toBe(true);
+  });
+
+  it("disables normal chat input keymaps when the transcript owns focus", () => {
+    expect(ownsChatInput({
+      pending: null,
+      activePanelId: null,
+      chatMode: "input",
+      isPaletteOpen: false,
+      inputFocused: false,
+    })).toBe(false);
   });
 
   it("disables normal chat input keymaps while a question is pending", () => {
@@ -234,27 +244,15 @@ describe("chat mode keymap registry", () => {
     expect(getChatModeKeymaps(makeKeymapContext("input", {
       activePanelId: "session.picker",
     }))[0]?.enabled).toBe(false);
+    expect(getChatModeKeymaps(makeKeymapContext("input", {
+      inputFocused: false,
+    }))[0]?.enabled).toBe(false);
   });
 
   it("disables active mode keymaps while the command palette is open", () => {
-    const modes: ChatMode[] = [
-      "input",
-      "subagent-picker",
-      "subagent-detail",
-    ];
-
-    for (const mode of modes) {
-      expect(getChatModeKeymaps(makeKeymapContext(mode, {
-        isPaletteOpen: true,
-      }))[0]?.enabled).toBe(false);
-    }
-  });
-
-  it("exposes one focused keymap per non-input mode", () => {
-    expect(Object.keys(getChatModeKeymaps(makeKeymapContext("subagent-picker"))[0]!.map).sort())
-      .toEqual(["ctrl+o", "down", "escape", "return", "up"]);
-    expect(Object.keys(getChatModeKeymaps(makeKeymapContext("subagent-detail"))[0]!.map).sort())
-      .toEqual(["ctrl+o", "escape"]);
+    expect(getChatModeKeymaps(makeKeymapContext("input", {
+      isPaletteOpen: true,
+    }))[0]?.enabled).toBe(false);
   });
 
   it("always routes Ctrl+O to toggleToolsExpanded regardless of sub-agents existence", () => {

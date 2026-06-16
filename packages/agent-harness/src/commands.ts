@@ -1,4 +1,4 @@
-import { SESSION_PICKER_PANEL_ID, type CommandResult } from "@excelsior/core";
+import { SESSION_PICKER_PANEL_ID, type CommandResult, type CommandDefinition } from "@excelsior/core";
 import {
   formatHarnessReplayReport,
   formatHarnessTrace,
@@ -7,13 +7,13 @@ import {
 import type { AgentHarness, HarnessCommand, ReviewCommandServices } from "./types.js";
 
 export function createBuiltInCommands(input: {
-  getDefinitions: () => readonly HarnessCommand[];
+  getDefinitions: () => readonly CommandDefinition[];
   reviewServices?: ReviewCommandServices;
 }): HarnessCommand[] {
   return [
     command("help", "core", "Show available commands", "/help", async () => ({
       handled: true,
-      message: formatHelp(input.getDefinitions().map((item) => item.definition)),
+      message: formatHelp(input.getDefinitions()),
       clearInput: true,
     })),
     command("clear", "core", "Clear chat messages from the screen", "/clear", async (_args, harness) => {
@@ -30,12 +30,17 @@ export function createBuiltInCommands(input: {
       navigate: "settings",
       clearInput: true,
     })),
+    command("theme", "settings", "Open the TUI theme picker", "/theme [name]", async () =>
+      ok("Theme selection is available in the TUI with /theme."),
+    ),
     command("session", "session", "Open or manage sessions", "/session [list|new|open|rename|delete]", sessionCommand),
     command("mode", "core", "Switch between Plan and Act modes", "/mode [plan|act]", modeCommand),
+    command("accept-edits", "core", "Toggle auto-approval for workspace file edits", "/accept-edits [on|off]", acceptEditsCommand),
     command("compact", "runtime", "Compact current conversation context", "/compact", async (_args, harness) => {
       await harness.compactCurrentSession("manual");
-      return ok("Conversation compacted.");
+      return { handled: true, clearInput: true };
     }),
+    command("reflect", "runtime", "Run or manage background reflection memory", "/reflect [status|stop|on|off]", reflectCommand),
     command("revert", "runtime", "Revert the last completed turn", "/revert", async (_args, harness) => harness.revertLastTurn()),
     command("trace", "runtime", "Inspect harness event timeline", "/trace [all|<turnIdPrefix>]", traceCommand),
     command("replay", "runtime", "Replay and validate current harness events", "/replay", async (_args, harness) => {
@@ -95,6 +100,48 @@ function traceCommand(args: string[], harness: AgentHarness): CommandResult {
   return ok(formatHarnessTrace(harness.inspectCurrentSession(), options));
 }
 
+async function reflectCommand(args: string[], harness: AgentHarness): Promise<CommandResult> {
+  const subcommand = args[0]?.toLowerCase();
+  if (!subcommand) return harness.startReflection("manual");
+
+  if (subcommand === "status") {
+    const state = harness.getSnapshot().reflection;
+    const settings = harness.getCatalog().settings;
+    return ok([
+      `Reflection: ${state.status}`,
+      `Auto: ${settings.autoReflectionEnabled ? "on" : "off"}`,
+      `Memory context: ${settings.reflectionMemoryEnabled ? "on" : "off"}`,
+      `Memory root: ${state.memoryRoot}`,
+      `Last run: ${state.lastRunAt ?? "never"}`,
+      `Last summary: ${state.lastSummary ?? "none"}`,
+      `Touched files: ${state.touchedFiles.length > 0 ? state.touchedFiles.join(", ") : "none"}`,
+    ].join("\n"));
+  }
+
+  if (subcommand === "stop") {
+    harness.cancelReflection();
+    return ok("Reflection cancellation requested.");
+  }
+
+  if (subcommand === "on" || subcommand === "off") {
+    const enabled = subcommand === "on";
+    harness.saveSettings({ autoReflectionEnabled: enabled });
+    return ok(`Auto reflection ${enabled ? "enabled" : "disabled"}.`);
+  }
+
+  if (subcommand === "memory") {
+    const value = args[1]?.toLowerCase();
+    if (value === "on" || value === "off") {
+      const enabled = value === "on";
+      harness.saveSettings({ reflectionMemoryEnabled: enabled });
+      return ok(`Reflection memory context ${enabled ? "enabled" : "disabled"}.`);
+    }
+    return ok("Usage: /reflect memory [on|off]");
+  }
+
+  return ok("Usage: /reflect [status|stop|on|off|memory on|memory off]");
+}
+
 async function sessionCommand(args: string[], harness: AgentHarness): Promise<CommandResult> {
   const subcommand = args[0]?.toLowerCase() ?? "list";
   if (subcommand === "list") {
@@ -135,6 +182,14 @@ function modeCommand(args: string[], harness: AgentHarness): CommandResult {
   }
   const nextMode = harness.toggleMode();
   return ok(`Mode set to ${nextMode}.`);
+}
+
+function acceptEditsCommand(args: string[], harness: AgentHarness): CommandResult {
+  const arg = args[0]?.toLowerCase();
+  const current = harness.getCatalog().settings.autoApproveWorkspaceEdits;
+  const enabled = arg === "on" ? true : arg === "off" ? false : !current;
+  harness.saveSettings({ autoApproveWorkspaceEdits: enabled });
+  return ok(`Auto-approve workspace edits ${enabled ? "enabled" : "disabled"}.`);
 }
 
 function formatHelp(definitions: ReadonlyArray<{ name: string; description: string; usage?: string }>): string {

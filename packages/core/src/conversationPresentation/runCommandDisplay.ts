@@ -18,7 +18,8 @@ function formatRunCommand(args: Record<string, unknown> | null): string {
   }
   const cwd = String(args?.cwd || args?.Cwd || "");
   const target = cwd ? `${cwd} > ${fullCommand}` : fullCommand;
-  return `runCommand(${target})`;
+  const label = /\b(test|vitest|jest)\b/.test(fullCommand) ? "Test" : "Run";
+  return `${label}(${target})`;
 }
 
 function formatRunCommandSummary(
@@ -42,12 +43,13 @@ function formatRunCommandDisplay({
   return {
     label: "Run command",
     summary: command || "shell command",
+    activityLabel: status === "pending" ? "running" : undefined,
     detail: normalizedContent.startsWith("Error executing command")
       ? "command failed"
       : normalizedContent === "Command timed out"
         ? "timed out"
-        : status === "pending"
-          ? "waiting for approval or execution"
+        : status === "pending" && !normalizedContent
+          ? `${command || "command"} is running...`
           : undefined,
     resultPreview: preview.lines,
     omittedResultLines: preview.omitted,

@@ -1,5 +1,6 @@
+import { memo } from "react";
 import type { ProjectedBlock } from "@excelsior/core";
-import { createToolDisplay } from "@excelsior/core";
+import { createToolDisplay, createToolDisplayPresentation } from "@excelsior/core";
 import {
   ChevronDown,
   ChevronRight,
@@ -25,8 +26,8 @@ function StatusDot({ isLoading }: { isLoading: boolean }) {
 
 function UserBubble({ block }: { block: Extract<ProjectedBlock, { type: "user" }> }) {
   return (
-    <div className="flex justify-end animate-fade-in-snappy">
-      <div className="user-message-bubble rounded-12">
+    <div className="flex justify-end">
+      <div className="user-message-bubble">
         {block.content}
       </div>
     </div>
@@ -35,8 +36,8 @@ function UserBubble({ block }: { block: Extract<ProjectedBlock, { type: "user" }
 
 function AssistantBubble({ block }: { block: Extract<ProjectedBlock, { type: "assistant" }> }) {
   return (
-    <div className="flex gap-3 pr-14 animate-fade-in-snappy">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-surface text-brand-accent shadow-sm">
+    <div className="message-row flex gap-3 pr-10">
+      <div className="surface-icon mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center text-brand-accent">
         <Compass className="h-4 w-4" />
       </div>
       <div className="flex-1 min-w-0 max-w-[82ch] select-text">
@@ -61,23 +62,27 @@ function ToolBubble({
     status: block.status,
     content: block.content,
   });
+  const presentation = createToolDisplayPresentation({
+    display,
+    status: block.status,
+    content: block.content,
+  });
   const fileChange = display.fileChangePreview;
-  const resultLines = display.resultPreview ?? [];
   const isRunning = block.status === "pending";
 
   return (
-    <div className={`flex gap-3 pr-14 ${isRunning ? "animate-pulse" : ""}`}>
-      <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center text-brand-text-muted">
-        <Code className="h-4 w-4" />
+    <div className={`message-row flex gap-3 pr-10 ${isRunning ? "tool-row-running" : ""}`}>
+      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-8 text-brand-text-muted">
+        <Code className="h-3.5 w-3.5" />
       </div>
 
       <div className="min-w-0 flex-1">
         <button
           type="button"
           onClick={() => onToggle(block.id)}
-          className="flex h-5 items-center gap-2 text-left text-base font-mono text-brand-text-muted hover:text-brand-text-light transition-colors"
+          className="flex min-h-6 max-w-full items-center gap-2 rounded-[var(--radius-control)] px-1.5 text-left text-[13px] font-mono text-brand-text-muted transition-snappy-colors hover:bg-[var(--surface-hover)] hover:text-brand-text-light"
         >
-          <span className="truncate">{display.command}</span>
+          <span className="min-w-0 truncate">{display.command}</span>
           <span className="text-xs opacity-60">({block.status})</span>
           {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
@@ -90,12 +95,19 @@ function ToolBubble({
             marginTop: isOpen ? "0.375rem" : "0px",
           }}
         >
-          <div className="overflow-hidden ml-5 pl-3 border-l border-brand-border/30 space-y-2 text-sm text-brand-text-muted select-text">
-            {display.summaryLine && (
-              <p className="font-medium text-brand-text-light">{display.summaryLine}</p>
+          <div className="overflow-hidden ml-5 pl-3 border-l border-brand-border/30 space-y-2 text-[13px] leading-5 text-brand-text-muted select-text">
+            {presentation.body.kind === "summary" && (
+              <p className="font-medium text-brand-text-light">{presentation.body.text}</p>
             )}
-            {display.detail && (
-              <p className="leading-5">{display.detail}</p>
+            {presentation.body.kind === "detail" && (
+              <p className="leading-5">{presentation.body.text}</p>
+            )}
+            {presentation.body.kind === "progressStats" && (
+              <div className="font-mono text-xs">
+                <span className="text-emerald-400">+{presentation.body.stats.added}</span>
+                <span className="ml-1 text-red-400">-{presentation.body.stats.removed}</span>
+                <span className="ml-1">lines</span>
+              </div>
             )}
             {fileChange && (
               <div className="font-mono text-xs text-brand-text-light">
@@ -104,16 +116,15 @@ function ToolBubble({
                 <span className="ml-1 text-red-400">-{fileChange.removed}</span>
               </div>
             )}
-            {resultLines.length > 0 && (
+            {presentation.body.kind === "preview" && (
               <pre className="max-h-56 overflow-auto font-mono text-xs">
-                {resultLines.join("\n")}
-                {display.omittedResultLines ? `\n... ${display.omittedResultLines} more lines` : ""}
+                {presentation.body.lines.join("\n")}
+                {presentation.body.omittedLines ? `\n... ${presentation.body.omittedLines} more lines` : ""}
               </pre>
             )}
-            {resultLines.length === 0 && !display.detail && !fileChange && block.content && (
-              <pre className="max-h-56 overflow-auto font-mono text-xs">{block.content}</pre>
+            {presentation.body.kind === "completion" && (
+              <p className="leading-5">{presentation.body.text}</p>
             )}
-            {block.toolArgs && <pre className="max-h-48 overflow-auto font-mono text-xs">{block.toolArgs}</pre>}
           </div>
         </div>
       </div>
@@ -124,7 +135,7 @@ function ToolBubble({
 function SubAgentBubble({ block }: { block: Extract<ProjectedBlock, { type: "sub-agent" }> }) {
   const isRunning = block.state.status === "running";
   return (
-    <div className={`flex gap-3 pr-14 py-1 ${isRunning ? "animate-pulse" : ""}`}>
+    <div className={`message-row flex gap-3 pr-10 py-1 ${isRunning ? "tool-row-running" : ""}`}>
       <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-brand-text-muted">
         <Compass className="h-4 w-4" />
       </div>
@@ -140,38 +151,39 @@ function SubAgentBubble({ block }: { block: Extract<ProjectedBlock, { type: "sub
   );
 }
 
-function ReasoningBubble({ block }: { block: Extract<ProjectedBlock, { type: "reasoning" }> }) {
+function CompactionBoundaryBubble({ block }: { block: Extract<ProjectedBlock, { type: "compaction-boundary" }> }) {
   return (
-    <div className="flex gap-3 pr-14 animate-fade-in-snappy opacity-70 pl-11">
-      <div className="flex-1 min-w-0 max-w-[82ch] select-text italic text-brand-text-muted">
-        <div className="text-[11px] font-bold tracking-wide uppercase not-italic mb-1 text-brand-text-muted/80">
-          Thinking Process
-        </div>
-        <MarkdownMessage block={block} />
+    <div className="my-4 flex items-center justify-center gap-4 text-xs font-semibold text-brand-text-muted select-none">
+      <div className="h-[1px] flex-1 bg-brand-border/40" />
+      <div className="flex flex-col items-center gap-1">
+        <span>History Compacted</span>
+        <span className="font-normal text-brand-text-muted/70">{block.summary}</span>
       </div>
+      <div className="h-[1px] flex-1 bg-brand-border/40" />
     </div>
   );
 }
 
-import { memo } from "react";
-
 export const MessageBlock = memo(function MessageBlock({ block, isToolOpen, onToggleToolCall }: MessageBlockProps) {
   if (block.type === "user") return <UserBubble block={block} />;
   if (block.type === "assistant") return <AssistantBubble block={block} />;
-  if (block.type === "reasoning") return <ReasoningBubble block={block} />;
+
   if (block.type === "tool-call") {
     return <ToolBubble block={block} isOpen={isToolOpen} onToggle={onToggleToolCall} />;
+  }
+  if (block.type === "compaction-boundary") {
+    return <CompactionBoundaryBubble block={block} />;
   }
   return <SubAgentBubble block={block} />;
 });
 
 export function ThinkingRow() {
   return (
-    <div className="flex gap-3 pr-14 animate-fade-in-snappy">
-      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-surface text-brand-accent shadow-sm">
+    <div className="message-row flex gap-3 pr-10 animate-fade-in-snappy">
+      <div className="surface-icon mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center text-brand-accent">
         <Compass className="h-4 w-4" />
       </div>
-      <div className="flex h-10 items-center gap-3 rounded-xl border border-brand-border/60 bg-brand-surface/80 px-4 text-xs text-brand-text-muted shadow-sm select-none">
+      <div className="surface-pill flex h-9 items-center gap-3 px-3.5 text-xs text-brand-text-muted select-none">
         <div className="flex gap-1.5 items-center h-full pt-1">
           <span className="thinking-dot h-2.5 w-2.5 rounded-full bg-brand-accent" />
           <span className="thinking-dot h-2.5 w-2.5 rounded-full bg-brand-accent" />

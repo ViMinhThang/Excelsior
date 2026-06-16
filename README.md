@@ -48,8 +48,7 @@ Các biến môi trường hữu ích:
 | --- | --- | --- |
 | `DEEPSEEK_API_KEY` | Có | API key để gọi DeepSeek |
 | `GITHUB_TOKEN` | Không | Dùng cho tính năng review PR |
-| `EXCELSIOR_DB_PATH` | Không | Đổi vị trí SQLite database |
-| `EXCELSIOR_SESSIONS_DIR` | Không | Đổi thư mục lưu session JSONL |
+| `EXCELSIOR_HARNESS_DATA_DIR` | Không | Đổi thư mục lưu dữ liệu harness (sessions, settings, memory, v.v.) |
 | `EXCELSIOR_RIPGREP_PATH` | Không | Chỉ định đường dẫn `rg` tùy chỉnh |
 
 ## Chạy ứng dụng

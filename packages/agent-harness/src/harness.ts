@@ -1,7 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { resolve } from "node:path";
-import { SkillCatalog } from "./skills/SkillCatalog.js";
 import type {
   AgentMode,
   AskQuestionRequest,
@@ -20,39 +17,35 @@ import {
   QUESTION_REQUESTED,
   SESSION_CHANGED,
 } from "./events.js";
-import { EventBus } from "./EventBus.js";
-import { registerSkills } from "./skills/register.js";
-import { createBuiltInCommands } from "./commands.js";
+import type { EventBus } from "./EventBus.js";
 import {
   buildCompactionNotice,
   buildCompactionSummary,
-  buildRunContext,
-  loadProjectInstructions,
 } from "./context/index.js";
-import { GitHubReviewService } from "./github.js";
+import { buildRunAssembly } from "./context/runAssembly.js";
 import { revertLastCompletedTurn } from "./history/revert.js";
+import { restoreTurnBackups } from "./history/turnBackups.js";
 import { copyHarnessEvents, replayHarnessEvents } from "./inspector.js";
-import { createDeepSeekProvider } from "./provider.js";
+import type { LspManager } from "./lsp/LspManager.js";
 import { projectHarnessState, ProjectionCache } from "./projection.js";
-import { CommandRegistry, ExtensionRegistry, ProviderRegistry, ToolRegistry } from "./registries.js";
-import { RunController } from "./runController.js";
-import { FileHarnessStorage } from "./storage.js";
-import { SessionManager } from "./SessionManager.js";
-import { EventStore } from "./EventStore.js";
-import { SettingsStore } from "./SettingsStore.js";
+import type { CommandRegistry, ProviderRegistry, ToolRegistry } from "./registries.js";
+import { runAgentLoop } from "./run/RunController.js";
+import type { FileHarnessStorage } from "./storage.js";
+import type { SessionManager } from "./SessionManager.js";
+import type { EventStore } from "./EventStore.js";
+import type { SettingsStore } from "./SettingsStore.js";
 import { ConfirmationRouter } from "./ConfirmationRouter.js";
-import { ActiveRunManager } from "./activeRun.js";
-import { createBuiltInTools } from "./tools/index.js";
+import { ActiveRunManager } from "./run/ActiveRunManager.js";
+import type { ReflectionRunManager, ReflectionTrigger } from "./reflection/ReflectionRunManager.js";
+import { bootstrapHarness } from "./bootstrap/HarnessBootstrap.js";
 import type {
   AgentHarness,
   HarnessCatalog,
-  HarnessCommand,
   HarnessConfig,
   HarnessInspectionSnapshot,
   HarnessReplayReport,
   HarnessSettings,
   HarnessSnapshot,
-  ToolExecutionContext,
 } from "./types.js";
 
 export function createAgentHarness(config: HarnessConfig = {}): AgentHarness {
@@ -61,11 +54,10 @@ export function createAgentHarness(config: HarnessConfig = {}): AgentHarness {
 
 class HarnessStore implements AgentHarness {
   private readonly storage: FileHarnessStorage;
-  private readonly providers = new ProviderRegistry();
-  private readonly tools = new ToolRegistry();
-  private readonly commands = new CommandRegistry();
-  private readonly runController = new RunController();
-  private readonly extensions: ExtensionRegistry;
+  private readonly providers: ProviderRegistry;
+  private readonly tools: ToolRegistry;
+  private readonly commands: CommandRegistry;
+
   private readonly listeners = new Set<() => void>();
   private readonly workspace: Workspace;
 
@@ -74,61 +66,38 @@ class HarnessStore implements AgentHarness {
   private readonly settingsStore: SettingsStore;
   private readonly confirmRouter: ConfirmationRouter;
   private readonly activeRun = new ActiveRunManager();
+  private readonly reflectionRun: ReflectionRunManager;
+  private readonly lsp: LspManager;
 
   private mode: AgentMode = "act";
   private snapshot!: HarnessSnapshot;
-  private skillCatalog!: SkillCatalog;
   private skillsList?: string;
   private readonly eventBus: EventBus;
   private notifyTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly projectionCache = new ProjectionCache();
 
   constructor(config: HarnessConfig) {
-    this.storage = new FileHarnessStorage(config.dataDir);
-    this.workspace = this.storage.getOrCreateWorkspace({
-      id: config.workspaceId,
-      rootPath: config.workspaceRoot,
+    const boot = bootstrapHarness({
+      config,
+      activeRun: this.activeRun,
+      notify: () => this.notify(),
+      currentMode: () => this.mode,
+      sendSkill: (input) => this.send(input),
     });
-    this.sessionManager = new SessionManager(this.storage, this.workspace.id);
-    this.eventStore = new EventStore(this.storage, this.workspace.id);
-    this.settingsStore = new SettingsStore(this.storage);
+
+    this.storage = boot.storage;
+    this.providers = boot.providers;
+    this.tools = boot.tools;
+    this.commands = boot.commands;
+    this.workspace = boot.workspace;
+    this.sessionManager = boot.sessionManager;
+    this.eventStore = boot.eventStore;
+    this.settingsStore = boot.settingsStore;
     this.confirmRouter = new ConfirmationRouter();
-    this.extensions = new ExtensionRegistry(this.providers, this.tools, this.commands);
-
-    this.eventBus = new EventBus(
-      this.workspace.id,
-      this.sessionManager,
-      this.eventStore,
-      this.extensions,
-      () => this.notify(),
-      (runId) => this.activeRun.isRunFinalized(runId),
-    );
-
-    this.providers.register(createDeepSeekProvider());
-    for (const tool of createBuiltInTools()) this.tools.register(tool);
-
-    this.skillCatalog = SkillCatalog.discover(this.workspace.rootPath, { reader: config.skillsReader });
-    const skills = this.skillCatalog.getSkills();
-    if (skills.length > 0) {
-      this.skillsList = skills.map((s) => `- ${s.name}: ${s.description}`).join("\n");
-      registerSkills(
-        this.skillCatalog,
-        this.tools,
-        this.commands,
-        async (body, name) => {
-          await this.send({
-            content: body,
-            mode: this.mode,
-            displayContent: `Running skill: ${name}`,
-          });
-        },
-      );
-    }
-
-    for (const command of this.createCommands(config)) this.commands.register(command);
-
-    this.extensions.load(config.extensions ?? []);
-    this.loadCurrentSessionEvents();
+    this.lsp = boot.lsp;
+    this.reflectionRun = boot.reflectionRun;
+    this.eventBus = boot.eventBus;
+    this.skillsList = boot.skillsList;
     this.updateSnapshot();
   }
 
@@ -180,20 +149,37 @@ class HarnessStore implements AgentHarness {
     if (input.sessionId) await this.switchSession(input.sessionId);
 
     const session = this.ensureSession(content);
-    // load AGENTS.md
-    const projectInstructions = loadProjectInstructions(this.workspace.rootPath);
-    const runContext = buildRunContext({
-      events: this.eventStore.events,
-      userContent: content,
-      mode: this.mode,
-      skillsList: this.skillsList,
-      projectInstructions: projectInstructions?.content,
-    });
     const runId = `run_${randomUUID()}`;
     const turnId = `turn_${randomUUID()}`;
+    const runMode = input.mode;
     const run = this.activeRun.begin({ runId, turnId, sessionId: session.id });
 
-    this.mode = input.mode;
+    this.mode = runMode;
+
+    const assembly = buildRunAssembly({
+      workspaceRoot: this.workspace.rootPath,
+      storageRoot: this.storage.rootDir,
+      workspaceId: this.workspace.id,
+      sessionId: session.id,
+      runId,
+      turnId,
+      priorMessages: this.projectionCache.project(this.eventStore.events).aiHistory,
+      userContent: content,
+      mode: runMode,
+      abortSignal: run.signal,
+      settings: this.settingsStore.settings,
+      providers: this.providers,
+      tools: this.tools,
+      lsp: this.lsp,
+      skillsList: this.skillsList,
+      reflectionMemoryContext: this.reflectionRun.buildMemoryContext(
+        this.settingsStore.settings.reflectionMemoryEnabled ?? false,
+      ),
+      confirm: (request) => this.requestConfirmation(request),
+      askQuestion: (request) => this.requestQuestion(request),
+      createEmitter: (activeRunId, activeSessionId, activeTurnId) =>
+        this.eventBus.createEmitter(activeRunId, activeSessionId, activeTurnId),
+    });
 
     if (!input.silent) {
       this.eventBus.emitUserMessage({
@@ -206,21 +192,24 @@ class HarnessStore implements AgentHarness {
     }
  
     try {
-      await this.runController.run({
-        messages: runContext.messages,
-        systemPrompt: runContext.systemPrompt,
+      await runAgentLoop({
+        messages: assembly.runContext.messages,
+        systemPrompt: assembly.runContext.systemPrompt,
         settings: this.settingsStore.settings,
         providers: this.providers,
         tools: this.tools,
-        toolContext: this.createToolContext(runId, session.id, turnId),
+        toolContext: assembly.toolContext,
         signal: run.signal,
-        emit: this.eventBus.createEmitter(runId, session.id, turnId),
+        emit: assembly.emit,
         getSteeringMessages: () => this.activeRun.drainSteeringMessages(),
       });
     } finally {
       this.activeRun.finish(run);
       this.sessionManager.refreshSessions();
       this.notify();
+      if (!input.silent) {
+        this.reflectionRun.maybeStartAutoReflection();
+      }
     }
   }
 
@@ -237,6 +226,14 @@ class HarnessStore implements AgentHarness {
     this.activeRun.clear(run);
     this.sessionManager.refreshSessions();
     this.notify();
+  }
+
+  startReflection(trigger: ReflectionTrigger): Promise<CommandResult> {
+    return this.reflectionRun.startReflection(trigger);
+  }
+
+  cancelReflection(): void {
+    this.reflectionRun.cancelReflection();
   }
 
   clear(): void {
@@ -336,6 +333,10 @@ class HarnessStore implements AgentHarness {
     this.confirmRouter.resolveConfirmation(callId, approved);
   }
 
+  approveAllConfirmations(): void {
+    this.confirmRouter.approveAllConfirmations();
+  }
+
   respondToQuestion(response: AskQuestionResponse): void {
     this.confirmRouter.resolveQuestion(response);
   }
@@ -349,7 +350,13 @@ class HarnessStore implements AgentHarness {
       return { handled: true, message: "No completed turn to revert.", clearInput: true };
     }
 
-    await this.restoreBackups(session.id, result.revertedTurnId);
+    restoreTurnBackups({
+      storageRoot: this.storage.rootDir,
+      workspaceRoot: this.workspace.rootPath,
+      workspaceId: this.workspace.id,
+      sessionId: session.id,
+      turnId: result.revertedTurnId,
+    });
 
     this.eventStore.replaceEvents(session, result.events);
     this.sessionManager.refreshSessions();
@@ -357,44 +364,23 @@ class HarnessStore implements AgentHarness {
     return { handled: true, message: "Reverted last turn.", clearInput: true };
   }
 
-  private async restoreBackups(sessionId: string, turnId?: string): Promise<void> {
-    if (!turnId) return;
-    const backupDir = resolve(this.storage.rootDir, "backups", this.workspace.id, sessionId, turnId);
-    const manifestPath = resolve(backupDir, "manifest.json");
-    if (!existsSync(manifestPath)) return;
-
-    try {
-      const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as Array<{ path: string; action: "modify" | "create" }>;
-      for (const entry of manifest) {
-        const workspacePath = resolve(this.workspace.rootPath, entry.path);
-        if (entry.action === "modify") {
-          const backupFilePath = resolve(backupDir, entry.path);
-          if (existsSync(backupFilePath)) {
-            const content = readFileSync(backupFilePath, "utf-8");
-            writeFileSync(workspacePath, content, "utf-8");
-          }
-        } else if (entry.action === "create") {
-          if (existsSync(workspacePath)) {
-            unlinkSync(workspacePath);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Failed to restore backups:", err);
-    }
-  }
-
   async compactCurrentSession(triggerMode: "manual" | "auto" = "manual"): Promise<void> {
     const session = this.sessionManager.currentSession();
     if (!session) return;
-    const compactedEventCount = this.eventStore.events.length;
+    const eventsToCompact = [...this.eventStore.events];
+    const compactedEventCount = eventsToCompact.length;
     if (compactedEventCount === 0) return;
 
-    const summary = await buildCompactionSummary(this.eventStore.events, {
-      providers: this.providers,
-      settings: this.settingsStore.settings,
-    });
     this.eventStore.clear(session);
+    this.notifyNow();
+
+    const summary = await buildCompactionSummary(
+      this.projectionCache.project(eventsToCompact).aiHistory,
+      {
+        providers: this.providers,
+        settings: this.settingsStore.settings,
+      },
+    );
 
     const runId = `run_${randomUUID()}`;
     const turnId = `turn_${randomUUID()}`;
@@ -404,6 +390,7 @@ class HarnessStore implements AgentHarness {
       triggerMode,
     }, { sessionId: session.id, turnId });
     this.eventBus.emitAssistantMessage(runId, turnId, session.id, buildCompactionNotice(summary));
+    this.notifyNow();
   }
 
   setMode(mode: AgentMode): void {
@@ -418,69 +405,14 @@ class HarnessStore implements AgentHarness {
   }
 
   dispose(): void {
+    this.cancelReflection();
     this.cancel();
+    this.lsp.dispose();
     if (this.notifyTimer) {
       clearTimeout(this.notifyTimer);
       this.notifyTimer = null;
     }
     this.listeners.clear();
-  }
-
-  private createCommands(config: HarnessConfig): HarnessCommand[] {
-    const reviewServices = config.reviewServices ?? new GitHubReviewService(() => {
-      const token = this.settingsStore.settings.githubToken || process.env.GITHUB_TOKEN;
-      if (!token) {
-        throw new Error("GITHUB_TOKEN is not configured.");
-      }
-      return token;
-    });
-    return createBuiltInCommands({
-      getDefinitions: () => this.commandsForHelp(),
-      reviewServices,
-    });
-  }
-
-  private commandsForHelp(): readonly HarnessCommand[] {
-    const definitions = this.commands.list();
-    return definitions.map((definition) => ({
-      definition,
-      execute: () => ({ handled: true }),
-    }));
-  }
-
-  private loadCurrentSessionEvents(): void {
-    const session = this.sessionManager.currentSession();
-    if (!session) {
-      this.eventStore.replaceEvents(null, []);
-      return;
-    }
-
-    this.eventStore.replaceEvents(
-      session,
-      this.storage.loadEvents(this.workspace.id, session.id),
-    );
-  }
-
-  private createToolContext(runId?: string, sessionId?: string, turnId?: string): ToolExecutionContext {
-    const projectInstructions = loadProjectInstructions(this.workspace.rootPath);
-    return {
-      workspaceRoot: resolve(this.workspace.rootPath),
-      mode: this.mode,
-      abortSignal: this.activeRun.currentSignal(),
-      confirm: (request) => this.requestConfirmation(request),
-      askQuestion: (request) => this.requestQuestion(request),
-      sendSubAgent: async ({ role, prompt }) => {
-        const modePrefix = this.mode === "plan" ? "Plan-only analysis" : "Focused analysis";
-        return `${modePrefix} from ${role}:\n${prompt}`;
-      },
-      emit: runId && sessionId && turnId ? this.eventBus.createEmitter(runId, sessionId, turnId) : undefined,
-      settings: this.settingsStore.settings,
-      providers: this.providers,
-      tools: this.tools,
-      skillsList: this.skillsList,
-      projectInstructions: projectInstructions?.content,
-      backupDir: sessionId && turnId ? resolve(this.storage.rootDir, "backups", this.workspace.id, sessionId, turnId) : undefined,
-    };
   }
 
   private requestConfirmation(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse> {
@@ -491,9 +423,7 @@ class HarnessStore implements AgentHarness {
       const turnId = active?.turnId;
       const sessionId = active?.sessionId ?? this.sessionManager.currentSession()?.id;
       const confirmRequest = { callId, ...request };
-      this.confirmRouter.pendingConfirmation = confirmRequest;
-      this.confirmRouter.addConfirmationResolver(callId, (response) => {
-        this.confirmRouter.pendingConfirmation = null;
+      this.confirmRouter.addConfirmation(confirmRequest, (response) => {
         if (sessionId) {
           this.eventBus.emit(runId, CONFIRMATION_ANSWERED, { response }, { sessionId, turnId });
         }
@@ -515,9 +445,7 @@ class HarnessStore implements AgentHarness {
       const turnId = active?.turnId;
       const sessionId = active?.sessionId ?? this.sessionManager.currentSession()?.id;
       const request = { callId, ...input };
-      this.confirmRouter.pendingQuestion = request;
-      this.confirmRouter.addQuestionResolver(callId, (response) => {
-        this.confirmRouter.pendingQuestion = null;
+      this.confirmRouter.addQuestion(request, (response) => {
         if (sessionId) {
           this.eventBus.emit(runId, QUESTION_ANSWERED, { response }, { sessionId, turnId });
         }
@@ -543,7 +471,7 @@ class HarnessStore implements AgentHarness {
     this.snapshot = projectHarnessState({
       events: this.eventStore.events,
       readModel: this.projectionCache.project(this.eventStore.events),
-      isLoading: this.activeRun.isLoading(),
+      isLoading: this.activeRun.isActive(),
       sessions: this.sessionManager.sessions,
       currentSessionId: this.sessionManager.currentSessionId,
       workspace: this.workspace,
@@ -554,6 +482,7 @@ class HarnessStore implements AgentHarness {
       mode: this.mode,
       pendingConfirmation: this.confirmRouter.pendingConfirmation,
       pendingQuestion: this.confirmRouter.pendingQuestion,
+      reflection: this.reflectionRun.snapshot(),
     });
   }
 
@@ -563,6 +492,14 @@ class HarnessStore implements AgentHarness {
       this.notifyTimer = null;
       this.flushNotify();
     }, 0);
+  }
+
+  private notifyNow(): void {
+    if (this.notifyTimer) {
+      clearTimeout(this.notifyTimer);
+      this.notifyTimer = null;
+    }
+    this.flushNotify();
   }
 
   private flushPendingSnapshot(): void {
@@ -585,4 +522,3 @@ function parseCommandInput(input: string): { name: string; args: string[] } | nu
   const [name, ...args] = text.split(/\s+/);
   return { name: name.toLowerCase(), args };
 }
-

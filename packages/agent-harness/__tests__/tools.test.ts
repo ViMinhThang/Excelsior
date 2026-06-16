@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
 import {
   createBuiltInTools,
+  type LspClient,
   type ToolExecutionContext,
 } from "@excelsior/agent-harness";
 
@@ -24,6 +25,13 @@ afterEach(async () => {
 });
 
 describe("built-in harness tools", () => {
+  function fakeLsp(result: string | null): LspClient {
+    return {
+      syncTouchedFile: vi.fn(async () => result),
+      dispose: vi.fn(),
+    };
+  }
+
   it("blocks write-like tools in Plan mode before confirmation", async () => {
     const workspaceRoot = await makeTempDir();
     const confirm = vi.fn();
@@ -136,6 +144,171 @@ describe("built-in harness tools", () => {
     }, ctx);
     expect(overwritten?.content).toContain("-export const x = 1;");
     expect(overwritten?.content).toContain("+export const x = 2;");
+  });
+
+  it("appends LSP diagnostics when viewing a TypeScript file", async () => {
+    const workspaceRoot = await makeTempDir();
+    await writeFile(join(workspaceRoot, "demo.ts"), "const value: string = 1;", "utf-8");
+    const lsp = fakeLsp("LSP diagnostics for demo.ts:\n- error typescript 1:7 Type 'number' is not assignable to type 'string'.");
+    const ctx: ToolExecutionContext = {
+      workspaceRoot,
+      mode: "act",
+      lsp,
+      confirm: async () => ({ callId: "confirm", approved: true }),
+      askQuestion: async () => ({
+        callId: "question",
+        answer: "",
+        isManual: true,
+        cancelled: true,
+      }),
+      sendSubAgent: async () => "sub-agent result",
+    };
+    const view = createBuiltInTools().find((tool) => tool.name === "view");
+
+    const result = await view?.execute({ filePath: "demo.ts" }, ctx);
+
+    expect(result?.content).toContain("1: const value: string = 1;");
+    expect(result?.content).toContain("LSP diagnostics for demo.ts:");
+    expect(lsp.syncTouchedFile).toHaveBeenCalledWith({
+      filePath: "demo.ts",
+      content: "const value: string = 1;",
+      abortSignal: undefined,
+    });
+  });
+
+  it("appends LSP diagnostics after writing and editing TypeScript files", async () => {
+    const workspaceRoot = await makeTempDir();
+    const lsp = fakeLsp("LSP diagnostics for demo.ts:\n- warning typescript 1:1 Prefer const.");
+    const ctx: ToolExecutionContext = {
+      workspaceRoot,
+      mode: "act",
+      lsp,
+      confirm: async () => ({ callId: "confirm", approved: true }),
+      askQuestion: async () => ({
+        callId: "question",
+        answer: "",
+        isManual: true,
+        cancelled: true,
+      }),
+      sendSubAgent: async () => "sub-agent result",
+    };
+    const tools = createBuiltInTools();
+    const write = tools.find((tool) => tool.name === "write");
+    const edit = tools.find((tool) => tool.name === "edit");
+
+    const written = await write?.execute({
+      filePath: "demo.ts",
+      content: "let value = 1;",
+    }, ctx);
+    const edited = await edit?.execute({
+      filePath: "demo.ts",
+      oldText: "let value = 1;",
+      newText: "const value = 1;",
+    }, ctx);
+
+    expect(written?.content).toContain("LSP diagnostics for demo.ts:");
+    expect(edited?.content).toContain("LSP diagnostics for demo.ts:");
+    expect(lsp.syncTouchedFile).toHaveBeenCalledTimes(2);
+    expect(lsp.syncTouchedFile).toHaveBeenLastCalledWith({
+      filePath: "demo.ts",
+      content: "const value = 1;",
+      abortSignal: undefined,
+    });
+  });
+
+  it("does not append LSP output for non-TypeScript files when the manager is quiet", async () => {
+    const workspaceRoot = await makeTempDir();
+    const lsp = fakeLsp(null);
+    const ctx: ToolExecutionContext = {
+      workspaceRoot,
+      mode: "act",
+      lsp,
+      confirm: async () => ({ callId: "confirm", approved: true }),
+      askQuestion: async () => ({
+        callId: "question",
+        answer: "",
+        isManual: true,
+        cancelled: true,
+      }),
+      sendSubAgent: async () => "sub-agent result",
+    };
+    const write = createBuiltInTools().find((tool) => tool.name === "write");
+
+    const result = await write?.execute({
+      filePath: "notes.txt",
+      content: "plain",
+    }, ctx);
+
+    expect(result?.content).toContain("Successfully wrote");
+    expect(result?.content).not.toContain("LSP diagnostics");
+    expect(lsp.syncTouchedFile).toHaveBeenCalledWith({
+      filePath: "notes.txt",
+      content: "plain",
+      abortSignal: undefined,
+    });
+  });
+
+
+  it("auto-approves workspace edits when the workspace toggle is enabled", async () => {
+    const workspaceRoot = await makeTempDir();
+    const confirm = vi.fn();
+    const ctx: ToolExecutionContext = {
+      workspaceRoot,
+      mode: "act",
+      settings: {
+        deepseekApiKey: "",
+        githubToken: "",
+        agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
+        autoApproveWorkspaceEdits: true,
+      },
+      confirm,
+      askQuestion: async () => ({
+        callId: "question",
+        answer: "",
+        isManual: true,
+        cancelled: true,
+      }),
+      sendSubAgent: async () => "sub-agent result",
+    };
+    const write = createBuiltInTools().find((tool) => tool.name === "write");
+
+    const result = await write?.execute({
+      filePath: "inside.txt",
+      content: "inside",
+    }, ctx);
+
+    expect(result?.content).toContain("Successfully wrote");
+    expect(await readFile(join(workspaceRoot, "inside.txt"), "utf-8")).toBe("inside");
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("emits task updates from the updateTasks tool", async () => {
+    const workspaceRoot = await makeTempDir();
+    const emit = vi.fn();
+    const ctx: ToolExecutionContext = {
+      workspaceRoot,
+      mode: "act",
+      emit,
+      confirm: async () => ({ callId: "confirm", approved: true }),
+      askQuestion: async () => ({
+        callId: "question",
+        answer: "",
+        isManual: true,
+        cancelled: true,
+      }),
+      sendSubAgent: async () => "sub-agent result",
+    };
+    const updateTasks = createBuiltInTools().find((tool) => tool.name === "updateTasks");
+
+    const result = await updateTasks?.execute({
+      tasks: [{ id: "one", text: "Do one thing", status: "in-progress" }],
+    }, ctx);
+
+    expect(result?.content).toBe("Updated 1 tasks.");
+    expect(emit).toHaveBeenCalledWith("tasks_updated", {
+      tasks: [{ id: "one", text: "Do one thing", status: "in-progress" }],
+    });
   });
 
   it("returns a unified diff for completed edits", async () => {
