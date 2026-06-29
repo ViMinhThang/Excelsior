@@ -298,4 +298,24 @@ describe("AgentHarness", () => {
     expect(await readFile(existingFile, "utf-8")).toBe("original content");
     expect(existsSync(join(workspaceRoot, "new.txt"))).toBe(false);
   });
+
+  it("handles errors during command execution gracefully", async () => {
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+
+    // Mock/register a command that throws an error
+    const testCommand = {
+      definition: { name: "throwy", category: "test", description: "throws" },
+      execute: async () => {
+        throw new Error("Test command error");
+      },
+    };
+    (harness as any).commands.register(testCommand);
+
+    const result = await harness.executeCommand("/throwy");
+    expect(result.handled).toBe(true);
+    expect(result.message).toBe("Command failed: Test command error");
+    expect(result.clearInput).toBe(true);
+  });
 });

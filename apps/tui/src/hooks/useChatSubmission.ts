@@ -42,6 +42,8 @@ export function useChatSubmission({
         if (result.message) setCommandResult(result.message);
         if (result.openPanelId) openPanel(result.openPanelId);
         if (result.navigate) navigate(result.navigate);
+      }).catch((err) => {
+        setCommandResult(`Command failed: ${err instanceof Error ? err.message : String(err)}`);
       });
       return;
     }

@@ -321,7 +321,15 @@ class HarnessStore implements AgentHarness {
         clearInput: true,
       };
     }
-    return command.execute(parsed.args, this);
+    try {
+      return await command.execute(parsed.args, this);
+    } catch (error) {
+      return {
+        handled: true,
+        message: `Command failed: ${error instanceof Error ? error.message : String(error)}`,
+        clearInput: true,
+      };
+    }
   }
 
   saveSettings(settings: Partial<HarnessSettings>): void {

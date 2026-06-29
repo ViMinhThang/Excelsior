@@ -26,6 +26,8 @@ export function useChatSubmission(input: {
     if (trimmed.startsWith("/")) {
       void executeCommand(trimmed).then((result) => {
         setCommandResult(result.message ?? null);
+      }).catch((err) => {
+        setCommandResult(`Command failed: ${err instanceof Error ? err.message : String(err)}`);
       });
     } else {
       setCommandResult(null);
