@@ -11,6 +11,7 @@ import { createRunCommandTool } from "./system.js";
 import { createAskQuestionTool } from "./interaction.js";
 import { createSpawnSubAgentTool } from "./subAgent.js";
 import { createUpdateTasksTool } from "./tasks.js";
+import { createBrowserUseTool } from "./browserUse.js";
 
 export {
   createLsTool,
@@ -24,6 +25,7 @@ export { createRunCommandTool } from "./system.js";
 export { createAskQuestionTool } from "./interaction.js";
 export { createSpawnSubAgentTool } from "./subAgent.js";
 export { createUpdateTasksTool } from "./tasks.js";
+export { createBrowserUseTool } from "./browserUse.js";
 
 export function createBuiltInTools(): HarnessTool[] {
   return [
@@ -39,5 +41,6 @@ export function createBuiltInTools(): HarnessTool[] {
     createUpdateTasksTool(),
     createAskQuestionTool(),
     createSpawnSubAgentTool(),
+    createBrowserUseTool(),
   ];
 }

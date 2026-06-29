@@ -5,6 +5,7 @@ import {
   writeFileDisplayConfig,
 } from "./fileToolDisplays.js";
 import {
+  browserUseDisplayConfig,
   gitDiffDisplayConfig,
   spawnSubAgentDisplayConfig,
   updateTasksDisplayConfig,
@@ -42,5 +43,6 @@ export const toolDisplayRegistry = new ToolDisplayRegistry()
   .on("run_command", runCommandDisplayConfig)
   .on("spawnSubAgent", spawnSubAgentDisplayConfig)
   .on("browser_subagent", spawnSubAgentDisplayConfig)
+  .on("browserUse", browserUseDisplayConfig)
   .on("updateTasks", updateTasksDisplayConfig)
   .on("gitDiff", gitDiffDisplayConfig);

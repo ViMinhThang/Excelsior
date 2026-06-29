@@ -69,3 +69,12 @@ export const updateTasksDisplayConfig: ToolDisplayConfig = {
     };
   },
 };
+
+export const browserUseDisplayConfig: ToolDisplayConfig = {
+  formatCommand: (args: Record<string, unknown> | null) => {
+    const action = String(args?.action || "");
+    const target = String(args?.url || args?.selector || "");
+    return `browser ${action}${target ? ` ${target}` : ""}`;
+  },
+};
+
