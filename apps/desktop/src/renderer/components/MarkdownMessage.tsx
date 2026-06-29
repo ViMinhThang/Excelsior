@@ -18,7 +18,7 @@ function renderInlineMarkdown(text: string): React.ReactNode {
       return (
         <code
           key={index}
-          className="px-1.5 py-0.5 rounded border border-brand-border bg-brand-surface font-mono text-[12px] text-brand-accent select-all"
+          className="font-mono text-[12px] text-brand-accent select-all"
         >
           {part.content}
         </code>
@@ -105,18 +105,19 @@ function renderMarkdownLines(text: string): React.ReactNode[] {
       renderedElements.push(
         <div
           key={`table-${index}`}
-          className="my-4 overflow-x-auto rounded-lg border border-brand-border/60 bg-brand-surface/40"
+          className="my-4 overflow-hidden rounded-lg border border-brand-border/40 bg-brand-surface/20"
         >
-          <table className="min-w-full divide-y divide-brand-border/40 text-[13px]">
-            <thead className="bg-brand-surface/80">
+          <table className="min-w-full border-collapse text-[13px]">
+            <thead className="bg-brand-surface/60 border-b border-brand-border/40">
               <tr>
                 {headers.map((header, hIdx) => {
                   const align = alignments[hIdx] || "left";
                   const alignmentClass = alignClassMap[align];
+                  const isLast = hIdx === headers.length - 1;
                   return (
                     <th
                       key={`th-${hIdx}`}
-                      className={`px-4 py-2 font-semibold text-brand-text-strong ${alignmentClass}`}
+                      className={`px-4 py-2 font-semibold text-brand-text-strong ${alignmentClass} ${!isLast ? "border-r border-brand-border/30" : ""}`}
                     >
                       {renderInlineMarkdown(header)}
                     </th>
@@ -134,10 +135,11 @@ function renderMarkdownLines(text: string): React.ReactNode[] {
                     const cellVal = row[cIdx] || "";
                     const align = alignments[cIdx] || "left";
                     const alignmentClass = alignClassMap[align];
+                    const isLast = cIdx === headers.length - 1;
                     return (
                       <td
                         key={`td-${cIdx}`}
-                        className={`px-4 py-2 text-brand-text-light ${alignmentClass}`}
+                        className={`px-4 py-2 text-brand-text-light ${alignmentClass} ${!isLast ? "border-r border-brand-border/20" : ""}`}
                       >
                         {renderInlineMarkdown(cellVal)}
                       </td>

@@ -147,3 +147,13 @@ pre.code-block-pre {
   border-radius: 0 !important;
   margin: 0 !important;
 }
+
+/* Specific styling for code elements inside markdown tables */
+table code {
+  background-color: var(--brand-panel) !important;
+  border: 1px solid color-mix(in srgb, var(--brand-border) 60%, transparent) !important;
+  border-radius: 4px !important;
+  padding: 1px 5px !important;
+  font-size: 11.5px !important;
+  display: inline-block !important;
+}

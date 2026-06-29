@@ -1,9 +1,14 @@
 import { defineConfig } from "vitest/config";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const sharedResolve = {
   conditions: ["development"],
   alias: {
     "react-reconciler/constants": "react-reconciler/constants.js",
+    "@": path.resolve(__dirname, "./apps/desktop/src/renderer"),
   },
 };
 

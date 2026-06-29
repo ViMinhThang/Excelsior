@@ -4,7 +4,6 @@ import { createToolDisplay, createToolDisplayPresentation } from "@excelsior/cor
 import {
   ChevronDown,
   ChevronRight,
-  Code,
   Compass,
 } from "lucide-react";
 import { MarkdownMessage } from "../MarkdownMessage.js";
@@ -72,9 +71,7 @@ function ToolBubble({
 
   return (
     <div className={`message-row flex gap-3 pr-10 ${isRunning ? "tool-row-running" : ""}`}>
-      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-8 text-brand-text-muted">
-        <Code className="h-3.5 w-3.5" />
-      </div>
+      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-8 text-brand-text-muted" />
 
       <div className="min-w-0 flex-1">
         <button

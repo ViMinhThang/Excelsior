@@ -52,6 +52,15 @@ function createSummaryLine(
   return undefined;
 }
 
+function cleanWorkspacePath(str: string): string {
+  if (!str) return str;
+  let normalized = str.replace(/\\/g, "/");
+  normalized = normalized.replace(/[a-zA-Z]:\/.*?\/Excelsior\b/gi, "Excelsior");
+  // Remove parentheses around tool arguments: e.g. ToolName(Args) -> ToolName Args
+  normalized = normalized.replace(/^([a-zA-Z0-9_]+)\((.*)\)$/, "$1 $2");
+  return normalized;
+}
+
 export function createToolDisplay({
   toolName,
   toolArgs,
@@ -65,7 +74,7 @@ export function createToolDisplay({
   const normalizedContent = normalizeToolText(content);
   const preview = previewContent(normalizedContent);
   const tone = toneFor(status, normalizedContent);
-  const command = createCommand(name, args, toolArgs, filePath);
+  const command = cleanWorkspacePath(createCommand(name, args, toolArgs, filePath));
   const summaryLine = createSummaryLine(name, args, normalizedContent);
   const isFileAction = isFileActionTool(name);
   const isWriteAction = isWriteTool(name);

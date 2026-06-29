@@ -28,7 +28,7 @@ export function PendingConfirmation({ confirmation, onRespond }: PendingConfirma
   const fileChange = display.fileChangePreview;
 
   return (
-    <div className="floating-prompt-panel flex w-full flex-col gap-4 p-5 backdrop-blur-md animate-fade-in-snappy relative overflow-hidden">
+    <div className="floating-prompt-panel flex w-full flex-col gap-4 p-5 animate-fade-in-snappy relative overflow-hidden">
       {/* Top indicator bar */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-accent to-brand-accent-hover opacity-95" />
       
@@ -116,7 +116,7 @@ export function PendingQuestion({ question, onRespond }: PendingQuestionProps) {
   };
 
   return (
-    <div className="floating-prompt-panel flex w-full flex-col gap-2.5 p-3.5 backdrop-blur-md animate-fade-in-snappy relative overflow-hidden">
+    <div className="floating-prompt-panel flex w-full flex-col gap-2.5 p-3.5 animate-fade-in-snappy relative overflow-hidden">
       {/* Top indicator bar */}
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand-accent to-brand-accent-hover opacity-95" />
 

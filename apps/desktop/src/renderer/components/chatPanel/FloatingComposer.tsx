@@ -1,11 +1,17 @@
-import { useEffect, useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { AgentMode } from "@excelsior/core";
 import {
   createDoubleEscapeCancelState,
   handleDoubleEscapeCancel,
   resetDoubleEscapeCancel,
 } from "@excelsior/core";
-import { ArrowUp, ChevronDown, Laptop, Mic, Plus, Square } from "lucide-react";
+import { ArrowUp, ChevronDown, Mic, Plus, Square } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu.js";
 
 type FloatingComposerProps = {
   inputValue: string;
@@ -31,24 +37,28 @@ function PlanToggle({
       type="button"
       aria-pressed={isPlanMode}
       onClick={() => onModeChange(isPlanMode ? "act" : "plan")}
-      className="composer-control"
-      title={isPlanMode ? "Disable plan mode" : "Enable plan mode"}
+      className={`composer-control flex items-center gap-2 px-2.5 py-1 rounded-[var(--radius-control)] border transition-all duration-200 ${
+        isPlanMode
+          ? "border-brand-accent/30 bg-brand-accent/5 text-brand-accent hover:bg-brand-accent/10"
+          : "border-transparent text-brand-text-muted hover:bg-[var(--surface-hover)]"
+      }`}
+      title={isPlanMode ? "Switch to Act Mode (Runs tools automatically)" : "Switch to Plan Mode (Requires manual confirmation for tools)"}
     >
       <span
-        className={`relative flex h-3.5 w-7 items-center rounded-full transition-colors duration-300 ${
+        className={`relative flex h-4 w-7 items-center rounded-full transition-colors duration-200 ${
           isPlanMode ? "bg-brand-accent" : "bg-brand-panel"
         }`}
       >
         <span
-          className={`absolute top-0.5 left-0.5 h-2.5 w-2.5 rounded-full transition-snappy shadow-sm ${
+          className={`absolute top-0.5 left-0.5 h-3 w-3 rounded-full transition-all duration-200 shadow-sm ${
             isPlanMode
-              ? "translate-x-3.5 bg-brand-bg"
+              ? "translate-x-3 bg-brand-bg shadow-[0_0_8px_var(--gold-glow-strong)]"
               : "translate-x-0 bg-brand-text-muted"
           }`}
         />
       </span>
-      Plan
-      <ChevronDown className="h-3 w-3" />
+      <span className="font-semibold tracking-wide text-[11px]">Plan Mode</span>
+      <ChevronDown className="h-3 w-3 opacity-60" />
     </button>
   );
 }
@@ -62,6 +72,7 @@ export function FloatingComposer({
   onModeChange,
   onSend,
 }: FloatingComposerProps) {
+  const [model, setModel] = useState<"DeepSeek V4 Flash" | "DeepSeek V4 Pro">("DeepSeek V4 Pro");
   const escapeCancelState = useRef(createDoubleEscapeCancelState());
 
   useEffect(() => {
@@ -120,14 +131,32 @@ export function FloatingComposer({
           >
             <Plus className="h-4 w-4" />
           </button>
-          <button
-            type="button"
-            className="composer-control min-w-0"
-            title="Current model"
-          >
-            <span className="truncate">DeepSeek V4</span>
-            <ChevronDown className="h-3 w-3 shrink-0" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="composer-control min-w-0"
+                title="Current model"
+              >
+                <span className="truncate">{model}</span>
+                <ChevronDown className="h-3 w-3 shrink-0" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-48 bg-brand-surface text-brand-text-strong border border-brand-border">
+              <DropdownMenuItem
+                className="focus:bg-brand-panel focus:text-brand-text-strong cursor-pointer whitespace-nowrap"
+                onClick={() => setModel("DeepSeek V4 Flash")}
+              >
+                DeepSeek V4 Flash
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="focus:bg-brand-panel focus:text-brand-text-strong cursor-pointer whitespace-nowrap"
+                onClick={() => setModel("DeepSeek V4 Pro")}
+              >
+                DeepSeek V4 Pro
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <PlanToggle mode={mode} onModeChange={onModeChange} />
         </div>
 
@@ -163,17 +192,6 @@ export function FloatingComposer({
             </button>
           )}
         </div>
-      </div>
-      <div className="composer-footer">
-        <button
-          type="button"
-          className="composer-control"
-          title="Local workspace"
-        >
-          <Laptop className="h-3.5 w-3.5" />
-          Local
-          <ChevronDown className="h-3 w-3" />
-        </button>
       </div>
     </div>
   );

@@ -28,7 +28,7 @@ export function ContextRail({
       : `Local ${environment.changeCount}`;
 
   return (
-    <aside className="context-rail-panel pointer-events-auto absolute right-4 top-14 z-30 hidden max-h-[calc(100%-88px)] w-[300px] backdrop-blur-xl xl:flex xl:flex-col">
+    <aside className="context-rail-panel pointer-events-auto absolute right-4 top-14 z-30 hidden max-h-[calc(100%-88px)] w-[300px] xl:flex xl:flex-col">
       <div className="context-rail-scroll min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <section className="context-rail-section">
           <div className="context-rail-section-heading">

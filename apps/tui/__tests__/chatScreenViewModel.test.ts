@@ -122,7 +122,7 @@ describe("chat screen model builders", () => {
   it("keeps pending file change preview behind the tool display model", () => {
     const model = buildPendingActionModel(pendingFileChangeRequest());
 
-    expect(model?.display.command).toBe("edit(demo.ts)");
+    expect(model?.display.command).toBe("edit demo.ts");
     expect(model?.display.fileChangePreview).toMatchObject({
       filePath: "demo.ts",
       action: "edit",

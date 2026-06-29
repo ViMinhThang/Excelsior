@@ -168,7 +168,7 @@
 .chat-empty-layer {
   left: 50%;
   transform: translateX(-50%);
-  width: min(760px, calc(100% - 64px));
+  width: min(640px, calc(100% - 64px));
 }
 
 @media (max-width: 720px) {
@@ -199,21 +199,21 @@
    COMPOSER PANEL
    ============================ */
 .composer-panel {
-  background: color-mix(in srgb, var(--brand-composer) 88%, var(--brand-sidebar-footer));
-  backdrop-filter: blur(14px) saturate(108%);
-  -webkit-backdrop-filter: blur(14px) saturate(108%);
-  border: 0;
+  background: var(--brand-surface);
+  border: 1px solid color-mix(in srgb, var(--brand-border) 40%, transparent);
   border-radius: var(--radius-panel) !important;
   box-shadow: var(--shadow-card), 0 14px 36px color-mix(in srgb, var(--brand-sidebar-footer) 32%, transparent);
   overflow: hidden;
   padding: 0 !important;
   transition: box-shadow var(--transition-snappy) var(--ease-snappy),
-    background-color var(--transition-snappy) var(--ease-snappy);
+    background-color var(--transition-snappy) var(--ease-snappy),
+    border-color var(--transition-snappy) var(--ease-snappy);
 }
 
 .composer-panel:focus-within {
+  border-color: color-mix(in srgb, var(--brand-accent) 60%, transparent);
   box-shadow: var(--shadow-panel-focus) !important;
-  background: color-mix(in srgb, var(--brand-composer) 92%, var(--brand-sidebar-footer)) !important;
+  background: var(--brand-surface) !important;
 }
 
 .composer-textarea {
@@ -222,11 +222,11 @@
   color: var(--brand-text-strong);
   display: block;
   font-size: 13.5px;
-  line-height: 22px;
+  line-height: 20px;
   max-height: 120px;
-  min-height: 34px;
+  min-height: 28px;
   outline: none;
-  padding: 14px 14px 2px;
+  padding: 8px 12px 2px;
   resize: none;
   transition: height 150ms ease-out;
   width: 100%;
@@ -241,16 +241,16 @@
   display: flex;
   gap: 12px;
   justify-content: space-between;
-  min-height: 42px;
-  padding: 2px 8px 8px;
+  min-height: 34px;
+  padding: 0px 8px 6px;
 }
 
 .composer-footer {
   align-items: center;
   background: color-mix(in srgb, var(--brand-panel) 48%, var(--brand-sidebar-footer));
   display: flex;
-  min-height: 34px;
-  padding: 0 14px;
+  min-height: 26px;
+  padding: 0 12px;
 }
 
 .composer-control {
@@ -260,12 +260,12 @@
   border-radius: var(--radius-control);
   color: var(--brand-text-muted);
   display: inline-flex;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   gap: 7px;
-  height: 28px;
+  height: 24px;
   max-width: 220px;
-  padding: 0 8px;
+  padding: 0 6px;
   transition: background-color var(--transition-snappy) var(--ease-snappy),
     color var(--transition-snappy) var(--ease-snappy);
 }
@@ -281,12 +281,12 @@
   border: 0;
   border-radius: var(--radius-pill);
   display: inline-flex;
-  height: 28px;
+  height: 24px;
   justify-content: center;
   transition: background-color var(--transition-snappy) var(--ease-snappy),
     color var(--transition-snappy) var(--ease-snappy),
     transform var(--transition-snappy) var(--ease-snappy);
-  width: 28px;
+  width: 24px;
 }
 
 .composer-icon-button {
@@ -332,7 +332,7 @@
 
 .starter-prompt-card {
   background: color-mix(in srgb, var(--brand-context-rail) 72%, transparent);
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--brand-border) 25%, transparent) !important;
   border-radius: var(--radius-control) !important;
   display: flex;
   flex-direction: column;
@@ -344,13 +344,15 @@
   cursor: pointer;
   transition: background-color var(--transition-snappy) var(--ease-snappy),
     box-shadow var(--transition-snappy) var(--ease-snappy),
+    border-color var(--transition-snappy) var(--ease-snappy),
     transform var(--transition-snappy) var(--ease-snappy);
 }
 
 .starter-prompt-card:hover {
   background: var(--surface-hover);
-  box-shadow: var(--shadow-card), 0 0 14px var(--gold-glow);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--brand-accent) 40%, transparent) !important;
+  box-shadow: var(--shadow-card), 0 8px 24px color-mix(in srgb, var(--brand-accent) 6%, transparent);
+  transform: translateY(-3px);
 }
 
 .starter-prompt-icon-wrapper {
@@ -364,6 +366,15 @@
   color: var(--brand-accent);
   margin-bottom: 16px;
   box-shadow: 0 2px 8px color-mix(in srgb, var(--brand-sidebar-footer) 12%, transparent);
+  transition: transform var(--transition-snappy) var(--ease-snappy),
+    background-color var(--transition-snappy) var(--ease-snappy),
+    color var(--transition-snappy) var(--ease-snappy);
+}
+
+.starter-prompt-card:hover .starter-prompt-icon-wrapper {
+  transform: scale(1.1);
+  background: color-mix(in srgb, var(--brand-accent) 18%, transparent);
+  color: var(--brand-accent-hover);
 }
 
 .starter-prompt-title {
@@ -386,4 +397,9 @@
 
 .tool-row-running {
   opacity: 0.9;
+}
+
+.bg-grid-pattern {
+  background-image: radial-gradient(color-mix(in srgb, var(--brand-text-muted) 35%, transparent) 1px, transparent 1px);
+  background-size: 16px 16px;
 }

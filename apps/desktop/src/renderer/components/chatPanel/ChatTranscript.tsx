@@ -1,4 +1,4 @@
-import type { ProjectedTurn } from "@excelsior/core";
+import type { ProjectedTurn, AgentMode } from "@excelsior/core";
 import type { RefObject } from "react";
 import { EmptyChat } from "./EmptyChat.js";
 import {
@@ -15,6 +15,12 @@ type ChatTranscriptProps = {
   workspaceName: string;
   onPickPrompt: (prompt: string) => void;
   onToggleToolCall: (id: string) => void;
+  inputValue: string;
+  mode: AgentMode;
+  onCancel: () => void;
+  onInputChange: (value: string) => void;
+  onModeChange: (mode: AgentMode) => void;
+  onSend: () => void;
 };
 
 export function ChatTranscript({
@@ -25,6 +31,12 @@ export function ChatTranscript({
   workspaceName,
   onPickPrompt,
   onToggleToolCall,
+  inputValue,
+  mode,
+  onCancel,
+  onInputChange,
+  onModeChange,
+  onSend,
 }: ChatTranscriptProps) {
   const lastTurnIndex = turns.length - 1;
   const staticTurns = lastTurnIndex >= 0 ? turns.slice(0, lastTurnIndex) : [];
@@ -86,7 +98,16 @@ export function ChatTranscript({
 
   return (
     <div className="chat-content-rail flex flex-col justify-center min-h-[calc(100%-20px)] py-6">
-      <EmptyChat workspaceName={workspaceName} onPickPrompt={onPickPrompt} />
+      <EmptyChat
+        workspaceName={workspaceName}
+        inputValue={inputValue}
+        isLoading={isLoading}
+        mode={mode}
+        onCancel={onCancel}
+        onInputChange={onInputChange}
+        onModeChange={onModeChange}
+        onSend={onSend}
+      />
     </div>
   );
 }

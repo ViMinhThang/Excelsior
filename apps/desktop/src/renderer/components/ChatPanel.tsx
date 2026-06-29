@@ -79,6 +79,12 @@ export function ChatPanel({
             workspaceName={state?.workspace.name ?? "Workspace"}
             onPickPrompt={onInputChange}
             onToggleToolCall={onToggleToolCall}
+            inputValue={inputValue}
+            mode={mode}
+            onCancel={onCancel}
+            onInputChange={onInputChange}
+            onModeChange={onModeChange}
+            onSend={onSend}
           />
         </div>
 
@@ -116,24 +122,26 @@ export function ChatPanel({
           <div className={`chat-floating-layer pointer-events-auto absolute ${hasPendingAction ? "bottom-[29rem]" : "bottom-28"}`}>
             <pre
               data-testid="command-result"
-              className="floating-prompt-panel max-h-64 w-full overflow-y-auto p-4 text-xs leading-5 text-brand-text-light backdrop-blur-md"
+              className="floating-prompt-panel max-h-64 w-full overflow-y-auto p-4 text-xs leading-5 text-brand-text-light"
             >
               {commandResult}
             </pre>
           </div>
         )}
 
-        <div className="chat-floating-layer pointer-events-auto absolute bottom-6">
-          <FloatingComposer
-            inputValue={inputValue}
-            isLoading={isLoading}
-            mode={mode}
-            onCancel={onCancel}
-            onInputChange={onInputChange}
-            onModeChange={onModeChange}
-            onSend={onSend}
-          />
-        </div>
+        {turns.length > 0 && (
+          <div className="chat-floating-layer pointer-events-auto absolute bottom-6">
+            <FloatingComposer
+              inputValue={inputValue}
+              isLoading={isLoading}
+              mode={mode}
+              onCancel={onCancel}
+              onInputChange={onInputChange}
+              onModeChange={onModeChange}
+              onSend={onSend}
+            />
+          </div>
+        )}
       </section>
     </main>
   );

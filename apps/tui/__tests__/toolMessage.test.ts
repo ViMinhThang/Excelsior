@@ -17,7 +17,7 @@ describe("ToolMessage command formatting", () => {
     expect(commandFor(
       "view",
       { filePath },
-    )).toBe("read(" + filePath + ")");
+    )).toBe("read " + filePath);
   });
 
   it("does not show quoted JSON args for view calls", () => {
@@ -25,7 +25,7 @@ describe("ToolMessage command formatting", () => {
     expect(commandFor(
       "view",
       { filePath },
-    )).toBe("read(" + filePath + ")");
+    )).toBe("read " + filePath);
   });
 
   it("shows ls calls with the directory path value only", () => {
@@ -34,7 +34,7 @@ describe("ToolMessage command formatting", () => {
     expect(commandFor(
       "ls",
       { directoryPath },
-    )).toBe(`Listfiles(${directoryPath})`);
+    )).toBe(`Listfiles ${directoryPath}`);
   });
 
   it("renders expanded edit output with highlighted diff rows", async () => {

@@ -8,7 +8,7 @@ import {
 
 const THEME_STORAGE_KEY = "excelsior-theme";
 const FONT_STORAGE_KEY = "excelsior-font";
-const DEFAULT_FONT = "ui-sans-serif, system-ui, sans-serif";
+const DEFAULT_FONT = "Sora, ui-sans-serif, system-ui, sans-serif";
 
 function readStoredTheme(storage: Storage): DesktopTheme {
   const storedTheme = storage.getItem(THEME_STORAGE_KEY);

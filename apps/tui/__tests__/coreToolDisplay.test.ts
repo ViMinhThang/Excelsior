@@ -158,7 +158,7 @@ describe("tool display model", () => {
     });
 
     expect(display.label).toBe("Edit");
-    expect(display.command).toBe("edit(demo.ts)");
+    expect(display.command).toBe("edit demo.ts");
     expect(display.fileChangePreview).toMatchObject({
       action: "edit",
       oldLines: ["old"],
@@ -261,7 +261,7 @@ describe("tool display model", () => {
       content: "Updated 3 tasks.",
     });
 
-    expect(display.command).toBe("Tasks(update)");
+    expect(display.command).toBe("Tasks update");
     expect(display.label).toBe("Tasks");
     expect(display.summary).toBe("1/3 complete");
     expect(createToolDisplayPresentation({

@@ -1,68 +1,57 @@
-import {
-  Bug,
-  Compass,
-  FileSearch,
-  GitPullRequest,
-} from "lucide-react";
-
-const STARTER_PROMPTS = [
-  {
-    icon: FileSearch,
-    title: "Trace a feature",
-    prompt: "Trace how chat submissions flow through this workspace.",
-  },
-  {
-    icon: GitPullRequest,
-    title: "Review changes",
-    prompt: "Review the current changes and call out risks.",
-  },
-  {
-    icon: Bug,
-    title: "Fix a test",
-    prompt: "Find the failing test and fix the bug behind it.",
-  },
-] as const;
+import { Compass } from "lucide-react";
+import type { AgentMode } from "@excelsior/core";
+import { FloatingComposer } from "./FloatingComposer.js";
 
 export function EmptyChat({
   workspaceName,
-  onPickPrompt,
+  inputValue,
+  isLoading,
+  mode,
+  onCancel,
+  onInputChange,
+  onModeChange,
+  onSend,
 }: {
   workspaceName: string;
-  onPickPrompt: (prompt: string) => void;
+  inputValue: string;
+  isLoading: boolean;
+  mode: AgentMode;
+  onCancel: () => void;
+  onInputChange: (value: string) => void;
+  onModeChange: (mode: AgentMode) => void;
+  onSend: () => void;
 }) {
   return (
-    <div className="w-full pb-8 animate-fade-in-snappy">
-      <div className="flex items-center gap-4 mb-5">
-        <div className="starter-header-icon">
-          <Compass className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-xl font-semibold text-brand-text-strong">
-            {workspaceName}
-          </p>
-          <p className="mt-1 text-sm font-medium text-brand-text-light">What should we work on?</p>
-        </div>
-      </div>
+    <div className="w-full max-w-[640px] mx-auto my-6 animate-fade-in-snappy relative px-4">
 
-      <div className="mt-8 grid gap-3 md:grid-cols-3">
-        {STARTER_PROMPTS.map(({ icon: Icon, prompt, title }) => (
-          <button
-            key={title}
-            type="button"
-            onClick={() => onPickPrompt(prompt)}
-            className="starter-prompt-card"
-          >
-            <div className="starter-prompt-icon-wrapper">
-              <Icon className="h-5 w-5" />
-            </div>
-            <span className="starter-prompt-title">
-              {title}
-            </span>
-            <span className="starter-prompt-description">
-              {prompt}
-            </span>
-          </button>
-        ))}
+      <div className="relative z-10">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="starter-header-icon relative overflow-hidden group">
+            <Compass className="h-5 w-5 relative z-10 transition-transform duration-500 group-hover:rotate-45" />
+            <div className="absolute inset-0 bg-brand-accent/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-2xl font-bold tracking-tight text-brand-text-strong font-heading">
+              {workspaceName}
+            </p>
+            <p className="mt-1.5 text-sm font-medium text-brand-text-muted">
+              What should we build today? Type a prompt below to start.
+            </p>
+          </div>
+        </div>
+
+        {/* Centered Composer when no history */}
+        <div className="my-6">
+          <FloatingComposer
+            inputValue={inputValue}
+            isLoading={isLoading}
+            mode={mode}
+            onCancel={onCancel}
+            onInputChange={onInputChange}
+            onModeChange={onModeChange}
+            onSend={onSend}
+          />
+        </div>
       </div>
     </div>
   );
