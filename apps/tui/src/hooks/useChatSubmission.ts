@@ -27,7 +27,6 @@ export function useChatSubmission({
   getSubmittedInput,
 }: UseChatSubmissionOptions) {
   return useCallback(() => {
-    if (isLoading) return;
     const trimmed = (getSubmittedInput?.() ?? inputRef.current).trim();
     if (!trimmed) return;
 

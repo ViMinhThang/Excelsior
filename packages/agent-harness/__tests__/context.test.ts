@@ -80,8 +80,8 @@ describe("harness context helpers", () => {
     expect(context.systemPrompt).toContain("Minimize emoji");
     expect(context.systemPrompt).toContain("Prefer rg before broader file scans.");
     expect(context.systemPrompt).toContain("## Available Agent Skills");
+    expect(context.systemPrompt).toContain("- Current Mode: plan");
     expect(context.messages).toEqual([
-      { role: "system", content: expect.stringMatching(/^current mode: plan timestamp:/) },
       { role: "user", content: "inspect the repo" },
     ]);
   });
@@ -100,9 +100,9 @@ describe("harness context helpers", () => {
       reflectionMemoryContext: "Reflection memory context: off. Do not use stored reflection memory for this turn.",
     });
 
+    expect(enabled.systemPrompt).toContain("- Current Mode: act");
     expect(enabled.messages).toMatchObject([
       { role: "assistant", content: "prior" },
-      { role: "system", content: expect.stringMatching(/^current mode: act timestamp:/) },
       { role: "system", content: "Reflection memory context: on.\nRemember the repo preference." },
       { role: "user", content: "continue" },
     ]);
@@ -163,11 +163,11 @@ describe("harness context helpers", () => {
     const assembly = buildRunAssembly(assemblyInput);
     assemblyInput.mode = "act";
 
-    expect(assembly.runContext.systemPrompt).not.toContain("CURRENT MODE:");
-    expect(assembly.runContext.messages).toContainEqual({
+    expect(assembly.runContext.systemPrompt).toContain("- Current Mode: plan");
+    expect(assembly.runContext.messages).not.toContainEqual(expect.objectContaining({
       role: "system",
-      content: expect.stringMatching(/^current mode: plan timestamp:/),
-    });
+      content: expect.stringMatching(/current mode:/),
+    }));
     expect(assembly.runContext.systemPrompt).toContain("Keep context assembly boring.");
     expect(assembly.toolContext.mode).toBe("plan");
     expect(assembly.toolContext.lsp).toBe(lsp);

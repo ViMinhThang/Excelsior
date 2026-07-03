@@ -9,9 +9,12 @@ export interface SystemPromptInput {
 export function buildSystemPrompt(input: SystemPromptInput): string {
   const platform = process.platform;
   const osName = platform === "win32" ? "Windows" : platform === "darwin" ? "macOS" : "Linux/Unix";
-
   let prompt = `
-- Host Operating System: ${osName} (platform: ${platform})
+- Host Operating System: ${osName} (platform: ${platform})`;
+  if (input.mode) {
+    prompt += `\n- Current Mode: ${input.mode}`;
+  }
+  prompt += `
 - Plan mode: inspect, reason, and draft plans only. Do not write files or run write-like commands.
 - In Plan mode, do not call runCommand for commands that create, modify, delete, install, move, copy, or reset anything. Use read-only tools only: view, ls, glob, ripgrep, askQuestion, and spawnSubAgent.
 - Act mode: you may apply edits after the normal confirmation flow.

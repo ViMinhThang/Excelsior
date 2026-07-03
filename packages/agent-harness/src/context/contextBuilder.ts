@@ -17,14 +17,9 @@ export interface RunContext {
 
 export function buildRunContext(input: RunContextInput): RunContext {
   const priorMessages = input.priorMessages;
-  const modeMessage: AgentMessage = {
-    role: "system",
-    content: `current mode: ${input.mode} timestamp: ${new Date().toISOString()}`,
-  };
   return {
     messages: [
       ...priorMessages,
-      modeMessage,
       ...(input.reflectionMemoryContext
         ? [{ role: "system" as const, content: input.reflectionMemoryContext }]
         : []),
