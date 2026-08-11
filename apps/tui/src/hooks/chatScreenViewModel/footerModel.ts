@@ -7,7 +7,6 @@ export function buildFooterModel(input: {
   pending: unknown;
   pendingKind?: "confirmation" | "question" | null;
   activePanelId: string | null;
-  subAgentCount: number;
   toolCallCount: number;
   toolsExpanded: boolean;
   totalTokens?: number;
@@ -17,7 +16,6 @@ export function buildFooterModel(input: {
     isLoading: input.isLoading,
     hasPending: !!input.pending,
     activePanelId: input.activePanelId,
-    subAgentCount: input.subAgentCount,
     toolCallCount: input.toolCallCount,
     toolsExpanded: input.toolsExpanded,
     totalTokens: input.totalTokens,

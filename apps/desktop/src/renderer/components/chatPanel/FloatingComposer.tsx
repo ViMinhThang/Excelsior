@@ -42,7 +42,11 @@ function PlanToggle({
           ? "border-brand-accent/30 bg-brand-accent/5 text-brand-accent hover:bg-brand-accent/10"
           : "border-transparent text-brand-text-muted hover:bg-[var(--surface-hover)]"
       }`}
-      title={isPlanMode ? "Switch to Act Mode (Runs tools automatically)" : "Switch to Plan Mode (Requires manual confirmation for tools)"}
+      title={
+        isPlanMode
+          ? "Switch to Act Mode (Tools run after confirmation)"
+          : "Switch to Plan Mode (Read-only; write tools are blocked)"
+      }
     >
       <span
         className={`relative flex h-4 w-7 items-center rounded-full transition-colors duration-200 ${
@@ -57,7 +61,9 @@ function PlanToggle({
           }`}
         />
       </span>
-      <span className="font-semibold tracking-wide text-[11px]">Plan Mode</span>
+      <span className="font-semibold tracking-wide text-[11px]">
+        {isPlanMode ? "Plan Mode" : "Act Mode"}
+      </span>
       <ChevronDown className="h-3 w-3 opacity-60" />
     </button>
   );

@@ -13,7 +13,6 @@ type ChatTranscriptProps = {
   messagesEndRef: RefObject<HTMLDivElement | null>;
   openToolCalls: Record<string, boolean>;
   workspaceName: string;
-  onPickPrompt: (prompt: string) => void;
   onToggleToolCall: (id: string) => void;
   inputValue: string;
   mode: AgentMode;
@@ -29,7 +28,6 @@ export function ChatTranscript({
   messagesEndRef,
   openToolCalls,
   workspaceName,
-  onPickPrompt,
   onToggleToolCall,
   inputValue,
   mode,

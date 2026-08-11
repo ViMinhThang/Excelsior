@@ -21,8 +21,6 @@ export function buildModeViewContext({
   settings,
   activePanel,
   featureContext,
-  subAgents,
-  subAgentIndex,
   toolsExpanded,
   viewportKey,
 }: BuildModeViewContextInput): ChatModeRenderContext {

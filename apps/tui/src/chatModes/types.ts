@@ -3,7 +3,6 @@ import type {
   AgentMode,
   AppSettings,
   CommandDefinition,
-  ProjectedBlock,
   ProjectedTask,
   ProjectedTurn,
   Workspace,
@@ -16,7 +15,6 @@ export const chatModeIds = [
 ] as const;
 
 export type ChatMode = (typeof chatModeIds)[number];
-export type SubAgentBlock = ProjectedBlock & { type: "sub-agent" };
 
 export interface CommandSuggestionState {
   show: boolean;
@@ -33,7 +31,6 @@ export interface ChatModeHintContext {
   hasPending: boolean;
   pendingKind?: "confirmation" | "question" | null;
   activePanelId?: string | null;
-  subAgentCount: number;
   toolCallCount: number;
   toolsExpanded: boolean;
 }
@@ -92,8 +89,6 @@ export interface InputModeKeymapContext {
   submit: () => void;
   cancel: () => void;
   toggleMode: () => "plan" | "act" | undefined;
-  openSubAgent: () => void;
-  subAgentCount: number;
   toolCallCount: number;
   toolsExpanded: boolean;
   toggleToolsExpanded: () => void;

@@ -13,7 +13,6 @@ describe("chat mode hints", () => {
       isLoading: false,
       hasPending: false,
       activePanelId: null,
-      subAgentCount: 1,
       toolCallCount: 1,
       toolsExpanded: false,
     });
@@ -28,7 +27,6 @@ describe("chat mode hints", () => {
       isLoading: false,
       hasPending: false,
       activePanelId: "session.picker",
-      subAgentCount: 0,
       toolCallCount: 0,
       toolsExpanded: false,
     })).toBe("Up/Down select | Enter open | Esc close");
@@ -41,7 +39,6 @@ describe("chat mode hints", () => {
       hasPending: true,
       pendingKind: "question",
       activePanelId: null,
-      subAgentCount: 0,
       toolCallCount: 0,
       toolsExpanded: false,
     })).toBe("Enter answer | type option number or custom answer | Esc cancel");
@@ -53,7 +50,6 @@ describe("chat mode hints", () => {
       isLoading: true,
       hasPending: false,
       activePanelId: null,
-      subAgentCount: 0,
       toolCallCount: 0,
       toolsExpanded: false,
     })).toBe("Esc twice cancel");

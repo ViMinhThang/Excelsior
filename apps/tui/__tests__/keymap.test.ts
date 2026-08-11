@@ -38,11 +38,10 @@ function makeKeymapContext(
       prev: noop,
     },
     setInput: noop,
+    setInputFocused: noop,
     submit: noop,
     cancel: noop,
     toggleMode: () => undefined,
-    openSubAgent: noop,
-    subAgentCount: 0,
     toolCallCount: 0,
     toolsExpanded: false,
     toggleToolsExpanded: noop,
@@ -72,11 +71,10 @@ function makeInputKeymapContext(
       prev: noop,
     },
     setInput: noop,
+    setInputFocused: noop,
     submit: noop,
     cancel: noop,
     toggleMode: () => undefined,
-    openSubAgent: noop,
-    subAgentCount: 0,
     toolCallCount: 0,
     toolsExpanded: false,
     toggleToolsExpanded: noop,
@@ -255,37 +253,16 @@ describe("chat mode keymap registry", () => {
     }))[0]?.enabled).toBe(false);
   });
 
-  it("always routes Ctrl+O to toggleToolsExpanded regardless of sub-agents existence", () => {
-    let openedSubAgent = false;
+  it("routes Ctrl+O to toggleToolsExpanded", () => {
     let toggledCommands = false;
 
     getChatModeKeymaps(makeKeymapContext("input", {
-      subAgentCount: 1,
       toolCallCount: 2,
-      openSubAgent: () => {
-        openedSubAgent = true;
-      },
       toggleToolsExpanded: () => {
         toggledCommands = true;
       },
     }))[0]!.map["ctrl+o"]!();
 
-    expect(openedSubAgent).toBe(false);
-    expect(toggledCommands).toBe(true);
-
-    toggledCommands = false;
-    getChatModeKeymaps(makeKeymapContext("input", {
-      subAgentCount: 0,
-      toolCallCount: 1,
-      openSubAgent: () => {
-        openedSubAgent = true;
-      },
-      toggleToolsExpanded: () => {
-        toggledCommands = true;
-      },
-    }))[0]!.map["ctrl+o"]!();
-
-    expect(openedSubAgent).toBe(false);
     expect(toggledCommands).toBe(true);
   });
 

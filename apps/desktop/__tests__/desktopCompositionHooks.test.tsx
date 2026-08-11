@@ -82,14 +82,14 @@ describe("desktop composition hooks", () => {
     );
     expect(send.mock.calls[0][0]).toContain("Branch: codex/refactor");
     expect(send.mock.calls[0][0]).toContain("Prefer renderer locality.");
-    expect(hook?.inputValue).toBe("");
+    expect(hook!.inputValue).toBe("");
   });
 
   it("routes slash commands to the command adapter and stores the command result", async () => {
     let hook: ReturnType<typeof useChatSubmission> | null = null;
     const send = vi.fn<(content: string, options?: SendOptions) => void>();
     const executeCommand = vi.fn<(command: string) => Promise<CommandResult>>()
-      .mockResolvedValue({ type: "message", message: "Command done" });
+      .mockResolvedValue({ handled: true, message: "Command done" });
 
     function Harness(): ReactElement | null {
       hook = useChatSubmission({
@@ -115,7 +115,7 @@ describe("desktop composition hooks", () => {
 
     expect(executeCommand).toHaveBeenCalledWith("/status");
     expect(send).not.toHaveBeenCalled();
-    expect(hook?.commandResult).toBe("Command done");
+    expect(hook!.commandResult).toBe("Command done");
   });
 
   it("persists theme/font preferences and applies theme side effects", () => {
@@ -142,7 +142,7 @@ describe("desktop composition hooks", () => {
     act(() => {
       create(<Harness />);
     });
-    expect(hook?.theme).toBe("nordic-blue");
+    expect(hook!.theme).toBe("nordic-blue");
     expect(changeTheme).toHaveBeenLastCalledWith("nordic-blue");
 
     act(() => {
@@ -153,6 +153,6 @@ describe("desktop composition hooks", () => {
     expect(storage.getItem("excelsior-theme")).toBe("excelsior");
     expect(storage.getItem("excelsior-font")).toBe("JetBrains Mono");
     expect(setProperty).toHaveBeenLastCalledWith("--font-brand", "JetBrains Mono");
-    expect(hook?.showSettings).toBe(false);
+    expect(hook!.showSettings).toBe(false);
   });
 });

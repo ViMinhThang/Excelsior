@@ -23,7 +23,6 @@ import { useTranscriptViewportReset } from "./useTranscriptViewportReset.js";
 import type { useToolConfirmation } from "./useToolConfirmation.js";
 import type { useQuestionResponse } from "./useQuestionResponse.js";
 import { useMemo } from "react";
-import type { SubAgentBlock } from "../chatModes/types.js";
 import { getActiveThemeName, setTheme, themes } from "../theme.js";
 
 interface UseChatRuntimeInteractionOptions {
@@ -69,10 +68,6 @@ export function useChatRuntimeInteraction({
 
   const inputHistory = useInputHistory(derivedTurns);
   const [inputFocused, setInputFocused] = useState(true);
-  const subAgentBlocks = useMemo(
-    () => derivedTurns.flatMap((t) => t.blocks).filter((block): block is SubAgentBlock => block.type === "sub-agent"),
-    [derivedTurns],
-  );
   const command = useCommandResult(inputHistory.input);
   const suggestion = useCommandAutocomplete(inputHistory.input);
   const palette = useCommandPalette({
@@ -120,8 +115,6 @@ export function useChatRuntimeInteraction({
     submit: () => submitRef.current(),
     cancel,
     toggleMode,
-    openSubAgent: () => {},
-    subAgentBlocks,
     toolsExpanded,
     toggleToolsExpanded,
     navigateUp: inputHistory.navigateUp,

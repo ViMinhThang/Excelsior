@@ -68,6 +68,7 @@ describe("ActiveRunManager", () => {
       runId: "run_1",
       turnId: "turn_1",
       sessionId: "session_1",
+      mode: "plan",
     });
 
     expect(activeRun.isActive()).toBe(true);
@@ -76,6 +77,7 @@ describe("ActiveRunManager", () => {
       runId: "run_1",
       turnId: "turn_1",
       sessionId: "session_1",
+      mode: "plan",
     });
     expect(activeRun.currentSignal()).toBe(handle.signal);
   });
@@ -86,11 +88,13 @@ describe("ActiveRunManager", () => {
       runId: "run_stale",
       turnId: "turn_stale",
       sessionId: "session_1",
+      mode: "plan",
     });
     const current = activeRun.begin({
       runId: "run_current",
       turnId: "turn_current",
       sessionId: "session_1",
+      mode: "plan",
     });
 
     activeRun.finish(stale);
@@ -100,6 +104,7 @@ describe("ActiveRunManager", () => {
       runId: "run_current",
       turnId: "turn_current",
       sessionId: "session_1",
+      mode: "plan",
     });
 
     activeRun.finish(current);
@@ -114,6 +119,7 @@ describe("ActiveRunManager", () => {
       runId: "run_1",
       turnId: "turn_1",
       sessionId: "session_1",
+      mode: "plan",
     });
 
     expect(activeRun.acceptSteering({ content: "   " })).toBeNull();
@@ -122,12 +128,14 @@ describe("ActiveRunManager", () => {
       runId: "run_1",
       turnId: "turn_1",
       sessionId: "session_1",
+      mode: "plan",
       content: "keep going",
     });
     expect(activeRun.acceptSteering({ content: "same session", sessionId: "session_1" })).toEqual({
       runId: "run_1",
       turnId: "turn_1",
       sessionId: "session_1",
+      mode: "plan",
       content: "same session",
     });
 
@@ -141,6 +149,7 @@ describe("ActiveRunManager", () => {
       runId: "run_1",
       turnId: "turn_1",
       sessionId: "session_1",
+      mode: "plan",
     });
 
     expect(activeRun.abort()).toBe(handle);
@@ -158,6 +167,7 @@ describe("ActiveRunManager", () => {
       runId: "run_cancel",
       turnId: "turn_cancel",
       sessionId: "session_1",
+      mode: "plan",
     });
     const identity = activeRun.currentIdentity();
     expect(identity).not.toBeNull();

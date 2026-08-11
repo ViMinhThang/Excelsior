@@ -4,14 +4,10 @@ import { formatAgentMode } from "@excelsior/core";
 import ChatHistory from "../components/chat/ChatHistory.js";
 import ChatInput from "../components/chat/ChatInput.js";
 import TaskList from "../components/chat/TaskList.js";
-import SubAgentPickerPanel from "../components/subAgents/SubAgentPickerPanel.js";
 import ThinkingIndicator from "../components/chat/ThinkingIndicator.js";
 import { useKeymap } from "../hooks/useKeymap.js";
 import { theme } from "../theme.js";
-import type {
-  InputModeRenderContext,
-  SubAgentPickerModeRenderContext,
-} from "./types.js";
+import type { InputModeRenderContext } from "./types.js";
 import {
   isScrolledBackFromLatest,
   getScrollSnapshot,
@@ -20,14 +16,9 @@ import {
 } from "../lib/scrollUtilities.js";
 import ScrollToLatestButton from "../components/chat/ScrollToLatestButton.js";
 
-type ConversationModeContext =
-  | InputModeRenderContext
-  | SubAgentPickerModeRenderContext;
-
 interface ConversationViewProps {
-  ctx: ConversationModeContext;
+  ctx: InputModeRenderContext;
   options: {
-    showSubAgentPicker?: boolean;
     showCommandResult?: boolean;
   };
 }
@@ -97,7 +88,6 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
   }, [ctx.input]);
 
   const ActiveFeaturePanel = ctx.panel.active?.component;
-  const showSubAgentPicker = options.showSubAgentPicker && "subAgents" in ctx;
 
   return (
     <box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} height="100%" width="100%">
@@ -121,14 +111,6 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
               turns={ctx.transcript.turns}
               toolsExpanded={ctx.transcript.toolsExpanded}
             />
-
-            {showSubAgentPicker ? (
-              <SubAgentPickerPanel
-                subAgents={ctx.subAgents.blocks}
-                selectedIndex={ctx.subAgents.selectedIndex}
-                showToolCalls={ctx.transcript.toolsExpanded}
-              />
-            ) : null}
           </box>
         </scrollbox>
 
@@ -195,9 +177,8 @@ const ConversationView: FC<ConversationViewProps> = ({ ctx, options }) => {
 };
 
 export function renderConversation(
-  ctx: ConversationModeContext,
+  ctx: InputModeRenderContext,
   options: {
-    showSubAgentPicker?: boolean;
     showCommandResult?: boolean;
   } = {},
 ) {

@@ -77,7 +77,6 @@ export function ChatPanel({
             messagesEndRef={chatViewport.messagesEndRef}
             openToolCalls={openToolCalls}
             workspaceName={state?.workspace.name ?? "Workspace"}
-            onPickPrompt={onInputChange}
             onToggleToolCall={onToggleToolCall}
             inputValue={inputValue}
             mode={mode}

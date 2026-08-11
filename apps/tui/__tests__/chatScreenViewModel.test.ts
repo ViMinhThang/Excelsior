@@ -190,7 +190,6 @@ describe("chat screen model builders", () => {
       isLoading: true,
       pending: pendingRequest(),
       activePanelId: "session.picker",
-      subAgentCount: 2,
       toolCallCount: 3,
       toolsExpanded: true,
     })).toEqual({
@@ -198,7 +197,6 @@ describe("chat screen model builders", () => {
       isLoading: true,
       hasPending: true,
       activePanelId: "session.picker",
-      subAgentCount: 2,
       toolCallCount: 3,
       toolsExpanded: true,
       totalTokens: undefined,
@@ -212,7 +210,6 @@ describe("chat screen model builders", () => {
       pending: pendingQuestion(),
       pendingKind: "question",
       activePanelId: null,
-      subAgentCount: 0,
       toolCallCount: 0,
       toolsExpanded: false,
     })).toMatchObject({
@@ -246,8 +243,6 @@ describe("chat screen model builders", () => {
       submit: noop,
       cancel: noop,
       toggleMode: () => undefined,
-      openSubAgent: noop,
-      subAgentBlocks: [selectedSubAgent],
       toolsExpanded: true,
       toggleToolsExpanded: noop,
       navigateUp: noop,
@@ -262,7 +257,6 @@ describe("chat screen model builders", () => {
       hasPending: true,
       pendingKind: "question",
       toolCallCount: 2,
-      subAgentCount: 1,
       toolsExpanded: true,
     });
   });

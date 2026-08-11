@@ -117,7 +117,7 @@ describe("desktop host store", () => {
     expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
     expect(store.getSnapshot()?.workspace.id).toBe("stream-3");
 
-    animationFrameCallback?.(16);
+    animationFrameCallback!(16);
 
     expect(listener).toHaveBeenCalledTimes(1);
     expect(store.getSnapshot()?.workspace.id).toBe("stream-3");

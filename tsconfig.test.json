@@ -1,7 +1,15 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@/*": [
+        "./apps/desktop/src/renderer/*.ts",
+        "./apps/desktop/src/renderer/*.tsx",
+        "./apps/desktop/src/renderer/*/index.ts",
+        "./apps/desktop/src/renderer/*/index.tsx"
+      ]
+    }
   },
   "include": [
     "src/__tests__",

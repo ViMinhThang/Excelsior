@@ -1,3 +1,4 @@
+import type { AgentMode } from "@excelsior/core";
 import type { AnyHarnessEvent, HarnessEventEmitter } from "../events.js";
 import { emitRunFinalization, findIncompleteEvents } from "../history/runFinalizer.js";
 
@@ -5,6 +6,7 @@ export interface ActiveRunIdentity {
   runId: string;
   turnId: string;
   sessionId: string;
+  mode: AgentMode;
 }
 
 export interface ActiveRunHandle extends ActiveRunIdentity {
@@ -42,8 +44,8 @@ export class ActiveRunManager {
 
   currentIdentity(): ActiveRunIdentity | null {
     if (!this.current) return null;
-    const { runId, turnId, sessionId } = this.current;
-    return { runId, turnId, sessionId };
+    const { runId, turnId, sessionId, mode } = this.current;
+    return { runId, turnId, sessionId, mode };
   }
 
   currentSignal(): AbortSignal | undefined {
@@ -62,6 +64,7 @@ export class ActiveRunManager {
       runId: this.current.runId,
       turnId: this.current.turnId,
       sessionId: this.current.sessionId,
+      mode: this.current.mode,
       content,
     };
   }

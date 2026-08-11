@@ -22,7 +22,6 @@ import type {
   ChatModeRenderContext,
   CommandSuggestionState,
   InputModeKeymapContext,
-  SubAgentBlock,
 } from "../../chatModes/types.js";
 
 export interface VisibilityModel<TProps> {
@@ -61,8 +60,6 @@ export interface BuildChatModeKeymapContextInput {
   submit: () => void;
   cancel: () => void;
   toggleMode: () => "plan" | "act" | undefined;
-  openSubAgent: () => void;
-  subAgentCount: number;
   toolCallCount: number;
   toolsExpanded: boolean;
   toggleToolsExpanded: () => void;
@@ -85,8 +82,6 @@ export interface BuildChatInteractionStateInput {
   submit: () => void;
   cancel: () => void;
   toggleMode: () => AgentMode | undefined;
-  openSubAgent: () => void;
-  subAgentBlocks: SubAgentBlock[];
   toolsExpanded: boolean;
   toggleToolsExpanded: () => void;
   navigateUp: () => void;

@@ -152,9 +152,12 @@ class HarnessStore implements AgentHarness {
     const runId = `run_${randomUUID()}`;
     const turnId = `turn_${randomUUID()}`;
     const runMode = input.mode;
-    const run = this.activeRun.begin({ runId, turnId, sessionId: session.id });
-
-    this.mode = runMode;
+    const run = this.activeRun.begin({
+      runId,
+      turnId,
+      sessionId: session.id,
+      mode: runMode,
+    });
 
     const assembly = buildRunAssembly({
       workspaceRoot: this.workspace.rootPath,
@@ -402,13 +405,14 @@ class HarnessStore implements AgentHarness {
   }
 
   setMode(mode: AgentMode): void {
+    if (this.mode === mode) return;
     this.mode = mode;
-    this.notify();
+    this.notifyNow();
   }
 
   toggleMode(): AgentMode {
     this.mode = this.mode === "act" ? "plan" : "act";
-    this.notify();
+    this.notifyNow();
     return this.mode;
   }
 
@@ -487,7 +491,7 @@ class HarnessStore implements AgentHarness {
         providerName: provider.displayName,
         modelName: provider.modelId,
       },
-      mode: this.mode,
+      mode: this.activeRun.currentIdentity()?.mode ?? this.mode,
       pendingConfirmation: this.confirmRouter.pendingConfirmation,
       pendingQuestion: this.confirmRouter.pendingQuestion,
       reflection: this.reflectionRun.snapshot(),

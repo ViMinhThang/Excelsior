@@ -11,7 +11,6 @@ export interface FooterBarProps {
   hasPending: boolean;
   pendingKind?: "confirmation" | "question" | null;
   activePanelId: string | null;
-  subAgentCount: number;
   toolCallCount: number;
   toolsExpanded: boolean;
   totalTokens?: number;
@@ -25,7 +24,6 @@ const FooterBar: FC<FooterBarProps> = ({
   hasPending,
   pendingKind,
   activePanelId,
-  subAgentCount,
   toolCallCount,
   toolsExpanded,
   totalTokens,
@@ -38,7 +36,6 @@ const FooterBar: FC<FooterBarProps> = ({
     hasPending,
     pendingKind,
     activePanelId,
-    subAgentCount,
     toolCallCount,
     toolsExpanded,
   });
