@@ -3,14 +3,15 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { initializeAgentHostRuntime } from "@excelsior/agent-host";
 import type { AgentHostIntent } from "@excelsior/client";
+import { IPC_CHANNELS } from "../shared/bridge.js";
+import { isDesktopTheme, titlebarOverlayForTheme } from "../shared/desktopThemes.js";
 import { DesktopWorkspaceHost } from "./workspaceHost.js";
-import { titlebarOverlayForTheme } from "./titlebarTheme.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let mainWindow: BrowserWindow | null = null;
 const workspaceHost = new DesktopWorkspaceHost((state) => {
-  mainWindow?.webContents.send("host:state-changed", state);
+  mainWindow?.webContents.send(IPC_CHANNELS.hostStateChanged, state);
 });
 
 function createWindow() {
@@ -64,9 +65,10 @@ app.on("window-all-closed", () => {
   }
 });
 
-ipcMain.on("theme:changed", (_event, theme: string) => {
+ipcMain.on(IPC_CHANNELS.themeChanged, (_event, theme: unknown) => {
   if (!mainWindow) return;
-  const titlebarOverlay = titlebarOverlayForTheme(theme);
+  const safeTheme = typeof theme === "string" && isDesktopTheme(theme) ? theme : undefined;
+  const titlebarOverlay = titlebarOverlayForTheme(safeTheme);
 
   try {
     mainWindow.setTitleBarOverlay({
@@ -79,7 +81,7 @@ ipcMain.on("theme:changed", (_event, theme: string) => {
 });
 
 
-ipcMain.handle("dialog:select-workspace-folder", async () => {
+ipcMain.handle(IPC_CHANNELS.dialogSelectWorkspaceFolder, async () => {
   if (!mainWindow) return null;
   const result = await dialog.showOpenDialog(mainWindow, {
     properties: ["openDirectory"],
@@ -91,13 +93,13 @@ ipcMain.handle("dialog:select-workspace-folder", async () => {
     : result.filePaths[0];
 });
 
-ipcMain.handle("host:initialize-workspace", async (_event, rootPath: string) =>
+ipcMain.handle(IPC_CHANNELS.hostInitializeWorkspace, async (_event, rootPath: string) =>
   workspaceHost.initializeWorkspace(rootPath),
 );
-ipcMain.handle("host:get-state", () => workspaceHost.requireHost().getState());
-ipcMain.handle("host:get-catalog", () => workspaceHost.requireHost().getCatalog());
-ipcMain.handle("host:dispatch", (_event, intent: AgentHostIntent) =>
+ipcMain.handle(IPC_CHANNELS.hostGetState, () => workspaceHost.requireHost().getState());
+ipcMain.handle(IPC_CHANNELS.hostGetCatalog, () => workspaceHost.requireHost().getCatalog());
+ipcMain.handle(IPC_CHANNELS.hostDispatch, (_event, intent: AgentHostIntent) =>
   workspaceHost.requireHost().dispatch(intent),
 );
-ipcMain.handle("workspace:get-tree", () => workspaceHost.getWorkspaceTree());
-ipcMain.handle("workspace:get-environment", () => workspaceHost.getWorkspaceEnvironment());
+ipcMain.handle(IPC_CHANNELS.workspaceGetTree, () => workspaceHost.getWorkspaceTree());
+ipcMain.handle(IPC_CHANNELS.workspaceGetEnvironment, () => workspaceHost.getWorkspaceEnvironment());

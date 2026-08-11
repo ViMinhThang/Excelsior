@@ -1,6 +1,6 @@
 import { CheckCircle2, Circle, LoaderCircle, NotebookText, Settings2 } from "lucide-react";
 import type { ProjectedTask } from "@excelsior/core";
-import type { WorkspaceEnvironmentInfo } from "../../main/preload.js";
+import type { WorkspaceEnvironmentInfo } from "../../shared/bridge.js";
 
 type ContextRailProps = {
   environment: WorkspaceEnvironmentInfo | null;

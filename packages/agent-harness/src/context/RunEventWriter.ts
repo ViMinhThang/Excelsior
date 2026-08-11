@@ -8,16 +8,14 @@ import {
   TOOL_EXECUTION_END,
   type HarnessEventEmitter,
 } from "../events.js";
-
-const TOOL_INPUT_UPDATE_INTERVAL_MS = 250;
-const TOOL_INPUT_UPDATE_CHARS = 2048;
+import { PROGRESS_BATCH_CHARS, PROGRESS_BATCH_INTERVAL_MS, ProgressBatcher } from "./ProgressBatcher.js";
 
 export class RunEventWriter {
   private assistant: { id: string; content: string } | null = null;
 
   // Tracks active inputs and execution progress
   private toolInputs = new Map<string, { toolName: string; toolArgs: string }>();
-  private toolInputBuffers = new Map<string, { toolName: string; delta: string; lastEmittedAt: number }>();
+  private toolInputBuffers = new Map<string, { toolName: string; batcher: ProgressBatcher<string> }>();
   private startedTools = new Set<string>();
   private completedTools = new Set<string>();
 
@@ -76,8 +74,18 @@ export class RunEventWriter {
     this.toolInputs.set(callId, { toolName, toolArgs: "" });
     this.toolInputBuffers.set(callId, {
       toolName,
-      delta: "",
-      lastEmittedAt: Date.now(),
+      batcher: new ProgressBatcher<string>({
+        intervalMs: PROGRESS_BATCH_INTERVAL_MS,
+        chars: PROGRESS_BATCH_CHARS,
+        count: (delta) => delta.length,
+        onFlush: (deltas) => {
+          this.emit(TOOL_EXECUTION_UPDATE, {
+            toolCallId: callId,
+            toolName,
+            delta: deltas.join(""),
+          }, { relatedToolCallId: callId });
+        },
+      }),
     });
   }
 
@@ -90,29 +98,13 @@ export class RunEventWriter {
     const buffer = this.toolInputBuffers.get(callId);
     if (!buffer) return;
 
-    const now = Date.now();
-    buffer.delta += delta;
-
-    if (
-      buffer.delta.length >= TOOL_INPUT_UPDATE_CHARS ||
-      now - buffer.lastEmittedAt >= TOOL_INPUT_UPDATE_INTERVAL_MS
-    ) {
-      this.flushToolInput(callId, now);
-    }
+    buffer.batcher.append(delta);
   }
 
   private flushToolInput(callId: string, now = Date.now()): void {
     const buffer = this.toolInputBuffers.get(callId);
-    if (!buffer || !buffer.delta) return;
-
-    this.emit(TOOL_EXECUTION_UPDATE, {
-      toolCallId: callId,
-      toolName: buffer.toolName,
-      delta: buffer.delta,
-    }, { relatedToolCallId: callId });
-
-    buffer.delta = "";
-    buffer.lastEmittedAt = now;
+    if (!buffer) return;
+    buffer.batcher.flush(now);
   }
 
   flushAllToolUpdates(): void {

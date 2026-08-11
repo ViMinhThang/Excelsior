@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { HarnessTool } from "../types.js";
 import { text } from "./fs.js";
-import { runSpawnedSubAgent } from "../subagentProcess.js";
+import { runSpawnedSubAgent } from "../subagent/process.js";
 
 const spawnSubAgentSchema = z.object({
   role: z.string(),

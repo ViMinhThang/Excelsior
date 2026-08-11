@@ -1,4 +1,4 @@
-import { buildSystemPrompt } from "./context/systemPrompt.js";
+import { buildSystemPrompt } from "../context/systemPrompt.js";
 import {
   MESSAGE_END,
   MESSAGE_UPDATE,
@@ -8,34 +8,19 @@ import {
   makeHarnessEvent,
   type HarnessEventDataMap,
   type HarnessEventEmitter,
-} from "./events.js";
-import { createDeepSeekProvider } from "./provider.js";
-import { ProviderRegistry, ToolRegistry } from "./registries.js";
-import { runAgentLoop } from "./run/RunController.js";
+} from "../events.js";
+import { createDeepSeekProvider } from "../provider.js";
+import { ProviderRegistry, ToolRegistry } from "../registries.js";
+import { runAgentLoop } from "../run/RunController.js";
 import {
   createGlobTool,
   createLsTool,
   createRipgrepTool,
   createViewTool,
-} from "./tools/index.js";
-import type { HarnessSettings, ToolExecutionContext } from "./types.js";
-
-interface ChildRequest {
-  workspaceRoot: string;
-  role: string;
-  prompt: string;
-  settings: HarnessSettings;
-  projectInstructions?: string;
-  skillsList?: string;
-}
-
-type ChildOutput =
-  | { type: "text_delta"; delta: string }
-  | { type: "tool_start"; toolCallId: string; toolName: string; toolArgs: string }
-  | { type: "tool_update"; toolCallId: string; delta: string }
-  | { type: "tool_end"; toolCallId: string; toolName: string; toolArgs: string; result: string; isError: boolean }
-  | { type: "final"; content: string }
-  | { type: "error"; message: string };
+} from "../tools/index.js";
+import type { ToolExecutionContext } from "../types.js";
+import type { ChildOutput, ChildRequest } from "@excelsior/core";
+import { childRequestSchema } from "@excelsior/core";
 
 function writeOutput(output: ChildOutput): void {
   process.stdout.write(`${JSON.stringify(output)}\n`);
@@ -79,7 +64,18 @@ SUBAGENT ROLE: ${request.role}
 
 async function main(): Promise<void> {
   const raw = await readStdin();
-  const request = JSON.parse(raw) as ChildRequest;
+  let request: ChildRequest;
+  try {
+    const parsed = childRequestSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) {
+      throw new Error(`Invalid subagent request: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`);
+    }
+    request = parsed.data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    writeOutput({ type: "error", message });
+    process.exit(1);
+  }
   const providers = new ProviderRegistry();
   providers.register(createDeepSeekProvider());
   const tools = createReadOnlyTools();

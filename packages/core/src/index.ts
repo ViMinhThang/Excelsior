@@ -7,4 +7,5 @@ export * from "./projection.js";
 export * from "./question.js";
 export * from "./session.js";
 export * from "./settings.js";
+export * from "./schemas.js";
 export * from "./turnCancelGesture.js";

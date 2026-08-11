@@ -1,27 +1,33 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { z } from "zod";
 import type { AppSettings, Session, Workspace } from "@excelsior/core";
 import {
   AGENT_TOOL_LOOP_STEPS_SETTING,
-  DEFAULT_AGENT_TOOL_LOOP_STEPS,
-  normalizeAgentToolLoopSteps,
+  DEFAULT_APP_SETTINGS,
+  appSettingsSchema,
+  sessionSchema,
+  workspaceSchema,
 } from "@excelsior/core";
 import { MESSAGE_END, type AnyHarnessEvent } from "./events.js";
 import type { HarnessSettings, StoredSessionFile } from "./types.js";
 
-const DEFAULT_SETTINGS: HarnessSettings = {
-  deepseekApiKey: "",
-  githubToken: "",
-  agentToolLoopSteps: DEFAULT_AGENT_TOOL_LOOP_STEPS,
-  autoReflectionEnabled: false,
-  reflectionMemoryEnabled: false,
-  autoApproveWorkspaceEdits: false,
-};
-
 type SessionFileLine =
   | { kind: "session"; session: Session }
   | { kind: "event"; event: AnyHarnessEvent };
+
+const sessionFileLineSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("session"), session: sessionSchema }),
+  z.object({
+    kind: z.literal("event"),
+    event: z.object({
+      type: z.string().min(1),
+      timestamp: z.string().min(1),
+      data: z.record(z.string(), z.unknown()).default({}),
+    }).passthrough(),
+  }),
+]);
 
 export class FileHarnessStorage {
   readonly rootDir: string;
@@ -33,28 +39,27 @@ export class FileHarnessStorage {
 
   loadSettings(): HarnessSettings {
     const raw = this.readJson<Partial<AppSettings>>(this.settingsPath(), {});
-    return {
-      deepseekApiKey: raw.deepseekApiKey ?? process.env.DEEPSEEK_API_KEY ?? "",
-      githubToken: raw.githubToken ?? process.env.GITHUB_TOKEN ?? "",
-      agentToolLoopSteps: normalizeAgentToolLoopSteps(
-        raw.agentToolLoopSteps ?? process.env[AGENT_TOOL_LOOP_STEPS_SETTING] ?? DEFAULT_SETTINGS.agentToolLoopSteps,
-      ),
-      autoReflectionEnabled: raw.autoReflectionEnabled ?? DEFAULT_SETTINGS.autoReflectionEnabled,
-      reflectionMemoryEnabled: raw.reflectionMemoryEnabled ?? DEFAULT_SETTINGS.reflectionMemoryEnabled,
-      autoApproveWorkspaceEdits: raw.autoApproveWorkspaceEdits ?? DEFAULT_SETTINGS.autoApproveWorkspaceEdits,
+    const candidate = {
+      ...raw,
+      deepseekApiKey: raw.deepseekApiKey ?? process.env.DEEPSEEK_API_KEY,
+      githubToken: raw.githubToken ?? process.env.GITHUB_TOKEN,
+      agentToolLoopSteps: raw.agentToolLoopSteps ?? process.env[AGENT_TOOL_LOOP_STEPS_SETTING],
     };
+    const parsed = appSettingsSchema.safeParse(candidate);
+    return parsed.success ? parsed.data : { ...DEFAULT_APP_SETTINGS };
   }
 
   saveSettings(settings: Partial<HarnessSettings>): HarnessSettings {
     const current = this.loadSettings();
-    const next = {
+    const parsed = appSettingsSchema.safeParse({
       ...current,
       ...settings,
-      agentToolLoopSteps: normalizeAgentToolLoopSteps(settings.agentToolLoopSteps ?? current.agentToolLoopSteps),
-      autoReflectionEnabled: settings.autoReflectionEnabled ?? current.autoReflectionEnabled,
-      reflectionMemoryEnabled: settings.reflectionMemoryEnabled ?? current.reflectionMemoryEnabled,
-      autoApproveWorkspaceEdits: settings.autoApproveWorkspaceEdits ?? current.autoApproveWorkspaceEdits,
-    };
+    });
+    if (!parsed.success) {
+      console.warn("Rejected invalid settings update:", parsed.error.issues);
+      return current;
+    }
+    const next = parsed.data;
     this.writeJson(this.settingsPath(), next);
     return next;
   }
@@ -84,7 +89,9 @@ export class FileHarnessStorage {
   }
 
   loadWorkspaces(): Workspace[] {
-    return this.readJson<Workspace[]>(this.workspacesPath(), []);
+    const raw = this.readJson<unknown>(this.workspacesPath(), []);
+    const parsed = z.array(workspaceSchema).safeParse(raw);
+    return parsed.success ? parsed.data : [];
   }
 
   listSessions(workspaceId: string): Session[] {
@@ -119,12 +126,22 @@ export class FileHarnessStorage {
     let session: Session | undefined;
     const events: AnyHarnessEvent[] = [];
     for (const line of lines) {
-      const parsed = JSON.parse(line) as SessionFileLine;
-      if (parsed.kind === "session") session = parsed.session;
-      if (parsed.kind === "event") events.push(parsed.event);
+      let raw: unknown;
+      try {
+        raw = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const parsed = sessionFileLineSchema.safeParse(raw);
+      if (!parsed.success) continue;
+      if (parsed.data.kind === "session") {
+        session = parsed.data.session as Session;
+      } else {
+        events.push(parsed.data.event as unknown as AnyHarnessEvent);
+      }
     }
     if (session) {
-      session = this.deriveSessionFromEvents(session, events);
+      session = this.deriveSession(session, events);
     }
     return { session, events };
   }
@@ -134,26 +151,14 @@ export class FileHarnessStorage {
   }
 
   appendEvent(workspaceId: string, session: Session, event: AnyHarnessEvent): Session {
-    const userInput = event.type === MESSAGE_END && event.data.message.role === "user"
-      ? event.data.message.content
-      : session.metadata.userInput;
-    const updated: Session = {
-      ...session,
-      updatedAt: event.timestamp,
-      metadata: session.metadata.userInput
-        ? session.metadata
-        : {
-            ...session.metadata,
-            userInput,
-          },
-    };
+    const updated = this.deriveSession(session, [event]);
     this.appendSessionLines(workspaceId, updated, event);
     return updated;
   }
 
   replaceEvents(workspaceId: string, session: Session, events: AnyHarnessEvent[]): void {
-    const updatedAt = events.at(-1)?.timestamp ?? new Date().toISOString();
-    this.writeSessionFile(workspaceId, { ...session, updatedAt }, events);
+    const updated = this.deriveSession(session, events, new Date().toISOString());
+    this.writeSessionFile(workspaceId, updated, events);
   }
 
   renameSession(workspaceId: string, sessionId: string, title: string): Session | null {
@@ -203,7 +208,11 @@ export class FileHarnessStorage {
     appendFileSync(path, `${JSON.stringify({ kind: "event", event } satisfies SessionFileLine)}\n`, "utf-8");
   }
 
-  private deriveSessionFromEvents(session: Session, events: readonly AnyHarnessEvent[]): Session {
+  private deriveSession(
+    session: Session,
+    events: readonly AnyHarnessEvent[],
+    updatedAtFallback: string = session.updatedAt,
+  ): Session {
     let userInput = session.metadata.userInput;
     if (!userInput) {
       const firstUserMessage = events.find(
@@ -214,7 +223,7 @@ export class FileHarnessStorage {
     }
     return {
       ...session,
-      updatedAt: events.at(-1)?.timestamp ?? session.updatedAt,
+      updatedAt: events.at(-1)?.timestamp ?? updatedAtFallback,
       metadata: {
         ...session.metadata,
         userInput,

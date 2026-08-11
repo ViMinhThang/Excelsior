@@ -5,46 +5,29 @@ import type {
   AgentHostDispatchResult,
   AgentHostIntent,
 } from "@excelsior/client";
+import { IPC_CHANNELS, type ExcelsiorApi } from "../shared/bridge.js";
 
-export type WorkspaceTreeNode = {
-  name: string;
-  path: string;
-  type: "file" | "directory";
-  children?: WorkspaceTreeNode[];
-};
-
-export type WorkspaceEnvironmentInfo = {
-  rootPath: string | null;
-  branchName: string | null;
-  changeCount: number | null;
-  hasGit: boolean;
-};
-
-// Define the API exposed to the renderer process
-const excelsiorApi = {
-  // Subscriptions to state changes
+const excelsiorApi: ExcelsiorApi = {
   onStateChanged: (callback: (state: AgentClientState) => void) => {
     const subscription = (_event: unknown, state: AgentClientState) => callback(state);
-    ipcRenderer.on("host:state-changed", subscription);
+    ipcRenderer.on(IPC_CHANNELS.hostStateChanged, subscription);
     return () => {
-      ipcRenderer.removeListener("host:state-changed", subscription);
+      ipcRenderer.removeListener(IPC_CHANNELS.hostStateChanged, subscription);
     };
   },
 
-  // Actions
-  getState: (): Promise<AgentClientState> => ipcRenderer.invoke("host:get-state"),
-  getCatalog: (): Promise<AgentHostCatalog> => ipcRenderer.invoke("host:get-catalog"),
+  getState: (): Promise<AgentClientState> => ipcRenderer.invoke(IPC_CHANNELS.hostGetState),
+  getCatalog: (): Promise<AgentHostCatalog> => ipcRenderer.invoke(IPC_CHANNELS.hostGetCatalog),
   dispatch: (intent: AgentHostIntent): Promise<AgentHostDispatchResult> =>
-    ipcRenderer.invoke("host:dispatch", intent),
-  
-  // Custom workspace dialog API
-  selectWorkspaceFolder: (): Promise<string | null> => ipcRenderer.invoke("dialog:select-workspace-folder"),
-  initializeWorkspace: (path: string): Promise<AgentClientState> => ipcRenderer.invoke("host:initialize-workspace", path),
-  getWorkspaceTree: (): Promise<WorkspaceTreeNode[]> => ipcRenderer.invoke("workspace:get-tree"),
-  getWorkspaceEnvironment: (): Promise<WorkspaceEnvironmentInfo> => ipcRenderer.invoke("workspace:get-environment"),
-  changeTheme: (theme: string) => ipcRenderer.send("theme:changed", theme),
+    ipcRenderer.invoke(IPC_CHANNELS.hostDispatch, intent),
+
+  selectWorkspaceFolder: (): Promise<string | null> =>
+    ipcRenderer.invoke(IPC_CHANNELS.dialogSelectWorkspaceFolder),
+  initializeWorkspace: (path: string): Promise<AgentClientState> =>
+    ipcRenderer.invoke(IPC_CHANNELS.hostInitializeWorkspace, path),
+  getWorkspaceTree: () => ipcRenderer.invoke(IPC_CHANNELS.workspaceGetTree),
+  getWorkspaceEnvironment: () => ipcRenderer.invoke(IPC_CHANNELS.workspaceGetEnvironment),
+  changeTheme: (theme: string) => ipcRenderer.send(IPC_CHANNELS.themeChanged, theme),
 };
 
 contextBridge.exposeInMainWorld("api", excelsiorApi);
-
-export type ExcelsiorApi = typeof excelsiorApi;

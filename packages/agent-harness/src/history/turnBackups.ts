@@ -2,10 +2,20 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import fs from "node:fs/promises";
 import { resolve } from "node:path";
 import path from "node:path";
+import { turnBackupManifestSchema } from "@excelsior/core";
 
 interface TurnBackupManifestEntry {
   path: string;
   action: "modify" | "create";
+}
+
+function readManifest(manifestPath: string): TurnBackupManifestEntry[] {
+  try {
+    const parsed = turnBackupManifestSchema.safeParse(JSON.parse(readFileSync(manifestPath, "utf-8")));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
 }
 
 export async function recordTurnBackup(input: {
@@ -18,11 +28,7 @@ export async function recordTurnBackup(input: {
   const manifestPath = path.join(input.backupDir, "manifest.json");
   let manifest: TurnBackupManifestEntry[] = [];
   if (existsSync(manifestPath)) {
-    try {
-      manifest = JSON.parse(await fs.readFile(manifestPath, "utf-8")) as TurnBackupManifestEntry[];
-    } catch {
-      manifest = [];
-    }
+    manifest = readManifest(manifestPath);
   }
 
   if (manifest.some((entry) => entry.path === input.relativePath)) {
@@ -56,7 +62,7 @@ export function restoreTurnBackups(input: {
   if (!existsSync(manifestPath)) return;
 
   try {
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf-8")) as TurnBackupManifestEntry[];
+    const manifest = readManifest(manifestPath);
     for (const entry of manifest) {
       const workspacePath = resolve(input.workspaceRoot, entry.path);
       if (entry.action === "modify") {

@@ -1,4 +1,4 @@
-import type { WorkspaceEnvironmentInfo } from "../../../main/preload.js";
+import type { WorkspaceEnvironmentInfo } from "../../../shared/bridge.js";
 
 export type DesktopContextState = {
   storageKey: string;

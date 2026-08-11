@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import type { AgentClientState, CommandResult, SendOptions } from "@excelsior/core";
-import type { WorkspaceEnvironmentInfo } from "../../main/preload.js";
+import type { WorkspaceEnvironmentInfo } from "../../shared/bridge.js";
 import { buildDesktopContextPrompt } from "../components/contextRail/contextRailModel.js";
 
 export function useChatSubmission(input: {

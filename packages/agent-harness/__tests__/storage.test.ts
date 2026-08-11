@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -83,5 +83,79 @@ describe("FileHarnessStorage", () => {
     expect(saved.agentToolLoopSteps).toBe("3");
     expect(saved.deepseekApiKey).toBe("first");
     expect(saved.githubToken).toBe("token");
+  });
+
+  it("falls back to defaults for corrupt or wrong-shaped settings files", async () => {
+    const storage = await makeStorage();
+    await writeFile(join(storage.rootDir, "settings.json"), "{ not json", "utf-8");
+    expect(storage.loadSettings()).toEqual({
+      deepseekApiKey: "",
+      githubToken: "",
+      agentToolLoopSteps: "unlimited",
+      autoReflectionEnabled: false,
+      reflectionMemoryEnabled: false,
+      autoApproveWorkspaceEdits: false,
+    });
+
+    await writeFile(join(storage.rootDir, "settings.json"), JSON.stringify({
+      agentToolLoopSteps: { nested: true },
+      autoReflectionEnabled: "false",
+      futureSetting: "x",
+    }), "utf-8");
+    const loaded = storage.loadSettings();
+    expect(loaded.agentToolLoopSteps).toBe("unlimited");
+    expect(loaded.autoReflectionEnabled).toBe(true);
+  });
+
+  it("falls back to environment variables when settings are absent", async () => {
+    const storage = await makeStorage();
+    const previous = process.env.DEEPSEEK_API_KEY;
+    process.env.DEEPSEEK_API_KEY = "env-key";
+    try {
+      expect(storage.loadSettings().deepseekApiKey).toBe("env-key");
+    } finally {
+      if (previous === undefined) delete process.env.DEEPSEEK_API_KEY;
+      else process.env.DEEPSEEK_API_KEY = previous;
+    }
+  });
+
+  it("normalizes invalid tool-loop budgets on save", async () => {
+    const storage = await makeStorage();
+    expect(storage.saveSettings({ agentToolLoopSteps: "banana" }).agentToolLoopSteps).toBe("unlimited");
+  });
+
+  it("treats wrong-shaped workspaces files as empty", async () => {
+    const storage = await makeStorage();
+    await writeFile(join(storage.rootDir, "workspaces.json"), JSON.stringify({ not: "an array" }), "utf-8");
+    expect(storage.loadWorkspaces()).toEqual([]);
+    expect(storage.getOrCreateWorkspace({ id: "ws_test" })).toBeDefined();
+  });
+
+  it("skips malformed session file lines and keeps the rest", async () => {
+    const storage = await makeStorage();
+    const workspace = storage.getOrCreateWorkspace({ id: "ws_test" });
+    const session = storage.createSession(workspace.id, "Corrupt");
+    const userMessage = {
+      id: "msg_user",
+      role: "user" as const,
+      content: "hi",
+    };
+    storage.appendEvent(workspace.id, session, makeHarnessEvent({
+      workspaceId: workspace.id,
+      runId: "run_test",
+      sessionId: session.id,
+      sequence: 1,
+      type: MESSAGE_END,
+      data: { message: userMessage },
+    }));
+
+    const sessionPath = join(storage.rootDir, "sessions", workspace.id, `${session.id}.jsonl`);
+    await appendFile(sessionPath, '{"kind":"event","event":{"type":"trunc",\n', "utf-8");
+    await appendFile(sessionPath, '{"kind":"event","event":{"type":123}}\n', "utf-8");
+
+    const loaded = storage.loadSessionFile(workspace.id, session.id);
+    expect(loaded.session?.title).toBe("Corrupt");
+    expect(loaded.session?.metadata.userInput).toBe("hi");
+    expect(loaded.events?.length).toBe(1);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { titlebarOverlayForTheme } from "../src/main/titlebarTheme.js";
+import { titlebarOverlayForTheme } from "../src/shared/desktopThemes.js";
 
 describe("desktop titlebar theme", () => {
   it("uses light overlay colors for Rose Pine Light", () => {

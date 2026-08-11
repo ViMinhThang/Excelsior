@@ -1,5 +1,6 @@
 import type { ModelMessage } from "ai";
 import type { AgentMessage } from "@excelsior/core";
+import { parseModelToolArgs } from "@excelsior/core";
 
 export function normalizeMessageContent(content: AgentMessage["content"]): string {
   if (typeof content === "string") return content;
@@ -35,17 +36,11 @@ export function toModelMessages(messages: readonly AgentMessage[]): ModelMessage
           parts.push({ type: "text", text: content });
         }
         for (const tc of message.tool_calls) {
-          let parsedArgs: unknown = {};
-          try {
-            parsedArgs = JSON.parse(tc.function.arguments || "{}");
-          } catch {
-            parsedArgs = tc.function.arguments;
-          }
           parts.push({
             type: "tool-call",
             toolCallId: tc.id,
             toolName: tc.function.name,
-            input: parsedArgs,
+            input: parseModelToolArgs(tc.function.arguments),
           });
         }
         return {

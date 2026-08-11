@@ -3,7 +3,7 @@ import type {
   ExcelsiorApi,
   WorkspaceEnvironmentInfo,
   WorkspaceTreeNode,
-} from "../../main/preload.js";
+} from "../../shared/bridge.js";
 import { selectWorkspaceFolder } from "./workspaceSelection.js";
 
 export function useDesktopWorkspaceHost(api: ExcelsiorApi) {

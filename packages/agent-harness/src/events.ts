@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { ChildOutput } from "@excelsior/core";
 import type { AskQuestionRequest, AskQuestionResponse, ConfirmRequest, ConfirmResponse, ProjectedTask } from "@excelsior/core";
 
 export const TURN_START = "turn_start";
@@ -60,13 +61,7 @@ export type HarnessEventDataMap = {
   };
   [SUB_AGENT_EVENT]: {
     parentToolCallId: string;
-    event:
-      | { type: "text_delta"; delta: string }
-      | { type: "tool_start"; toolCallId: string; toolName: string; toolArgs: string }
-      | { type: "tool_update"; toolCallId: string; delta: string }
-      | { type: "tool_end"; toolCallId: string; toolName: string; toolArgs: string; result?: string; isError: boolean }
-      | { type: "final"; content: string }
-      | { type: "error"; message: string };
+    event: ChildOutput;
   };
   [CONFIRMATION_REQUESTED]: { request: ConfirmRequest };
   [CONFIRMATION_ANSWERED]: { response: ConfirmResponse };

@@ -86,33 +86,3 @@ export type SubAgentProjectionPart =
       status: ToolCallStatus;
       content?: string;
     };
-
-export interface SubAgentViewModel {
-  toolCallId: string;
-  role: string;
-  status: "running" | "done" | "error";
-  latestLine: string;
-  fullOutput: string;
-  outputParts: SubAgentProjectionPart[];
-  toolCalls: ToolCallInfo[];
-  startTime?: number;
-  endTime?: number;
-}
-
-export function toSubAgentViewModel(
-  display: ProjectedSubAgent,
-  toolCallId: string,
-  role: string,
-): SubAgentViewModel {
-  return {
-    toolCallId,
-    role,
-    status: display.status,
-    latestLine: display.latestLine,
-    fullOutput: display.fullOutput,
-    outputParts: display.parts,
-    toolCalls: display.toolCalls,
-    startTime: display.startTime,
-    endTime: display.endTime,
-  };
-}

@@ -1,4 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 
 export const themes = {
   excelsior: {
@@ -1089,18 +1091,51 @@ function toneDownThemeColors(colors: ThemeColors): ThemeColors {
   return toned;
 }
 
-const CONFIG_PATH = "/home/fragile/.gemini/antigravity-cli/tui-theme.json";
+export interface ThemeStore {
+  read(): string | null;
+  write(themeName: string): void;
+}
+
+export function fileThemeStore(configPath: string): ThemeStore {
+  return {
+    read() {
+      try {
+        if (!existsSync(configPath)) return null;
+        const data = JSON.parse(readFileSync(configPath, "utf-8"));
+        return data && typeof data.theme === "string" ? data.theme : null;
+      } catch {
+        return null;
+      }
+    },
+    write(themeName) {
+      try {
+        mkdirSync(dirname(configPath), { recursive: true });
+        writeFileSync(configPath, JSON.stringify({ theme: themeName }), "utf-8");
+      } catch {
+        // best effort persistence
+      }
+    },
+  };
+}
+
+export function defaultThemeStore(): ThemeStore {
+  return fileThemeStore(join(homedir(), ".excelsior", "tui-theme.json"));
+}
+
+let themeStore: ThemeStore = defaultThemeStore();
+
+export function setThemeStore(store: ThemeStore): void {
+  themeStore = store;
+  const saved = store.read();
+  if (saved && saved in themes) {
+    activeThemeName = saved;
+    Object.assign(theme.colors, toneDownThemeColors(themes[saved as keyof typeof themes]));
+  }
+}
 
 function getSavedTheme(): string {
-  try {
-    if (existsSync(CONFIG_PATH)) {
-      const data = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
-      if (data && data.theme && data.theme in themes) {
-        return data.theme;
-      }
-    }
-  } catch {}
-  return "excelsior";
+  const saved = themeStore.read();
+  return saved && saved in themes ? saved : "excelsior";
 }
 
 let activeThemeName = getSavedTheme();
@@ -1152,9 +1187,7 @@ export function setTheme(name: string): boolean {
   if (name in themes) {
     activeThemeName = name;
     Object.assign(theme.colors, toneDownThemeColors(themes[name as keyof typeof themes]));
-    try {
-      writeFileSync(CONFIG_PATH, JSON.stringify({ theme: name }), "utf-8");
-    } catch {}
+    themeStore.write(name);
     return true;
   }
   return false;

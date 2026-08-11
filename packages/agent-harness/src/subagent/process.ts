@@ -2,19 +2,15 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SUB_AGENT_EVENT } from "./events.js";
-import type { ToolExecutionContext, ToolResult } from "./types.js";
+import type { ChildOutput } from "@excelsior/core";
+import { SUB_AGENT_EVENT } from "../events.js";
+import type { ToolExecutionContext, ToolResult } from "../types.js";
+import { PROGRESS_BATCH_CHARS, PROGRESS_BATCH_INTERVAL_MS, ProgressBatcher } from "../context/ProgressBatcher.js";
+import { ChildOutputLineReader } from "./protocol.js";
 
-type ChildOutput =
+type ProgressDelta =
   | { type: "text_delta"; delta: string }
-  | { type: "tool_start"; toolCallId: string; toolName: string; toolArgs: string }
-  | { type: "tool_update"; toolCallId: string; delta: string }
-  | { type: "tool_end"; toolCallId: string; toolName: string; toolArgs: string; result?: string; isError: boolean }
-  | { type: "final"; content: string }
-  | { type: "error"; message: string };
-
-const SUBAGENT_PROGRESS_INTERVAL_MS = 250;
-const SUBAGENT_PROGRESS_CHARS = 2048;
+  | { type: "tool_update"; toolCallId: string; delta: string };
 
 interface RunSpawnedSubAgentInput {
   role: string;
@@ -30,13 +26,20 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
 
   const spawnSpec = resolveChildRunner(input.ctx.workspaceRoot);
   return new Promise((resolveResult) => {
-    let stdoutBuffer = "";
     let stderr = "";
     let finalOutput = "";
     let settled = false;
-    let pendingTextDelta = "";
-    let lastProgressEmittedAt = Date.now();
-    const pendingToolUpdates = new Map<string, string>();
+
+    const progress = new ProgressBatcher<ProgressDelta>({
+      intervalMs: PROGRESS_BATCH_INTERVAL_MS,
+      chars: PROGRESS_BATCH_CHARS,
+      count: (delta) => delta.delta.length,
+      onFlush: (payloads) => {
+        for (const delta of payloads) {
+          emitChildEvent(delta);
+        }
+      },
+    });
 
     const child = spawn(spawnSpec.command, spawnSpec.args, {
       cwd: input.ctx.workspaceRoot,
@@ -51,13 +54,10 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
     const finish = (content: string, isError = false) => {
       if (settled) return;
       settled = true;
-      flushProgress();
+      progress.flush();
       input.ctx.abortSignal?.removeEventListener("abort", abort);
       if (isError) {
-        input.ctx.emit?.(SUB_AGENT_EVENT, {
-          parentToolCallId: input.parentToolCallId,
-          event: { type: "error", message: content },
-        }, { relatedToolCallId: input.parentToolCallId });
+        emitChildEvent({ type: "error", message: content });
       }
       resolveResult({ content, isError });
     };
@@ -73,13 +73,21 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
 
     input.ctx.abortSignal?.addEventListener("abort", abort, { once: true });
 
-    child.stdout.on("data", (data) => {
-      stdoutBuffer += String(data);
-      const lines = stdoutBuffer.split(/\r?\n/);
-      stdoutBuffer = lines.pop() ?? "";
-      for (const line of lines) {
-        handleLine(line);
+    const reader = new ChildOutputLineReader((output) => {
+      if (output.type === "final") {
+        finalOutput = output.content;
+        progress.flush();
+        emitChildEvent(output);
+      } else if (output.type === "text_delta" || output.type === "tool_update") {
+        progress.append(output);
+      } else if (output.type === "tool_start" || output.type === "tool_end" || output.type === "error") {
+        progress.flush();
+        emitChildEvent(output);
       }
+    });
+
+    child.stdout.on("data", (data) => {
+      reader.push(String(data));
     });
     child.stderr.on("data", (data) => {
       stderr += String(data);
@@ -90,7 +98,7 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
         : `Subagent runner failed: ${error.message}`, true);
     });
     child.on("close", (code) => {
-      if (stdoutBuffer.trim()) handleLine(stdoutBuffer);
+      reader.flush();
       if (settled) return;
       if (code === 0) {
         finish(finalOutput || "(no output)");
@@ -108,71 +116,19 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
       skillsList: input.ctx.skillsList,
     }));
 
-    function handleLine(line: string): void {
-      if (!line.trim()) return;
-      let parsed: ChildOutput;
-      try {
-        parsed = JSON.parse(line) as ChildOutput;
-      } catch {
-        return;
-      }
-      if (parsed.type === "final") {
-        finalOutput = parsed.content;
-        flushProgress();
-      } else if (parsed.type === "text_delta") {
-        pendingTextDelta += parsed.delta;
-        flushProgressIfNeeded();
-        return;
-      } else if (parsed.type === "tool_update") {
-        pendingToolUpdates.set(
-          parsed.toolCallId,
-          `${pendingToolUpdates.get(parsed.toolCallId) ?? ""}${parsed.delta}`,
-        );
-        flushProgressIfNeeded();
-        return;
-      } else if (parsed.type === "tool_start" || parsed.type === "tool_end" || parsed.type === "error") {
-        flushProgress();
-      }
-      emitChildEvent(parsed);
-    }
-
     function emitChildEvent(event: ChildOutput): void {
       input.ctx.emit?.(SUB_AGENT_EVENT, {
         parentToolCallId: input.parentToolCallId,
         event,
       }, { relatedToolCallId: input.parentToolCallId });
     }
-
-    function flushProgressIfNeeded(): void {
-      const pendingChars = pendingTextDelta.length +
-        [...pendingToolUpdates.values()].reduce((sum, delta) => sum + delta.length, 0);
-      const now = Date.now();
-      if (
-        pendingChars >= SUBAGENT_PROGRESS_CHARS ||
-        now - lastProgressEmittedAt >= SUBAGENT_PROGRESS_INTERVAL_MS
-      ) {
-        flushProgress(now);
-      }
-    }
-
-    function flushProgress(now = Date.now()): void {
-      if (pendingTextDelta) {
-        emitChildEvent({ type: "text_delta", delta: pendingTextDelta });
-        pendingTextDelta = "";
-      }
-      for (const [toolCallId, delta] of pendingToolUpdates) {
-        if (delta) emitChildEvent({ type: "tool_update", toolCallId, delta });
-      }
-      pendingToolUpdates.clear();
-      lastProgressEmittedAt = now;
-    }
   });
 }
 
 function resolveChildRunner(workspaceRoot: string): { command: string; args: string[] } {
-  const workspaceBuiltRunner = join(workspaceRoot, "packages/agent-harness/dist/subagentChildRunner.js");
-  const workspaceSourceRunner = join(workspaceRoot, "packages/agent-harness/src/subagentChildRunner.ts");
-  
+  const workspaceBuiltRunner = join(workspaceRoot, "packages/agent-harness/dist/subagent/childRunner.js");
+  const workspaceSourceRunner = join(workspaceRoot, "packages/agent-harness/src/subagent/childRunner.ts");
+
   const isElectron = process.versions.electron !== undefined;
   const nodeCommand = isElectron ? "node" : process.execPath;
 
@@ -185,12 +141,12 @@ function resolveChildRunner(workspaceRoot: string): { command: string; args: str
   }
 
   const currentDir = dirname(fileURLToPath(import.meta.url));
-  const builtRunner = join(currentDir, "subagentChildRunner.js");
+  const builtRunner = join(currentDir, "childRunner.js");
   if (existsSync(builtRunner)) {
     return { command: nodeCommand, args: [builtRunner] };
   }
 
-  const sourceRunner = join(currentDir, "subagentChildRunner.ts");
+  const sourceRunner = join(currentDir, "childRunner.ts");
   const tsxCli = join(workspaceRoot, "node_modules", "tsx", "dist", "cli.mjs");
   return { command: nodeCommand, args: [tsxCli, sourceRunner] };
 }

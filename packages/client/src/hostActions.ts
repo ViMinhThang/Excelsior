@@ -53,7 +53,12 @@ export class AgentHostClient {
   }
 
   async send(content: string, options?: SendOptions): Promise<void> {
-    await this.host.dispatch({ type: "send", content, options });
+    await this.host.dispatch({
+      type: "send",
+      content,
+      mode: this.host.getState().mode,
+      options,
+    });
   }
 
   async cancel(): Promise<void> {

@@ -31,7 +31,7 @@ describe("plan/act mode snapshot consistency", () => {
       sessionId: "ses_1",
       mode: "plan",
     });
-    (harness as any).notifyNow();
+    (harness as any).snapshots.notifyNow();
 
     expect(harness.getSnapshot().mode).toBe("plan");
 
@@ -42,7 +42,7 @@ describe("plan/act mode snapshot consistency", () => {
     expect(harness.getSnapshot().mode).toBe("plan");
 
     (harness as any).activeRun.finish(run);
-    (harness as any).notifyNow();
+    (harness as any).snapshots.notifyNow();
     expect(harness.getSnapshot().mode).toBe("act");
 
     harness.dispose();

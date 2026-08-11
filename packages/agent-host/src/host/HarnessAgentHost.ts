@@ -35,7 +35,7 @@ export class HarnessAgentHost implements AgentHost {
       case "send":
         await this.harness.send({
           content: intent.content,
-          mode: this.harness.getSnapshot().mode,
+          mode: intent.mode ?? this.harness.getSnapshot().mode,
           ...intent.options,
         });
         return none();

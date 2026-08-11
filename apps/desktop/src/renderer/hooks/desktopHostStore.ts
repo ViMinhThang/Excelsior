@@ -4,7 +4,8 @@ import type {
   AppSettings,
   CommandDefinition,
 } from "@excelsior/client";
-import type { ExcelsiorApi } from "../../main/preload.js";
+import { DEFAULT_APP_SETTINGS } from "@excelsior/core";
+import type { ExcelsiorApi } from "../../shared/bridge.js";
 
 const emptyState: AgentClientState = {
   turns: [],
@@ -24,13 +25,7 @@ const emptyState: AgentClientState = {
   },
 };
 
-const emptySettings: AppSettings = {
-  deepseekApiKey: "",
-  githubToken: "",
-  agentToolLoopSteps: "unlimited",
-  autoReflectionEnabled: false,
-  autoApproveWorkspaceEdits: false,
-};
+const emptySettings: AppSettings = { ...DEFAULT_APP_SETTINGS };
 
 export interface IpcStateStore {
   getSnapshot: () => AgentClientState | null;

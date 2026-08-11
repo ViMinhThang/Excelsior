@@ -52,14 +52,14 @@ export function toAgentMessage(message: HarnessMessage): AgentMessage {
 }
 
 export function readRoleFromToolArgs(rawArgs: string): string {
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(rawArgs) as { role?: unknown };
-    return typeof parsed.role === "string" && parsed.role.trim()
-      ? parsed.role
-      : "SubAgent";
+    parsed = JSON.parse(rawArgs);
   } catch {
     return rawArgs || "SubAgent";
   }
+  const role = parsed && typeof parsed === "object" ? (parsed as { role?: unknown }).role : undefined;
+  return typeof role === "string" && role.trim() ? role : "SubAgent";
 }
 
 export function buildSubAgentState(tool: ToolDraft): ProjectedSubAgent {

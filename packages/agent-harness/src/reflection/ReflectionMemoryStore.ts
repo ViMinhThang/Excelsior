@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
 import type { ReflectionClientState } from "@excelsior/core";
+import { reflectionMemoryStateSchema } from "@excelsior/core";
 
 export interface ReflectionMemoryState {
   lastReflectedAt?: string;
@@ -46,13 +47,10 @@ export class ReflectionMemoryStore {
   readState(): ReflectionMemoryState {
     this.ensureReady();
     try {
-      const raw = JSON.parse(readFileSync(this.statePath(), "utf-8")) as Partial<ReflectionMemoryState>;
-      return {
-        ...DEFAULT_STATE,
-        ...raw,
-        touchedFiles: Array.isArray(raw.touchedFiles) ? raw.touchedFiles : [],
-        reviewedSessionIds: Array.isArray(raw.reviewedSessionIds) ? raw.reviewedSessionIds : [],
-      };
+      const parsed = reflectionMemoryStateSchema.safeParse(JSON.parse(readFileSync(this.statePath(), "utf-8")));
+      return parsed.success
+        ? { ...DEFAULT_STATE, ...parsed.data }
+        : { ...DEFAULT_STATE };
     } catch {
       return { ...DEFAULT_STATE };
     }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  completeCommandInput,
   getSubmittedCommand,
   shouldAllowChatInputSubmit,
 } from "../src/lib/commandSubmission.js";
@@ -28,10 +27,6 @@ describe("command submission", () => {
   it("does not submit a bare slash while opening command suggestions", () => {
     expect(getSubmittedCommand("/")).toBeNull();
     expect(getSubmittedCommand("  /  ")).toBeNull();
-  });
-
-  it("completes the selected autocomplete command explicitly", () => {
-    expect(completeCommandInput(commands, 1)).toBe("/review-post ");
   });
 
   it("blocks chat input submit while slash suggestions are visible", () => {

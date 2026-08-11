@@ -9,7 +9,7 @@ import type {
   Session,
 } from "@excelsior/client";
 import { AgentHostClient } from "@excelsior/client";
-import type { ExcelsiorApi } from "../../main/preload";
+import type { ExcelsiorApi } from "../../shared/bridge";
 import {
   createDesktopHostAdapter,
   createIpcStateStore,

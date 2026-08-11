@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -40,5 +40,28 @@ describe("ReflectionMemoryStore", () => {
     store.writeMemoryFile("index.md", "");
 
     expect(store.buildContext()).toBe("Reflection memory files are empty.");
+  });
+
+  it("falls back to defaults for a corrupt state file", async () => {
+    const store = await makeStore();
+    await writeFile(join(store.rootDir, "state.json"), "{ oops", "utf-8");
+
+    expect(store.readState()).toEqual({ touchedFiles: [], reviewedSessionIds: [] });
+  });
+
+  it("recovers per-field from wrong-typed state", async () => {
+    const store = await makeStore();
+    await writeFile(
+      join(store.rootDir, "state.json"),
+      JSON.stringify({ lastSummary: "summary", touchedFiles: "garbage", reviewedSessionIds: [1] }),
+      "utf-8",
+    );
+
+    expect(store.readState()).toEqual({
+      lastReflectedAt: undefined,
+      lastSummary: "summary",
+      touchedFiles: [],
+      reviewedSessionIds: [],
+    });
   });
 });

@@ -3,7 +3,7 @@ import type {
   AgentClientState,
   AgentHostIntent,
 } from "@excelsior/client";
-import type { ExcelsiorApi } from "../src/main/preload.js";
+import type { ExcelsiorApi } from "../src/shared/bridge.js";
 import {
   createDesktopHostAdapter,
   createIpcStateStore,
