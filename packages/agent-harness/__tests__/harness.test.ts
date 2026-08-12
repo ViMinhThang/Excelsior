@@ -7,12 +7,14 @@ import { PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
 import {
   createAgentHarness,
   createBuiltInTools,
-  type ToolExecutionContext,
+  type ToolActions,
+  type ToolEnv,
 } from "@excelsior/agent-harness";
 import {
   MESSAGE_END,
   MESSAGE_START,
   MESSAGE_UPDATE,
+  SESSION_CHANGED,
   TOOL_EXECUTION_START,
   TURN_END,
   TURN_START,
@@ -173,9 +175,19 @@ describe("AgentHarness", () => {
   it("blocks write-like built-in tools in Plan mode before confirmation", async () => {
     const workspaceRoot = await makeTempDir();
     const confirm = vi.fn();
-    const ctx: ToolExecutionContext = {
+    const env: ToolEnv = {
       workspaceRoot,
       mode: "plan",
+      emit: () => undefined as never,
+      settings: {
+        deepseekApiKey: "",
+        githubToken: "",
+        agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
+      },
+      backupDir: join(workspaceRoot, "backups"),
+    };
+    const actions: ToolActions = {
       confirm,
       askQuestion: async () => ({
         callId: "question",
@@ -183,7 +195,6 @@ describe("AgentHarness", () => {
         isManual: true,
         cancelled: true,
       }),
-      sendSubAgent: async () => "sub-agent result",
     };
     const tools = createBuiltInTools();
     const writeFile = tools.find((tool) => tool.name === "writeFile");
@@ -194,9 +205,9 @@ describe("AgentHarness", () => {
     expect(editFile).toBeDefined();
     expect(runCommand).toBeDefined();
 
-    const writeResult = await writeFile?.execute({ filePath: "new.txt", content: "x" }, ctx);
-    const editResult = await editFile?.execute({ filePath: "new.txt", oldText: "x", newText: "y" }, ctx);
-    const runResult = await runCommand?.execute({ command: "mkdir", args: ["new-dir"] }, ctx);
+    const writeResult = await writeFile?.execute({ filePath: "new.txt", content: "x" }, env, actions);
+    const editResult = await editFile?.execute({ filePath: "new.txt", oldText: "x", newText: "y" }, env, actions);
+    const runResult = await runCommand?.execute({ command: "mkdir", args: ["new-dir"] }, env, actions);
 
     expect(writeResult?.content).toBe(PLAN_MODE_BLOCKED_MESSAGE);
     expect(editResult?.content).toBe(PLAN_MODE_BLOCKED_MESSAGE);
@@ -264,24 +275,32 @@ describe("AgentHarness", () => {
     const sessionId = session.id;
     const turnId = "turn_test";
 
-    // Mock ToolExecutionContext
-    const ctx: ToolExecutionContext = {
+    // Mock ToolEnv/ToolActions
+    const env: ToolEnv = {
       workspaceRoot,
       mode: "act",
+      emit: () => undefined as never,
+      settings: {
+        deepseekApiKey: "",
+        githubToken: "",
+        agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
+      },
+      backupDir: join(dataDir, "backups", "ws_test", sessionId, turnId),
+    };
+    const actions: ToolActions = {
       confirm: async () => ({ callId: "1", approved: true }),
       askQuestion: async () => ({ callId: "1", answer: "", isManual: true, cancelled: true }),
-      sendSubAgent: async () => "",
-      backupDir: join(dataDir, "backups", "ws_test", sessionId, turnId),
     };
 
     const tools = createBuiltInTools();
     const writeFileTool = tools.find((tool) => tool.name === "writeFile")!;
 
     // Modify existing file
-    await writeFileTool.execute({ filePath: "existing.txt", content: "modified content" }, ctx);
+    await writeFileTool.execute({ filePath: "existing.txt", content: "modified content" }, env, actions);
 
     // Create new file
-    await writeFileTool.execute({ filePath: "new.txt", content: "new content" }, ctx);
+    await writeFileTool.execute({ filePath: "new.txt", content: "new content" }, env, actions);
 
     // Verify files were written
     expect(await readFile(existingFile, "utf-8")).toBe("modified content");
@@ -297,6 +316,40 @@ describe("AgentHarness", () => {
     expect(result.message).toBe("Reverted last turn.");
     expect(await readFile(existingFile, "utf-8")).toBe("original content");
     expect(existsSync(join(workspaceRoot, "new.txt"))).toBe(false);
+  });
+
+  it("finalizes a cancelled run with a coherent stored event stream", async () => {
+    const dataDir = await makeTempDir();
+    const workspaceRoot = await makeTempDir();
+    const harness = createAgentHarness({ dataDir, workspaceRoot, workspaceId: "ws_test" });
+    harness.createSession("Cancel Test");
+    const sessionId = harness.getSnapshot().currentSessionId;
+    expect(sessionId).toBeTruthy();
+
+    const store = harness as any;
+    const runId = "run_cancel";
+    const turnId = "turn_cancel";
+    store.activeRun.begin({ runId, turnId, sessionId, mode: "act" });
+    store.eventBus.emit(runId, TURN_START, {}, { sessionId, turnId });
+    store.eventBus.emit(runId, MESSAGE_START, {
+      message: { id: "msg_1", role: "assistant", content: "Partial" },
+    }, { sessionId, turnId });
+
+    harness.cancel();
+
+    const types = store.eventStore.events.map((event: any) => event.type);
+    expect(types).toEqual([
+      SESSION_CHANGED,
+      TURN_START,
+      MESSAGE_START,
+      MESSAGE_END,
+      TURN_END,
+    ]);
+    expect(store.eventStore.events.at(-1).data).toEqual({ cancelled: true });
+    expect(store.eventStore.events.find((event: any) => event.type === MESSAGE_END)?.data).toMatchObject({
+      message: { id: "msg_1", role: "assistant", isError: true },
+    });
+    expect(harness.getSnapshot().isLoading).toBe(false);
   });
 
   it("handles errors during command execution gracefully", async () => {

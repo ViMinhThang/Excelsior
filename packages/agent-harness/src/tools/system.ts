@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { z } from "zod";
 import { PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
 import { TOOL_EXECUTION_UPDATE } from "../events.js";
-import type { HarnessTool, ToolExecutionContext } from "../types.js";
+import type { HarnessTool, ToolEnv } from "../types.js";
 import { text } from "./fs.js";
 
 const MAX_OUTPUT_LENGTH = 100_000;
@@ -18,25 +18,25 @@ export function createRunCommandTool(): HarnessTool<z.infer<typeof runCommandSch
     name: "runCommand",
     description: "Run an executable with distinct arguments in the workspace.",
     inputSchema: runCommandSchema,
-    async execute({ command, args }, ctx, options) {
+    async execute({ command, args }, env, actions, options) {
       const normalizedArgs = args ?? [];
       const risk = classifyCommandRisk(command, normalizedArgs);
       if (risk.blocked) return text(risk.message, true);
-      if (ctx.mode === "plan" && risk.writeLike) return text(PLAN_MODE_BLOCKED_MESSAGE, true);
+      if (env.mode === "plan" && risk.writeLike) return text(PLAN_MODE_BLOCKED_MESSAGE, true);
       if (risk.writeLike) {
-        const response = await ctx.confirm({
+        const response = await actions.confirm({
           toolName: "runCommand",
           args: JSON.stringify({ command, args: normalizedArgs }),
           action: "warning",
         });
         if (!response.approved) return text("Denied by user.");
       }
-      return text(await runProcess(command, normalizedArgs, ctx, options?.toolCallId));
+      return text(await runProcess(command, normalizedArgs, env, options?.toolCallId));
     },
   };
 }
 
-export function runProcess(command: string, args: string[], ctx: ToolExecutionContext, toolCallId?: string): Promise<string> {
+export function runProcess(command: string, args: string[], env: ToolEnv, toolCallId?: string): Promise<string> {
   return new Promise((resolveProcess) => {
     let stdout = "";
     let stderr = "";
@@ -44,13 +44,13 @@ export function runProcess(command: string, args: string[], ctx: ToolExecutionCo
     let settled = false;
 
     const child = spawn(command, args, {
-      cwd: ctx.workspaceRoot,
+      cwd: env.workspaceRoot,
       shell: false,
     });
 
     const emitOutput = (delta: string) => {
-      if (!toolCallId || !ctx.emit || !delta) return;
-      ctx.emit(TOOL_EXECUTION_UPDATE, {
+      if (!toolCallId || !delta) return;
+      env.emit(TOOL_EXECUTION_UPDATE, {
         toolCallId,
         toolName: "runCommand",
         delta,
@@ -62,7 +62,7 @@ export function runProcess(command: string, args: string[], ctx: ToolExecutionCo
       if (settled) return;
       settled = true;
       clearTimeout(timeoutTimer);
-      ctx.abortSignal?.removeEventListener("abort", abort);
+      env.abortSignal?.removeEventListener("abort", abort);
       resolveProcess(output);
     };
 
@@ -84,7 +84,7 @@ export function runProcess(command: string, args: string[], ctx: ToolExecutionCo
       finish("Command timed out.");
     }, DEFAULT_TIMEOUT);
 
-    ctx.abortSignal?.addEventListener("abort", abort, { once: true });
+    env.abortSignal?.addEventListener("abort", abort, { once: true });
 
     child.stdout?.on("data", (data) => {
       const chunk = String(data);

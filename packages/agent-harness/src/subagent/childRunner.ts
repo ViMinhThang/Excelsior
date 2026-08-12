@@ -9,8 +9,8 @@ import {
   type HarnessEventDataMap,
   type HarnessEventEmitter,
 } from "../events.js";
-import { createDeepSeekProvider } from "../provider.js";
-import { ProviderRegistry, ToolRegistry } from "../registries.js";
+import { createDeepSeekProvider } from "../integrations/provider.js";
+import { ProviderRegistry, ToolRegistry } from "../registries/registries.js";
 import { runAgentLoop } from "../run/RunController.js";
 import {
   createGlobTool,
@@ -18,7 +18,7 @@ import {
   createRipgrepTool,
   createViewTool,
 } from "../tools/index.js";
-import type { ToolExecutionContext } from "../types.js";
+import type { ToolActions, ToolEnv } from "../types.js";
 import type { ChildOutput, ChildRequest } from "@excelsior/core";
 import { childRequestSchema } from "@excelsior/core";
 
@@ -79,9 +79,7 @@ async function main(): Promise<void> {
   const providers = new ProviderRegistry();
   providers.register(createDeepSeekProvider());
   const tools = createReadOnlyTools();
-  const ctx: ToolExecutionContext = {
-    workspaceRoot: request.workspaceRoot,
-    mode: "plan",
+  const actions: ToolActions = {
     confirm: async (confirmRequest) => ({
       callId: confirmRequest.toolName,
       approved: false,
@@ -92,7 +90,6 @@ async function main(): Promise<void> {
       isManual: true,
       cancelled: true,
     }),
-    sendSubAgent: async () => "Nested subagents are not available inside spawned subagents.",
   };
   let finalContent = "";
   let sequence = 0;
@@ -143,6 +140,13 @@ async function main(): Promise<void> {
       data,
     });
   };
+  const env: ToolEnv = {
+    workspaceRoot: request.workspaceRoot,
+    mode: "plan",
+    emit,
+    settings: request.settings,
+    backupDir: request.workspaceRoot,
+  };
 
   await runAgentLoop({
     messages: [{ role: "user", content: request.prompt }],
@@ -153,7 +157,8 @@ async function main(): Promise<void> {
     },
     providers,
     tools,
-    toolContext: ctx,
+    toolEnv: env,
+    toolActions: actions,
     signal: new AbortController().signal,
     emit,
   });

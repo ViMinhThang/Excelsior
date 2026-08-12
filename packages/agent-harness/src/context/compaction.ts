@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import type { AgentMessage } from "@excelsior/core";
-import type { ProviderRegistry } from "../registries.js";
+import type { ProviderRegistry } from "../registries/registries.js";
 import type { HarnessSettings } from "../types.js";
 
 export interface CompactionSummaryOptions {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ProgressBatcher } from "../src/context/ProgressBatcher.js";
+import { ProgressBatcher } from "../src/run/ProgressBatcher.js";
 
 function createBatcher(chars = 2048, intervalMs = 250) {
   const onFlush = vi.fn();

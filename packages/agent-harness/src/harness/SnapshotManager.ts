@@ -1,11 +1,11 @@
 import type { AgentMode, Workspace } from "@excelsior/core";
 import type { AnyHarnessEvent } from "../events.js";
-import { projectHarnessState, ProjectionCache, type CanonicalReadModel } from "../projection.js";
-import type { EventStore } from "../EventStore.js";
+import { projectHarnessState, ProjectionCache, type CanonicalReadModel } from "../projection/index.js";
+import type { EventStore } from "../events/EventStore.js";
 import type { ReflectionRunManager } from "../reflection/ReflectionRunManager.js";
-import type { ProviderRegistry } from "../registries.js";
+import type { ProviderRegistry } from "../registries/registries.js";
 import type { ActiveRunManager } from "../run/ActiveRunManager.js";
-import type { SessionManager } from "../SessionManager.js";
+import type { SessionManager } from "./SessionManager.js";
 import type { HarnessSnapshot } from "../types.js";
 import type { ConfirmationCoordinator } from "./ConfirmationCoordinator.js";
 

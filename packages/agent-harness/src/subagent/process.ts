@@ -4,8 +4,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ChildOutput } from "@excelsior/core";
 import { SUB_AGENT_EVENT } from "../events.js";
-import type { ToolExecutionContext, ToolResult } from "../types.js";
-import { PROGRESS_BATCH_CHARS, PROGRESS_BATCH_INTERVAL_MS, ProgressBatcher } from "../context/ProgressBatcher.js";
+import type { ToolEnv, ToolResult } from "../types.js";
+import { PROGRESS_BATCH_CHARS, PROGRESS_BATCH_INTERVAL_MS, ProgressBatcher } from "../run/ProgressBatcher.js";
 import { ChildOutputLineReader } from "./protocol.js";
 
 type ProgressDelta =
@@ -16,15 +16,12 @@ interface RunSpawnedSubAgentInput {
   role: string;
   prompt: string;
   parentToolCallId: string;
-  ctx: ToolExecutionContext;
+  env: ToolEnv;
 }
 
 export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<ToolResult> {
-  const settings = input.ctx.settings;
-  if (!settings) return Promise.resolve({ content: "Subagent settings are unavailable.", isError: true });
-  if (!input.ctx.emit) return Promise.resolve({ content: "Subagent event emitter is unavailable.", isError: true });
-
-  const spawnSpec = resolveChildRunner(input.ctx.workspaceRoot);
+  const settings = input.env.settings;
+  const spawnSpec = resolveChildRunner(input.env.workspaceRoot);
   return new Promise((resolveResult) => {
     let stderr = "";
     let finalOutput = "";
@@ -42,7 +39,7 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
     });
 
     const child = spawn(spawnSpec.command, spawnSpec.args, {
-      cwd: input.ctx.workspaceRoot,
+      cwd: input.env.workspaceRoot,
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
       env: {
@@ -55,7 +52,7 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
       if (settled) return;
       settled = true;
       progress.flush();
-      input.ctx.abortSignal?.removeEventListener("abort", abort);
+      input.env.abortSignal?.removeEventListener("abort", abort);
       if (isError) {
         emitChildEvent({ type: "error", message: content });
       }
@@ -71,7 +68,7 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
       finish("Subagent cancelled.", true);
     };
 
-    input.ctx.abortSignal?.addEventListener("abort", abort, { once: true });
+    input.env.abortSignal?.addEventListener("abort", abort, { once: true });
 
     const reader = new ChildOutputLineReader((output) => {
       if (output.type === "final") {
@@ -108,16 +105,16 @@ export function runSpawnedSubAgent(input: RunSpawnedSubAgentInput): Promise<Tool
     });
 
     child.stdin.end(JSON.stringify({
-      workspaceRoot: input.ctx.workspaceRoot,
+      workspaceRoot: input.env.workspaceRoot,
       role: input.role,
       prompt: input.prompt,
       settings,
-      projectInstructions: input.ctx.projectInstructions,
-      skillsList: input.ctx.skillsList,
+      projectInstructions: input.env.projectInstructions,
+      skillsList: input.env.skillsList,
     }));
 
     function emitChildEvent(event: ChildOutput): void {
-      input.ctx.emit?.(SUB_AGENT_EVENT, {
+      input.env.emit(SUB_AGENT_EVENT, {
         parentToolCallId: input.parentToolCallId,
         event,
       }, { relatedToolCallId: input.parentToolCallId });

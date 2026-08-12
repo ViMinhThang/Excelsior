@@ -18,7 +18,7 @@ import {
   replayHarnessEvents,
   type HarnessInspectionSnapshot,
 } from "@excelsior/agent-harness";
-import { projectHarnessState } from "../src/projection.js";
+import { projectHarnessState } from "../src/projection/index.js";
 
 const workspace: Workspace = {
   id: "ws_test",

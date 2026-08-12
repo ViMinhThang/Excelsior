@@ -1,8 +1,7 @@
 import { resolve } from "node:path";
 import type { AgentMessage, AgentMode } from "@excelsior/core";
 import type { HarnessEventEmitter } from "../events.js";
-import type { ProviderRegistry, ToolRegistry } from "../registries.js";
-import type { HarnessSettings, ToolExecutionContext } from "../types.js";
+import type { HarnessSettings, ToolActions, ToolEnv } from "../types.js";
 import type { LspClient } from "../lsp/LspManager.js";
 import { buildRunContext, type RunContext } from "./contextBuilder.js";
 import { loadProjectInstructions } from "./projectInstructions.js";
@@ -19,19 +18,18 @@ export interface RunAssemblyInput {
   mode: AgentMode;
   abortSignal?: AbortSignal;
   settings: HarnessSettings;
-  providers: ProviderRegistry;
-  tools: ToolRegistry;
   skillsList?: string;
   reflectionMemoryContext?: string;
   lsp?: LspClient;
-  confirm: ToolExecutionContext["confirm"];
-  askQuestion: ToolExecutionContext["askQuestion"];
+  confirm: ToolActions["confirm"];
+  askQuestion: ToolActions["askQuestion"];
   createEmitter(runId: string, sessionId: string, turnId: string): HarnessEventEmitter;
 }
 
 export interface RunAssembly {
   runContext: RunContext;
-  toolContext: ToolExecutionContext;
+  toolEnv: ToolEnv;
+  toolActions: ToolActions;
   emit: HarnessEventEmitter;
 }
 
@@ -53,24 +51,20 @@ export function buildRunAssembly(input: RunAssemblyInput): RunAssembly {
   return {
     runContext,
     emit,
-    toolContext: {
+    toolEnv: {
       workspaceRoot,
       mode,
       abortSignal: input.abortSignal,
-      confirm: input.confirm,
-      askQuestion: input.askQuestion,
-      sendSubAgent: async ({ role, prompt }) => {
-        const modePrefix = mode === "plan" ? "Plan-only analysis" : "Focused analysis";
-        return `${modePrefix} from ${role}:\n${prompt}`;
-      },
       emit,
       settings: input.settings,
-      providers: input.providers,
-      tools: input.tools,
       skillsList: input.skillsList,
       projectInstructions: projectInstructions?.content,
       backupDir: resolve(input.storageRoot, "backups", input.workspaceId, input.sessionId, input.turnId),
       lsp: input.lsp,
+    },
+    toolActions: {
+      confirm: input.confirm,
+      askQuestion: input.askQuestion,
     },
   };
 }

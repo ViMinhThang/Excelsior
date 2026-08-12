@@ -17,11 +17,11 @@ import {
   type HarnessEventDataMap,
   type HarnessEventType,
 } from "../src/events.js";
-import { MessageHandler } from "../src/projector/MessageHandler.js";
+import { MessageHandler } from "../src/projection/MessageHandler.js";
 import {
   ProjectionCache,
   projectEvents,
-} from "../src/projection.js";
+} from "../src/projection/index.js";
 import type { ProjectedBlock } from "@excelsior/core";
 
 function projectEventsToDisplayBlocks(events: readonly AnyHarnessEvent[]): ProjectedBlock[] {

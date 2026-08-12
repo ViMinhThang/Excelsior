@@ -13,9 +13,7 @@ import type {
   Session,
 } from "@excelsior/core";
 import type { AnyHarnessEvent, HarnessEvent, HarnessEventEmitter } from "./events.js";
-import type { ProviderRegistry, ToolRegistry } from "./registries.js";
 import type { LspClient } from "./lsp/LspManager.js";
-
 export type HarnessSettings = AppSettings;
 export type HarnessSnapshot = AgentClientState;
 
@@ -31,25 +29,25 @@ export interface ToolResult {
   isError?: boolean;
 }
 
-export interface ToolExecutionContext {
+export interface ToolEnv {
   workspaceRoot: string;
   mode: AgentMode;
   abortSignal?: AbortSignal;
-  emit?: HarnessEventEmitter;
-  settings?: HarnessSettings;
-  providers?: ProviderRegistry;
-  tools?: ToolRegistry;
+  emit: HarnessEventEmitter;
+  settings: HarnessSettings;
   skillsList?: string;
   projectInstructions?: string;
-  backupDir?: string;
+  backupDir: string;
   lsp?: LspClient;
+}
+
+export interface ToolActions {
   confirm(request: Omit<ConfirmRequest, "callId">): Promise<ConfirmResponse>;
   askQuestion(input: {
     question: string;
     options: Array<{ id: string; label: string; description?: string }>;
     allowManual: boolean;
   }): Promise<AskQuestionResponse>;
-  sendSubAgent(input: { role: string; prompt: string }): Promise<string>;
 }
 
 export interface ToolExecuteOptions {
@@ -60,12 +58,63 @@ export interface HarnessTool<TInput = unknown> {
   name: string;
   description: string;
   inputSchema: z.ZodType<TInput>;
-  execute(input: TInput, ctx: ToolExecutionContext, options?: ToolExecuteOptions): Promise<ToolResult>;
+  execute(input: TInput, env: ToolEnv, actions: ToolActions, options?: ToolExecuteOptions): Promise<ToolResult>;
+}
+
+export type RunInput = {
+  content: string;
+  mode: AgentMode;
+  sessionId?: string;
+} & SendOptions;
+
+export interface RunApi {
+  getSnapshot(): HarnessSnapshot;
+  send(input: RunInput): Promise<void>;
+  cancel(): void;
+  startReflection(trigger: "manual" | "auto"): Promise<CommandResult>;
+  cancelReflection(): void;
+  setMode(mode: AgentMode): void;
+  toggleMode(): AgentMode;
+  revertLastTurn(): Promise<CommandResult>;
+  compactCurrentSession(triggerMode?: "manual" | "auto"): Promise<void>;
+}
+
+export interface SessionApi {
+  clear(): void;
+  createSession(title?: string): Session;
+  switchSession(sessionId: string): Promise<void>;
+  deleteSession(sessionId: string): Promise<void>;
+  deleteAllSessions(): Promise<void>;
+  renameSession(sessionId: string, title: string): void;
+}
+
+export interface SettingsApi {
+  getSettings(): HarnessSettings;
+  saveSettings(settings: Partial<HarnessSettings>): void;
+}
+
+export interface ConfirmationApi {
+  respondToConfirmation(callId: string, approved: boolean): void;
+  approveAllConfirmations(): void;
+  respondToQuestion(response: AskQuestionResponse): void;
+}
+
+export interface InspectionApi {
+  inspectCurrentSession(): HarnessInspectionSnapshot;
+  replayCurrentSession(): HarnessReplayReport;
+}
+
+export interface HarnessCommandContext {
+  run: RunApi;
+  sessions: SessionApi;
+  settings: SettingsApi;
+  confirmations: ConfirmationApi;
+  inspection: InspectionApi;
 }
 
 export type HarnessCommandHandler = (
   args: string[],
-  harness: AgentHarness,
+  api: HarnessCommandContext,
 ) => CommandResult | Promise<CommandResult>;
 
 export interface HarnessCommand {
@@ -132,7 +181,7 @@ export interface AgentHarness {
   inspectCurrentSession(): HarnessInspectionSnapshot;
   replayCurrentSession(): HarnessReplayReport;
   subscribe(listener: () => void): () => void;
-  send(input: { content: string; mode: AgentMode; sessionId?: string } & SendOptions): Promise<void>;
+  send(input: RunInput): Promise<void>;
   cancel(): void;
   startReflection(trigger: "manual" | "auto"): Promise<CommandResult>;
   cancelReflection(): void;

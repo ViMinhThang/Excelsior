@@ -24,7 +24,6 @@ export interface AcceptedSteering extends ActiveRunIdentity {
 export class ActiveRunManager {
   private current: InternalActiveRunHandle | null = null;
   private steeringQueue: string[] = [];
-  private readonly finalizedRunIds = new Set<string>();
 
   begin(identity: ActiveRunIdentity): ActiveRunHandle {
     const abortController = new AbortController();
@@ -89,7 +88,6 @@ export class ActiveRunManager {
   ): void {
     const incomplete = findIncompleteEvents(events, handle.runId, handle.turnId);
     emitRunFinalization(incomplete, reason, emit);
-    this.finalizedRunIds.add(handle.runId);
   }
 
   clear(handle: ActiveRunHandle): void {
@@ -100,11 +98,6 @@ export class ActiveRunManager {
 
   finish(handle: ActiveRunHandle): void {
     this.clear(handle);
-    this.finalizedRunIds.delete(handle.runId);
-  }
-
-  isRunFinalized(runId: string): boolean {
-    return this.finalizedRunIds.has(runId);
   }
 
   private isCurrent(handle: ActiveRunHandle): boolean {

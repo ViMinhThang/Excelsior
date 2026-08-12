@@ -2,7 +2,7 @@ import { mkdir, writeFile, mkdtemp, rm } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createAgentHarness } from "../src/harness.js";
+import { createAgentHarness } from "../src/harness/HarnessStore.js";
 import type { ISkillReader } from "../src/types.js";
 
 const tempDirs: string[] = [];

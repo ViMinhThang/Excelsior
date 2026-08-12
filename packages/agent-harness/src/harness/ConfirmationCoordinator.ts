@@ -11,10 +11,10 @@ import {
   QUESTION_ANSWERED,
   QUESTION_REQUESTED,
 } from "../events.js";
-import type { EventBus } from "../EventBus.js";
-import { ConfirmationRouter } from "../ConfirmationRouter.js";
+import type { EventBus } from "../events/EventBus.js";
+import { ConfirmationRouter } from "./ConfirmationRouter.js";
 import type { ActiveRunManager } from "../run/ActiveRunManager.js";
-import type { SessionManager } from "../SessionManager.js";
+import type { SessionManager } from "./SessionManager.js";
 
 interface ConfirmationCoordinatorDeps {
   eventBus: EventBus;

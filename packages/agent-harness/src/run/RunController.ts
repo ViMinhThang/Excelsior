@@ -19,12 +19,13 @@ import {
   TURN_START,
   type HarnessEventEmitter,
 } from "../events.js";
-import { RunEventWriter } from "../context/RunEventWriter.js";
+import { RunEventWriter } from "./RunEventWriter.js";
 import { runModelStep } from "./runModelStep.js";
-import type { ProviderRegistry, ToolRegistry } from "../registries.js";
+import type { ProviderRegistry, ToolRegistry } from "../registries/registries.js";
 import type {
   HarnessSettings,
-  ToolExecutionContext,
+  ToolActions,
+  ToolEnv,
 } from "../types.js";
 
 export async function runAgentLoop(input: {
@@ -33,7 +34,8 @@ export async function runAgentLoop(input: {
   settings: HarnessSettings;
   providers: ProviderRegistry;
   tools: ToolRegistry;
-  toolContext: ToolExecutionContext;
+  toolEnv: ToolEnv;
+  toolActions: ToolActions;
   signal: AbortSignal;
   emit: HarnessEventEmitter;
   getSteeringMessages?: () => string[];
@@ -56,7 +58,8 @@ export async function runAgentLoop(input: {
       settings: input.settings,
       providers: input.providers,
       tools: input.tools,
-      toolContext: input.toolContext,
+      toolEnv: input.toolEnv,
+      toolActions: input.toolActions,
       signal: input.signal,
       emit: input.emit,
       writer,

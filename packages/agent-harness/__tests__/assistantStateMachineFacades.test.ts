@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Projector } from "../src/projector/Projector.js";
-import { RunEventWriter } from "../src/context/RunEventWriter.js";
+import { Projector } from "../src/projection/Projector.js";
+import { RunEventWriter } from "../src/run/RunEventWriter.js";
 import {
   MESSAGE_END,
   MESSAGE_START,

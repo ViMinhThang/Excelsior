@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ToolRegistry } from "../registries.js";
+import { ToolRegistry } from "../registries/registries.js";
 import type { HarnessTool } from "../types.js";
 import { text } from "../tools/fs.js";
 import type { ReflectionMemoryStore } from "./ReflectionMemoryStore.js";

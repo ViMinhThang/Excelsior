@@ -5,13 +5,14 @@ import {
   type ToolSet,
 } from "ai";
 import type { AgentMessage } from "@excelsior/core";
-import { RunEventWriter } from "../context/RunEventWriter.js";
+import { RunEventWriter } from "./RunEventWriter.js";
 import { toModelMessages } from "../context/index.js";
 import type { HarnessEventEmitter } from "../events.js";
-import type { ProviderRegistry, ToolRegistry } from "../registries.js";
+import type { ProviderRegistry, ToolRegistry } from "../registries/registries.js";
 import type {
   HarnessSettings,
-  ToolExecutionContext,
+  ToolActions,
+  ToolEnv,
 } from "../types.js";
 import {
   RunStepRecorder,
@@ -25,7 +26,8 @@ export async function runModelStep(input: {
   settings: HarnessSettings;
   providers: ProviderRegistry;
   tools: ToolRegistry;
-  toolContext: ToolExecutionContext;
+  toolEnv: ToolEnv;
+  toolActions: ToolActions;
   signal: AbortSignal;
   emit: HarnessEventEmitter;
   writer: RunEventWriter;
@@ -48,7 +50,7 @@ export async function runModelStep(input: {
       model,
       system: input.systemPrompt,
       messages: toModelMessages(input.messages),
-      tools: input.tools.toToolSet(input.toolContext),
+      tools: input.tools.toToolSet(input.toolEnv, input.toolActions),
       stopWhen: stepCountIs(1),
       abortSignal: input.signal,
       maxRetries: 3,

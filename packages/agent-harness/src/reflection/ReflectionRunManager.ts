@@ -9,12 +9,13 @@ import {
   type HarnessEventEmitter,
   type HarnessEventType,
 } from "../events.js";
-import { ProjectionCache } from "../projection.js";
-import type { ProviderRegistry } from "../registries.js";
+import { ProjectionCache } from "../projection/index.js";
+import type { ProviderRegistry } from "../registries/registries.js";
 import { runAgentLoop } from "../run/RunController.js";
-import type { FileHarnessStorage } from "../storage.js";
-import type { SessionManager } from "../SessionManager.js";
-import type { SettingsStore } from "../SettingsStore.js";
+import type { FileHarnessStorage } from "../harness/FileHarnessStorage.js";
+import type { SessionManager } from "../harness/SessionManager.js";
+import type { SettingsStore } from "../harness/SettingsStore.js";
+import type { EventRepository } from "../repository/EventRepository.js";
 import type { HarnessSettings } from "../types.js";
 import { ReflectionMemoryStore, type ReflectionMemoryState } from "./ReflectionMemoryStore.js";
 import { buildReflectionPrompt } from "./prompt.js";
@@ -69,6 +70,7 @@ export class ReflectionRunManager {
     private readonly input: {
       workspace: Workspace;
       storage: FileHarnessStorage;
+      eventRepository: EventRepository;
       sessionManager: SessionManager;
       settingsStore: SettingsStore;
       providers: ProviderRegistry;
@@ -176,19 +178,23 @@ export class ReflectionRunManager {
       sessionCorpus: corpus.text,
     });
 
+    const emit = this.createEmitter(runId, turnId, events);
+
     await runAgentLoop({
       messages: [{ role: "user", content: prompt }],
       systemPrompt: "You are Excelsior's private background reflection worker. Use only memory tools.",
       settings,
       providers: this.input.providers,
       tools,
-      toolContext: {
+      toolEnv: {
         workspaceRoot: this.store.rootDir,
         mode: "act",
         abortSignal: controller.signal,
+        emit,
         settings,
-        providers: this.input.providers,
-        tools,
+        backupDir: this.store.rootDir,
+      },
+      toolActions: {
         confirm: async () => ({ callId: "reflection", approved: false }),
         askQuestion: async () => ({
           callId: "reflection",
@@ -196,10 +202,9 @@ export class ReflectionRunManager {
           isManual: true,
           cancelled: true,
         }),
-        sendSubAgent: async () => "Reflection runs cannot spawn sub-agents.",
       },
       signal: controller.signal,
-      emit: this.createEmitter(runId, turnId, events),
+      emit,
     });
 
     if (controller.signal.aborted) {
@@ -266,7 +271,7 @@ export class ReflectionRunManager {
 
       cache.reset();
       const messages = cache.project(
-        this.input.storage.loadEvents(this.input.workspace.id, session.id),
+        this.input.eventRepository.loadEvents(this.input.workspace.id, session.id),
       ).aiHistory;
       if (messages.length === 0) continue;
 

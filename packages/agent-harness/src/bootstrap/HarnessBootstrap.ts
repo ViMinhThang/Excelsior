@@ -1,27 +1,27 @@
 import type { AgentMode, Workspace } from "@excelsior/core";
-import { EventBus } from "../EventBus.js";
-import { EventStore } from "../EventStore.js";
-import { GitHubReviewService } from "../github.js";
+import { EventBus } from "../events/EventBus.js";
+import { EventStore } from "../events/EventStore.js";
+import { GitHubReviewService } from "../integrations/github.js";
 import { LspManager } from "../lsp/LspManager.js";
-import { createDeepSeekProvider } from "../provider.js";
+import { createDeepSeekProvider } from "../integrations/provider.js";
 import { ReflectionRunManager } from "../reflection/ReflectionRunManager.js";
-import { CommandRegistry, ExtensionRegistry, ProviderRegistry, ToolRegistry } from "../registries.js";
-import { SessionManager } from "../SessionManager.js";
-import { SettingsStore } from "../SettingsStore.js";
+import { CommandRegistry, ExtensionRegistry, ProviderRegistry, ToolRegistry } from "../registries/registries.js";
+import { SessionManager } from "../harness/SessionManager.js";
+import { SettingsStore } from "../harness/SettingsStore.js";
 import { SkillCatalog } from "../skills/SkillCatalog.js";
 import { registerSkills } from "../skills/register.js";
-import { FileHarnessStorage } from "../storage.js";
-import { createBuiltInCommands } from "../commands.js";
+import { FileHarnessStorage } from "../harness/FileHarnessStorage.js";
+import { JsonlEventRepository } from "../repository/JsonlEventRepository.js";
+import type { EventRepository } from "../repository/EventRepository.js";
+import { createBuiltInCommands } from "../commands/commands.js";
 import { createBuiltInTools } from "../tools/index.js";
 import type {
   HarnessCommand,
   HarnessConfig,
 } from "../types.js";
-import type { ActiveRunManager } from "../run/ActiveRunManager.js";
 
 export interface HarnessBootstrapInput {
   config: HarnessConfig;
-  activeRun: ActiveRunManager;
   notify(): void;
   sendSkill(input: { content: string; mode: AgentMode; displayContent: string }): Promise<void>;
   currentMode(): AgentMode;
@@ -29,6 +29,7 @@ export interface HarnessBootstrapInput {
 
 export interface HarnessBootstrap {
   storage: FileHarnessStorage;
+  eventRepository: EventRepository;
   workspace: Workspace;
   providers: ProviderRegistry;
   tools: ToolRegistry;
@@ -44,6 +45,7 @@ export interface HarnessBootstrap {
 
 export function bootstrapHarness(input: HarnessBootstrapInput): HarnessBootstrap {
   const storage = new FileHarnessStorage(input.config.dataDir);
+  const eventRepository = new JsonlEventRepository(storage.rootDir);
   const workspace = storage.getOrCreateWorkspace({
     id: input.config.workspaceId,
     rootPath: input.config.workspaceRoot,
@@ -51,13 +53,14 @@ export function bootstrapHarness(input: HarnessBootstrapInput): HarnessBootstrap
   const providers = new ProviderRegistry();
   const tools = new ToolRegistry();
   const commands = new CommandRegistry();
-  const sessionManager = new SessionManager(storage, workspace.id);
-  const eventStore = new EventStore(storage, workspace.id);
+  const sessionManager = new SessionManager(eventRepository, workspace.id);
+  const eventStore = new EventStore(eventRepository, workspace.id);
   const settingsStore = new SettingsStore(storage);
   const lsp = LspManager.create(workspace.rootPath);
   const reflectionRun = new ReflectionRunManager({
     workspace,
     storage,
+    eventRepository,
     sessionManager,
     settingsStore,
     providers,
@@ -70,7 +73,6 @@ export function bootstrapHarness(input: HarnessBootstrapInput): HarnessBootstrap
     eventStore,
     extensions,
     input.notify,
-    (runId) => input.activeRun.isRunFinalized(runId),
   );
 
   registerBuiltIns({ providers, tools });
@@ -91,10 +93,11 @@ export function bootstrapHarness(input: HarnessBootstrapInput): HarnessBootstrap
   }
 
   extensions.load(input.config.extensions ?? []);
-  loadCurrentSessionEvents({ storage, workspace, sessionManager, eventStore });
+  loadCurrentSessionEvents({ eventRepository, workspace, sessionManager, eventStore });
 
   return {
     storage,
+    eventRepository,
     workspace,
     providers,
     tools,
@@ -164,7 +167,7 @@ function createHarnessCommands(input: {
 }
 
 function loadCurrentSessionEvents(input: {
-  storage: FileHarnessStorage;
+  eventRepository: EventRepository;
   workspace: Workspace;
   sessionManager: SessionManager;
   eventStore: EventStore;
@@ -177,6 +180,6 @@ function loadCurrentSessionEvents(input: {
 
   input.eventStore.replaceEvents(
     session,
-    input.storage.loadEvents(input.workspace.id, session.id),
+    input.eventRepository.loadEvents(input.workspace.id, session.id),
   );
 }

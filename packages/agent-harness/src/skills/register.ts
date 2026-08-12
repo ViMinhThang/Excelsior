@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ToolRegistry, CommandRegistry } from "../registries.js";
+import type { ToolRegistry, CommandRegistry } from "../registries/registries.js";
 import type { SkillCatalog } from "./SkillCatalog.js";
 
 export function registerSkills(

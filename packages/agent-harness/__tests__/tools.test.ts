@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PLAN_MODE_BLOCKED_MESSAGE } from "@excelsior/core";
 import {
   createBuiltInTools,
+  type HarnessSettings,
   type LspClient,
-  type ToolExecutionContext,
+  type ToolActions,
+  type ToolEnv,
 } from "@excelsior/agent-harness";
 
 const tempDirs: string[] = [];
@@ -24,6 +26,39 @@ afterEach(async () => {
   }
 });
 
+function makeEnv(partial: Partial<ToolEnv> = {}): ToolEnv {
+  return {
+    workspaceRoot: process.cwd(),
+    mode: "act",
+    emit: (() => undefined) as unknown as ToolEnv["emit"],
+    settings: defaultSettings(),
+    backupDir: join(tmpdir(), "excelsior-backup"),
+    ...partial,
+  };
+}
+
+function defaultSettings(): HarnessSettings {
+  return {
+    deepseekApiKey: "",
+    githubToken: "",
+    agentToolLoopSteps: "unlimited",
+    autoReflectionEnabled: false,
+  };
+}
+
+function makeActions(partial: Partial<ToolActions> = {}): ToolActions {
+  return {
+    confirm: async () => ({ callId: "", approved: true }),
+    askQuestion: async () => ({
+      callId: "",
+      answer: "",
+      isManual: false,
+      cancelled: true,
+    }),
+    ...partial,
+  };
+}
+
 describe("built-in harness tools", () => {
   function fakeLsp(result: string | null): LspClient {
     return {
@@ -35,18 +70,8 @@ describe("built-in harness tools", () => {
   it("blocks write-like tools in Plan mode before confirmation", async () => {
     const workspaceRoot = await makeTempDir();
     const confirm = vi.fn();
-    const ctx: ToolExecutionContext = {
-      workspaceRoot,
-      mode: "plan",
-      confirm,
-      askQuestion: async () => ({
-        callId: "question",
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      }),
-      sendSubAgent: async () => "sub-agent result",
-    };
+    const env = makeEnv({ workspaceRoot, mode: "plan" });
+    const actions = makeActions({ confirm });
     const tools = createBuiltInTools();
     const writeFile = tools.find((tool) => tool.name === "writeFile");
     const write = tools.find((tool) => tool.name === "write");
@@ -60,11 +85,11 @@ describe("built-in harness tools", () => {
     expect(edit).toBeDefined();
     expect(runCommand).toBeDefined();
 
-    const writeResult = await writeFile?.execute({ filePath: "new.txt", content: "x" }, ctx);
-    const writeAliasResult = await write?.execute({ filePath: "alias.txt", content: "x" }, ctx);
-    const editResult = await editFile?.execute({ filePath: "new.txt", oldText: "x", newText: "y" }, ctx);
-    const editAliasResult = await edit?.execute({ filePath: "new.txt", oldText: "x", newText: "y" }, ctx);
-    const runResult = await runCommand?.execute({ command: "mkdir", args: ["new-dir"] }, ctx);
+    const writeResult = await writeFile?.execute({ filePath: "new.txt", content: "x" }, env, actions);
+    const writeAliasResult = await write?.execute({ filePath: "alias.txt", content: "x" }, env, actions);
+    const editResult = await editFile?.execute({ filePath: "new.txt", oldText: "x", newText: "y" }, env, actions);
+    const editAliasResult = await edit?.execute({ filePath: "new.txt", oldText: "x", newText: "y" }, env, actions);
+    const runResult = await runCommand?.execute({ command: "mkdir", args: ["new-dir"] }, env, actions);
 
     expect(writeResult?.content).toBe(PLAN_MODE_BLOCKED_MESSAGE);
     expect(writeAliasResult?.content).toBe(PLAN_MODE_BLOCKED_MESSAGE);
@@ -82,24 +107,14 @@ describe("built-in harness tools", () => {
       callId: request.toolName,
       approved: false,
     }));
-    const ctx: ToolExecutionContext = {
-      workspaceRoot,
-      mode: "act",
-      confirm,
-      askQuestion: async () => ({
-        callId: "question",
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      }),
-      sendSubAgent: async () => "sub-agent result",
-    };
+    const env = makeEnv({ workspaceRoot, mode: "act" });
+    const actions = makeActions({ confirm });
     const write = createBuiltInTools().find((tool) => tool.name === "write");
 
     const result = await write?.execute({
       filePath: outsideFile,
       content: "outside",
-    }, ctx);
+    }, env, actions);
 
     expect(result?.content).toBe("Denied by user.");
     expect(confirm).toHaveBeenCalledWith(expect.objectContaining({
@@ -115,24 +130,14 @@ describe("built-in harness tools", () => {
       callId: request.toolName,
       approved: true,
     }));
-    const ctx: ToolExecutionContext = {
-      workspaceRoot,
-      mode: "act",
-      confirm,
-      askQuestion: async () => ({
-        callId: "question",
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      }),
-      sendSubAgent: async () => "sub-agent result",
-    };
+    const env = makeEnv({ workspaceRoot, mode: "act" });
+    const actions = makeActions({ confirm });
     const write = createBuiltInTools().find((tool) => tool.name === "write");
 
     const created = await write?.execute({
       filePath: "created.ts",
       content: "export const x = 1;",
-    }, ctx);
+    }, env, actions);
     expect(created?.content).toContain("Successfully wrote");
     expect(created?.content).toContain("--- created.ts");
     expect(created?.content).toContain("+++ created.ts");
@@ -141,7 +146,7 @@ describe("built-in harness tools", () => {
     const overwritten = await write?.execute({
       filePath: "created.ts",
       content: "export const x = 2;",
-    }, ctx);
+    }, env, actions);
     expect(overwritten?.content).toContain("-export const x = 1;");
     expect(overwritten?.content).toContain("+export const x = 2;");
   });
@@ -150,22 +155,11 @@ describe("built-in harness tools", () => {
     const workspaceRoot = await makeTempDir();
     await writeFile(join(workspaceRoot, "demo.ts"), "const value: string = 1;", "utf-8");
     const lsp = fakeLsp("LSP diagnostics for demo.ts:\n- error typescript 1:7 Type 'number' is not assignable to type 'string'.");
-    const ctx: ToolExecutionContext = {
-      workspaceRoot,
-      mode: "act",
-      lsp,
-      confirm: async () => ({ callId: "confirm", approved: true }),
-      askQuestion: async () => ({
-        callId: "question",
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      }),
-      sendSubAgent: async () => "sub-agent result",
-    };
+    const env = makeEnv({ workspaceRoot, mode: "act", lsp });
+    const actions = makeActions();
     const view = createBuiltInTools().find((tool) => tool.name === "view");
 
-    const result = await view?.execute({ filePath: "demo.ts" }, ctx);
+    const result = await view?.execute({ filePath: "demo.ts" }, env, actions);
 
     expect(result?.content).toContain("1: const value: string = 1;");
     expect(result?.content).toContain("LSP diagnostics for demo.ts:");
@@ -179,19 +173,8 @@ describe("built-in harness tools", () => {
   it("appends LSP diagnostics after writing and editing TypeScript files", async () => {
     const workspaceRoot = await makeTempDir();
     const lsp = fakeLsp("LSP diagnostics for demo.ts:\n- warning typescript 1:1 Prefer const.");
-    const ctx: ToolExecutionContext = {
-      workspaceRoot,
-      mode: "act",
-      lsp,
-      confirm: async () => ({ callId: "confirm", approved: true }),
-      askQuestion: async () => ({
-        callId: "question",
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      }),
-      sendSubAgent: async () => "sub-agent result",
-    };
+    const env = makeEnv({ workspaceRoot, mode: "act", lsp });
+    const actions = makeActions();
     const tools = createBuiltInTools();
     const write = tools.find((tool) => tool.name === "write");
     const edit = tools.find((tool) => tool.name === "edit");
@@ -199,12 +182,12 @@ describe("built-in harness tools", () => {
     const written = await write?.execute({
       filePath: "demo.ts",
       content: "let value = 1;",
-    }, ctx);
+    }, env, actions);
     const edited = await edit?.execute({
       filePath: "demo.ts",
       oldText: "let value = 1;",
       newText: "const value = 1;",
-    }, ctx);
+    }, env, actions);
 
     expect(written?.content).toContain("LSP diagnostics for demo.ts:");
     expect(edited?.content).toContain("LSP diagnostics for demo.ts:");
@@ -219,25 +202,14 @@ describe("built-in harness tools", () => {
   it("does not append LSP output for non-TypeScript files when the manager is quiet", async () => {
     const workspaceRoot = await makeTempDir();
     const lsp = fakeLsp(null);
-    const ctx: ToolExecutionContext = {
-      workspaceRoot,
-      mode: "act",
-      lsp,
-      confirm: async () => ({ callId: "confirm", approved: true }),
-      askQuestion: async () => ({
-        callId: "question",
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      }),
-      sendSubAgent: async () => "sub-agent result",
-    };
+    const env = makeEnv({ workspaceRoot, mode: "act", lsp });
+    const actions = makeActions();
     const write = createBuiltInTools().find((tool) => tool.name === "write");
 
     const result = await write?.execute({
       filePath: "notes.txt",
       content: "plain",
-    }, ctx);
+    }, env, actions);
 
     expect(result?.content).toContain("Successfully wrote");
     expect(result?.content).not.toContain("LSP diagnostics");
@@ -252,31 +224,21 @@ describe("built-in harness tools", () => {
   it("auto-approves workspace edits when the workspace toggle is enabled", async () => {
     const workspaceRoot = await makeTempDir();
     const confirm = vi.fn();
-    const ctx: ToolExecutionContext = {
+    const env = makeEnv({
       workspaceRoot,
       mode: "act",
       settings: {
-        deepseekApiKey: "",
-        githubToken: "",
-        agentToolLoopSteps: "unlimited",
-        autoReflectionEnabled: false,
+        ...defaultSettings(),
         autoApproveWorkspaceEdits: true,
       },
-      confirm,
-      askQuestion: async () => ({
-        callId: "question",
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      }),
-      sendSubAgent: async () => "sub-agent result",
-    };
+    });
+    const actions = makeActions({ confirm });
     const write = createBuiltInTools().find((tool) => tool.name === "write");
 
     const result = await write?.execute({
       filePath: "inside.txt",
       content: "inside",
-    }, ctx);
+    }, env, actions);
 
     expect(result?.content).toContain("Successfully wrote");
     expect(await readFile(join(workspaceRoot, "inside.txt"), "utf-8")).toBe("inside");
@@ -286,24 +248,13 @@ describe("built-in harness tools", () => {
   it("emits task updates from the updateTasks tool", async () => {
     const workspaceRoot = await makeTempDir();
     const emit = vi.fn();
-    const ctx: ToolExecutionContext = {
-      workspaceRoot,
-      mode: "act",
-      emit,
-      confirm: async () => ({ callId: "confirm", approved: true }),
-      askQuestion: async () => ({
-        callId: "question",
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      }),
-      sendSubAgent: async () => "sub-agent result",
-    };
+    const env = makeEnv({ workspaceRoot, mode: "act", emit: emit as unknown as ToolEnv["emit"] });
+    const actions = makeActions();
     const updateTasks = createBuiltInTools().find((tool) => tool.name === "updateTasks");
 
     const result = await updateTasks?.execute({
       tasks: [{ id: "one", text: "Do one thing", status: "in-progress" }],
-    }, ctx);
+    }, env, actions);
 
     expect(result?.content).toBe("Updated 1 tasks.");
     expect(emit).toHaveBeenCalledWith("tasks_updated", {
@@ -319,25 +270,15 @@ describe("built-in harness tools", () => {
       callId: request.toolName,
       approved: true,
     }));
-    const ctx: ToolExecutionContext = {
-      workspaceRoot,
-      mode: "act",
-      confirm,
-      askQuestion: async () => ({
-        callId: "question",
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      }),
-      sendSubAgent: async () => "sub-agent result",
-    };
+    const env = makeEnv({ workspaceRoot, mode: "act" });
+    const actions = makeActions({ confirm });
     const edit = createBuiltInTools().find((tool) => tool.name === "edit");
 
     const result = await edit?.execute({
       filePath: "test.txt",
       oldText: "before block after",
       newText: "before updated after",
-    }, ctx);
+    }, env, actions);
 
     expect(result?.content).toContain("Successfully replaced the block in test.txt.");
     expect(result?.content).toContain("--- test.txt");
@@ -355,25 +296,15 @@ describe("built-in harness tools", () => {
       callId: request.toolName,
       approved: true,
     }));
-    const ctx: ToolExecutionContext = {
-      workspaceRoot,
-      mode: "act",
-      confirm,
-      askQuestion: async () => ({
-        callId: "question",
-        answer: "",
-        isManual: true,
-        cancelled: true,
-      }),
-      sendSubAgent: async () => "sub-agent result",
-    };
+    const env = makeEnv({ workspaceRoot, mode: "act", backupDir: "" });
+    const actions = makeActions({ confirm });
     const edit = createBuiltInTools().find((tool) => tool.name === "edit");
 
     const result = await edit?.execute({
       filePath: outsideFile,
       oldText: "before",
       newText: "after",
-    }, ctx);
+    }, env, actions);
 
     expect(result?.content).toContain(outsideFile);
     expect(await readFile(outsideFile, "utf-8")).toBe("after");

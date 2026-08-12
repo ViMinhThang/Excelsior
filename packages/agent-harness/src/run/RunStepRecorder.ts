@@ -1,7 +1,7 @@
 import type { TextStreamPart, ToolSet } from "ai";
 import type { AgentMessage } from "@excelsior/core";
 import { ERROR, type HarnessEventEmitter } from "../events.js";
-import { RunEventWriter } from "../context/RunEventWriter.js";
+import { RunEventWriter } from "./RunEventWriter.js";
 
 type StepToolCall = {
   id: string;
@@ -97,12 +97,10 @@ export class RunStepRecorder {
   finish(): RunStepResult {
     if (this.status === "completed") {
       this.input.writer.endMessage();
-    } else {
+    } else if (this.status === "failed") {
       this.input.writer.flushAllToolUpdates();
       this.input.writer.finalizeIncompleteTools(
-        this.status === "cancelled"
-          ? "Tool execution was cancelled before the tool input completed."
-          : `Tool input failed before execution.${this.failureMessage ? ` ${this.failureMessage}` : ""}`,
+        `Tool input failed before execution.${this.failureMessage ? ` ${this.failureMessage}` : ""}`,
       );
     }
 

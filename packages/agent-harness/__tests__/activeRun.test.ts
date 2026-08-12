@@ -225,15 +225,10 @@ describe("ActiveRunManager", () => {
         data: { cancelled: true },
       }),
     ]));
-    expect(activeRun.isRunFinalized("run_cancel")).toBe(true);
 
     activeRun.clear(handle);
 
     expect(activeRun.isActive()).toBe(false);
-    expect(activeRun.isRunFinalized("run_cancel")).toBe(true);
-
-    activeRun.finish(handle);
-
-    expect(activeRun.isRunFinalized("run_cancel")).toBe(false);
+    expect(activeRun.currentIdentity()).toBeNull();
   });
 });

@@ -16,13 +16,13 @@ export function createUpdateTasksTool(): HarnessTool<z.infer<typeof taskSchema>>
     name: "updateTasks",
     description: "Replace the visible TUI task checklist for the current turn. Use this before and during implementation work.",
     inputSchema: taskSchema,
-    async execute({ tasks }, ctx) {
+    async execute({ tasks }, env) {
       const projected = tasks.map((task, index) => ({
         id: task.id || `task_${index + 1}`,
         text: task.text,
         status: task.status,
       }));
-      ctx.emit?.(TASKS_UPDATED, { tasks: projected });
+      env.emit(TASKS_UPDATED, { tasks: projected });
       return text(projected.length === 0 ? "Cleared task checklist." : `Updated ${projected.length} tasks.`);
     },
   };

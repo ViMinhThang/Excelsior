@@ -9,13 +9,11 @@ import {
   buildRunContext,
   loadProjectInstructions,
   type LspClient,
-  ProviderRegistry,
   revertLastCompletedTurn,
   toModelMessages,
-  ToolRegistry,
   type HarnessSettings,
 } from "@excelsior/agent-harness";
-import { projectEvents } from "../src/projection.js";
+import { projectEvents } from "../src/projection/index.js";
 import { buildRunAssembly, type RunAssemblyInput } from "../src/context/runAssembly.js";
 import {
   type HarnessEventEmitter,
@@ -152,8 +150,6 @@ describe("harness context helpers", () => {
       userContent: "inspect the repo",
       mode: "plan" satisfies AgentMode,
       settings,
-      providers: new ProviderRegistry(),
-      tools: new ToolRegistry(),
       lsp,
       confirm: async (request) => ({ callId: request.toolName, approved: true }),
       askQuestion: async () => ({ callId: "question", answer: "", isManual: true, cancelled: true }),
@@ -169,14 +165,13 @@ describe("harness context helpers", () => {
       content: expect.stringMatching(/current mode:/),
     }));
     expect(assembly.runContext.systemPrompt).toContain("Keep context assembly boring.");
-    expect(assembly.toolContext.mode).toBe("plan");
-    expect(assembly.toolContext.lsp).toBe(lsp);
-    expect(assembly.toolContext.projectInstructions).toBe("Keep context assembly boring.");
-    expect(assembly.toolContext.backupDir).toBe(join(storageRoot, "backups", "ws_test", "ses_test", "turn_test"));
-    await expect(assembly.toolContext.sendSubAgent({
-      role: "Explore",
-      prompt: "find coupling",
-    })).resolves.toBe("Plan-only analysis from Explore:\nfind coupling");
+    expect(assembly.toolEnv.mode).toBe("plan");
+    expect(assembly.toolEnv.lsp).toBe(lsp);
+    expect(assembly.toolEnv.settings).toBe(settings);
+    expect(assembly.toolEnv.projectInstructions).toBe("Keep context assembly boring.");
+    expect(assembly.toolEnv.backupDir).toBe(join(storageRoot, "backups", "ws_test", "ses_test", "turn_test"));
+    expect(assembly.toolActions.confirm).toBe(assemblyInput.confirm);
+    expect(assembly.toolActions.askQuestion).toBe(assemblyInput.askQuestion);
 
     const emitted = assembly.emit(MESSAGE_END, {
       message: { id: "msg_test", role: "assistant", content: "done" },

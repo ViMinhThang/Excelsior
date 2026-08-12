@@ -13,14 +13,16 @@ export function createSpawnSubAgentTool(): HarnessTool<z.infer<typeof spawnSubAg
     name: "spawnSubAgent",
     description: "Run a focused sub-agent for specialized analysis.",
     inputSchema: spawnSubAgentSchema,
-    async execute(input, ctx, options) {
+    async execute(input, env, _actions, options) {
       const parentToolCallId = options?.toolCallId;
-      if (!parentToolCallId) return text(await ctx.sendSubAgent(input));
+      if (!parentToolCallId) {
+        return text("spawnSubAgent requires an active tool call.", true);
+      }
       return runSpawnedSubAgent({
         role: input.role,
         prompt: input.prompt,
         parentToolCallId,
-        ctx,
+        env,
       });
     },
   };

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ConfirmationRouter } from "../src/ConfirmationRouter.js";
+import { ConfirmationRouter } from "../src/harness/ConfirmationRouter.js";
 import type { ConfirmRequest, ConfirmResponse } from "@excelsior/core";
 
 function request(callId: string): ConfirmRequest {

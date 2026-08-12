@@ -16,8 +16,10 @@ import {
   type AnyHarnessEvent,
   type HarnessEventEmitter,
 } from "../src/events.js";
-import { ProviderRegistry, ToolRegistry } from "../src/registries.js";
+import { ProviderRegistry, ToolRegistry } from "../src/registries/registries.js";
 import { runAgentLoop } from "../src/run/RunController.js";
+import { runModelStep } from "../src/run/runModelStep.js";
+import { RunEventWriter } from "../src/run/RunEventWriter.js";
 
 describe("RunController", () => {
   it("emits a complete run lifecycle for streamed assistant text", async () => {
@@ -80,9 +82,19 @@ describe("RunController", () => {
       },
       providers,
       tools: new ToolRegistry(),
-      toolContext: {
+      toolEnv: {
         workspaceRoot: process.cwd(),
         mode: "act",
+        emit,
+        settings: {
+          deepseekApiKey: "test",
+          githubToken: "",
+          agentToolLoopSteps: "unlimited",
+          autoReflectionEnabled: false,
+        },
+        backupDir: process.cwd(),
+      },
+      toolActions: {
         confirm: async (request) => ({ callId: request.toolName, approved: true }),
         askQuestion: async () => ({
           callId: "question",
@@ -90,7 +102,6 @@ describe("RunController", () => {
           isManual: true,
           cancelled: true,
         }),
-        sendSubAgent: async () => "",
       },
       signal: new AbortController().signal,
       emit,
@@ -220,9 +231,19 @@ describe("RunController", () => {
       },
       providers,
       tools,
-      toolContext: {
+      toolEnv: {
         workspaceRoot: process.cwd(),
         mode: "act",
+        emit,
+        settings: {
+          deepseekApiKey: "test",
+          githubToken: "",
+          agentToolLoopSteps: "unlimited",
+          autoReflectionEnabled: false,
+        },
+        backupDir: process.cwd(),
+      },
+      toolActions: {
         confirm: async (request) => ({ callId: request.toolName, approved: true }),
         askQuestion: async () => ({
           callId: "question",
@@ -230,7 +251,6 @@ describe("RunController", () => {
           isManual: true,
           cancelled: true,
         }),
-        sendSubAgent: async () => "",
       },
       signal: new AbortController().signal,
       emit,
@@ -330,9 +350,19 @@ describe("RunController", () => {
       },
       providers,
       tools,
-      toolContext: {
+      toolEnv: {
         workspaceRoot: process.cwd(),
         mode: "act",
+        emit,
+        settings: {
+          deepseekApiKey: "test",
+          githubToken: "",
+          agentToolLoopSteps: "unlimited",
+          autoReflectionEnabled: false,
+        },
+        backupDir: process.cwd(),
+      },
+      toolActions: {
         confirm: async (request) => ({ callId: request.toolName, approved: true }),
         askQuestion: async () => ({
           callId: "question",
@@ -340,7 +370,6 @@ describe("RunController", () => {
           isManual: true,
           cancelled: true,
         }),
-        sendSubAgent: async () => "",
       },
       signal: new AbortController().signal,
       emit,
@@ -450,9 +479,19 @@ describe("RunController", () => {
       },
       providers,
       tools,
-      toolContext: {
+      toolEnv: {
         workspaceRoot: process.cwd(),
         mode: "act",
+        emit,
+        settings: {
+          deepseekApiKey: "test",
+          githubToken: "",
+          agentToolLoopSteps: "unlimited",
+          autoReflectionEnabled: false,
+        },
+        backupDir: process.cwd(),
+      },
+      toolActions: {
         confirm: async (request) => ({ callId: request.toolName, approved: true }),
         askQuestion: async () => ({
           callId: "question",
@@ -460,7 +499,6 @@ describe("RunController", () => {
           isManual: true,
           cancelled: true,
         }),
-        sendSubAgent: async () => "",
       },
       signal: new AbortController().signal,
       emit,
@@ -470,5 +508,70 @@ describe("RunController", () => {
 
     expect(updates).toHaveLength(1);
     expect(updates[0]?.data.delta).toBe(chunks.join(""));
+  });
+
+  it("emits nothing for a step cancelled before the model starts", async () => {
+    const events: AnyHarnessEvent[] = [];
+    let sequence = 0;
+    const emit: HarnessEventEmitter = (type, data, options) => {
+      const event = makeHarnessEvent({
+        workspaceId: "ws_test",
+        sessionId: "ses_test",
+        runId: "run_test",
+        turnId: options?.turnId ?? "turn_test",
+        sequence: ++sequence,
+        type,
+        data,
+        relatedToolCallId: options?.relatedToolCallId,
+        parentEventId: options?.parentEventId,
+      });
+      events.push(event as AnyHarnessEvent);
+      return event;
+    };
+
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await runModelStep({
+      messages: [{ role: "user", content: "hello" }],
+      systemPrompt: "test system prompt",
+      settings: {
+        deepseekApiKey: "test",
+        githubToken: "",
+        agentToolLoopSteps: "unlimited",
+        autoReflectionEnabled: false,
+      },
+      providers: new ProviderRegistry(),
+      tools: new ToolRegistry(),
+      toolEnv: {
+        workspaceRoot: process.cwd(),
+        mode: "act",
+        emit,
+        settings: {
+          deepseekApiKey: "test",
+          githubToken: "",
+          agentToolLoopSteps: "unlimited",
+          autoReflectionEnabled: false,
+        },
+        backupDir: process.cwd(),
+      },
+      toolActions: {
+        confirm: async (request) => ({ callId: request.toolName, approved: true }),
+        askQuestion: async () => ({
+          callId: "question",
+          answer: "",
+          isManual: true,
+          cancelled: true,
+        }),
+      },
+      signal: controller.signal,
+      emit,
+      writer: new RunEventWriter(emit),
+      runPrefix: "cancelled",
+    });
+
+    expect(result.status).toBe("cancelled");
+    expect(result.hasToolCalls).toBe(false);
+    expect(events).toEqual([]);
   });
 });
