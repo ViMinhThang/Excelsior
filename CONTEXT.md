@@ -1,25 +1,29 @@
 # Excelsior Context
 
-Excelsior is a local coding-agent workspace with terminal and desktop clients.
+Excelsior is a local coding-agent workspace with a terminal client driven by a persistent engine daemon.
 
 ## Domain Vocabulary
 
-- Workspace: a project root selected by the user. It owns sessions, settings, and the file tree shown by clients.
-- Session: a chat thread inside a workspace. A session has projected transcript blocks and persisted run events.
+- Workspace: a project root selected by the user. The engine is bound to one workspace per process and owns its sessions, settings, and file tree.
+- Session: a chat thread inside a workspace. A session has persisted state, committed transcript blocks, and an interaction slot (pending confirmation or question).
 - Turn: one user request and the agent work that follows. Completed turns are checkpointed so history can be replayed safely after interruption.
-- Run: an eventful execution unit that emits typed events, supports cancellation, and persists every harness event.
-- Transcript: the user-facing projection of events into chat blocks.
-- Tool display: the presentation model for a tool call, including command text, status, result preview, risk, and optional file-change preview.
+- Run: an eventful execution unit that emits typed deltas, supports cancellation, and commits its transcript blocks when finished.
+- Transcript: the committed projection of turns into user, assistant, and tool-call blocks stored with the session.
+- Tool display: the presentation model for a tool call, including status, result preview, and risk.
 - File-change preview: a parsed diff model used by clients to show pending or completed edits.
-- Language diagnostics: lazily collected language-server feedback attached to file tool results after the agent reads or edits a supported source file.
-- Command catalog: the available slash commands and settings shown by clients.
-- Agent host: the adapter behind client actions. Clients should use package interfaces instead of importing host internals.
+- Command catalog: the slash commands and settings surfaced by the engine.
+- Engine daemon: the stdio process hosting `createEngine`. Clients should never import engine internals.
+- Agent client: the client-facing host interface in `@excelsior/client`; clients drive the engine through it over the transport.
 
 ## Architecture Notes
 
-- `@excelsior/core` contains shared data contracts and presentation models used by multiple clients.
-- `@excelsior/client` is the client-facing host interface and must remain independent from host and app implementations.
-- `@excelsior/agent-harness` owns runtime execution, event storage, settings, sessions, registries, confirmation/question state, and projection to `AgentClientState`.
-- `@excelsior/agent-harness` also owns language diagnostics; clients receive them as ordinary tool result text rather than managing language-server processes.
-- `@excelsior/agent-host` is a thin adapter layer that exposes `HarnessAgentHost`, default host creation, and runtime initialization for app clients.
-- TUI and desktop clients should keep rendering modules thin by moving reusable policy and model logic into `@excelsior/core` or `@excelsior/agent-harness`.
+- `@excelsior/protocol` contains the wire contract (v2 envelopes, commands, requests, deltas, snapshots) and the transports (stdio, in-process). It has zero dependencies and must stay dependency-free.
+- `@excelsior/engine` owns the daemon assembly: session and run stores, the mutation path, interaction manager, capability policies, sync service, responder, and the turn executor (ai-sdk `streamText` with DeepSeek). The entrypoint wires it to stdio.
+- `@excelsior/engine` also owns tools, permissions (plan/act modes), and settings persistence. Clients receive everything as protocol deltas.
+- `@excelsior/client` is the client-side host: read model, agent client, and presentation. It must remain independent from engine and app implementations.
+- TUI and desktop clients should keep rendering modules thin by moving reusable policy and model logic into `@excelsior/client` or `@excelsior/engine`.
+- The v1 legacy stack (harness, host, core packages, reflection, LSP, GitHub integration, skills, subagents, compaction) was decommissioned in v2; `scripts/check-boundaries.mjs` bans references to it.
+
+## Specs
+
+The v2 build is driven by numbered specs in `docs/` (00-vision through 12-tui-build), each with an acceptance checklist.

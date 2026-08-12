@@ -1,26 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "noEmit": true,
-    "paths": {
-      "@/*": [
-        "./apps/desktop/src/renderer/*.ts",
-        "./apps/desktop/src/renderer/*.tsx",
-        "./apps/desktop/src/renderer/*/index.ts",
-        "./apps/desktop/src/renderer/*/index.tsx"
-      ]
-    }
+    "noEmit": true
   },
   "include": [
-    "src/__tests__",
     "packages/*/src",
-    "packages/*/__tests__",
-    "apps/*/src",
-    "apps/*/__tests__"
-  ],
-  "exclude": [
-    "apps/tui/src",
-    "apps/tui/__tests__",
-    "apps/desktop/src/renderer"
+    "packages/*/__tests__"
   ]
 }

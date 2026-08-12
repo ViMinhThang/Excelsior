@@ -6,20 +6,16 @@ const workspaceRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 const packages = [
   {
-    source: "dist/packages/core/src",
-    target: "packages/core/dist",
+    source: "dist/packages/protocol/src",
+    target: "packages/protocol/dist",
   },
   {
-    source: "dist/packages/agent-host/src",
-    target: "packages/agent-host/dist",
+    source: "dist/packages/engine/src",
+    target: "packages/engine/dist",
   },
   {
-    source: "dist/packages/agent-harness/src",
-    target: "packages/agent-harness/dist",
-  },
-  {
-    source: "dist/apps/tui/src",
-    target: "apps/tui/dist",
+    source: "dist/packages/client/src",
+    target: "packages/client/dist",
   },
 ];
 

@@ -1,15 +1,12 @@
 import { useKeyboard } from "@opentui/react";
-import type { KeyEvent } from "@opentui/core";
 import { useRef } from "react";
+import type { KeyEvent } from "@opentui/core";
+import type { TuiKey } from "../../routing/keys.js";
 import { keyEventToTuiKey } from "./keyAdapter.js";
-import type { TuiKey } from "../../lib/tuiKey.js";
 
 type InputHandler = (input: string, key: TuiKey, event: KeyEvent) => void;
 
-export function useKeyboardInput(
-  handler: InputHandler,
-  options: { isActive?: boolean } = {},
-) {
+export function useKeyboardInput(handler: InputHandler, options: { isActive?: boolean } = {}): void {
   const { isActive = true } = options;
   const handlerRef = useRef(handler);
   handlerRef.current = handler;

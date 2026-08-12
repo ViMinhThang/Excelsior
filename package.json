@@ -8,58 +8,32 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "bun --env-file=.env --conditions development apps/tui/src/index.ts",
-    "dev:tui": "bun --env-file=.env --conditions development apps/tui/src/index.ts",
-    "dev:desktop": "npm run --workspace=apps/desktop dev",
-    "start": "node dist/apps/tui/src/index.js",
-    "build": "node scripts/build.mjs",
-    "build:linux": "npx bun build apps/tui/src/index.ts --compile --outfile release/excelsior-tui --external @opentui/core-linux-x64-musl --external @opentui/core-linux-arm64-gnu --external @opentui/core-linux-arm64-musl --external @opentui/core-darwin-x64 --external @opentui/core-darwin-arm64 --external @opentui/core-win32-x64-msvc",
-    "build:tui:exe": "bun build apps/tui/src/index.ts --compile --outfile release/excelsior-tui.exe",
-    "build:desktop": "npm run --workspace=apps/desktop build",
-    "check": "npm run typecheck && npm run typecheck:test && npm run check:unused && npm run check:test-unused && npm test && npm run build",
+    "check": "npm run typecheck && npm run typecheck:test && npm run check:unused && npm run check:test-unused && npm test && npm run build && npm run check:boundaries",
     "typecheck": "tsc --noEmit && tsc -p apps/tui/tsconfig.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json && tsc -p apps/tui/tsconfig.test.json",
-    "check:unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
-    "check:test-unused": "tsc -p tsconfig.test.json --noEmit --noUnusedLocals --noUnusedParameters",
+    "check:unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters && tsc -p apps/tui/tsconfig.json --noEmit --noUnusedLocals --noUnusedParameters",
+    "check:test-unused": "tsc -p tsconfig.test.json --noEmit --noUnusedLocals --noUnusedParameters && tsc -p apps/tui/tsconfig.test.json --noEmit --noUnusedLocals --noUnusedParameters",
     "test": "vitest run",
-    "test:agent-host": "vitest run packages/agent-host/__tests__/harnessAgentHost.test.ts",
-    "test:arch": "vitest run src/__tests__/architecture.test.ts",
-    "test:projection": "vitest run packages/agent-harness/__tests__/projection.test.ts",
-    "test:runtime": "vitest run packages/agent-harness/__tests__/runController.test.ts packages/agent-harness/__tests__/harness.test.ts packages/agent-harness/__tests__/inspector.test.ts packages/agent-harness/__tests__/context.test.ts",
-    "test:tools": "vitest run packages/agent-harness/__tests__/tools.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build": "node scripts/build.mjs",
+    "dev:engine": "node --import tsx --conditions development packages/engine/src/entrypoint.ts",
+    "dev:tui": "bun --conditions development apps/tui/src/main.tsx",
+    "dev:tui:node": "node --import tsx --conditions development apps/tui/src/main.tsx",
+    "check:boundaries": "node scripts/check-boundaries.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "@ai-sdk/deepseek": "^2.0.32",
-    "@octokit/rest": "^22.0.1",
-    "@opentui/core": "^0.3.2",
-    "@opentui/react": "^0.3.2",
-    "ai": "^6.0.175",
-    "chalk": "^5.6.2",
-    "cli-highlight": "^2.1.11",
-    "marked": "^18.0.3",
-    "react": "^19.2.7",
-    "string-width": "^8.2.1",
-    "zod": "^4.4.3"
-  },
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "@types/react": "^19.2.14",
-    "@types/react-test-renderer": "^19.1.0",
     "bun": "^1.3.14",
-    "react-test-renderer": "^19.2.7",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
   "allowScripts": {
     "esbuild@0.21.5": true,
-    "bun@1.3.14": true,
-    "electron@34.5.8": true,
-    "msw@2.14.6": true,
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "bun@1.3.14": true
   }
 }

@@ -16,7 +16,8 @@ vi.mock("@opentui/core", () => ({
 }));
 
 vi.mock("@opentui/react", () => ({
-  useKeyboard: () => {},
+  createRoot: vi.fn(() => ({ render: vi.fn(), unmount: vi.fn() })),
+  useKeyboard: vi.fn(() => {}),
   useRenderer: () => ({
     destroy: rendererMocks.destroy,
     width: rendererMocks.terminalWidth,
@@ -27,7 +28,7 @@ vi.mock("@opentui/react", () => ({
     resize: rendererMocks.resize,
   }),
   useTerminalDimensions: () => ({
-    columns: rendererMocks.terminalWidth,
-    rows: rendererMocks.terminalHeight,
+    width: rendererMocks.terminalWidth,
+    height: rendererMocks.terminalHeight,
   }),
 }));

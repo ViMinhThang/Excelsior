@@ -6,6 +6,7 @@
     "moduleResolution": "NodeNext",
     "jsx": "react-jsx",
     "lib": ["ESNext", "DOM"],
+    "types": ["node"],
     "rootDir": ".",
     "outDir": "./dist",
     "esModuleInterop": true,
@@ -14,13 +15,6 @@
     "skipLibCheck": true
   },
   "include": [
-    "src",
-    "packages/*/src",
-    "apps/*/src"
-  ],
-  "exclude": [
-    "src/__tests__",
-    "apps/desktop/src/renderer",
-    "apps/tui/src"
+    "packages/*/src"
   ]
 }

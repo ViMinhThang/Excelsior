@@ -1,155 +1,144 @@
-import { memo, type FC, type ReactNode } from "react";
+import { memo } from "react";
 import {
   createToolDisplay,
   createToolDisplayPresentation,
-  type ToolDisplayBody,
-} from "@excelsior/core";
+} from "@excelsior/client";
+import type { TranscriptBlock, ToolCallBlock } from "@excelsior/protocol";
+import type { ThemeTokens } from "../../theme/tokens.js";
 import { textAttrs } from "../../platform/opentui/textAttributes.js";
-import { theme } from "../../theme.js";
 import { FileChangePreviewView } from "../diff/FileChangePreviewView.js";
-import { ToolHeader, FileChangeToolHeader } from "./toolMessage/ToolHeader.js";
-import { TaskPreviewBody } from "./toolMessage/TaskPreviewBody.js";
-import { WritingProgressStats } from "./toolMessage/WritingProgressStats.js";
 
-interface ToolMessageProps {
-  toolName?: string;
-  toolArgs?: string;
-  status?: "pending" | "completed" | "error";
-  content?: string;
-  marginTop?: number;
-  nested?: boolean;
-  expanded?: boolean;
+export interface ToolMessageProps {
+  block: TranscriptBlock;
+  tokens: ThemeTokens;
+  width: number;
+  toolsExpanded: boolean;
+  terminalColumns: number;
 }
 
-function renderBody(body: ToolDisplayBody, nested: boolean): ReactNode {
-  switch (body.kind) {
-    case "none":
-      return null;
-    case "progressStats":
-      return (
-        <WritingProgressStats
-          added={body.stats.added}
-          removed={body.stats.removed}
-        />
-      );
-    case "taskPreview":
-      return (
-        <TaskPreviewBody
-          tasks={body.tasks}
-          completed={body.completed}
-          total={body.total}
-          nested={nested}
-        />
-      );
-    case "summary":
+function toToolStatus(tool: ToolCallBlock): "completed" | "error" {
+  if (tool.isError || tool.status === "failed") return "error";
+  return "completed";
+}
+
+export const ToolMessage = memo(
+  function ToolMessage({ block, tokens, width, toolsExpanded, terminalColumns }: ToolMessageProps) {
+    const tool = block.tool;
+    if (!tool) return null;
+    const status = toToolStatus(tool);
+    const display = createToolDisplay({
+      toolName: tool.toolName,
+      toolArgs: tool.args,
+      status,
+      content: tool.result,
+    });
+    const presentation = createToolDisplayPresentation({ display, status, content: tool.result });
+    const toneColor = display.tone === "error" ? tokens.error : display.tone === "success" ? tokens.success : tokens.activity;
+
+    return (
+      <box flexDirection="column" width={width} backgroundColor={tokens.toolPanel} paddingX={1} paddingY={0}>
+        <box flexDirection="row" gap={1} width={width}>
+          <text fg={toneColor} attributes={textAttrs({ bold: true })} truncate>
+            {display.command}
+          </text>
+          {display.summaryLine ? (
+            <text fg={tokens.toolArgs} attributes={textAttrs({ dim: true })} truncate>
+              {display.summaryLine}
+            </text>
+          ) : null}
+          {presentation.diffStats ? (
+            <text fg={tokens.diffAddedText} attributes={textAttrs({ dim: true })}>
+              {presentation.diffStats}
+            </text>
+          ) : null}
+        </box>
+        {toolsExpanded ? <ToolBody tool={tool} tokens={tokens} width={width} terminalColumns={terminalColumns} /> : null}
+      </box>
+    );
+  },
+  (prev, next) =>
+    prev.block.id === next.block.id &&
+    prev.block.status === next.block.status &&
+    prev.toolsExpanded === next.toolsExpanded,
+);
+
+function ToolBody({ tool, tokens, width, terminalColumns }: { tool: ToolCallBlock; tokens: ThemeTokens; width: number; terminalColumns: number }) {
+  const status = toToolStatus(tool);
+  const display = createToolDisplay({
+    toolName: tool.toolName,
+    toolArgs: tool.args,
+    status,
+    content: tool.result,
+  });
+  const presentation = createToolDisplayPresentation({ display, status, content: tool.result });
+
+  if (presentation.hasFileChangePreview && display.fileChangePreview) {
+    return (
+      <FileChangePreviewView
+        preview={display.fileChangePreview}
+        tokens={tokens}
+        terminalColumns={terminalColumns}
+        hideRemovedRows={false}
+      />
+    );
+  }
+
+  switch (presentation.body.kind) {
     case "detail":
       return (
-        <box flexDirection="row" paddingLeft={2}>
-          <text fg={theme.colors.muted} attributes={textAttrs({ dim: nested })}>
-            {theme.glyphs.branch} {body.text}
-          </text>
-        </box>
+        <text fg={tokens.secondary} wrapMode="char" width={width}>
+          {presentation.body.text}
+        </text>
+      );
+    case "summary":
+      return (
+        <text fg={tokens.secondary} wrapMode="char" width={width}>
+          {presentation.body.text}
+        </text>
       );
     case "preview":
       return (
-        <box flexDirection="column" paddingLeft={2} width="100%">
-          {body.lines.map((line, index) => {
-            const prefix = index === 0 ? "-> " : "   ";
-            return <text key={`preview_line_${index}`} fg={theme.colors.muted}>{prefix}{line}</text>;
-          })}
-          {body.omittedLines ? (
-            <text fg={theme.colors.muted}>{`   ... ${body.omittedLines} more lines`}</text>
+        <box flexDirection="column" width={width}>
+          {presentation.body.lines.map((line, index) => (
+            <text key={index} fg={tokens.secondary} wrapMode="char" width={width}>
+              {line}
+            </text>
+          ))}
+          {presentation.body.omittedLines ? (
+            <text fg={tokens.muted} attributes={textAttrs({ dim: true })}>
+              {`… ${presentation.body.omittedLines} more lines`}
+            </text>
           ) : null}
         </box>
       );
     case "completion":
       return (
-        <box flexDirection="column" paddingLeft={2} width="100%">
-          <text fg={theme.colors.muted}>{"-> "}{body.text}</text>
+        <text fg={tokens.success} attributes={textAttrs({ dim: true })}>
+          {presentation.body.text}
+        </text>
+      );
+    case "progressStats": {
+      const stats = presentation.body.stats;
+      return (
+        <text fg={tokens.activity}>
+          {`writing: +${stats.added} -${stats.removed}`}
+        </text>
+      );
+    }
+    case "taskPreview": {
+      const body = presentation.body;
+      return (
+        <box flexDirection="column" width={width}>
+          {body.tasks.map((task) => (
+            <text key={task.id} fg={task.status === "done" ? tokens.success : task.status === "in-progress" ? tokens.highlight : tokens.muted}>
+              {`${task.status === "done" ? "✓" : task.status === "in-progress" ? "●" : "○"} ${task.text}`}
+            </text>
+          ))}
         </box>
       );
+    }
+    case "none":
+    default:
+      return null;
   }
 }
-
-const ToolMessage: FC<ToolMessageProps> = ({
-  toolName,
-  toolArgs,
-  status = "completed",
-  content,
-  marginTop,
-  nested = false,
-  expanded = false,
-}) => {
-  const display = createToolDisplay({ toolName, toolArgs, status, content });
-  const presentation = createToolDisplayPresentation({ display, status, content });
-  const expandable = !nested && presentation.expandable;
-  const showCollapsedBody = status === "pending" && toolName === "runCommand";
-
-  const toolShell = (body: ReactNode, fullWidth = false) => (
-    <box
-      marginTop={marginTop}
-      paddingLeft={nested || fullWidth ? 0 : theme.spacing.indent}
-      paddingBottom={0}
-      width="100%"
-      backgroundColor={nested ? theme.colors.subAgentToolBackground : undefined}
-      border={nested ? ["left"] : undefined}
-      borderColor={nested ? theme.colors.subAgentToolBorder : undefined}
-      paddingX={nested ? 1 : 0}
-    >
-      {body}
-    </box>
-  );
-
-  if (presentation.hasFileChangePreview && display.fileChangePreview) {
-    return toolShell(
-      <box flexDirection="column" width="100%">
-        <box paddingLeft={nested ? 0 : theme.spacing.indent}>
-          <FileChangeToolHeader
-            label={display.label}
-            filePath={display.fileChangePreview.filePath}
-            expandable={expandable && !expanded}
-            subAgent={nested}
-            diffStats={!expanded ? presentation.diffStats : undefined}
-          />
-        </box>
-        <box width="100%">
-          <FileChangePreviewView
-            preview={display.fileChangePreview}
-            focused={expanded}
-            embedded
-          />
-        </box>
-      </box>,
-      true,
-    );
-  }
-
-  if (!expanded) {
-    return toolShell(
-      <box flexDirection="column" width="100%">
-        <ToolHeader
-          status={status}
-          cmd={display.command}
-          activity={display.activityLabel}
-          expandable={expandable}
-          subAgent={nested}
-        />
-        {showCollapsedBody ? renderBody(presentation.body, nested) : null}
-      </box>,
-    );
-  }
-
-  return toolShell(
-    <box flexDirection="column" width="100%">
-      <ToolHeader
-        status={status}
-        cmd={display.command}
-        activity={display.activityLabel}
-        subAgent={nested}
-      />
-      {renderBody(presentation.body, nested)}
-    </box>,
-  );
-};
-
-export default memo(ToolMessage);

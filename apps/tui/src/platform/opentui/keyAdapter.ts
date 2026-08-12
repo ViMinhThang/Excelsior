@@ -1,28 +1,12 @@
 import type { KeyEvent } from "@opentui/core";
-import type { TuiKey } from "../../lib/tuiKey.js";
+import { isNamedKey, type TuiKey } from "../../routing/keys.js";
 
-const NAMED_KEYS = new Set([
-  "return",
-  "escape",
-  "tab",
-  "backspace",
-  "delete",
-  "up",
-  "down",
-  "left",
-  "right",
-  "home",
-  "end",
-  "pageup",
-  "pagedown",
-  "space",
-]);
-
-function isNamedKey(name: string): boolean {
-  return NAMED_KEYS.has(name);
+export interface MappedKey {
+  input: string;
+  key: TuiKey;
 }
 
-export function keyEventToTuiKey(key: KeyEvent): { input: string; key: TuiKey } {
+export function keyEventToTuiKey(key: KeyEvent): MappedKey {
   const tuiKey: TuiKey = {
     ctrl: key.ctrl || undefined,
     meta: key.meta || undefined,
@@ -38,6 +22,8 @@ export function keyEventToTuiKey(key: KeyEvent): { input: string; key: TuiKey } 
     delete: key.name === "delete",
     pageUp: key.name === "pageup",
     pageDown: key.name === "pagedown",
+    home: key.name === "home",
+    end: key.name === "end",
   };
 
   let input = "";

@@ -1,6 +1,6 @@
 import { TextAttributes } from "@opentui/core";
 
-export interface TextStyleOptions {
+export interface TextAttrs {
   bold?: boolean;
   dim?: boolean;
   italic?: boolean;
@@ -8,12 +8,12 @@ export interface TextStyleOptions {
   inverse?: boolean;
 }
 
-export function textAttrs(options: TextStyleOptions = {}): number | undefined {
-  let attrs = 0;
-  if (options.bold) attrs |= TextAttributes.BOLD;
-  if (options.dim) attrs |= TextAttributes.DIM;
-  if (options.italic) attrs |= TextAttributes.ITALIC;
-  if (options.underline) attrs |= TextAttributes.UNDERLINE;
-  if (options.inverse) attrs |= TextAttributes.INVERSE;
-  return attrs || undefined;
+export function textAttrs(attrs: TextAttrs = {}): number {
+  let value = TextAttributes.NONE;
+  if (attrs.bold) value |= TextAttributes.BOLD;
+  if (attrs.dim) value |= TextAttributes.DIM;
+  if (attrs.italic) value |= TextAttributes.ITALIC;
+  if (attrs.underline) value |= TextAttributes.UNDERLINE;
+  if (attrs.inverse) value |= TextAttributes.INVERSE;
+  return value;
 }

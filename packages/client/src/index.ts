@@ -1,27 +1,16 @@
-export * from "./hostActions.js";
+export { AgentClient } from "./agentClient.js";
+export {
+  applyDelta,
+  INITIAL_READ_MODEL,
+  EMPTY_SETTINGS,
+} from "./readModel.js";
 export type {
-  AgentHost,
-  AgentHostCatalog,
-  AgentHostCatalogReader,
-  AgentHostDispatchResult,
-  AgentHostDispatcher,
-  AgentHostIntent,
-  AgentHostStateReader,
-  IntentHandler,
-  IntentMiddleware,
-} from "./hostContract.js";
-export type {
-  AgentClientState,
-  AgentMode,
-  AskQuestionOption,
-  AskQuestionRequest,
-  AskQuestionResponse,
-  AppSettings,
-  CommandDefinition,
-  CommandResult,
-  ConfirmRequest,
-  ConfirmResponse,
-  ReflectionClientState,
-  SendOptions,
-  Session,
-} from "@excelsior/core";
+  ReadModel,
+  MetaSlice,
+  CatalogSlice,
+  SessionSlice,
+  RunSlice,
+  SliceKey,
+  ApplyDeltaResult,
+} from "./readModel.js";
+export * from "./presentation.js";

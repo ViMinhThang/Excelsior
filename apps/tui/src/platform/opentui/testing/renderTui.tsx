@@ -15,7 +15,6 @@ function extractText(node: ReactTestInstance | string | number): string {
   if (typeof node === "string" || typeof node === "number") {
     return String(node);
   }
-
   return node.children
     .map((child: ReactTestInstance | string | number) => {
       if (typeof child === "string" || typeof child === "number") {

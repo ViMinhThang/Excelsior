@@ -1,20 +1,23 @@
-import { memo, type FC } from 'react';
-import { theme } from '../../theme.js';
+import { memo } from "react";
+import type { TranscriptBlock } from "@excelsior/protocol";
+import type { ThemeTokens } from "../../theme/tokens.js";
+import { textAttrs } from "../../platform/opentui/textAttributes.js";
 
-interface UserMessageProps {
-  content: string;
-  timestamp?: string;
+export interface UserMessageProps {
+  block: TranscriptBlock;
+  tokens: ThemeTokens;
+  width: number;
 }
 
-const UserMessage: FC<UserMessageProps> = ({ content }) => {
+export const UserMessage = memo(function UserMessage({ block, tokens, width }: UserMessageProps) {
   return (
-    <box flexDirection="row" gap={1} paddingBottom={1}>
-      <text fg={theme.colors.highlightBrand}>●</text>
-      <box flexDirection="column" flexGrow={1}>
-        <text fg={theme.colors.text}>{content}</text>
-      </box>
+    <box flexDirection="column" width={width} backgroundColor={tokens.userPanel} paddingX={1} paddingY={0}>
+      <text fg={tokens.muted} attributes={textAttrs({ dim: true })}>
+        you
+      </text>
+      <text fg={tokens.text} wrapMode="char" width={width}>
+        {block.content}
+      </text>
     </box>
   );
-};
-
-export default memo(UserMessage);
+});

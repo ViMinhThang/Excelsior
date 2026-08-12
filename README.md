@@ -1,143 +1,87 @@
 # Excelsior
 
-Excelsior là trợ lý lập trình AI chạy trong terminal, dùng DeepSeek và giao diện TUI bằng Ink. Dự án được tổ chức theo dạng npm workspaces với các package dùng chung, app TUI và app desktop.
+Excelsior is a local coding agent that runs as a terminal client backed by a
+persistent engine daemon. The agent works inside a workspace: it can read,
+search, and edit files, run commands, and ask for approval before making
+changes.
 
-## Yêu cầu
+## Architecture
 
-- Node.js và npm
+Excelsior v2 is a three-package core with a thin client on top:
+
+```text
+packages/
+|- protocol/   # wire contract: envelopes, commands, requests, deltas, snapshots (zero dependencies)
+|- engine/     # daemon: sessions, runs, turn execution (DeepSeek), tools, permissions, persistence
+|- client/     # client-side host interface: agent client, read model, presentation
+
+apps/
+`- tui/        # terminal client (planned)
+```
+
+- The engine runs as a separate process and speaks a versioned JSON-lines
+  protocol over stdio. Clients connect through `@excelsior/client` and never
+  import engine internals.
+- Every user turn is executed and persisted as a run; committed turns are
+  checkpointed so history survives engine restarts.
+- All events (session state, streamed text, tool activity, confirmation
+  requests, committed blocks) are delivered to clients as scoped deltas.
+
+## Requirements
+
+- Node.js and npm
 - Git
-- Ripgrep (`rg`) nếu muốn công cụ tìm kiếm file hoạt động nhanh và đúng như thiết kế
+- Ripgrep (`rg`) on `PATH` for fast file search
 
-## Cài đặt dự án
-
-Clone repository rồi cài dependencies:
-
-```powershell
-git clone <repository-url>
-cd Excelsior
-npm install
-```
-
-Nếu bạn đã có source code sẵn, chỉ cần mở thư mục dự án và chạy:
+## Setup
 
 ```powershell
 npm install
 ```
 
-## Cấu hình
+## Configuration
 
-Excelsior cần DeepSeek API key để chạy trợ lý AI.
-
-Trên PowerShell:
+The engine needs a DeepSeek API key:
 
 ```powershell
 $env:DEEPSEEK_API_KEY="your-deepseek-api-key"
 ```
 
-Token GitHub là tùy chọn, chỉ cần khi dùng tính năng review pull request:
+The key can also be saved at runtime with the `/settings` command or the
+`settings-save` command.
 
-```powershell
-$env:GITHUB_TOKEN="your-github-token"
-```
+Environment variables:
 
-Bạn cũng có thể mở màn hình Settings trong app bằng `Ctrl+S` hoặc lệnh `/settings` để lưu key trực tiếp trong ứng dụng.
-
-Các biến môi trường hữu ích:
-
-| Biến | Bắt buộc | Mục đích |
+| Variable | Required | Purpose |
 | --- | --- | --- |
-| `DEEPSEEK_API_KEY` | Có | API key để gọi DeepSeek |
-| `GITHUB_TOKEN` | Không | Dùng cho tính năng review PR |
-| `EXCELSIOR_HARNESS_DATA_DIR` | Không | Đổi thư mục lưu dữ liệu harness (sessions, settings, memory, v.v.) |
-| `EXCELSIOR_RIPGREP_PATH` | Không | Chỉ định đường dẫn `rg` tùy chỉnh |
+| `DEEPSEEK_API_KEY` | Yes | API key for DeepSeek model calls |
+| `EXCELSIOR_ENGINE_DATA_DIR` | No | Where sessions and settings are stored (default `~/excelsior/data`) |
+| `EXCELSIOR_ENGINE_HEARTBEAT_MS` | No | Heartbeat interval for the engine process (default 5000) |
 
-## Chạy ứng dụng
+## Development
 
-Chạy TUI trong terminal:
-
-```powershell
-npm run dev
-```
-
-Hoặc dùng script tương đương:
-
-```powershell
-npm run dev:tui
-```
-
-Chạy app desktop:
-
-```powershell
-npm run dev:desktop
-```
-
-Sau khi build, có thể chạy bản TUI đã biên dịch:
-
-```powershell
-npm run build
-npm start
-```
-
-## Lệnh phát triển
-
-| Lệnh | Công dụng |
+| Command | Purpose |
 | --- | --- |
-| `npm run dev` | Chạy app TUI ở chế độ development |
-| `npm run dev:desktop` | Chạy app desktop ở chế độ development |
-| `npm test` | Chạy toàn bộ test bằng Vitest |
-| `npm run test:watch` | Chạy test ở chế độ watch |
-| `npm run typecheck` | Kiểm tra TypeScript |
-| `npm run build` | Build toàn bộ dự án |
-| `npm run check` | Chạy typecheck, kiểm tra unused, test và build |
+| `npm run dev:engine` | Run the engine daemon standalone (stdio) |
+| `npm test` | Run all tests with Vitest |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run typecheck` | Type-check source |
+| `npm run build` | Compile and sync package dists |
+| `npm run check:boundaries` | Enforce package import rules and ban legacy references |
+| `npm run check` | Typecheck, unused checks, tests, build, and boundaries |
 
-## Lệnh trong Excelsior
+## Engine commands
 
-| Lệnh | Mô tả |
+| Command | Description |
 | --- | --- |
-| `/help` | Xem danh sách lệnh |
-| `/clear` | Xóa nội dung chat đang hiển thị |
-| `/reset` | Xóa lịch sử hội thoại |
-| `/revert` | Hoàn tác thay đổi file của lượt gần nhất |
-| `/settings` | Mở màn hình Settings |
-| `/review <number>` | Lấy diff của PR và chạy review bằng nhiều agent |
-| `/review-post <number> <body>` | Đăng comment vào PR |
-| `/session` | Mở danh sách session |
-
-## Phím tắt
-
-| Phím | Hành động |
-| --- | --- |
-| `Ctrl+S` | Mở Settings |
-| `Ctrl+C` | Thoát ứng dụng |
-| `Ctrl+O` | Bật/tắt chi tiết sub-agent |
-| `Esc` | Hủy agent đang chạy hoặc quay lại |
-| `Up` / `Down` | Di chuyển trong lịch sử tin nhắn hoặc gợi ý |
-| `Tab` | Hoàn thành gợi ý lệnh hoặc chuyển field trong Settings |
-
-## Cấu trúc thư mục
-
-```text
-packages/
-|- core/           # shared domain and view contracts
-|- client/         # host client contract and client-side helpers
-|- agent-harness/  # execution, events, settings, sessions, and projections
-`- agent-host/     # local backend adapter host for the client
-
-apps/
-|- tui/            # app terminal bằng Ink
-`- desktop/        # app desktop bằng Electron/Vite
-
-src/
-`- __tests__/      # cross-repo architecture boundary tests
-```
-
-Package and app unit tests live beside their owners under `packages/*/__tests__` and `apps/*/__tests__`.
-
-## Xử lý lỗi thường gặp
-
-- Thiếu `DEEPSEEK_API_KEY`: cấu hình biến môi trường hoặc vào `Ctrl+S` / `/settings`.
-- Lỗi GitHub PR review: cấu hình `GITHUB_TOKEN` có quyền truy cập repository.
-- Lỗi dependency: xóa `node_modules`, sau đó chạy lại `npm install`.
+| `/help` | List commands |
+| `/new` | Create a new session |
+| `/sessions` | Open the session picker |
+| `/clear` | Clear the active session |
+| `/reset` | Delete all sessions and start fresh |
+| `/settings` | Open settings |
+| `/mode [plan\|act]` | Switch agent mode |
+| `/accept-edits` | Approve all pending edits |
 
 ## License
 
