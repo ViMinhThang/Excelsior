@@ -8,12 +8,11 @@ import { exitApp } from "./actions/navigation.js";
 import { restartEngine } from "./engine/connection.js";
 import { ChatScreen } from "./components/ChatScreen.js";
 import { SettingsScreen } from "./components/SettingsScreen.js";
-import { useThemeTokens } from "./components/useThemeTokens.js";
+import "./actions/index.js";
 
 export function App() {
   const store = useStore();
   const screen = useSlice(selectScreen);
-  const tokens = useThemeTokens();
 
   useKeyboardInput((input, key) => {
     const state = store.getState();
@@ -43,7 +42,7 @@ export function App() {
   });
 
   return (
-    <box flexDirection="column" width="100%" height="100%" backgroundColor={tokens.background}>
+    <box flexDirection="column" width="100%" height="100%">
       {screen === "settings" ? <SettingsScreen /> : <ChatScreen />}
     </box>
   );

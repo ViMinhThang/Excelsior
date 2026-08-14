@@ -20,7 +20,6 @@ function makeBlock(index: number, turnId: string): TranscriptBlock {
 }
 
 const SETTINGS: AppSettings = {
-  deepseekApiKey: "sk-test",
   githubToken: "",
   agentToolLoopSteps: "unlimited",
   autoReflectionEnabled: false,
@@ -153,11 +152,11 @@ describe("Mutate", () => {
     emitter.subscribe((d) => deltas.push(d));
 
     mutate({ kind: "mode-set", mode: "act" });
-    mutate({ kind: "settings-save", patch: { deepseekApiKey: "sk-new" } });
+    mutate({ kind: "settings-save", patch: { githubToken: "gh-new" } });
 
     expect(meta.mode).toBe("act");
-    expect(meta.settings.deepseekApiKey).toBe("sk-new");
-    expect(meta.settings.githubToken).toBe("");
+    expect(meta.settings.githubToken).toBe("gh-new");
+    expect(meta.settings.agentToolLoopSteps).toBe("unlimited");
     expect(deltas.map((d) => d.delta.kind)).toEqual(["meta-changed", "meta-changed"]);
   });
 

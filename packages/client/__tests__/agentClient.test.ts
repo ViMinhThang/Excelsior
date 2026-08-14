@@ -35,7 +35,6 @@ function createHarness(dataDir: string): Harness {
     currentSessionId: null as string | null,
     mode: "act" as const,
     settings: {
-      deepseekApiKey: "",
       githubToken: "",
       agentToolLoopSteps: "unlimited",
       autoReflectionEnabled: false,
@@ -130,7 +129,7 @@ describe("AgentClient", () => {
 
     const catalog = harness.client.getSlice("catalog");
     expect(catalog.commands.length).toBeGreaterThanOrEqual(4);
-    expect(catalog.settings.deepseekApiKey).toBe("");
+    expect(catalog.settings.githubToken).toBe("");
 
     const session = harness.client.getSlice("session");
     expect(session).not.toBeNull();
@@ -169,6 +168,44 @@ describe("AgentClient", () => {
     expect(session?.blocks[2].kind).toBe("tool-call");
     expect(session?.blocks[2].tool?.result).toBe("file contents");
     expect(session?.blocks[3].content).toBe(" Done.");
+
+    harness.cleanup();
+  });
+
+  it("keeps the run slice items interleaved in order while a turn streams", async () => {
+    const harness = createHarness(dataDir());
+    harness.engine.mutate({ kind: "session-create", title: "S1" });
+    await harness.client.connect();
+
+    const sessionId = harness.client.getSlice("meta").currentSessionId!;
+    const turn: RunTurn = {
+      id: "turn_interleaved",
+      sessionId,
+      status: "running",
+      userContent: "go",
+      steps: [],
+      blocks: [],
+      startedAt: Date.now(),
+    };
+    harness.engine.mutate({ kind: "run-begin", turn });
+    harness.engine.mutate({ kind: "run-text", turnId: turn.id, content: "Let me check." });
+    harness.engine.mutate({
+      kind: "run-tool-start",
+      turnId: turn.id,
+      call: { id: "tool1", toolName: "view", args: { filePath: "a.ts" }, status: "executing" },
+    });
+    harness.engine.mutate({ kind: "run-tool-end", callId: "tool1", result: "file contents" });
+    harness.engine.mutate({ kind: "run-text", turnId: turn.id, content: " Done." });
+
+    const items = harness.client.getSlice("run")!.items;
+    expect(items.map((item) => item.kind)).toEqual([
+      "assistant",
+      "tool-call",
+      "assistant",
+    ]);
+    expect(items[0].kind === "assistant" ? items[0].content : "").toBe("Let me check.");
+    expect(items[1].kind === "tool-call" ? items[1].tool.result : "").toBe("file contents");
+    expect(items[2].kind === "assistant" ? items[2].content : "").toBe(" Done.");
 
     harness.cleanup();
   });

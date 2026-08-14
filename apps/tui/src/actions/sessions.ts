@@ -27,6 +27,14 @@ export function deleteSelected(store: Store): void {
   void bridge.command({ cmd: "session-delete", sessionId: session.id }).then((ack) => handleAck(store, ack));
 }
 
+export function deleteCurrentSession(store: Store): void {
+  const currentId = store.getState().meta.currentSessionId;
+  if (!currentId) return;
+  const bridge = getBridge();
+  if (!bridge) return;
+  void bridge.command({ cmd: "session-delete", sessionId: currentId }).then((ack) => handleAck(store, ack));
+}
+
 export function createSession(store: Store): void {
   const bridge = getBridge();
   if (!bridge) return;
@@ -34,6 +42,14 @@ export function createSession(store: Store): void {
   void bridge.command({ cmd: "session-create" }).then((ack) => handleAck(store, ack));
 }
 
+export function createSessionInOverlay(store: Store): void {
+  const bridge = getBridge();
+  if (!bridge) return;
+  void bridge.command({ cmd: "session-create" }).then((ack) => handleAck(store, ack));
+}
+
 register("session-list.switch", (store) => switchToSelected(store));
 register("session-list.delete", (store) => deleteSelected(store));
-register("session-list.create", (store) => createSession(store));
+register("session-list.create", (store) => createSessionInOverlay(store));
+register("app.deleteSession", (store) => deleteCurrentSession(store));
+register("app.newSession", (store) => createSession(store));

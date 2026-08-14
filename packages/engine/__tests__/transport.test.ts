@@ -102,15 +102,15 @@ describe("in-process transport fidelity", () => {
     const received: unknown[] = [];
     b.onMessage((message) => received.push(message));
 
-    const sent = makeEnvelope("command", { cmd: "settings-save", patch: { deepseekApiKey: "sk-a" } }, 0);
+    const sent = makeEnvelope("command", { cmd: "settings-save", patch: { githubToken: "gh-a" } }, 0);
     a.send(sent);
-    const copy = received[0] as { payload: { patch: { deepseekApiKey: string } } };
-    copy.payload.patch.deepseekApiKey = "sk-mutated";
+    const copy = received[0] as { payload: { patch: { githubToken: string } } };
+    copy.payload.patch.githubToken = "gh-mutated";
 
-    expect((sent.payload as { patch: { deepseekApiKey: string } }).patch.deepseekApiKey).toBe("sk-a");
+    expect((sent.payload as { patch: { githubToken: string } }).patch.githubToken).toBe("gh-a");
 
     // send a second time to prove the first mutation was isolated on the wire
     a.send(sent);
-    expect((sent.payload as { patch: { deepseekApiKey: string } }).patch.deepseekApiKey).toBe("sk-a");
+    expect((sent.payload as { patch: { githubToken: string } }).patch.githubToken).toBe("gh-a");
   });
 });

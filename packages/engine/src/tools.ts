@@ -429,7 +429,3 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   createRunCommandTool(),
   createAskQuestionTool(),
 ];
-
-export function getTool(name: string): ToolDefinition | undefined {
-  return TOOL_DEFINITIONS.find((tool) => tool.name === name);
-}

@@ -1,17 +1,39 @@
 import type { Store } from "../store/store.js";
+import type { UiState } from "../store/types.js";
+import { flattenTranscript } from "../transcript/flatten.js";
 import { register } from "./registry.js";
+
+function estimateTranscriptTotalHeight(s: UiState): number {
+  const { heights } = flattenTranscript(s.transcript.blocks, s.transcript.live, s.view.toolsExpanded, 80);
+  return heights.reduce((sum, h) => sum + h, 0);
+}
 
 export function scrollBy(store: Store, delta: number): void {
   store.dispatch((s) => {
-    const scrollTop = Math.max(0, s.view.scrollTop + delta);
+    const totalHeight = estimateTranscriptTotalHeight(s);
+    const estimatedMaxScroll = Math.max(0, totalHeight - 18);
+    const base = s.view.followLatest ? estimatedMaxScroll : s.view.scrollTop;
+    const scrollTop = Math.max(0, base + delta);
+    const followLatest = scrollTop >= estimatedMaxScroll;
     return {
-      view: { ...s.view, scrollTop, followLatest: false },
+      view: { ...s.view, scrollTop, followLatest },
     };
   });
 }
 
 export function pageBy(store: Store, page: number): void {
   scrollBy(store, page);
+}
+
+export function scrollTo(store: Store, targetScroll: number, maxScroll?: number): void {
+  store.dispatch((s) => {
+    const effectiveMax = maxScroll ?? Math.max(0, estimateTranscriptTotalHeight(s) - 18);
+    const clamped = Math.max(0, Math.min(effectiveMax, targetScroll));
+    const followLatest = clamped >= effectiveMax;
+    return {
+      view: { ...s.view, scrollTop: clamped, followLatest },
+    };
+  });
 }
 
 export function scrollToTop(store: Store): void {

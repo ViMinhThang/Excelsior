@@ -4,11 +4,11 @@ import { useThemeTokens } from "./useThemeTokens.js";
 import { textAttrs } from "../platform/opentui/textAttributes.js";
 
 const FOCUS_HINT: Record<string, string> = {
-  input: "enter send · tab autocomplete · esc blur",
-  transcript: "↑↓ scroll · ctrl+f follow · ctrl+o tools · esc input",
-  overlay: "overlay — overlay keys active",
-  settings: "↑↓ fields · ctrl+s save · esc back",
-  app: "ctrl+s settings",
+  input: "enter send · tab mode · ctrl+o tools · ctrl+p sessions · ctrl+n new · ctrl+s settings · esc scroll",
+  transcript: "↑↓/ctrl+↑↓ scroll · tab mode · ctrl+o tools · ctrl+p sessions · ctrl+n new · esc input",
+  overlay: "overlay active — [n] new · [d] delete · [enter] switch · [esc] close",
+  settings: "↑↓ select · enter toggle · ctrl+s save · esc back",
+  app: "tab mode · ctrl+o tools · ctrl+p sessions · ctrl+n new · ctrl+s settings",
 };
 
 export function FooterBar() {
@@ -21,28 +21,19 @@ export function FooterBar() {
   return (
     <box flexDirection="row" width="100%" border={["top"]} borderStyle="single" borderColor={tokens.border} paddingX={1} paddingY={0}>
       <box flexGrow={1} flexDirection="row" gap={1} minWidth={0}>
-        {status.notice ? (
-          <text fg={tokens.highlight} attributes={textAttrs({ dim: true })} truncate>
-            {status.notice}
-          </text>
-        ) : status.error ? (
-          <text fg={tokens.error} truncate>
-            {status.error}
-          </text>
-        ) : (
-          <text fg={tokens.muted} attributes={textAttrs({ dim: true })} truncate>
-            {hint}
-          </text>
-        )}
+        <text fg={tokens.muted} attributes={textAttrs({ dim: true })} wrapMode="char" truncate>
+          {hint}
+        </text>
       </box>
       <box flexDirection="row" gap={1} flexShrink={0}>
         {status.busy ? (
           <text fg={tokens.activity} attributes={textAttrs({ bold: true })}>
-            ● busy
+            <span fg={tokens.highlight}>{"● "}</span>
+            {"busy"}
           </text>
         ) : null}
         <text fg={tokens.muted} attributes={textAttrs({ dim: true })}>
-          ctrl+c quit
+          {status.busy ? "ctrl+c cancel" : "ctrl+c quit"}
         </text>
       </box>
     </box>

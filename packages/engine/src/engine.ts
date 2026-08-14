@@ -17,7 +17,7 @@ import {
   type PermissionPolicy,
 } from "./capabilities.js";
 import type { CapabilityContextFactory } from "./capabilities.js";
-import { DiffEmitter } from "./diffEmitter.js";
+import { DiffEmitter, emitMetaError } from "./diffEmitter.js";
 import { createTurnExecutor, type TurnExecutor } from "./executor.js";
 import { InteractionManager } from "./interaction.js";
 import { createMutate, type MetaState, type Mutate } from "./mutate.js";
@@ -49,13 +49,12 @@ export interface Engine {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  deepseekApiKey: "",
   githubToken: "",
   agentToolLoopSteps: "unlimited",
   autoReflectionEnabled: false,
 };
 
-const DEFAULT_LLM: AgentLlmInfo = { providerName: "deepseek", modelName: "deepseek-chat" };
+const DEFAULT_LLM: AgentLlmInfo = { providerName: "deepseek", modelName: "deepseek-v4-flash" };
 
 function readSettings(dataDir: string, overrides: Partial<AppSettings> | undefined): AppSettings {
   let persisted: Partial<AppSettings> = {};
@@ -63,7 +62,10 @@ function readSettings(dataDir: string, overrides: Partial<AppSettings> | undefin
   try {
     if (existsSync(settingsPath)) {
       const parsed = JSON.parse(readFileSync(settingsPath, "utf8")) as Partial<AppSettings>;
-      if (parsed && typeof parsed === "object") persisted = parsed;
+      if (parsed && typeof parsed === "object") {
+        persisted = parsed;
+        delete (persisted as Record<string, unknown>).deepseekApiKey;
+      }
     }
   } catch {
     // corrupt settings fall back to defaults
@@ -118,7 +120,7 @@ export function createEngine(config: EngineConfig): Engine {
   });
 
   const emitError = (message: string): void => {
-    emitter.emit({ kind: "meta" }, { scope: { kind: "meta" }, delta: { kind: "error", message } });
+    emitMetaError(emitter, message);
   };
 
   const executor =
@@ -155,7 +157,9 @@ export function createEngine(config: EngineConfig): Engine {
     handleCommand: (cmd) => responder.handleCommand(cmd),
     handleRequest: (req) => responder.handleRequest(req),
     subscribe: (listener) => emitter.subscribe(listener),
-    close: () => undefined,
+    close: () => {
+      store.flush();
+    },
     meta,
     mutate,
     store,

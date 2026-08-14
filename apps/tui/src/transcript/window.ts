@@ -38,7 +38,6 @@ export function computeWindow({
   scrollTop,
   viewportHeight,
   followLatest,
-  overscan = 8,
 }: WindowInput): WindowResult {
   const totalHeight = totalItemsHeight(items);
   const maxScroll = Math.max(0, totalHeight - viewportHeight);
@@ -58,32 +57,38 @@ export function computeWindow({
 
   let anchor: "top" | "bottom";
   let effectiveScroll: number;
+  let startIndex = 0;
+  let endIndex = 0;
+
   if (followLatest) {
     anchor = "bottom";
     effectiveScroll = maxScroll;
+    endIndex = items.length - 1;
+    let within = 0;
+    for (let i = endIndex; i >= 0; i -= 1) {
+      within += items[i].height;
+      startIndex = i;
+      if (within >= viewportHeight) break;
+    }
   } else {
     anchor = "top";
     effectiveScroll = clamp(scrollTop, 0, maxScroll);
-  }
-
-  let startIndex = 0;
-  let acc = 0;
-  for (let i = 0; i < items.length; i += 1) {
-    if (acc + items[i].height > effectiveScroll) {
-      startIndex = i;
-      break;
+    let acc = 0;
+    for (let i = 0; i < items.length; i += 1) {
+      if (acc + items[i].height > effectiveScroll) {
+        startIndex = i;
+        break;
+      }
+      acc += items[i].height;
     }
-    acc += items[i].height;
+    endIndex = startIndex;
+    let within = 0;
+    for (let i = startIndex; i < items.length; i += 1) {
+      within += items[i].height;
+      endIndex = i;
+      if (within >= viewportHeight) break;
+    }
   }
-
-  let endIndex = startIndex;
-  let within = 0;
-  for (let i = startIndex; i < items.length; i += 1) {
-    within += items[i].height;
-    endIndex = i;
-    if (within >= viewportHeight) break;
-  }
-  endIndex = Math.min(items.length - 1, endIndex + overscan);
 
   let padTop = 0;
   for (let i = 0; i < startIndex; i += 1) padTop += items[i].height;

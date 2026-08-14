@@ -32,8 +32,9 @@ function systemPrompt(rootPath: string, mode: string): string {
     "You are Excelsior, a local coding agent running inside the workspace.",
     `Workspace root: ${rootPath}`,
     `Current mode: ${mode}. In plan mode you only read and propose; you never modify the workspace. In act mode you may apply changes with approval.`,
-    "Use the available tools to inspect and change files. Run commands when needed.",
-    "Respond concisely. When you need the user to decide something, use the askQuestion tool.",
+    "Use tools only when necessary to inspect or modify files or run commands requested by the user.",
+    "Do not invoke tools in an endless loop. Once you have sufficient information or have answered the user, stop calling tools and output your response directly.",
+    "When you need the user to decide something, use the askQuestion tool.",
   ].join("\n");
 }
 
@@ -46,34 +47,13 @@ function stepLimit(agentToolLoopSteps: string): number {
 export function createTurnExecutor(deps: ExecutorDeps): TurnExecutor {
   const { store, runStore, meta, mutate, capabilityFactory, emitError } = deps;
   const abortControllers = new Map<string, AbortController>();
+  const provider = createDeepSeek({
+    apiKey: process.env.DEEPSEEK_API_KEY,
+  });
 
   const isActive = (turn: { id: string }): boolean =>
     runStore.activeTurn?.id === turn.id && runStore.activeTurn.status === "running";
 
-  const toAiTool = (definition: ToolDefinition, turnId: string) =>
-    aiTool({
-      description: definition.description,
-      inputSchema: definition.inputSchema,
-      execute: async (input, { toolCallId }) => {
-        const cap = capabilityFactory(toolCallId);
-        cap.onOutput = (delta: string) =>
-          mutate({ kind: "run-tool-update", callId: toolCallId, result: delta });
-        mutate({
-          kind: "run-tool-start",
-          turnId,
-          call: { id: toolCallId, toolName: definition.name, args: input, status: "executing" },
-        });
-        try {
-          const result = await definition.execute(input, cap);
-          mutate({ kind: "run-tool-end", callId: toolCallId, result: result.content, isError: result.isError });
-          return result.content;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          mutate({ kind: "run-tool-end", callId: toolCallId, result: message, isError: true });
-          return message;
-        }
-      },
-    });
 
   async function runTurn(turn: { id: string; sessionId: string }, signal: AbortSignal): Promise<void> {
     try {
@@ -105,7 +85,35 @@ export function createTurnExecutor(deps: ExecutorDeps): TurnExecutor {
     const session = store.load(turn.sessionId);
     if (!session) return false;
     const messages = buildAiHistory(session, runStore.activeTurn);
-    const model = createDeepSeek({ apiKey: meta.settings.deepseekApiKey })(meta.llm.modelName);
+    const model = provider(meta.llm.modelName);
+    let hadToolCall = false;
+
+    const toAiTool = (definition: ToolDefinition, turnId: string) =>
+      aiTool({
+        description: definition.description,
+        inputSchema: definition.inputSchema,
+        execute: async (input, { toolCallId }) => {
+          hadToolCall = true;
+          const cap = capabilityFactory(toolCallId);
+          cap.onOutput = (delta: string) =>
+            mutate({ kind: "run-tool-update", callId: toolCallId, result: delta });
+          mutate({
+            kind: "run-tool-start",
+            turnId,
+            call: { id: toolCallId, toolName: definition.name, args: input, status: "executing" },
+          });
+          try {
+            const result = await definition.execute(input, cap);
+            mutate({ kind: "run-tool-end", callId: toolCallId, result: result.content, isError: result.isError });
+            return result.content;
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            mutate({ kind: "run-tool-end", callId: toolCallId, result: message, isError: true });
+            return message;
+          }
+        },
+      });
+
     const tools = Object.fromEntries(
       TOOL_DEFINITIONS.map((definition) => [definition.name, toAiTool(definition, turn.id)]),
     ) as ToolSet;
@@ -124,6 +132,8 @@ export function createTurnExecutor(deps: ExecutorDeps): TurnExecutor {
     for await (const part of stream) {
       if (part.type === "text-delta") {
         mutate({ kind: "run-text", turnId: turn.id, content: part.text });
+      } else if (part.type === "tool-call") {
+        hadToolCall = true;
       } else if (part.type === "abort") {
         break;
       } else if (part.type === "error") {
@@ -131,9 +141,7 @@ export function createTurnExecutor(deps: ExecutorDeps): TurnExecutor {
       }
     }
 
-    const current = runStore.activeTurn;
-    const last = current?.steps[current.steps.length - 1];
-    return (last?.toolCalls.length ?? 0) > 0;
+    return hadToolCall;
   }
 
   return {
@@ -147,8 +155,8 @@ export function createTurnExecutor(deps: ExecutorDeps): TurnExecutor {
         emitError("a run is already active");
         return;
       }
-      if (!meta.settings.deepseekApiKey) {
-        emitError("DeepSeek API key is not set. Use /settings to configure it.");
+      if (!process.env.DEEPSEEK_API_KEY) {
+        emitError("DeepSeek API key is not set. Set the DEEPSEEK_API_KEY environment variable.");
         return;
       }
       const turn = {

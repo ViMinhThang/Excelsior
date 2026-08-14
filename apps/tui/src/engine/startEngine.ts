@@ -38,16 +38,24 @@ export function startEngine(workspaceRoot: string, options: StartEngineOptions =
   const child = spawn(process.execPath, args, {
     cwd: options.cwd ?? workspaceRoot,
     env: { ...process.env, ...options.env },
-    stdio: ["pipe", "pipe", "inherit"],
+    stdio: ["pipe", "pipe", "pipe"],
   });
 
-      const transport = createStdioTransport({
-        stdin: child.stdout!,
-        stdout: child.stdin!,
-      });
+  const transport = createStdioTransport({
+    stdin: child.stdout!,
+    stdout: child.stdin!,
+  });
 
   const exitListeners = new Set<(code: number | null, signal: string | null) => void>();
+  let stderrTail = "";
+  child.stderr?.setEncoding("utf8");
+  child.stderr?.on("data", (chunk) => {
+    stderrTail = (stderrTail + chunk).slice(-4096);
+  });
   child.on("exit", (code, signal) => {
+    if (code !== 0 && stderrTail.trim()) {
+      console.error(`[excelsior-tui] engine stderr:\n${stderrTail.trimEnd()}`);
+    }
     transport.close();
     for (const listener of exitListeners) listener(code, signal);
   });

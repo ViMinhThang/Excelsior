@@ -35,3 +35,4 @@ export function moveSessionCursor(store: Store, delta: number): void {
 
 register("overlay.dismiss", (store) => closeOverlay(store));
 register("session-list.move", (store, arg) => moveSessionCursor(store, Number(arg ?? 1)));
+register("app.openSessions", (store) => openSessionList(store));

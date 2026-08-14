@@ -9,7 +9,7 @@ import {
   type CommandResult,
   type SendOptions,
 } from "@excelsior/protocol";
-import { DiffEmitter } from "./diffEmitter.js";
+import { DiffEmitter, emitMetaError } from "./diffEmitter.js";
 import type { MetaState, Mutate } from "./mutate.js";
 import { RunStore } from "./runStore.js";
 import { SessionStore } from "./sessionStore.js";
@@ -87,7 +87,7 @@ export function createResponder(deps: ResponderDeps): Responder {
   const err = (error: string): CommandAck => ({ ok: false, error });
 
   const emitError = (message: string): void => {
-    emitter.emit({ kind: "meta" }, { scope: { kind: "meta" }, delta: { kind: "error", message } });
+    emitMetaError(emitter, message);
   };
 
   const currentSession = () => {
@@ -178,9 +178,18 @@ export function createResponder(deps: ResponderDeps): Responder {
           mutate({ kind: "session-switch", sessionId: cmd.sessionId });
           return ok({ kind: "session", session: state.session });
         }
-        case "session-delete":
+        case "session-delete": {
           mutate({ kind: "session-delete", sessionId: cmd.sessionId });
+          if (!meta.currentSessionId) {
+            const remaining = store.list();
+            if (remaining.length > 0) {
+              mutate({ kind: "session-switch", sessionId: remaining[0].id });
+            } else {
+              mutate({ kind: "session-create", title: "New Session" });
+            }
+          }
           return ok();
+        }
         case "session-rename":
           mutate({ kind: "session-rename", sessionId: cmd.sessionId, title: cmd.title });
           return ok();
@@ -188,6 +197,7 @@ export function createResponder(deps: ResponderDeps): Responder {
           for (const session of store.list()) {
             mutate({ kind: "session-delete", sessionId: session.id });
           }
+          mutate({ kind: "session-create", title: "New Session" });
           return ok();
         }
         case "mode-set":

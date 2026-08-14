@@ -4,8 +4,8 @@ import type {
   AppSettings,
   CommandDefinition,
   InteractionState,
+  RunItem,
   RunStatus,
-  RunToolState,
   Session,
   TranscriptBlock,
   Workspace,
@@ -26,8 +26,7 @@ export interface InputState {
 export interface LiveRunState {
   status: RunStatus;
   turnId: string | null;
-  text: string;
-  tools: RunToolState[];
+  items: RunItem[];
 }
 
 export interface ViewState {
@@ -111,7 +110,7 @@ export interface SettingsDraft {
   values: Partial<AppSettings>;
 }
 
-export type SettingsField = "deepseekApiKey" | "githubToken" | "agentToolLoopSteps" | "autoApproveWorkspaceEdits";
+export type SettingsField = "githubToken" | "agentToolLoopSteps" | "autoApproveWorkspaceEdits";
 
 export interface UiState {
   ui: {
@@ -135,7 +134,6 @@ export const EMPTY_INTERACTION: InteractionState = {
 };
 
 export const EMPTY_SETTINGS: AppSettings = {
-  deepseekApiKey: "",
   githubToken: "",
   agentToolLoopSteps: "unlimited",
   autoReflectionEnabled: false,

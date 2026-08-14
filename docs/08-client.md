@@ -54,7 +54,7 @@ interface ReadModel {
   meta: { sessions: Session[]; currentSessionId: string | null; workspace: Workspace; llm: AgentLlmInfo; mode: AgentMode };
   catalog: { commands: CommandDefinition[]; settings: AppSettings };
   session: { blocks: TranscriptBlock[]; interaction: InteractionState } | null;
-  run: { status: RunStatus; turnId: string | null; text: string; tools: RunToolCall[] } | null;
+  run: { status: RunStatus; turnId: string | null; items: RunItem[] } | null;
 }
 ```
 

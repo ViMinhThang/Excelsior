@@ -76,6 +76,10 @@ export class AgentClient {
     return () => this.errorListeners.delete(cb);
   }
 
+  isClosed(): boolean {
+    return this.closed;
+  }
+
   close(): void {
     if (this.closed) return;
     this.closed = true;

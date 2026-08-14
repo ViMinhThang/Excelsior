@@ -55,7 +55,6 @@ export function normalizeAgentToolLoopSteps(
 }
 
 export interface AppSettings {
-  deepseekApiKey: string;
   githubToken: string;
   agentToolLoopSteps: string;
   autoReflectionEnabled: boolean;
@@ -189,6 +188,10 @@ export interface RunToolState {
   result?: string;
   isError?: boolean;
 }
+
+export type RunItem =
+  | { kind: "assistant"; content: string }
+  | { kind: "tool-call"; tool: RunToolState };
 
 export interface LiveBlock {
   id: string;

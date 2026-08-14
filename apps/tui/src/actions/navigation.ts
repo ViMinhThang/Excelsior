@@ -38,7 +38,18 @@ export function blurInput(store: Store): void {
   store.dispatch((s) => ({ ui: { ...s.ui, focus: nextFocus(s.ui.focus, "blur") } }));
 }
 
-export function exitApp(_store: Store): void {
+export function cancelTurn(_store: Store): void {
+  const bridge = getBridge();
+  if (bridge) {
+    void bridge.command({ cmd: "cancel" });
+  }
+}
+
+export function exitApp(store: Store): void {
+  if (store.getState().status.busy) {
+    cancelTurn(store);
+    return;
+  }
   getBridge()?.stop();
   process.exit(0);
 }
@@ -46,5 +57,6 @@ export function exitApp(_store: Store): void {
 register("app.openSettings", (store) => openSettings(store));
 register("app.back", (store) => back(store));
 register("app.exit", (store) => exitApp(store));
+register("app.cancelTurn", (store) => cancelTurn(store));
 register("input.blur", (store) => blurInput(store));
 register("transcript.focusInput", (store) => refocusInput(store));

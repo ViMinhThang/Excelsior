@@ -26,7 +26,7 @@ export function PendingOverlay() {
   void width;
 
   return (
-    <box flexDirection="column" width="100%" borderStyle="single" borderColor={tokens.highlightSecondary} backgroundColor={tokens.pendingPanel} paddingX={1} paddingY={0}>
+    <box flexDirection="column" width="100%" borderStyle="single" borderColor={tokens.highlightSecondary} paddingX={1} paddingY={0}>
       {content}
     </box>
   );
@@ -52,16 +52,18 @@ function ConfirmView() {
   return (
     <box flexDirection="column" width="100%">
       <text fg={tokens.highlightAction} attributes={textAttrs({ bold: true })}>
-        {state.action === "warning" ? "Warning" : "Approve tool call"}
+        <span fg={tokens.highlightBrand}>{"⚠️  "}</span>
+        {state.action === "warning" ? "Security Warning" : "Permission Required"}
       </text>
       <text fg={tokens.text} wrapMode="char" width={width}>
-        <text fg={tokens.toolCommand} attributes={textAttrs({ bold: true })}>
-          {state.toolName}
-        </text>
-        {state.args ? ` ${state.args.replace(/^{|}$/g, "").trim()}` : ""}
+        <span fg={tokens.toolCommand} attributes={textAttrs({ bold: true })}>
+          {`● ${state.toolName}`}
+        </span>
+        {state.args ? ` (${state.args.replace(/^{|}$/g, "").trim()})` : ""}
       </text>
       {state.warning ? (
         <text fg={tokens.error} wrapMode="char" width={width}>
+          <span fg={tokens.error} attributes={textAttrs({ bold: true })}>{"! "}</span>
           {state.warning}
         </text>
       ) : null}
@@ -69,7 +71,10 @@ function ConfirmView() {
         <FileChangePreviewView preview={preview} tokens={tokens} terminalColumns={width} pending hideRemovedRows={false} />
       ) : null}
       <text fg={tokens.muted} attributes={textAttrs({ dim: true })}>
-        [y] approve [n] deny [a] approve all [esc] dismiss
+        <span fg={tokens.highlight} attributes={textAttrs({ bold: true })}>{"[y] "}</span>{"Approve  "}
+        <span fg={tokens.highlight} attributes={textAttrs({ bold: true })}>{"[n] "}</span>{"Deny  "}
+        <span fg={tokens.highlight} attributes={textAttrs({ bold: true })}>{"[a] "}</span>{"Always allow  "}
+        <span fg={tokens.muted}>{"[esc] Dismiss"}</span>
       </text>
     </box>
   );
@@ -84,24 +89,38 @@ function QuestionView() {
   return (
     <box flexDirection="column" width="100%">
       <text fg={tokens.highlightHeading} attributes={textAttrs({ bold: true })}>
-        Question
+        <span fg={tokens.highlightBrand}>{"❓ "}</span>
+        {"Question"}
       </text>
       <text fg={tokens.text} wrapMode="char" width={80}>
         {state.question}
       </text>
-      {state.options.map((option, index) => (
-        <text key={option.id} fg={index === state.selected ? tokens.highlightSelected : tokens.muted}>
-          {`${index === state.selected ? "▸" : " "} [${index + 1}] ${option.label}`}
-          {option.description ? ` — ${option.description}` : ""}
-        </text>
-      ))}
+      {state.options.map((option, index) => {
+        const selected = index === state.selected;
+        return (
+          <text key={option.id} fg={selected ? tokens.highlightSelected : tokens.secondary}>
+            <span fg={selected ? tokens.highlight : tokens.muted} attributes={textAttrs({ bold: selected })}>
+              {`${selected ? "▸ " : "  "}[${index + 1}] `}
+            </span>
+            {option.label}
+            {option.description ? (
+              <span fg={tokens.muted} attributes={textAttrs({ dim: true })}>
+                {` — ${option.description}`}
+              </span>
+            ) : null}
+          </text>
+        );
+      })}
       {state.allowManual ? (
         <text fg={tokens.highlightSecondary} wrapMode="char" width={80}>
-          {`manual: ${state.manual}`}
+          <span fg={tokens.muted}>{"Manual: "}</span>
+          {state.manual}
         </text>
       ) : null}
       <text fg={tokens.muted} attributes={textAttrs({ dim: true })}>
-        [1-9] select [enter] submit [esc] cancel
+        <span fg={tokens.highlight}>{"[1-9] "}</span>{"Select  "}
+        <span fg={tokens.highlight}>{"[enter] "}</span>{"Submit  "}
+        <span fg={tokens.muted}>{"[esc] Cancel"}</span>
       </text>
     </box>
   );

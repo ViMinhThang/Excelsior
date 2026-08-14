@@ -54,17 +54,21 @@ function tableFor(ctx: ResolveContext): KeyTable {
 
 /**
  * Resolve a key combo against the static tables for (screen × focus).
- * Printable text is only accepted while the input (or a settings text
- * field) owns the focus; overlays capture all keys while open.
+ * Printable text is accepted while an input/settings field owns focus, or
+ * while a manual question answer is being typed. Overlays keep their key
+ * bindings (letters, digits) even though the keypress carries text.
  */
 export function resolve(ctx: ResolveContext): string | null {
   if (ctx.text) {
     if (ctx.focus === "input") return "input.insert";
     if (ctx.focus === "settings") return "settings.insert";
-    if (ctx.focus === "overlay" && ctx.overlayKind === "pending-question" && ctx.questionManual) {
+    if (
+      ctx.focus === "overlay" &&
+      ctx.overlayKind === "pending-question" &&
+      ctx.questionManual
+    ) {
       return "question.insert";
     }
-    return null;
   }
   const table = tableFor(ctx);
   return table[ctx.combo] ?? null;

@@ -1,5 +1,4 @@
 export interface ThemeTokens {
-  background: string;
   accent: string;
   activity: string;
   success: string;
@@ -8,12 +7,6 @@ export interface ThemeTokens {
   secondary: string;
   muted: string;
   border: string;
-  panel: string;
-  userPanel: string;
-  assistantPanel: string;
-  inputPanel: string;
-  toolPanel: string;
-  pendingPanel: string;
   assistantBorder: string;
   assistantText: string;
   assistantEmphasis: string;
@@ -30,19 +23,13 @@ export interface ThemeTokens {
   highlightPriority: string;
   highlightSelected: string;
   highlightAction: string;
-  diffRemovedBackground: string;
-  diffAddedBackground: string;
   diffRemovedText: string;
   diffAddedText: string;
   diffContextText: string;
   diffGutter: string;
-  diffHeaderBackground: string;
   diffBorder: string;
-  modeHintKeyBg: string;
   modeHintKey: string;
-  modeHintPlanBg: string;
   modeHintPlan: string;
-  modeHintActBg: string;
   modeHintAct: string;
   syntaxKeyword: string;
   syntaxBuiltIn: string;
@@ -64,68 +51,55 @@ export interface ThemeTokens {
 }
 
 const EXCELSIOR: ThemeTokens = {
-  background: "#141414",
-  accent: "#c6c6c6",
-  activity: "#c6c6c6",
-  success: "#b5b5b5",
-  error: "#a6a6a6",
-  text: "#c6c6c6",
-  secondary: "#c6c6c6",
-  muted: "#919191",
-  border: "#4e4e4e",
-  panel: "#202020",
-  userPanel: "#202020",
-  assistantPanel: "#202020",
-  inputPanel: "#202020",
-  toolPanel: "#202020",
-  pendingPanel: "#202020",
-  assistantBorder: "#919191",
-  assistantText: "#c6c6c6",
-  assistantEmphasis: "#8d8072",
-  assistantBullet: "#a6a6a6",
-  highlight: "#a89468",
-  highlightSecondary: "#8d8072",
-  toolCommand: "#8a8a8a",
-  toolArgs: "#8a8a8a",
-  highlightBrand: "#a89468",
-  highlightHeading: "#a89468",
-  highlightEmphasis: "#a89468",
-  highlightInline: "#afafaf",
-  highlightLink: "#a89468",
-  highlightPriority: "#9a816b",
-  highlightSelected: "#b8a078",
-  highlightAction: "#a89468",
-  diffRemovedBackground: "#3a151b",
-  diffAddedBackground: "#0d3513",
-  diffRemovedText: "#a67b7c",
-  diffAddedText: "#6d8f73",
-  diffContextText: "#c6c6c6",
-  diffGutter: "#868f99",
-  diffHeaderBackground: "#1e2530",
-  diffBorder: "#444c55",
-  modeHintKeyBg: "#2a241c",
-  modeHintKey: "#8a8274",
-  modeHintPlanBg: "#22302c",
-  modeHintPlan: "#729382",
-  modeHintActBg: "#302b22",
-  modeHintAct: "#8d8072",
-  syntaxKeyword: "#c4a7e7",
-  syntaxBuiltIn: "#31748f",
-  syntaxType: "#9ccfd8",
-  syntaxLiteral: "#f6c177",
-  syntaxNumber: "#f6c177",
-  syntaxRegexp: "#ebbcba",
-  syntaxString: "#9ccfd8",
-  syntaxSubst: "#908caa",
-  syntaxSymbol: "#c4a7e7",
-  syntaxClass: "#9ccfd8",
-  syntaxFunction: "#31748f",
-  syntaxTitle: "#c4a7e7",
-  syntaxParams: "#908caa",
-  syntaxComment: "#6e6a86",
-  syntaxTag: "#eb6f92",
-  syntaxAttr: "#ebbcba",
-  syntaxVariable: "#e0def4",
+  accent: "#f5c026",
+  activity: "#f5c026",
+  success: "#7ece78",
+  error: "#f07171",
+  text: "#ece7d5",
+  secondary: "#c8c2ae",
+  muted: "#86806d",
+  border: "#3e382b",
+  assistantBorder: "#5a523f",
+  assistantText: "#ece7d5",
+  assistantEmphasis: "#f5c026",
+  assistantBullet: "#f5c026",
+  highlight: "#f5c026",
+  highlightSecondary: "#cf9d22",
+  toolCommand: "#f5c026",
+  toolArgs: "#9e9783",
+  highlightBrand: "#f5c026",
+  highlightHeading: "#ffd644",
+  highlightEmphasis: "#cf9d22",
+  highlightInline: "#fff6d6",
+  highlightLink: "#f5c026",
+  highlightPriority: "#ffd644",
+  highlightSelected: "#ffd644",
+  highlightAction: "#f5c026",
+  diffRemovedText: "#f07171",
+  diffAddedText: "#7ece78",
+  diffContextText: "#c8c2ae",
+  diffGutter: "#706b5b",
+  diffBorder: "#3e382b",
+  modeHintKey: "#cf9d22",
+  modeHintPlan: "#7ece78",
+  modeHintAct: "#f5c026",
+  syntaxKeyword: "#f5c026",
+  syntaxBuiltIn: "#9dc490",
+  syntaxType: "#88cfc0",
+  syntaxLiteral: "#ffd644",
+  syntaxNumber: "#f5a832",
+  syntaxRegexp: "#f07c65",
+  syntaxString: "#c2d968",
+  syntaxSubst: "#a4ac98",
+  syntaxSymbol: "#f5c026",
+  syntaxClass: "#88cfc0",
+  syntaxFunction: "#9dc490",
+  syntaxTitle: "#ffd644",
+  syntaxParams: "#a4ac98",
+  syntaxComment: "#6d6857",
+  syntaxTag: "#f07c65",
+  syntaxAttr: "#f5c026",
+  syntaxVariable: "#eae5d1",
 };
 
 export const THEMES: Record<string, ThemeTokens> = {

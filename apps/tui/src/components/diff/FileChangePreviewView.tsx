@@ -29,39 +29,59 @@ export const FileChangePreviewView = memo(function FileChangePreviewView({
   });
   const width = Math.max(20, frame.previewWidth - 2);
 
+  const actionLabel =
+    preview.action === "create"
+      ? "Added"
+      : preview.action === "overwrite"
+        ? "Overwrote"
+        : "Modified";
+  const actionColor =
+    preview.action === "create"
+      ? tokens.diffAddedText
+      : tokens.highlight;
+
   return (
-    <box flexDirection="column" width={width} backgroundColor={tokens.diffHeaderBackground}>
-      <text fg={tokens.diffContextText} attributes={textAttrs({ bold: true })} truncate width={width}>
-        {preview.action === "create" ? "NEW" : preview.action === "overwrite" ? "OVERWRITE" : "EDIT"} {preview.filePath}
+    <box flexDirection="column" width={width} marginY={0}>
+      <text fg={tokens.diffContextText} wrapMode="char" width={width}>
+        <span fg={actionColor} attributes={textAttrs({ bold: true })}>
+          {`● ${actionLabel} `}
+        </span>
+        <span fg={tokens.text} attributes={textAttrs({ bold: true })}>
+          {preview.filePath}
+        </span>
         {" "}
-        <text fg={tokens.diffAddedText}>+{preview.added}</text>
-        <text fg={tokens.diffRemovedText}> -{preview.removed}</text>
+        <span fg={tokens.diffAddedText} attributes={textAttrs({ bold: true })}>
+          {`+${preview.added}`}
+        </span>
+        {" "}
+        <span fg={tokens.diffRemovedText} attributes={textAttrs({ bold: true })}>
+          {`-${preview.removed}`}
+        </span>
       </text>
-      {frame.inlineRows.map((row, index) => {
-        const fg =
-          row.tone === "added"
-            ? tokens.diffAddedText
-            : row.tone === "removed"
-              ? tokens.diffRemovedText
-              : tokens.diffContextText;
-        const bg =
-          row.tone === "added"
-            ? tokens.diffAddedBackground
-            : row.tone === "removed"
-              ? tokens.diffRemovedBackground
-              : undefined;
-        const marker = row.marker === " " ? " " : row.marker;
-        return (
-          <text key={index} fg={fg} bg={bg} wrapMode="char" width={width} truncate>
-            {`${marker}${row.text}`}
+      <box flexDirection="column" width={width}>
+        {frame.inlineRows.map((row, index) => {
+          const fg =
+            row.tone === "added"
+              ? tokens.diffAddedText
+              : row.tone === "removed"
+                ? tokens.diffRemovedText
+                : tokens.diffContextText;
+          const marker = row.marker === " " ? "  " : `${row.marker} `;
+          return (
+            <text key={index} fg={fg} wrapMode="char" width={width} truncate>
+              <span fg={tokens.assistantBorder}>{"│ "}</span>
+              <span fg={fg}>{marker}</span>
+              {row.text}
+            </text>
+          );
+        })}
+        {frame.isCapped ? (
+          <text fg={tokens.muted} attributes={textAttrs({ dim: true })}>
+            <span fg={tokens.assistantBorder}>{"│ "}</span>
+            {`… ${frame.totalInlineRows - frame.inlineRows.length} more rows (ctrl+o to expand)`}
           </text>
-        );
-      })}
-      {frame.isCapped ? (
-        <text fg={tokens.muted} attributes={textAttrs({ dim: true })}>
-          {`… ${frame.totalInlineRows - frame.inlineRows.length} more rows (ctrl+o to expand)`}
-        </text>
-      ) : null}
+        ) : null}
+      </box>
     </box>
   );
 });

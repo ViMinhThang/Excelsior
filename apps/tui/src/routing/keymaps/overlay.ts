@@ -31,8 +31,8 @@ export const QUESTION_KEYS: KeyTable = {
 };
 
 export const SESSION_LIST_KEYS: KeyTable = {
-  up: "session-list.move:1",
-  down: "session-list.move:-1",
+  up: "session-list.move:-1",
+  down: "session-list.move:1",
   enter: "session-list.switch",
   d: "session-list.delete",
   n: "session-list.create",

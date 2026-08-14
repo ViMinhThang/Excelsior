@@ -1,14 +1,14 @@
 import type {
   DeltaScope,
   MetaSnapshot,
+  RunItem,
   RunSnapshot,
   SessionSnapshot,
   SnapshotPayload,
-  RunToolState,
 } from "@excelsior/protocol";
 import { DiffEmitter } from "./diffEmitter.js";
 import type { MetaState } from "./mutate.js";
-import { RunStore } from "./runStore.js";
+import { RunStore, toRunToolState } from "./runStore.js";
 import { SessionStore } from "./sessionStore.js";
 
 export interface SyncService {
@@ -43,24 +43,16 @@ export function createSyncService({ emitter, store, runStore, meta }: SyncDeps):
       case "run": {
         const turn = runStore.activeTurn;
         if (!turn || turn.sessionId !== scope.sessionId) return null;
-        const tools = turn.steps.flatMap((step) => step.toolCalls);
-        const toolsState: RunToolState[] = tools.map((call) => ({
-          id: call.id,
-          toolName: call.toolName,
-          args: call.args,
-          status: call.status,
-          result: call.result,
-          isError: call.isError,
-        }));
-        const snapshot: RunSnapshot = {
-          status: turn.status,
-          turnId: turn.id,
-          text: turn.blocks
-            .filter((block) => block.kind === "assistant")
-            .map((block) => block.content)
-            .join(""),
-          tools: toolsState,
-        };
+        const calls = turn.steps.flatMap((step) => step.toolCalls);
+        const items: RunItem[] = turn.blocks.flatMap<RunItem>((block) => {
+          if (block.kind === "assistant") {
+            return [{ kind: "assistant", content: block.content }];
+          }
+          const call = calls.find((c) => c.id === block.id);
+          if (!call) return [];
+          return [{ kind: "tool-call", tool: toRunToolState(call) }];
+        });
+        const snapshot: RunSnapshot = { status: turn.status, turnId: turn.id, items };
         return snapshot;
       }
     }

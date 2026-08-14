@@ -6,18 +6,17 @@ import { maskSecret } from "../lib/text.js";
 import type { SettingsField } from "../actions/settings.js";
 
 const FIELD_LABELS: Record<SettingsField, string> = {
-  deepseekApiKey: "DeepSeek API key",
   githubToken: "GitHub token",
   agentToolLoopSteps: "Tool loop steps (max turns)",
   autoApproveWorkspaceEdits: "Auto-approve workspace edits",
 };
 
 function formatValue(field: SettingsField, value: unknown): string {
-  if (field === "deepseekApiKey" || field === "githubToken") {
+  if (field === "githubToken") {
     return maskSecret(String(value ?? ""));
   }
   if (field === "autoApproveWorkspaceEdits") {
-    return value ? "yes" : "no";
+    return value ? "[ON]" : "[OFF]";
   }
   return String(value ?? "");
 }
@@ -28,29 +27,42 @@ export function SettingsScreen() {
   if (!draft) return null;
 
   return (
-    <box flexDirection="column" width="100%" height="100%" paddingX={1} paddingY={0}>
+    <box flexDirection="column" width="100%" height="100%" paddingX={1} paddingY={1}>
       <text fg={tokens.highlightHeading} attributes={textAttrs({ bold: true })}>
-        Settings
+        <span fg={tokens.highlightBrand}>{"⚙ "}</span>
+        {"Settings & Preferences"}
+      </text>
+      <text fg={tokens.border}>
+        {"─".repeat(50)}
       </text>
       {draft.fields.map((field, index) => {
         const active = index === draft.active;
         const isBool = field === "autoApproveWorkspaceEdits";
+        const val = formatValue(field, draft.values[field]);
         return (
-          <box key={field} flexDirection="row" gap={1} width="100%" backgroundColor={active ? tokens.highlightSecondary : undefined} paddingX={0}>
+          <box key={field} flexDirection="row" gap={1} width="100%" paddingX={0}>
             <text fg={active ? tokens.highlightSelected : tokens.text} attributes={textAttrs({ bold: active })}>
-              {active ? "▸ " : "  "}
+              <span fg={active ? tokens.highlightBrand : tokens.muted}>
+                {active ? "▸ " : "  "}
+              </span>
               {FIELD_LABELS[field]}
             </text>
-            <text fg={active ? tokens.highlight : tokens.muted} truncate>
+            <text fg={active ? (isBool && val === "[ON]" ? tokens.success : tokens.highlight) : tokens.muted} truncate>
               {isBool ? "" : ":"}
               {" "}
-              {formatValue(field, draft.values[field])}
+              {val}
             </text>
           </box>
         );
       })}
+      <text fg={tokens.border}>
+        {"─".repeat(50)}
+      </text>
       <text fg={tokens.muted} attributes={textAttrs({ dim: true })}>
-        [↑↓] move [enter] toggle [ctrl+s] save [esc] back
+        <span fg={tokens.highlight}>{"[↑↓] "}</span>{"Select  "}
+        <span fg={tokens.highlight}>{"[enter] "}</span>{"Edit/Toggle  "}
+        <span fg={tokens.highlight}>{"[ctrl+s] "}</span>{"Save  "}
+        <span fg={tokens.muted}>{"[esc] Back"}</span>
       </text>
     </box>
   );

@@ -23,6 +23,17 @@ export interface RunTurn {
   startedAt: number;
 }
 
+export function toRunToolState(call: RunToolCall): RunToolState {
+  return {
+    id: call.id,
+    toolName: call.toolName,
+    args: call.args,
+    status: call.status,
+    result: call.result,
+    isError: call.isError,
+  };
+}
+
 export class RunStore {
   private active: RunTurn | null = null;
 

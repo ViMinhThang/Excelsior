@@ -33,7 +33,6 @@ import {
 import type { CapabilityContext, PermissionDecision, PermissionPolicy } from "@excelsior/engine/capabilities";
 
 const SETTINGS: AppSettings = {
-  deepseekApiKey: "sk-test",
   githubToken: "",
   agentToolLoopSteps: "unlimited",
   autoReflectionEnabled: false,

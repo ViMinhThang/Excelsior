@@ -15,7 +15,7 @@ export function keyEventToTuiKey(key: KeyEvent): MappedKey {
     downArrow: key.name === "down",
     leftArrow: key.name === "left",
     rightArrow: key.name === "right",
-    return: key.name === "return",
+    return: key.name === "return" || key.name === "linefeed",
     escape: key.name === "escape",
     tab: key.name === "tab",
     backspace: key.name === "backspace",

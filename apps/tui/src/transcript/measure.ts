@@ -55,9 +55,14 @@ export function estimateBlockHeight(block: TranscriptBlock, ctx: MeasureContext)
 
 export function estimateLiveHeight(live: LiveRunState, ctx: MeasureContext): number {
   const contentWidth = Math.max(20, ctx.width - 2);
-  const text = live.text ? textRows(live.text, contentWidth) : 0;
-  const tools = live.tools.length > 0
-    ? live.tools.reduce((sum, _tool) => sum + LIVE_TOOL_HEADER + (ctx.toolsExpanded ? 1 : 0), 0)
-    : 0;
+  let text = 0;
+  let tools = 0;
+  for (const item of live.items) {
+    if (item.kind === "assistant") {
+      text += item.content ? textRows(item.content, contentWidth) : 0;
+    } else {
+      tools += LIVE_TOOL_HEADER + (ctx.toolsExpanded ? 1 : 0);
+    }
+  }
   return Math.max(1, text + tools + 1);
 }

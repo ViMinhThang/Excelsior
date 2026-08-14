@@ -39,7 +39,7 @@ describe("protocol round-trip", () => {
       { cmd: "session-delete-all" },
       { cmd: "mode-set", mode: "act" },
       { cmd: "mode-toggle" },
-      { cmd: "settings-save", patch: { deepseekApiKey: "sk-…" } },
+      { cmd: "settings-save", patch: { githubToken: "gh-…" } },
       { cmd: "confirm-respond", callId: "c1", approved: true },
       { cmd: "confirm-approve-all" },
       { cmd: "question-respond", response: { callId: "c1", answer: "x", isManual: false } },

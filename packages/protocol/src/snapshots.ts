@@ -3,11 +3,12 @@ import type {
   AgentMode,
   AppSettings,
   CommandDefinition,
+  RunItem,
+  RunStatus,
   Session,
   SessionState,
   Workspace,
 } from "./value.js";
-import type { RunStatus, RunToolState } from "./value.js";
 
 export interface MetaSnapshot {
   sessions: Session[];
@@ -29,8 +30,7 @@ export interface SessionSnapshot {
 export interface RunSnapshot {
   status: RunStatus;
   turnId: string | null;
-  text: string;
-  tools: RunToolState[];
+  items: RunItem[];
 }
 
 export type SnapshotPayload = MetaSnapshot | SessionSnapshot | RunSnapshot;

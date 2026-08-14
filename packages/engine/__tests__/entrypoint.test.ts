@@ -41,17 +41,19 @@ function freshDir(): string {
   return dir;
 }
 
-function spawnEngine(opts: { workspace: string; dataDir: string; heartbeatMs?: number }): EngineProcess {
+function spawnEngine(opts: { workspace: string; dataDir: string; heartbeatMs?: number; env?: Record<string, string | undefined> }): EngineProcess {
+  const env = {
+    ...process.env,
+    EXCELSIOR_ENGINE_DATA_DIR: opts.dataDir,
+    EXCELSIOR_ENGINE_HEARTBEAT_MS: String(opts.heartbeatMs ?? 200),
+    NODE_NO_WARNINGS: "1",
+    ...opts.env,
+  };
   const child = spawn(
     process.execPath,
     ["--import", "tsx", "--conditions", "development", ENTRYPOINT, opts.workspace],
     {
-      env: {
-        ...process.env,
-        EXCELSIOR_ENGINE_DATA_DIR: opts.dataDir,
-        EXCELSIOR_ENGINE_HEARTBEAT_MS: String(opts.heartbeatMs ?? 200),
-        NODE_NO_WARNINGS: "1",
-      },
+      env,
       stdio: ["pipe", "pipe", "inherit"],
     },
   );
@@ -68,7 +70,7 @@ interface WireHarness extends EngineProcess {
   sendRequest(req: AgentRequest): Promise<Envelope>;
 }
 
-function wireHarness(opts: { workspace: string; dataDir: string; heartbeatMs?: number }): WireHarness {
+function wireHarness(opts: { workspace: string; dataDir: string; heartbeatMs?: number; env?: Record<string, string | undefined> }): WireHarness {
   const { child, transport } = spawnEngine(opts);
   const envelopes: Envelope[] = [];
   const responseQueue: Envelope[] = [];
@@ -179,7 +181,7 @@ describe("engine daemon (stdio)", () => {
   it(
     "surfaces a missing API key as an error delta",
     async () => {
-      const harness = wireHarness({ workspace: freshDir(), dataDir: freshDir() });
+      const harness = wireHarness({ workspace: freshDir(), dataDir: freshDir(), env: { DEEPSEEK_API_KEY: "" } });
       await harness.sendCommand({ cmd: "session-create", title: "S" });
       await harness.waitForDelta(
         (env) => (env.payload as { delta?: { kind?: string } }).delta?.kind === "session-state",
@@ -219,7 +221,7 @@ describe("engine daemon (stdio)", () => {
       );
       const settingsAck = await first.sendCommand({
         cmd: "settings-save",
-        patch: { deepseekApiKey: "sk-test-123" },
+        patch: { githubToken: "gh-test-123" },
       });
       expect(settingsAck.payload).toMatchObject({ ok: true });
       await first.waitForDelta(
@@ -245,9 +247,9 @@ describe("engine daemon (stdio)", () => {
 
       const catalog = await second.sendRequest({ req: "catalog" });
       expect(
-        (catalog.payload as { data: { settings: { deepseekApiKey: string } } }).data.settings
-          .deepseekApiKey,
-      ).toBe("sk-test-123");
+        (catalog.payload as { data: { settings: { githubToken: string } } }).data.settings
+          .githubToken,
+      ).toBe("gh-test-123");
     },
     30_000,
   );

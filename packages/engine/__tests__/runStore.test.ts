@@ -7,7 +7,6 @@ import type { MetaState, Mutation, RunTurn } from "@excelsior/engine";
 import type { AgentLlmInfo, AppSettings, Workspace, WireDelta } from "@excelsior/protocol";
 
 const SETTINGS: AppSettings = {
-  deepseekApiKey: "sk-test",
   githubToken: "",
   agentToolLoopSteps: "unlimited",
   autoReflectionEnabled: false,

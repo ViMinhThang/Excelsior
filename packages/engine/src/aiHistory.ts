@@ -26,20 +26,22 @@ function toolCallToToolBlock(call: RunToolCall): ToolCallBlock {
   };
 }
 
-export function turnToTranscriptBlocks(turn: RunTurn): TranscriptBlock[] {
+export function turnToTranscriptBlocks(turn: RunTurn, includeUser = true): TranscriptBlock[] {
   const now = Date.now();
   const blocks: TranscriptBlock[] = [];
 
-  blocks.push({
-    id: `user_${turn.id}`,
-    turnId: turn.id,
-    kind: "user",
-    role: "user",
-    content: turn.userContent,
-    status: "completed",
-    createdAt: turn.startedAt,
-    finalizedAt: turn.startedAt,
-  });
+  if (includeUser) {
+    blocks.push({
+      id: `user_${turn.id}`,
+      turnId: turn.id,
+      kind: "user",
+      role: "user",
+      content: turn.userContent,
+      status: "completed",
+      createdAt: turn.startedAt,
+      finalizedAt: turn.startedAt,
+    });
+  }
 
   for (const block of turn.blocks) {
     if (block.kind === "assistant") {
@@ -103,9 +105,28 @@ export function buildAiHistory(
   const messages: AgentMessage[] = [];
 
   for (const block of committed.blocks) {
-    if (block.kind === "user" || block.kind === "assistant") {
-      messages.push({ role: block.role ?? "user", content: block.content });
+    if (block.kind === "user") {
+      messages.push({ role: "user", content: block.content });
+    } else if (block.kind === "assistant") {
+      messages.push({ role: "assistant", content: block.content });
     } else if (block.kind === "tool-call" && block.tool) {
+      messages.push({
+        role: "assistant",
+        content: "",
+        tool_calls: [
+          {
+            id: block.tool.id,
+            type: "function",
+            function: {
+              name: block.tool.toolName,
+              arguments:
+                typeof block.tool.args === "string"
+                  ? block.tool.args
+                  : JSON.stringify(block.tool.args ?? {}),
+            },
+          },
+        ],
+      });
       messages.push({
         role: "tool",
         content: block.tool.result,
@@ -115,15 +136,15 @@ export function buildAiHistory(
   }
 
   if (active) {
-    messages.push({ role: "user", content: active.userContent });
+    const hasUser = committed.blocks.some((b) => b.id === `user_${active.id}`);
+    if (!hasUser) {
+      messages.push({ role: "user", content: active.userContent });
+    }
     for (const step of active.steps) {
-      if (step.modelOutput) {
-        messages.push({ role: "assistant", content: step.modelOutput });
-      }
       if (step.toolCalls.length > 0) {
         messages.push({
           role: "assistant",
-          content: "",
+          content: step.modelOutput,
           tool_calls: step.toolCalls.map((call) => ({
             id: call.id,
             type: "function",
@@ -141,6 +162,8 @@ export function buildAiHistory(
             tool_call_id: call.id,
           });
         }
+      } else if (step.modelOutput) {
+        messages.push({ role: "assistant", content: step.modelOutput });
       }
     }
   }
@@ -150,8 +173,7 @@ export function buildAiHistory(
 
 export function latestStep(turn: RunTurn): RunStep {
   const last = turn.steps[turn.steps.length - 1];
-  if (last && last.modelOutput !== "") return last;
-  if (last && last.toolCalls.length > 0) return last;
+  if (last && last.toolCalls.length === 0) return last;
   const step: RunStep = { id: `step_${turn.steps.length + 1}`, modelOutput: "", toolCalls: [] };
   turn.steps.push(step);
   return step;

@@ -47,9 +47,6 @@ The engine needs a DeepSeek API key:
 $env:DEEPSEEK_API_KEY="your-deepseek-api-key"
 ```
 
-The key can also be saved at runtime with the `/settings` command or the
-`settings-save` command.
-
 Environment variables:
 
 | Variable | Required | Purpose |

@@ -12,6 +12,13 @@ export function scopeKey(scope: DeltaScope): string {
   return scope.kind === "meta" ? "meta" : `${scope.kind}:${scope.sessionId}`;
 }
 
+export function emitMetaError(emitter: DiffEmitter, message: string): void {
+  emitter.emit(
+    { kind: "meta" },
+    { scope: { kind: "meta" }, delta: { kind: "error", message } },
+  );
+}
+
 interface ScopeRing {
   deltas: WireDelta[];
   lastRev: number;

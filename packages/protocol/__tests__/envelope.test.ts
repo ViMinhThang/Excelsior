@@ -20,7 +20,7 @@ const sampleCommands: AgentCommand[] = [
   { cmd: "session-delete-all" },
   { cmd: "mode-set", mode: "plan" },
   { cmd: "mode-toggle" },
-  { cmd: "settings-save", patch: { deepseekApiKey: "k" } },
+  { cmd: "settings-save", patch: { githubToken: "k" } },
   { cmd: "confirm-respond", callId: "c1", approved: true },
   { cmd: "confirm-approve-all" },
   {
@@ -70,7 +70,6 @@ const sampleResponses: AgentResponse[] = [
     data: {
       commands: [],
       settings: {
-        deepseekApiKey: "",
         githubToken: "",
         agentToolLoopSteps: "unlimited",
         autoReflectionEnabled: false,

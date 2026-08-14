@@ -20,7 +20,6 @@ import type {
 } from "@excelsior/protocol";
 
 const SETTINGS: AppSettings = {
-  deepseekApiKey: "sk-test",
   githubToken: "",
   agentToolLoopSteps: "unlimited",
   autoReflectionEnabled: false,

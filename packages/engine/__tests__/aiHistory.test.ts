@@ -79,6 +79,17 @@ describe("buildAiHistory", () => {
     expect(messages).toEqual([
       { role: "user", content: "hello" },
       { role: "assistant", content: "hi" },
+      {
+        role: "assistant",
+        content: "",
+        tool_calls: [
+          {
+            id: "c1",
+            type: "function",
+            function: { name: "view", arguments: "{}" },
+          },
+        ],
+      },
       { role: "tool", content: "file content", tool_call_id: "c1" },
     ]);
   });

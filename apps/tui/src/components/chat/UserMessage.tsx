@@ -11,11 +11,11 @@ export interface UserMessageProps {
 
 export const UserMessage = memo(function UserMessage({ block, tokens, width }: UserMessageProps) {
   return (
-    <box flexDirection="column" width={width} backgroundColor={tokens.userPanel} paddingX={1} paddingY={0}>
-      <text fg={tokens.muted} attributes={textAttrs({ dim: true })}>
-        you
-      </text>
-      <text fg={tokens.text} wrapMode="char" width={width}>
+    <box flexDirection="column" width={width} paddingX={1} paddingY={0}>
+      <text fg={tokens.text} attributes={textAttrs({ bold: true })} wrapMode="char" width={width}>
+        <span fg={tokens.highlight} attributes={textAttrs({ bold: true })}>
+          {"❯ "}
+        </span>
         {block.content}
       </text>
     </box>

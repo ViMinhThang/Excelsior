@@ -9,17 +9,20 @@ export function EngineCrashed() {
   if (status.engine !== "crashed") return null;
 
   return (
-    <box flexDirection="column" width="100%" borderStyle="single" borderColor={tokens.error} backgroundColor={tokens.pendingPanel} paddingX={1} paddingY={0}>
+    <box flexDirection="column" width="100%" borderStyle="single" borderColor={tokens.error} paddingX={1} paddingY={0}>
       <text fg={tokens.error} attributes={textAttrs({ bold: true })}>
-        Engine crashed
+        <span fg={tokens.error}>{"💥 "}</span>
+        {"Engine Disconnected / Crashed"}
       </text>
       {status.error ? (
         <text fg={tokens.error} wrapMode="char" width={80}>
+          <span fg={tokens.border}>{"│ "}</span>
           {status.error}
         </text>
       ) : null}
       <text fg={tokens.muted} attributes={textAttrs({ dim: true })}>
-        [r] restart engine (committed turns resume) [ctrl+c] quit
+        <span fg={tokens.highlight}>{"[r] "}</span>{"Restart engine (turns resume)  "}
+        <span fg={tokens.muted}>{"[ctrl+c] Quit"}</span>
       </text>
     </box>
   );

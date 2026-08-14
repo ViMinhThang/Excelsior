@@ -4,6 +4,7 @@ import type {
   AppSettings,
   CommandDefinition,
   InteractionState,
+  RunItem,
   RunStatus,
   RunToolState,
   Session,
@@ -41,8 +42,7 @@ export interface SessionSlice {
 export interface RunSlice {
   status: RunStatus;
   turnId: string | null;
-  text: string;
-  tools: RunToolState[];
+  items: RunItem[];
 }
 
 export interface ReadModel {
@@ -53,7 +53,6 @@ export interface ReadModel {
 }
 
 export const EMPTY_SETTINGS: AppSettings = {
-  deepseekApiKey: "",
   githubToken: "",
   agentToolLoopSteps: "unlimited",
   autoReflectionEnabled: false,
@@ -94,6 +93,24 @@ function applyMetaSnapshot(snapshot: MetaSnapshot, model: ReadModel): void {
     llm: snapshot.llm,
     mode: snapshot.mode,
   };
+}
+
+function appendAssistantItems(items: RunItem[], content: string): RunItem[] {
+  const last = items[items.length - 1];
+  if (last && last.kind === "assistant") {
+    return [...items.slice(0, -1), { kind: "assistant", content: last.content + content }];
+  }
+  return [...items, { kind: "assistant", content }];
+}
+
+function upsertToolItem(items: RunItem[], tool: RunToolState): RunItem[] {
+  const existing = items.findIndex((item) => item.kind === "tool-call" && item.tool.id === tool.id);
+  if (existing === -1) {
+    return [...items, { kind: "tool-call", tool }];
+  }
+  return items.map((item) =>
+    item.kind === "tool-call" && item.tool.id === tool.id ? { kind: "tool-call", tool } : item,
+  );
 }
 
 export function applyDelta(model: ReadModel, wire: AgentDelta): ApplyDeltaResult {
@@ -146,19 +163,18 @@ export function applyDelta(model: ReadModel, wire: AgentDelta): ApplyDeltaResult
       switch (delta.kind) {
         case "run-status":
           if (delta.status === "running") {
-            model.run = { status: delta.status, turnId: delta.turnId, text: "", tools: [] };
+            model.run = { status: delta.status, turnId: delta.turnId, items: [] };
           } else {
             model.run = null;
           }
           return "run";
         case "run-text-delta":
           if (!model.run) return null;
-          model.run = { ...model.run, text: model.run.text + delta.content };
+          model.run = { ...model.run, items: appendAssistantItems(model.run.items, delta.content) };
           return "run";
         case "run-tool": {
           if (!model.run) return null;
-          const tools = model.run.tools.filter((t) => t.id !== delta.tool.id);
-          model.run = { ...model.run, tools: [...tools, delta.tool] };
+          model.run = { ...model.run, items: upsertToolItem(model.run.items, delta.tool) };
           return "run";
         }
         case "snapshot":
@@ -166,8 +182,7 @@ export function applyDelta(model: ReadModel, wire: AgentDelta): ApplyDeltaResult
           model.run = {
             status: delta.snapshot.status,
             turnId: delta.snapshot.turnId,
-            text: delta.snapshot.text,
-            tools: [...delta.snapshot.tools],
+            items: [...delta.snapshot.items],
           };
           return "run";
         case "error":

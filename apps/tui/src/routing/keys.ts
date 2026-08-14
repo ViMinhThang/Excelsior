@@ -19,6 +19,7 @@ export interface TuiKey {
 
 const NAMED_KEYS = new Set([
   "return",
+  "linefeed",
   "escape",
   "tab",
   "backspace",

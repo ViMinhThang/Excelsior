@@ -3,9 +3,11 @@ import type { ThemeTokens } from "../../theme/tokens.js";
 import { textAttrs } from "../../platform/opentui/textAttributes.js";
 
 export interface MarkdownBlock {
-  kind: "heading" | "code" | "list" | "quote" | "paragraph" | "empty";
+  kind: "heading" | "code" | "list" | "quote" | "paragraph" | "hr" | "empty";
   lines: string[];
   level?: number;
+  lang?: string;
+  ordered?: boolean;
 }
 
 export function parseMarkdown(text: string): MarkdownBlock[] {
@@ -22,6 +24,12 @@ export function parseMarkdown(text: string): MarkdownBlock[] {
       continue;
     }
 
+    if (/^(\*{3,}|-{3,}|_{3,})$/.test(line.trim())) {
+      blocks.push({ kind: "hr", lines: [] });
+      i += 1;
+      continue;
+    }
+
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
     if (heading) {
       blocks.push({ kind: "heading", level: heading[1].length, lines: [heading[2]] });
@@ -30,6 +38,7 @@ export function parseMarkdown(text: string): MarkdownBlock[] {
     }
 
     if (line.trimStart().startsWith("```")) {
+      const lang = line.trimStart().slice(3).trim();
       const fenceLines: string[] = [];
       i += 1;
       while (i < rawLines.length && !rawLines[i].trimStart().startsWith("```")) {
@@ -37,22 +46,37 @@ export function parseMarkdown(text: string): MarkdownBlock[] {
         i += 1;
       }
       if (i < rawLines.length) i += 1;
-      blocks.push({ kind: "code", lines: fenceLines });
+      blocks.push({ kind: "code", lines: fenceLines, lang });
       continue;
     }
 
-    const listMatch = /^\s*([-*+]|\d+\.)\s+/.exec(line);
+    const orderedMatch = /^\s*(\d+)\.\s+/.exec(line);
+    if (orderedMatch) {
+      const listLines: string[] = [];
+      while (i < rawLines.length) {
+        const candidate = rawLines[i];
+        if (!candidate.trim()) break;
+        const m = /^\s*(\d+)\.\s+(.*)$/.exec(candidate);
+        if (!m) break;
+        listLines.push(m[2]);
+        i += 1;
+      }
+      blocks.push({ kind: "list", lines: listLines, ordered: true });
+      continue;
+    }
+
+    const listMatch = /^\s*([-*+])\s+/.exec(line);
     if (listMatch) {
       const listLines: string[] = [];
       while (i < rawLines.length) {
         const candidate = rawLines[i];
         if (!candidate.trim()) break;
-        const m = /^\s*([-*+]|\d+\.)\s+(.*)$/.exec(candidate);
+        const m = /^\s*([-*+])\s+(.*)$/.exec(candidate);
         if (!m) break;
         listLines.push(m[2]);
         i += 1;
       }
-      blocks.push({ kind: "list", lines: listLines });
+      blocks.push({ kind: "list", lines: listLines, ordered: false });
       continue;
     }
 
@@ -109,6 +133,41 @@ export function parseInline(text: string): InlineToken[] {
   return tokens;
 }
 
+const JS_KEYWORDS = new Set([
+  "const", "let", "var", "function", "return", "import", "from", "export",
+  "default", "class", "interface", "type", "extends", "implements", "if",
+  "else", "for", "while", "switch", "case", "break", "continue", "try",
+  "catch", "finally", "throw", "new", "async", "await", "yield", "typeof",
+  "instanceof", "void", "null", "undefined", "true", "false", "def", "self",
+  "fn", "pub", "mut", "struct", "impl", "enum", "select", "where", "join",
+]);
+
+function highlightCodeTokens(line: string, tokens: ThemeTokens): ReactNode {
+  if (!line) return " ";
+  if (line.trimStart().startsWith("//") || line.trimStart().startsWith("#")) {
+    return <span fg={tokens.syntaxComment}>{line}</span>;
+  }
+  const parts: ReactNode[] = [];
+  const tokenRegex = /("[^"]*"|'[^']*'|`[^`]*`|\b\d+(\.\d+)?\b|[a-zA-Z_$][a-zA-Z0-9_$]*|[^\s\w]+|\s+)/g;
+  let match: RegExpExecArray | null;
+  let idx = 0;
+  while ((match = tokenRegex.exec(line)) !== null) {
+    const word = match[0];
+    if (word.startsWith('"') || word.startsWith("'") || word.startsWith("`")) {
+      parts.push(<span key={idx++} fg={tokens.syntaxString}>{word}</span>);
+    } else if (/^\d+(\.\d+)?$/.test(word)) {
+      parts.push(<span key={idx++} fg={tokens.syntaxNumber}>{word}</span>);
+    } else if (JS_KEYWORDS.has(word)) {
+      parts.push(<span key={idx++} fg={tokens.syntaxKeyword} attributes={textAttrs({ bold: true })}>{word}</span>);
+    } else if (/^[A-Z][a-zA-Z0-9_$]*$/.test(word)) {
+      parts.push(<span key={idx++} fg={tokens.syntaxType}>{word}</span>);
+    } else {
+      parts.push(<span key={idx++} fg={tokens.assistantText}>{word}</span>);
+    }
+  }
+  return parts.length > 0 ? parts : line;
+}
+
 export interface MarkdownRendererProps {
   text: string;
   tokens: ThemeTokens;
@@ -126,33 +185,84 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({ text, tokens, w
   );
 });
 
-function MarkdownBlockView({ block, tokens, width }: { block: MarkdownBlock; tokens: ThemeTokens; width: number }) {
+export function MarkdownBlockView({
+  block,
+  tokens,
+  width,
+  isLive,
+}: {
+  block: MarkdownBlock;
+  tokens: ThemeTokens;
+  width: number;
+  isLive?: boolean;
+}) {
+  const contentWidth = Math.max(10, width - 2);
   switch (block.kind) {
     case "empty":
       return null;
-    case "heading":
+    case "hr":
       return (
-        <text fg={tokens.highlightHeading} attributes={textAttrs({ bold: true })} truncate width={width}>
-          {`${"#".repeat(block.level ?? 1)} ${block.lines[0] ?? ""}`}
+        <text fg={tokens.border} width={width} truncate>
+          {"─".repeat(Math.min(contentWidth, 60))}
         </text>
       );
-    case "code":
+    case "heading": {
+      const prefix = "#".repeat(block.level ?? 1);
       return (
-        <box flexDirection="column" width={width}>
+        <text fg={tokens.highlightHeading} attributes={textAttrs({ bold: true })} wrapMode="char" width={width}>
+          <span fg={tokens.highlightBrand} attributes={textAttrs({ bold: true })}>
+            {`${prefix} `}
+          </span>
+          {block.lines[0] ?? ""}
+          {isLive ? (
+            <span fg={tokens.highlight} attributes={textAttrs({ bold: true })}>
+              {" ▌"}
+            </span>
+          ) : null}
+        </text>
+      );
+    }
+    case "code": {
+      const langTag = block.lang ? `─ ${block.lang} ` : "──";
+      const topBarWidth = Math.max(10, Math.min(contentWidth, 60) - langTag.length - 2);
+      const topBar = `╭${langTag}${"─".repeat(Math.max(2, topBarWidth))}╮`;
+      const bottomBar = `╰${"─".repeat(Math.max(4, Math.min(contentWidth, 60) - 2))}╯`;
+      return (
+        <box flexDirection="column" width={width} marginY={0}>
+          <text fg={tokens.assistantBorder} width={width} truncate>
+            {topBar}
+          </text>
           {block.lines.map((line, index) => (
-            <text key={index} fg={tokens.highlightInline} wrapMode="char" width={width}>
-              {line}
+            <text key={index} fg={tokens.assistantText} wrapMode="none" width={width} truncate>
+              <span fg={tokens.assistantBorder}>{"│ "}</span>
+              {highlightCodeTokens(line, tokens)}
+              {isLive && index === block.lines.length - 1 ? (
+                <span fg={tokens.highlight} attributes={textAttrs({ bold: true })}>
+                  {" ▌"}
+                </span>
+              ) : null}
             </text>
           ))}
+          <text fg={tokens.assistantBorder} width={width} truncate>
+            {bottomBar}
+          </text>
         </box>
       );
+    }
     case "list":
       return (
         <box flexDirection="column" width={width}>
           {block.lines.map((line, index) => (
             <text key={index} fg={tokens.text} wrapMode="char" width={width}>
-              <text fg={tokens.assistantBullet}>{"• "}</text>
+              <span fg={tokens.assistantBullet} attributes={textAttrs({ bold: true })}>
+                {block.ordered ? `${index + 1}. ` : "• "}
+              </span>
               <InlineSpans text={line} tokens={tokens} />
+              {isLive && index === block.lines.length - 1 ? (
+                <span fg={tokens.highlight} attributes={textAttrs({ bold: true })}>
+                  {" ▌"}
+                </span>
+              ) : null}
             </text>
           ))}
         </box>
@@ -161,9 +271,14 @@ function MarkdownBlockView({ block, tokens, width }: { block: MarkdownBlock; tok
       return (
         <box flexDirection="column" width={width}>
           {block.lines.map((line, index) => (
-            <text key={index} fg={tokens.highlightSecondary} wrapMode="char" width={width}>
-              <text fg={tokens.muted}>{"│ "}</text>
+            <text key={index} fg={tokens.secondary} wrapMode="char" width={width}>
+              <span fg={tokens.highlightSecondary}>{"│ "}</span>
               <InlineSpans text={line} tokens={tokens} />
+              {isLive && index === block.lines.length - 1 ? (
+                <span fg={tokens.highlight} attributes={textAttrs({ bold: true })}>
+                  {" ▌"}
+                </span>
+              ) : null}
             </text>
           ))}
         </box>
@@ -172,6 +287,11 @@ function MarkdownBlockView({ block, tokens, width }: { block: MarkdownBlock; tok
       return (
         <text fg={tokens.text} wrapMode="char" width={width}>
           <InlineSpans text={block.lines[0] ?? ""} tokens={tokens} />
+          {isLive ? (
+            <span fg={tokens.highlight} attributes={textAttrs({ bold: true })}>
+              {" ▌"}
+            </span>
+          ) : null}
         </text>
       );
     default:
@@ -183,9 +303,9 @@ export function InlineSpans({ text, tokens }: { text: string; tokens: ThemeToken
   return parseInline(text).map((token, index) => {
     if (token.code) {
       return (
-        <text key={index} fg={tokens.highlightInline}>
-          {token.text}
-        </text>
+        <span key={index} fg={tokens.highlightInline} attributes={textAttrs({ bold: true })}>
+          {`\`${token.text}\``}
+        </span>
       );
     }
     const attrs = textAttrs({
@@ -193,9 +313,9 @@ export function InlineSpans({ text, tokens }: { text: string; tokens: ThemeToken
       italic: token.italic,
     });
     return (
-      <text key={index} fg={token.bold ? tokens.highlightEmphasis : tokens.text} attributes={attrs}>
+      <span key={index} fg={token.bold ? tokens.highlightEmphasis : tokens.text} attributes={attrs}>
         {token.text}
-      </text>
+      </span>
     );
   });
 }

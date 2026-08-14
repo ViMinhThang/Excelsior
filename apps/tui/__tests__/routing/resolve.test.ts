@@ -57,9 +57,24 @@ describe("resolve", () => {
     expect(resolve(ctx({ focus: "input", combo: "up" }))).toBe("input.historyUp");
   });
 
+  it("lets pageup/pagedown scroll the transcript from any chat focus", () => {
+    expect(resolve(ctx({ focus: "input", combo: "pageup" }))).toBe("transcript.pageUp");
+    expect(resolve(ctx({ focus: "app", combo: "pagedown" }))).toBe("transcript.pageDown");
+    expect(resolve(ctx({ focus: "transcript", combo: "pagedown" }))).toBe("transcript.pageDown");
+  });
+
   it("resolves chat screen keys from any chat focus", () => {
     expect(resolve(ctx({ combo: "ctrl+s" }))).toBe("app.openSettings");
     expect(resolve(ctx({ focus: "transcript", combo: "ctrl+s" }))).toBe("app.openSettings");
+    expect(resolve(ctx({ combo: "ctrl+p" }))).toBe("app.openSessions");
+    expect(resolve(ctx({ combo: "ctrl+n" }))).toBe("app.newSession");
+    expect(resolve(ctx({ combo: "ctrl+d" }))).toBe("app.deleteSession");
+    expect(resolve(ctx({ combo: "ctrl+o" }))).toBe("transcript.toggleTools");
+    expect(resolve(ctx({ combo: "tab" }))).toBe("input.tab");
+    expect(resolve(ctx({ focus: "transcript", combo: "tab" }))).toBe("app.toggleMode");
+    expect(resolve(ctx({ combo: "shift+tab" }))).toBe("app.toggleMode");
+    expect(resolve(ctx({ combo: "ctrl+up" }))).toBe("transcript.scrollUp");
+    expect(resolve(ctx({ combo: "ctrl+down" }))).toBe("transcript.scrollDown");
   });
 
   it("lets overlays capture all keys while open", () => {
@@ -72,6 +87,33 @@ describe("resolve", () => {
     expect(
       resolve(ctx({ focus: "overlay", overlayKind: "session-list", combo: "d" })),
     ).toBe("session-list.delete");
+    expect(
+      resolve(ctx({ focus: "overlay", overlayKind: "session-list", combo: "up" })),
+    ).toBe("session-list.move:-1");
+    expect(
+      resolve(ctx({ focus: "overlay", overlayKind: "session-list", combo: "down" })),
+    ).toBe("session-list.move:1");
+  });
+
+  it("captures overlay letter/digit keys even when the keypress carries text", () => {
+    expect(
+      resolve(ctx({ focus: "overlay", overlayKind: "session-list", combo: "n", text: "n" })),
+    ).toBe("session-list.create");
+    expect(
+      resolve(ctx({ focus: "overlay", overlayKind: "session-list", combo: "d", text: "d" })),
+    ).toBe("session-list.delete");
+    expect(
+      resolve(ctx({ focus: "overlay", overlayKind: "pending-confirm", combo: "y", text: "y" })),
+    ).toBe("confirm.approve");
+    expect(
+      resolve(ctx({ focus: "overlay", overlayKind: "pending-question", combo: "1", text: "1" })),
+    ).toBe("question.select:0");
+  });
+
+  it("does not route unbound overlay letters to text insertion", () => {
+    expect(
+      resolve(ctx({ focus: "overlay", overlayKind: "session-list", combo: "x", text: "x" })),
+    ).toBeNull();
   });
 
   it("keeps app.exit available above overlays", () => {

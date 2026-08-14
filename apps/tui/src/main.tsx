@@ -6,6 +6,7 @@ import { App } from "./app.js";
 import { StoreProvider, createStore } from "./store/store.js";
 import { createInitialState } from "./store/types.js";
 import { connectEngine } from "./engine/connection.js";
+import "./actions/index.js";
 
 async function main(): Promise<void> {
   const workspaceRoot = resolve(process.argv[2] ?? process.cwd());
@@ -19,7 +20,11 @@ async function main(): Promise<void> {
 
   await connectEngine(workspaceRoot, store);
 
-  const renderer = await createCliRenderer({ exitOnCtrlC: false });
+  const renderer = await createCliRenderer({
+    exitOnCtrlC: false,
+    screenMode: "alternate-screen",
+    useMouse: true,
+  });
   const root = createRoot(renderer);
   root.render(
     createElement(StoreProvider, { store }, createElement(App)),

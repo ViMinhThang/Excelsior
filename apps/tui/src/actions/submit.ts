@@ -6,7 +6,7 @@ import { pushHistory, setInput } from "./input.js";
 import { openSettings } from "./navigation.js";
 import { openSessionList } from "./overlay.js";
 import { register } from "./registry.js";
-import { patchStatus } from "./status.js";
+import { patchStatus, toggleMode } from "./status.js";
 
 export function matchCommand(value: string, commands: CommandDefinition[]): CommandDefinition | null {
   const trimmed = value.trim();
@@ -94,8 +94,13 @@ export function submit(store: Store): void {
 export function insertCommand(store: Store): void {
   const { value } = store.getState().ui.input;
   const suggestion = suggestCommand(value, store.getState().catalog.commands);
-  if (suggestion) setInput(store, suggestion + " ");
+  if (suggestion) {
+    setInput(store, suggestion + " ");
+  } else {
+    toggleMode(store);
+  }
 }
 
 register("input.submit", (store) => submit(store));
 register("input.insertCommand", (store) => insertCommand(store));
+register("input.tab", (store) => insertCommand(store));

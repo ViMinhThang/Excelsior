@@ -6,12 +6,12 @@ import { back } from "./navigation.js";
 import { register } from "./registry.js";
 import { handleAck } from "./submit.js";
 
-export type SettingsField = "deepseekApiKey" | "githubToken" | "agentToolLoopSteps" | "autoApproveWorkspaceEdits";
+export type SettingsField = "githubToken" | "agentToolLoopSteps" | "autoApproveWorkspaceEdits";
 
 export function createSettingsDraft(settings: AppSettings): SettingsDraft {
   return {
     active: 0,
-    fields: ["deepseekApiKey", "githubToken", "agentToolLoopSteps", "autoApproveWorkspaceEdits"],
+    fields: ["githubToken", "agentToolLoopSteps", "autoApproveWorkspaceEdits"],
     values: { ...settings },
   };
 }

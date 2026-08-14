@@ -18,7 +18,7 @@ export function getEngineConnection(): EngineConnection | null {
 }
 
 export function isEngineConnected(): boolean {
-  return current !== null && !current.client["closed"];
+  return current !== null && !current.client.isClosed();
 }
 
 export function disconnectEngine(): void {
@@ -45,14 +45,15 @@ export async function connectEngine(workspaceRoot: string, store: Store): Promis
   });
 
   handle.onExit((code) => {
-    if (current === null || current.client["closed"]) return;
-    const intentional = code === 0 && client["closed"];
+    if (current === null || current.client.isClosed()) return;
+    const intentional = code === 0 && current.client.isClosed();
     if (!intentional) setEngineState(store, "crashed", `engine exited (code ${code ?? "unknown"})`);
   });
 
   fold(client, store);
   try {
     await client.connect();
+    await ensureActiveSession(client, store);
     setEngineState(store, "connected");
   } catch (error) {
     setEngineState(store, "crashed", String(error));
@@ -60,6 +61,17 @@ export async function connectEngine(workspaceRoot: string, store: Store): Promis
   return current;
 }
 
+export async function ensureActiveSession(client: AgentClient, store: Store): Promise<void> {
+  const meta = store.getState().meta;
+  if (meta.currentSessionId) return;
+  const sessions = meta.sessions;
+  if (sessions.length > 0) {
+    const mostRecent = sessions[0];
+    await client.command({ cmd: "session-switch", sessionId: mostRecent.id });
+  } else {
+    await client.command({ cmd: "session-create" });
+  }
+}
 export async function restartEngine(store: Store): Promise<void> {
   const meta = store.getState().meta;
   await connectEngine(meta.workspace.rootPath || process.cwd(), store);

@@ -5,15 +5,25 @@ import { EMPTY_INTERACTION } from "../store/types.js";
 import { nextFocus } from "../routing/focus.js";
 
 export function foldMeta(store: Store, slice: MetaSlice): void {
-  store.dispatch((s) => ({
-    meta: {
-      sessions: slice.sessions,
-      currentSessionId: slice.currentSessionId,
-      workspace: slice.workspace,
-      llm: slice.llm,
-    },
-    status: { ...s.status, mode: slice.mode, llm: slice.llm },
-  }));
+  store.dispatch((s) => {
+    let overlay = s.overlay;
+    if (overlay.kind === "session-list") {
+      const activeIdx = slice.sessions.findIndex((sess) => sess.id === slice.currentSessionId);
+      const maxCursor = Math.max(0, slice.sessions.length - 1);
+      const cursor = activeIdx >= 0 ? activeIdx : Math.min(overlay.state.cursor, maxCursor);
+      overlay = { kind: "session-list", state: { cursor } };
+    }
+    return {
+      overlay,
+      meta: {
+        sessions: slice.sessions,
+        currentSessionId: slice.currentSessionId,
+        workspace: slice.workspace,
+        llm: slice.llm,
+      },
+      status: { ...s.status, mode: slice.mode, llm: slice.llm },
+    };
+  });
 }
 
 export function foldCatalog(store: Store, slice: CatalogSlice): void {
@@ -92,7 +102,7 @@ export function foldRun(store: Store, slice: RunSlice | null): void {
     transcript: {
       ...s.transcript,
       live: slice
-        ? { status: slice.status, turnId: slice.turnId, text: slice.text, tools: slice.tools }
+        ? { status: slice.status, turnId: slice.turnId, items: slice.items }
         : null,
     },
     status: { ...s.status, busy: slice ? slice.status === "running" : false },
