@@ -1,0 +1,15 @@
+node_modules
+dist
+.env
+data/
+tmp/
+*.db
+*.db-wal
+*.db-shm
+data/sessions/*.jsonl
+.codex
+AGENTS.md
+.agent
+skills-lock.json
+.grok
+release
