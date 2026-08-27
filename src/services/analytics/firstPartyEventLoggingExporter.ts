@@ -1,2 +1,0 @@
-// nuked
-export class FirstPartyEventLoggingExporter {}
