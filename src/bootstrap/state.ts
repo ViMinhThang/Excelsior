@@ -1,4 +1,4 @@
-import type { BetaMessageStreamParams } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
+import type { BetaMessageStreamParams } from '../types/message.js'
 
 import { realpathSync } from 'fs'
 import sumBy from 'lodash-es/sumBy.js'

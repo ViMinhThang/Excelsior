@@ -1,5 +1,5 @@
 import { feature } from 'bun:bundle'
-import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs'
+// removed anthropic import: // removed anthropic import
 import { randomUUID } from 'crypto'
 import last from 'lodash-es/last.js'
 import {

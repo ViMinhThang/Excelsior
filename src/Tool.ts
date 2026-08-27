@@ -1,4 +1,4 @@
-import type {
+// removed anthropic import: import type {
   ToolResultBlockParam,
   ToolUseBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'

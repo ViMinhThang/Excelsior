@@ -3,7 +3,7 @@ import { APIError } from '@anthropic-ai/sdk'
 import type {
   BetaStopReason,
   BetaUsage as Usage,
-} from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
+} from '../../types/message.js'
 import {
   addToTotalDurationState,
   consumePostCompaction,

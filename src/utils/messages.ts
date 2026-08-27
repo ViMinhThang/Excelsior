@@ -1,6 +1,6 @@
 import { feature } from 'bun:bundle'
-import type { BetaUsage as Usage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
-import type {
+import type { BetaUsage as Usage } from '../types/message.js'
+// removed anthropic import: import type {
   ContentBlock,
   ContentBlockParam,
   RedactedThinkingBlock,
@@ -98,7 +98,7 @@ import type {
   BetaRedactedThinkingBlock,
   BetaThinkingBlock,
   BetaToolUseBlock,
-} from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
+} from '../types/message.js'
 import type {
   HookEvent,
   SDKAssistantMessageError,

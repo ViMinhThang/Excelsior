@@ -1,4 +1,4 @@
-import type {
+// removed anthropic import: import type {
   ContentBlockParam,
   ImageBlockParam,
   TextBlockParam,

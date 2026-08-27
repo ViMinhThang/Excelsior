@@ -1,4 +1,4 @@
-import type {
+// removed anthropic import: import type {
   Base64ImageSource,
   ContentBlockParam,
   ToolResultBlockParam,

@@ -1,5 +1,5 @@
 import { feature } from 'bun:bundle'
-import type {
+// removed anthropic import: import type {
   Base64ImageSource,
   ContentBlockParam,
   MessageParam,

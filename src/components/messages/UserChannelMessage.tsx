@@ -1,5 +1,5 @@
 import { c as _c } from "react/compiler-runtime";
-import type { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs';
+// removed anthropic import: // removed anthropic import
 import * as React from 'react';
 import { CHANNEL_ARROW } from '../../constants/figures.js';
 import { CHANNEL_TAG } from '../../constants/xml.js';

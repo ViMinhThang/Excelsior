@@ -1,5 +1,5 @@
-import type { BetaContentBlock } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
-import type {
+import type { BetaContentBlock } from '../types/message.js'
+// removed anthropic import: import type {
   ContentBlock,
   ContentBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'

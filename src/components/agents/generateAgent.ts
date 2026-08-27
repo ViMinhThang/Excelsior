@@ -1,4 +1,4 @@
-import type { ContentBlock } from '@anthropic-ai/sdk/resources/index.mjs'
+// removed anthropic import: // removed anthropic import
 import { getUserContext } from 'src/context.js'
 import { queryModelWithoutStreaming } from 'src/services/api/claude.js'
 import { getEmptyToolPermissionContext } from 'src/Tool.js'

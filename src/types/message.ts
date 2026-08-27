@@ -1,22 +1,38 @@
 /**
- * Pure message type definitions extracted to break import cycles.
- *
- * This file contains only type definitions with no runtime dependencies.
- * Message types are discriminated unions based on `.type` field.
- * System messages are further discriminated by `.subtype`.
+ * Pure message type definitions — Vercel AI SDK (no @anthropic-ai/sdk)
+ * All Anthropic Beta* types replaced with local Vercel-compatible definitions.
  */
 
 import type { UUID } from 'crypto'
-import type {
-  BetaContentBlock,
-  BetaMessage,
-  BetaRawMessageStreamEvent,
-} from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
-import type {
-  ContentBlockParam,
-} from '@anthropic-ai/sdk/resources/messages.mjs'
-import type { APIError } from '@anthropic-ai/sdk'
 import type { PermissionMode } from './permissions.js'
+
+// Local content block types (replaces BetaContentBlock / ContentBlockParam)
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'tool_use'; id: string; name: string; input: unknown }
+  | { type: 'tool_result'; tool_use_id: string; content: string; is_error?: boolean }
+  | { type: 'reasoning'; text: string }
+  | { type: 'image'; source: unknown }
+
+export type ContentBlockParam = ContentBlock
+
+// Local message shape (replaces BetaMessage)
+export type BetaMessage = {
+  id: string
+  type: 'message'
+  role: 'assistant'
+  content: ContentBlock[]
+  model: string
+  stop_reason: string | null
+  stop_sequence: string | null
+  usage: { input_tokens: number; output_tokens: number; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null }
+}
+
+export type BetaContentBlock = ContentBlock
+export type BetaRawMessageStreamEvent = { type: string; [k: string]: unknown }
+
+// Generic API error (replaces APIError from anthropic sdk)
+export type APIError = Error & { status?: number; code?: string }
 
 // ============================================================================
 // Scalar / Enum Types
@@ -407,7 +423,7 @@ export interface RequestStartEvent {
   type: 'stream_request_start'
 }
 
-/** Wrapper for streaming events from the Anthropic API. */
+/** Wrapper for streaming events from Vercel AI SDK (replaces Anthropic BetaRawMessageStreamEvent). */
 export interface StreamEvent {
   type: 'stream_event'
   event: BetaRawMessageStreamEvent

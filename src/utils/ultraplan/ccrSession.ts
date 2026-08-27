@@ -4,7 +4,7 @@
 // Plan mode is set via set_permission_mode control_request in
 // teleportToRemote's CreateSession events array.
 
-import type {
+// removed anthropic import: import type {
   ToolResultBlockParam,
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources'

@@ -65,7 +65,7 @@ import {
 import { randomUUID, type UUID } from 'crypto'
 import { getSettings_DEPRECATED } from './settings/settings.js'
 import { getSnippetForTwoFileDiff } from 'src/tools/FileEditTool/utils.js'
-import type {
+// removed anthropic import: import type {
   ContentBlockParam,
   ImageBlockParam,
   Base64ImageSource,
