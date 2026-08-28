@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -62,17 +63,19 @@ func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system stri
 		slog.Info("TUI start", "model", model, "workspace", workspace)
 	}
 
+	// In TUI we silence logs — they would bleed into AltScreen (see screenshot)
+	discardLog := slog.New(slog.NewTextHandler(io.Discard, nil))
 	client := &llm.Client{
 		APIKey:  cfg.APIKey,
 		BaseURL: cfg.BaseURL,
 		Model:   model,
-		Logger:  slog.Default(),
+		Logger:  discardLog,
 	}
 	ag := &agent.Agent{
 		LLM:    client,
 		Tools:  tools.DefaultRegistry(workspace),
 		System: system,
-		Logger: slog.Default(),
+		Logger: discardLog,
 	}
 
 	return tui.Run(tui.Config{

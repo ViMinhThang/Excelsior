@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -485,11 +486,42 @@ func (m model) scrollbarView() string {
 
 // Render
 
+func shortWorkspace(ws string, max int) string {
+	if max <= 0 {
+		return ws
+	}
+	if len(ws) <= max {
+		return ws
+	}
+	base := ws
+	if b := ws; len(b) > 0 {
+		// show last 2 segments if possible
+		if i := strings.LastIndex(b, string(filepath.Separator)); i > 0 {
+			if j := strings.LastIndex(b[:i], string(filepath.Separator)); j >= 0 {
+				base = "…" + b[j:]
+			} else {
+				base = "…" + b[i:]
+			}
+		}
+	}
+	if len(base) > max {
+		return "…" + base[len(base)-max+1:]
+	}
+	return base
+}
+
 func (m model) View() string {
 	if m.width == 0 {
 		return "loading…"
 	}
-	header := titleStyle.Render(" excelsior ") + statusStyle.Render(fmt.Sprintf(" %s • %s ", m.cfg.Model, m.cfg.Workspace))
+	wsShort := shortWorkspace(m.cfg.Workspace, m.width-30)
+	if wsShort == "" {
+		wsShort = m.cfg.Workspace
+	}
+	if len(wsShort) > 40 {
+		wsShort = "…" + wsShort[len(wsShort)-40:]
+	}
+	header := titleStyle.Render(" excelsior ") + statusStyle.Render(fmt.Sprintf(" %s • %s ", m.cfg.Model, wsShort))
 	if m.streaming {
 		header += toolStyle.Render(" ● streaming… (esc to cancel)")
 	}
@@ -541,11 +573,12 @@ func (m model) renderTranscript() string {
 				continue
 			}
 			out := b.Content
-			if m.glam != nil && (strings.Contains(out, "```") || strings.Contains(out, "# ") || strings.Contains(out, "- ")) {
-				if rendered, err := m.glam.Render(out); err == nil {
-					out = strings.TrimSpace(rendered)
-				}
-			}
+			// Monochrome: disable glamour colors (was rendering inline code with red bg); keep plain for true B&W
+			// if m.glam != nil && (strings.Contains(out, "```") || strings.Contains(out, "# ") || strings.Contains(out, "- ")) {
+			// 	if rendered, err := m.glam.Render(out); err == nil {
+			// 		out = strings.TrimSpace(rendered)
+			// 	}
+			// }
 			sb.WriteString(assistantStyle.Render(out) + "\n\n")
 		case "reasoning":
 			sb.WriteString(reasonStyle.Render("… " + b.Content) + "\n\n")
