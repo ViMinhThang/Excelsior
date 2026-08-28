@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -16,7 +15,6 @@ import (
 	"excelsior/pkg/config"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/protocol"
-	"excelsior/pkg/session"
 	"excelsior/pkg/tools"
 )
 
@@ -158,10 +156,6 @@ func (c *Conn) readPump(ctx context.Context) {
 			c.handleChat(ctx, env)
 		case protocol.TypeAskResp:
 			c.handleAskResp(env)
-		case protocol.TypeSessionPush:
-			c.handleSessionPush(env)
-		case protocol.TypeSessionPull:
-			c.handleSessionPull(env)
 		case protocol.TypePing:
 			c.sendEnvelope(protocol.Envelope{Ver: protocol.Ver, Type: protocol.TypePong})
 		default:
@@ -314,37 +308,6 @@ func (c *Conn) handleAskResp(env protocol.Envelope) {
 		default:
 		}
 	}
-}
-
-func (c *Conn) handleSessionPush(env protocol.Envelope) {
-	raw, _ := json.Marshal(env.Payload)
-	var sp protocol.SessionPush
-	if err := json.Unmarshal(raw, &sp); err != nil {
-		c.sendError(env.ID, fmt.Sprintf("bad session.push: %v", err))
-		return
-	}
-	store := session.NewStore(filepath.Join(c.hub.Workspace, ".excelsior", "sessions"))
-	if err := store.Save(context.Background(), sp.ID, sp.Messages); err != nil {
-		c.sendError(env.ID, fmt.Sprintf("session save: %v", err))
-		return
-	}
-	c.sendEnvelope(protocol.Envelope{Ver: protocol.Ver, ID: env.ID, Type: protocol.TypeSessionData, Payload: sp})
-}
-
-func (c *Conn) handleSessionPull(env protocol.Envelope) {
-	raw, _ := json.Marshal(env.Payload)
-	var sp protocol.SessionPull
-	if err := json.Unmarshal(raw, &sp); err != nil {
-		c.sendError(env.ID, fmt.Sprintf("bad session.pull: %v", err))
-		return
-	}
-	store := session.NewStore(filepath.Join(c.hub.Workspace, ".excelsior", "sessions"))
-	msgs, err := store.Load(context.Background(), sp.ID)
-	if err != nil {
-		c.sendError(env.ID, fmt.Sprintf("session load: %v", err))
-		return
-	}
-	c.sendEnvelope(protocol.Envelope{Ver: protocol.Ver, ID: env.ID, Type: protocol.TypeSessionData, Payload: protocol.SessionData{ID: sp.ID, Messages: msgs}})
 }
 
 func (c *Conn) sendError(id, msg string) {

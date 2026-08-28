@@ -9,7 +9,6 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 
 	"excelsior/pkg/agent"
@@ -52,7 +51,6 @@ type model struct {
 	errMsg       string
 	width         int
 	height        int
-	glam          *glamour.TermRenderer
 	askState      *askOverlay
 }
 
@@ -69,16 +67,10 @@ func New(cfg Config) tea.Model {
 	vp.YPosition = 0
 	vp.MouseWheelEnabled = true
 
-	gr, _ := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(80),
-	)
-
 	m := model{
 		cfg:         cfg,
 		viewport:    vp,
 		input:       ti,
-		glam:        gr,
 		streamText:  &strings.Builder{},
 		streamThink: &strings.Builder{},
 		blocks: []block{
@@ -112,11 +104,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = m.width - 4 // leave room for scrollbar + border
 		m.viewport.Height = vH
 		m.input.Width = m.width - 6
-		if m.width > 20 {
-			if gr, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(m.width-8)); err == nil {
-				m.glam = gr
-			}
-		}
 		m.syncViewport()
 
 	case askRequestMsg:
@@ -634,14 +621,7 @@ func (m model) renderTranscript() string {
 				}
 				continue
 			}
-			out := b.Content
-			// Monochrome: disable glamour colors (was rendering inline code with red bg); keep plain for true B&W
-			// if m.glam != nil && (strings.Contains(out, "```") || strings.Contains(out, "# ") || strings.Contains(out, "- ")) {
-			// 	if rendered, err := m.glam.Render(out); err == nil {
-			// 		out = strings.TrimSpace(rendered)
-			// 	}
-			// }
-			sb.WriteString(assistantStyle.Render(out) + "\n\n")
+			sb.WriteString(assistantStyle.Render(b.Content) + "\n\n")
 		case "reasoning":
 			sb.WriteString(reasonStyle.Render("… " + b.Content) + "\n\n")
 		case "tool":
