@@ -35,6 +35,7 @@ func main() {
 		system    string
 		sessionID string
 		verbose   bool
+		engineURL string
 	)
 
 	root := &cobra.Command{
@@ -80,6 +81,7 @@ Examples:
 	root.PersistentFlags().StringVarP(&workspace, "workspace", "w", "", "Workspace root (default: cwd)")
 	root.PersistentFlags().StringVar(&system, "system", "", "Override system prompt")
 	root.PersistentFlags().StringVar(&sessionID, "session", "", "Session ID for persistence (.excelsior/sessions)")
+	root.PersistentFlags().StringVar(&engineURL, "engine", "", "WebSocket engine URL (e.g. ws://localhost:17812/v1/ws) for remote/desktop/mobile sync")
 	root.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Verbose logging (debug)")
 
 	runCmd := &cobra.Command{
@@ -91,6 +93,7 @@ Examples:
 	root.AddCommand(runCmd)
 
 	root.AddCommand(newTUICommand(cfg, &model, &workspace, &system))
+	root.AddCommand(newEngineCommand(cfg, &workspace))
 
 	root.AddCommand(&cobra.Command{
 		Use:   "models",

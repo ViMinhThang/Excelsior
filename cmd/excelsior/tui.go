@@ -55,33 +55,43 @@ func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system stri
 	if system == "" {
 		system = agent.DefaultSystemPrompt
 	}
-	if err := cfg.Validate(); err != nil {
-		// For TUI, warn but allow to start (user can set key in /settings later)
+	engineURL := strings.TrimSpace(cfg.EngineURL)
+	if v, _ := cmd.Root().PersistentFlags().GetString("engine"); v != "" {
+		engineURL = strings.TrimSpace(v)
+	}
+	if err := cfg.Validate(); err != nil && engineURL == "" {
+		// For local TUI, warn but allow to start (user can set key in /settings later)
 		fmt.Fprintln(os.Stderr, "warning:", err)
 		slog.Warn("config validation failed (TUI will start)", "err", err)
+	} else if engineURL != "" {
+		slog.Info("TUI start (remote engine)", "engine", engineURL, "model", model, "workspace", workspace)
 	} else {
 		slog.Info("TUI start", "model", model, "workspace", workspace)
 	}
 
 	// In TUI we silence logs — they would bleed into AltScreen (see screenshot)
 	discardLog := slog.New(slog.NewTextHandler(io.Discard, nil))
-	client := &llm.Client{
-		APIKey:  cfg.APIKey,
-		BaseURL: cfg.BaseURL,
-		Model:   model,
-		Logger:  discardLog,
-	}
-	ag := &agent.Agent{
-		LLM:    client,
-		Tools:  tools.DefaultRegistry(workspace),
-		System: system,
-		Logger: discardLog,
+	var ag *agent.Agent
+	if engineURL == "" {
+		client := &llm.Client{
+			APIKey:  cfg.APIKey,
+			BaseURL: cfg.BaseURL,
+			Model:   model,
+			Logger:  discardLog,
+		}
+		ag = &agent.Agent{
+			LLM:    client,
+			Tools:  tools.DefaultRegistry(workspace),
+			System: system,
+			Logger: discardLog,
+		}
 	}
 
 	return tui.Run(tui.Config{
 		Agent:     ag,
 		Workspace: workspace,
 		Model:     model,
+		EngineURL: engineURL,
 	})
 }
 

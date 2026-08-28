@@ -17,6 +17,7 @@ type Config struct {
 	MaxTokens   int
 	Temperature float64
 	Workspace   string
+	EngineURL   string // ws://... for remote engine (TUI/desktop/mobile)
 }
 
 var ModelAliases = map[string]string{
@@ -44,12 +45,14 @@ func FromEnv() Config {
 		base = "https://api.deepseek.com"
 	}
 	ws := os.Getenv("EXCELSIOR_WORKSPACE")
+	engineURL := strings.TrimSpace(os.Getenv("EXCELSIOR_ENGINE"))
 	return Config{
 		APIKey:      strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")),
 		BaseURL:     strings.TrimSpace(base),
 		Model:       strings.TrimSpace(m),
 		Temperature: 0.7,
 		Workspace:   strings.TrimSpace(ws),
+		EngineURL:   engineURL,
 	}
 }
 

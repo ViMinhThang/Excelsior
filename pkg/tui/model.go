@@ -13,16 +13,20 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"excelsior/pkg/agent"
+	"excelsior/pkg/engine"
 	"excelsior/pkg/llm"
+	"excelsior/pkg/protocol"
 	"excelsior/pkg/tools"
 )
 
 // Config holds the TUI wiring. The agent is injected so the TUI is pure UI.
+// If EngineURL is set (ws://...), TUI talks to remote engine via WS; otherwise it runs Agent locally.
 type Config struct {
 	Agent     *agent.Agent
 	Workspace string
 	Model     string // for status bar
 	History   []llm.Message
+	EngineURL string // e.g. ws://localhost:17812/v1/ws, empty = local
 }
 
 // block is a rendered turn in the transcript.
@@ -365,11 +369,6 @@ func waitForChunk(ch <-chan agent.StreamEvent) tea.Cmd {
 }
 
 func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
-	if m.cfg.Agent == nil {
-		m.blocks = append(m.blocks, block{Role: "error", Content: "agent not configured (DEEPSEEK_API_KEY missing?)"})
-		m.syncViewport()
-		return m, nil
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
 	m.streaming = true
@@ -383,6 +382,64 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 
 	ch := make(chan agent.StreamEvent, 128)
 	m.streamCh = ch
+
+	// Remote engine via WS?
+	if m.cfg.EngineURL != "" {
+		wsClient := &engine.WSClient{URL: m.cfg.EngineURL}
+		// Handler for askQuestion coming from remote engine (ask.req over WS)
+		remoteAskHandler := func(hctx context.Context, req tools.AskRequest) (tools.AskResponse, error) {
+			respCh := make(chan tools.AskResponse, 1)
+			if activeProgram != nil {
+				activeProgram.Send(askRequestMsg{Req: req, RespChan: respCh})
+			} else {
+				return tools.AskResponse{}, fmt.Errorf("no active TUI")
+			}
+			select {
+			case resp := <-respCh:
+				return resp, nil
+			case <-hctx.Done():
+				return tools.AskResponse{}, hctx.Err()
+			case <-ctx.Done():
+				return tools.AskResponse{}, ctx.Err()
+			}
+		}
+		go func() {
+			chatReq := protocol.ChatReq{Model: m.cfg.Model, Messages: msgs}
+			err := wsClient.StreamRemote(ctx, chatReq, func(d protocol.Delta) error {
+				ev := agent.StreamEvent{
+					Type:         d.Type,
+					Text:         d.Text,
+					Reasoning:    d.Reasoning,
+					ToolName:     d.ToolName,
+					ToolCallID:   d.ToolCallID,
+					ToolArgs:     d.ToolArgs,
+					ToolResult:   d.ToolResult,
+					FinishReason: d.FinishReason,
+				}
+				select {
+				case ch <- ev:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				return nil
+			}, remoteAskHandler)
+			if err != nil {
+				select {
+				case ch <- agent.StreamEvent{Type: "error", Text: err.Error()}:
+				case <-ctx.Done():
+				}
+			}
+			close(ch)
+		}()
+		return m, waitForChunk(ch)
+	}
+
+	// Local engine
+	if m.cfg.Agent == nil {
+		m.blocks = append(m.blocks, block{Role: "error", Content: "agent not configured (DEEPSEEK_API_KEY missing?)"})
+		m.syncViewport()
+		return m, nil
+	}
 
 	// Interactive askQuestion handler — shows overlay and waits for user choice
 	handler := func(hctx context.Context, req tools.AskRequest) (tools.AskResponse, error) {
