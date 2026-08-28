@@ -39,9 +39,27 @@ export default function Page(){
       const env = JSON.parse(ev.data);
       if(env.type==="delta"){
         const d:Delta = env.payload;
-        if(d.type==="text") setBlocks(b=>[...b, {role:"assistant", content:d.text||""}]);
-        else if(d.type==="reasoning") setBlocks(b=>[...b, {role:"reason", content:d.reasoning||""}]);
-        else if(d.type==="tool_start") setBlocks(b=>[...b, {role:"tool", content:d.toolArgs||"", meta:d.toolName}]);
+        if(d.type==="text"){
+          setBlocks(b=>{
+            const last = b[b.length-1];
+            if(last && last.role==="assistant"){
+              const updated=[...b];
+              updated[updated.length-1]={...last, content: last.content + (d.text||"")};
+              return updated;
+            }
+            return [...b, {role:"assistant", content:d.text||""}];
+          });
+        } else if(d.type==="reasoning"){
+          setBlocks(b=>{
+            const last = b[b.length-1];
+            if(last && last.role==="reason"){
+              const updated=[...b];
+              updated[updated.length-1]={...last, content: last.content + (d.reasoning||"")};
+              return updated;
+            }
+            return [...b, {role:"reason", content:d.reasoning||""}];
+          });
+        } else if(d.type==="tool_start") setBlocks(b=>[...b, {role:"tool", content:d.toolArgs||"", meta:d.toolName}]);
         else if(d.type==="tool_result") setBlocks(b=>[...b, {role:"tool", content:d.toolResult||"", meta:(d.toolName||"")+" →"}]);
         else if(d.type==="error") setBlocks(b=>[...b, {role:"error", content:d.text||""}]);
         setStreaming(true);
