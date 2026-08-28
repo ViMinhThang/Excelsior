@@ -8,8 +8,17 @@
     "build": "electron-builder --win --linux",
     "start:engine": "go run ./cmd/excelsior engine --addr :17812"
   },
+  "build": {
+    "appId": "com.excelsior.desktop",
+    "productName": "Excelsior",
+    "files": ["main.js", "preload.js", "../web/dist/**/*", "../gui/**/*"],
+    "extraResources": [{ "from": "../../excelsior.exe", "to": "excelsior.exe" }],
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage" },
+    "directories": { "buildResources": "build" }
+  },
   "devDependencies": {
-    "electron": "^30.0.0",
-    "electron-builder": "^24.0.0"
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.0"
   }
 }
