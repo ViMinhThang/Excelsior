@@ -1,0 +1,7 @@
+.excelsior/
+*.exe
+/excelsior
+/tmp/
+dist/
+bin/
+.env
