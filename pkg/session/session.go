@@ -196,6 +196,42 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// Prune deletes sessions older than maxAge based on file mtime.
+func (s *Store) Prune(ctx context.Context, maxAge time.Duration) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, fmt.Errorf("session prune canceled: %w", err)
+	}
+	entries, err := os.ReadDir(s.Dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("session prune list: %w", err)
+	}
+	var deleted int
+	cutoff := time.Now().Add(-maxAge)
+	for _, e := range entries {
+		if ctx.Err() != nil {
+			return deleted, fmt.Errorf("session prune canceled: %w", ctx.Err())
+		}
+		if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			p := filepath.Join(s.Dir, e.Name())
+			if err := os.Remove(p); err == nil {
+				deleted++
+				slog.Info("session pruned", "file", e.Name(), "age", time.Since(info.ModTime()))
+			}
+		}
+	}
+	return deleted, nil
+}
+
 func splitLines(s string) []string {
 	var out []string
 	start := 0

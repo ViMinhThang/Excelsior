@@ -13,11 +13,17 @@ import (
 	"excelsior/pkg/tools"
 )
 
+// ToolRegistry is the port the agent depends on — small interface for testability.
+type ToolRegistry interface {
+	Get(name string) (tools.Tool, bool)
+	All() []tools.Tool
+}
+
 // Agent is the importable library. It owns the tool-call loop and streams
 // events to the caller so both CLI and TUI can render identically.
 type Agent struct {
 	LLM      *llm.Client
-	Tools    *tools.Registry
+	Tools    ToolRegistry
 	System   string
 	MaxIters int // tool-call loop cap
 	Logger   *slog.Logger

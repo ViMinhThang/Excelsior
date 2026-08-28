@@ -510,10 +510,7 @@ func shortWorkspace(ws string, max int) string {
 	return base
 }
 
-func (m model) View() string {
-	if m.width == 0 {
-		return "loading…"
-	}
+func (m model) headerView() string {
 	wsShort := shortWorkspace(m.cfg.Workspace, m.width-30)
 	if wsShort == "" {
 		wsShort = m.cfg.Workspace
@@ -525,36 +522,44 @@ func (m model) View() string {
 	if m.streaming {
 		header += toolStyle.Render(" ● streaming… (esc to cancel)")
 	}
-	headerBox := borderStyle.Width(m.width - 2).Render(header)
+	return borderStyle.Width(m.width - 2).Render(header)
+}
 
-	// transcript + scrollbar (one-line prompt, viewport with scroll bar)
+func (m model) bodyView() string {
 	m.viewport.SetContent(m.renderTranscript())
 	viewportView := m.viewport.View()
 	scrollbar := m.scrollbarView()
 	body := lipgloss.JoinHorizontal(lipgloss.Top, viewportView, " ", scrollbar)
-
-	// Ask overlay takes over body when active
 	if m.askState != nil {
 		body = m.askState.View(m.width)
 	}
+	return body
+}
 
-	// input — single line only (hidden behind ask overlay)
-	var inputView string
+func (m model) inputView() string {
+	var v string
 	if m.askState != nil {
-		inputView = helpStyle.Render("  answering question…")
+		v = helpStyle.Render("  answering question…")
 	} else if m.streaming {
-		inputView = helpStyle.Render("  streaming… press esc to cancel")
+		v = helpStyle.Render("  streaming… press esc to cancel")
 	} else {
-		inputView = m.input.View()
+		v = m.input.View()
 	}
-	inputBox := borderStyle.Width(m.width - 2).Render(inputView)
+	return borderStyle.Width(m.width - 2).Render(v)
+}
 
-	status := statusStyle.Render(fmt.Sprintf(" %d blocks  •  %d history msgs  •  ↑↓/PgUp/PgDn scroll ", len(m.blocks), len(m.cfg.History)))
+func (m model) statusView() string {
 	if m.errMsg != "" {
-		status = errorStyle.Render(m.errMsg)
+		return errorStyle.Render(m.errMsg)
 	}
+	return statusStyle.Render(fmt.Sprintf(" %d blocks  •  %d history msgs  •  ↑↓/PgUp/PgDn scroll ", len(m.blocks), len(m.cfg.History)))
+}
 
-	return headerBox + "\n" + body + "\n" + inputBox + "\n" + status
+func (m model) View() string {
+	if m.width == 0 {
+		return "loading…"
+	}
+	return m.headerView() + "\n" + m.bodyView() + "\n" + m.inputView() + "\n" + m.statusView()
 }
 
 func (m model) renderTranscript() string {

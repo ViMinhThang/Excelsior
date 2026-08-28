@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"excelsior/pkg/config"
 )
 
 // Client is a DeepSeek-native provider. DeepSeek is OpenAI-compatible but has
@@ -35,24 +37,32 @@ func (c *Client) baseURL() string {
 	return "https://api.deepseek.com"
 }
 
-var modelAliases = map[string]string{
-	"deepseek-v4-pro": "deepseek-reasoner",
-	"v4-pro":          "deepseek-reasoner",
-}
-
-func resolveModel(m string) string {
-	m = strings.TrimSpace(m)
-	if a, ok := modelAliases[m]; ok {
-		return a
-	}
-	return m
-}
+func resolveModel(m string) string { return config.ResolveModel(m) }
 
 // IsReasoner reports whether a model uses reasoning_content.
 func IsReasoner(model string) bool {
 	m := resolveModel(model)
-	return m == "deepseek-reasoner" || m == "deepseek-v4-pro"
+	return m == "deepseek-reasoner"
 }
+
+// RetryPolicy controls retry for transient failures.
+type RetryPolicy struct {
+	MaxRetries int
+	BaseDelay  time.Duration
+}
+
+func (p RetryPolicy) shouldRetry(status int, err error, attempt int) (bool, time.Duration) {
+	if attempt >= p.MaxRetries {
+		return false, 0
+	}
+	if !isRetryable(status, err) {
+		return false, 0
+	}
+	backoff := time.Duration(math.Pow(2, float64(attempt))*float64(p.BaseDelay)) + time.Duration(rand.Int63n(int64(p.BaseDelay)))
+	return true, backoff
+}
+
+var defaultRetry = RetryPolicy{MaxRetries: 2, BaseDelay: 200 * time.Millisecond}
 
 func (c *Client) validate() error {
 	if strings.TrimSpace(c.APIKey) == "" {
@@ -209,7 +219,7 @@ func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(D
 	req.Stream = true
 
 	var lastErr error
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := 0; attempt <= defaultRetry.MaxRetries; attempt++ {
 		msg, err := c.doStreamOnce(ctx, req, onDelta)
 		if err == nil {
 			return msg, nil
@@ -220,15 +230,13 @@ func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(D
 		if errors.As(err, &le) {
 			status = le.StatusCode
 		}
-		if !isRetryable(status, err) || attempt == 2 {
+		should, backoff := defaultRetry.shouldRetry(status, err, attempt)
+		if !should {
 			break
 		}
 		if ctx.Err() != nil {
 			return nil, fmt.Errorf("deepseek stream canceled: %w", ctx.Err())
 		}
-		backoff := time.Duration(math.Pow(2, float64(attempt))*200) * time.Millisecond
-		jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
-		backoff += jitter
 		c.logger().Warn("deepseek retry", "attempt", attempt+1, "status", status, "backoff", backoff, "err", err)
 		select {
 		case <-time.After(backoff):
