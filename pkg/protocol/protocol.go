@@ -14,17 +14,14 @@ type Envelope struct {
 
 // Types
 const (
-	TypeChatReq    = "chat.req"
-	TypeDelta      = "delta"
-	TypeDone       = "done"
-	TypeError      = "error"
-	TypeAskReq     = "ask.req"
-	TypeAskResp    = "ask.resp"
-	TypePing       = "ping"
-	TypePong       = "pong"
-	TypeSessionPush = "session.push"
-	TypeSessionPull = "session.pull"
-	TypeSessionData = "session.data"
+	TypeChatReq = "chat.req"
+	TypeDelta   = "delta"
+	TypeDone    = "done"
+	TypeError   = "error"
+	TypeAskReq  = "ask.req"
+	TypeAskResp = "ask.resp"
+	TypePing    = "ping"
+	TypePong    = "pong"
 )
 
 // ChatReq is client → engine to start a turn.
@@ -56,17 +53,4 @@ type AskResp struct {
 	Selected int    `json:"selected"` // 0..2 or -1 for manual
 	Answer   string `json:"answer"`
 	Label    string `json:"label"`
-}
-
-// SessionPush/Pull for sync.
-type SessionPush struct {
-	ID       string        `json:"id"`
-	Messages []llm.Message `json:"messages"`
-}
-type SessionPull struct {
-	ID string `json:"id"`
-}
-type SessionData struct {
-	ID       string        `json:"id"`
-	Messages []llm.Message `json:"messages"`
 }

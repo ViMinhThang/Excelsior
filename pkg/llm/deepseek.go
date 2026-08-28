@@ -89,8 +89,6 @@ func (c *Client) httpClient() *http.Client {
 	return &http.Client{Timeout: 120 * time.Second}
 }
 
-func (c *Client) effectiveModel() string { return resolveModel(c.Model) }
-
 const (
 	maxErrorBody = 4 * 1024
 	maxSSLine    = 1 << 20 // 1 MiB per SSE line (prevent OOM)
