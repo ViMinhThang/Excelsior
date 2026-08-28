@@ -18,11 +18,18 @@ export default function Page(){
   const wsRef = useRef<WebSocket|null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
 
-  const engineUrl = typeof window!=="undefined" ? ((window as unknown as {EXCELSIOR_ENGINE?:string}).EXCELSIOR_ENGINE || `${location.protocol==="https:"?"wss:":"ws:"}//${location.host}/v1/ws`) : "ws://localhost:17812/v1/ws";
+  // Fix hydration: same initial value on server and client, update after mount if needed
+  const [engineUrl, setEngineUrl] = useState("ws://localhost:17812/v1/ws");
+  useEffect(()=>{
+    const envUrl = (window as unknown as {EXCELSIOR_ENGINE?:string}).EXCELSIOR_ENGINE;
+    if(envUrl) setEngineUrl(envUrl);
+    // keep default 17812 for both dev (3000) and prod; don't use location.host
+  },[]);
 
   useEffect(()=>{
-    let url = engineUrl;
-    if(location.protocol==="file:") url="ws://localhost:17812/v1/ws";
+    const url = engineUrl;
+    // don't connect until engineUrl is set (always set, but guard)
+    if(!url) return;
     const ws = new WebSocket(url);
     wsRef.current = ws;
     ws.onopen = ()=> setWsState("connected");
@@ -55,7 +62,7 @@ export default function Page(){
       }
     };
     return ()=> ws.close();
-  },[]);
+  },[engineUrl]);
 
   useEffect(()=>{ transcriptRef.current?.scrollTo(0, 9e9); },[blocks]);
 
