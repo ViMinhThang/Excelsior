@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
 
 	"excelsior/pkg/agent"
 	"excelsior/pkg/llm"
@@ -32,7 +33,7 @@ type block struct {
 type model struct {
 	cfg      Config
 	viewport viewport.Model
-	textarea textarea.Model
+	input    textinput.Model
 	blocks   []block
 	// streaming state: accumulate assistant text + reasoning + tool calls
 	// use pointers — strings.Builder must not be copied by value (bubbletea copies model on Update)
@@ -49,16 +50,17 @@ type model struct {
 }
 
 func New(cfg Config) tea.Model {
-	ta := textarea.New()
-	ta.Placeholder = "Ask anything — Enter to send, Ctrl+J for newline, Ctrl+C to quit…"
-	ta.Focus()
-	ta.CharLimit = 0
-	ta.SetHeight(3)
-	ta.ShowLineNumbers = false
-	ta.Prompt = "❯ "
+	ti := textinput.New()
+	ti.Placeholder = "Ask anything — Enter to send, Ctrl+C to quit…"
+	ti.Focus()
+	ti.CharLimit = 0
+	ti.Prompt = "❯ "
+	ti.TextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15"))
+	ti.PlaceholderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
 	vp := viewport.New(0, 0)
 	vp.YPosition = 0
+	vp.MouseWheelEnabled = true
 
 	gr, _ := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),
@@ -68,13 +70,13 @@ func New(cfg Config) tea.Model {
 	m := model{
 		cfg:         cfg,
 		viewport:    vp,
-		textarea:    ta,
+		input:       ti,
 		glam:        gr,
 		streamText:  &strings.Builder{},
 		streamThink: &strings.Builder{},
 		blocks: []block{
 			{Role: "system", Content: fmt.Sprintf("Excelsior — %s  •  %s  •  deepseek-native", cfg.Model, cfg.Workspace)},
-			{Role: "system", Content: helpStyle.Render("Enter: send  •  Ctrl+C: quit  •  Ctrl+L: clear  •  /clear /help /model")},
+			{Role: "system", Content: helpStyle.Render("Enter: send  •  Ctrl+C: quit  •  Ctrl+L: clear  •  /clear /help /model  •  PgUp/PgDn scroll")},
 		},
 	}
 	m.syncViewport()
@@ -82,7 +84,7 @@ func New(cfg Config) tea.Model {
 }
 
 func (m model) Init() tea.Cmd {
-	return textarea.Blink
+	return textinput.Blink
 }
 
 // Messages for streaming
@@ -95,15 +97,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// viewport = height - header(3) - inputBox(3) - status(1)
 		vH := m.height - 7
 		if vH < 5 {
 			vH = 5
 		}
-		m.viewport.Width = m.width - 2
+		m.viewport.Width = m.width - 4 // leave room for scrollbar + border
 		m.viewport.Height = vH
-		m.textarea.SetWidth(m.width - 4)
+		m.input.Width = m.width - 6
 		if m.width > 20 {
-			if gr, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(m.width-6)); err == nil {
+			if gr, err := glamour.NewTermRenderer(glamour.WithAutoStyle(), glamour.WithWordWrap(m.width-8)); err == nil {
 				m.glam = gr
 			}
 		}
@@ -134,26 +137,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.blocks = m.blocks[:2]
 			m.syncViewport()
 			return m, nil
-		case "ctrl+j":
-			// insert newline in textarea (alternative to submit)
-			m.textarea.InsertString("\n")
-			return m, nil
 		case "enter":
-			val := strings.TrimSpace(m.textarea.Value())
+			val := strings.TrimSpace(m.input.Value())
 			if val == "" {
 				return m, nil
 			}
 			if strings.HasPrefix(val, "/") {
 				m.handleCommand(val)
-				m.textarea.Reset()
+				m.input.Reset()
 				m.syncViewport()
 				return m, nil
 			}
 			m.blocks = append(m.blocks, block{Role: "user", Content: val})
-			m.textarea.Reset()
+			m.input.Reset()
 			m.syncViewport()
 			return m.startAgent(val)
+		case "pgup", "pgdown", "home", "end", "up", "down":
+			// let viewport handle history scrolling even with input focused
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			return m, cmd
 		}
+
+		// mouse wheel also falls through to viewport via MouseMsg below
+
+	case tea.MouseMsg:
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
 
 	case streamChunkMsg:
 		ev := msg.ev
@@ -176,7 +187,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.blocks = append(m.blocks, block{Role: "error", Content: ev.Text})
 			m.syncViewport()
 		}
-		// keep polling for next chunk while streaming
 		if m.streaming && m.streamCh != nil {
 			return m, waitForChunk(m.streamCh)
 		}
@@ -206,22 +216,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.streamText.Reset()
 			m.streamThink.Reset()
 		}
-		m.textarea.Focus()
+		m.input.Focus()
 		m.syncViewport()
-		return m, textarea.Blink
+		return m, textinput.Blink
 	}
 
-	// delegate to textarea when not streaming
+	// delegate to input when not streaming
 	if !m.streaming {
 		var cmd tea.Cmd
-		m.textarea, cmd = m.textarea.Update(msg)
+		m.input, cmd = m.input.Update(msg)
 		return m, cmd
 	}
 	return m, nil
 }
 
 func (m *model) upsertAssistant() {
-	// merge consecutive assistant text into one block tail
 	if len(m.blocks) > 0 && m.blocks[len(m.blocks)-1].Role == "assistant" {
 		m.blocks[len(m.blocks)-1].Content = m.streamText.String()
 	} else {
@@ -231,11 +240,9 @@ func (m *model) upsertAssistant() {
 }
 
 func (m *model) upsertReasoning(delta string) {
-	// reasoning shown as dim separate block that grows; collapse into one reasoning block
 	if len(m.blocks) > 0 && m.blocks[len(m.blocks)-1].Role == "reasoning" {
 		m.blocks[len(m.blocks)-1].Content += delta
 	} else if delta != "" {
-		// if last is assistant being streamed, insert reasoning before it? Keep appended.
 		m.blocks = append(m.blocks, block{Role: "reasoning", Content: delta})
 	}
 	m.syncViewport()
@@ -317,36 +324,98 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 	return m, waitForChunk(ch)
 }
 
+// scrollbarView renders a vertical scrollbar for the viewport.
+// Returns empty string if content fits (no scroll needed).
+func (m model) scrollbarView() string {
+	h := m.viewport.Height
+	if h <= 0 {
+		return ""
+	}
+	// if viewport can't scroll, hide scrollbar
+	if m.viewport.TotalLineCount() <= h {
+		// still render a dim track so layout stays stable, but use empty
+		var sb strings.Builder
+		for i := 0; i < h; i++ {
+			sb.WriteString(scrollbarStyle.Render("│"))
+			if i < h-1 {
+				sb.WriteString("\n")
+			}
+		}
+		return sb.String()
+	}
+	percent := m.viewport.ScrollPercent()
+	if percent < 0 {
+		percent = 0
+	}
+	if percent > 1 {
+		percent = 1
+	}
+	// thumb size proportional to visible ratio, min 1
+	total := m.viewport.TotalLineCount()
+	if total == 0 {
+		total = 1
+	}
+	thumbSize := h * h / total
+	if thumbSize < 1 {
+		thumbSize = 1
+	}
+	if thumbSize > h {
+		thumbSize = h
+	}
+	thumbPos := int(percent * float64(h-thumbSize))
+	if thumbPos < 0 {
+		thumbPos = 0
+	}
+	if thumbPos > h-thumbSize {
+		thumbPos = h - thumbSize
+	}
+	var sb strings.Builder
+	for i := 0; i < h; i++ {
+		if i >= thumbPos && i < thumbPos+thumbSize {
+			sb.WriteString(scrollbarThumbStyle.Render("█"))
+		} else {
+			sb.WriteString(scrollbarStyle.Render("│"))
+		}
+		if i < h-1 {
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
+
 // Render
 
 func (m model) View() string {
 	if m.width == 0 {
 		return "loading…"
 	}
-	// Build header
 	header := titleStyle.Render(" excelsior ") + statusStyle.Render(fmt.Sprintf(" %s • %s ", m.cfg.Model, m.cfg.Workspace))
 	if m.streaming {
 		header += toolStyle.Render(" ● streaming… (esc to cancel)")
 	}
 	headerBox := borderStyle.Width(m.width - 2).Render(header)
 
-	// transcript
-	transcript := m.renderTranscript()
+	// transcript + scrollbar (one-line prompt, viewport with scroll bar)
+	m.viewport.SetContent(m.renderTranscript())
+	viewportView := m.viewport.View()
+	scrollbar := m.scrollbarView()
+	body := lipgloss.JoinHorizontal(lipgloss.Top, viewportView, " ", scrollbar)
 
-	m.viewport.SetContent(transcript)
-	m.viewport.Width = m.width - 2
-
-	// input
-	inputView := m.textarea.View()
+	// input — single line only
+	var inputView string
 	if m.streaming {
 		inputView = helpStyle.Render("  streaming… press esc to cancel")
+	} else {
+		inputView = m.input.View()
 	}
-	status := statusStyle.Render(fmt.Sprintf(" %d blocks  •  %d history msgs ", len(m.blocks), len(m.cfg.History)))
+	inputBox := borderStyle.Width(m.width - 2).Render(inputView)
+
+	status := statusStyle.Render(fmt.Sprintf(" %d blocks  •  %d history msgs  •  ↑↓/PgUp/PgDn scroll ", len(m.blocks), len(m.cfg.History)))
 	if m.errMsg != "" {
 		status = errorStyle.Render(m.errMsg)
 	}
 
-	return headerBox + "\n" + m.viewport.View() + "\n" + borderStyle.Width(m.width-2).Render(inputView) + "\n" + status
+	return headerBox + "\n" + body + "\n" + inputBox + "\n" + status
 }
 
 func (m model) renderTranscript() string {
@@ -365,7 +434,6 @@ func (m model) renderTranscript() string {
 				continue
 			}
 			out := b.Content
-			// glamour render if looks like markdown
 			if m.glam != nil && (strings.Contains(out, "```") || strings.Contains(out, "# ") || strings.Contains(out, "- ")) {
 				if rendered, err := m.glam.Render(out); err == nil {
 					out = strings.TrimSpace(rendered)
@@ -380,9 +448,13 @@ func (m model) renderTranscript() string {
 			if len(body) > 800 {
 				body = body[:800] + "…"
 			}
-			sb.WriteString(meta + "\n" + toolArgStyle.Render(body) + "\n")
-			_ = toolResStyle
-			sb.WriteString("\n")
+			// Monochrome: white border containing tool output
+			w := m.width - 8
+			if w < 20 {
+				w = 20
+			}
+			boxed := toolResStyle.Width(w).Render(toolArgStyle.Render(body))
+			sb.WriteString(meta + "\n" + boxed + "\n\n")
 		case "error":
 			sb.WriteString(errorStyle.Render("✖ " + b.Content) + "\n\n")
 		}
@@ -391,7 +463,6 @@ func (m model) renderTranscript() string {
 }
 
 func (m *model) syncViewport() {
-	// viewport helper: re-render and go to bottom
 	m.viewport.SetContent(m.renderTranscript())
 	m.viewport.GotoBottom()
 }

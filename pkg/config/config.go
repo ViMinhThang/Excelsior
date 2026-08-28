@@ -16,7 +16,7 @@ type Config struct {
 func FromEnv() Config {
 	m := os.Getenv("DEEPSEEK_MODEL")
 	if m == "" {
-		m = "deepseek-chat"
+		m = "deepseek-v4-flash"
 	}
 	base := os.Getenv("DEEPSEEK_BASE_URL")
 	if base == "" {

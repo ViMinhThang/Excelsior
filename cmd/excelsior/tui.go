@@ -33,7 +33,7 @@ func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system stri
 		model = cfg.Model
 	}
 	if model == "" {
-		model = "deepseek-chat"
+		model = "deepseek-v4-flash"
 	}
 	if system == "" {
 		system = agent.DefaultSystemPrompt

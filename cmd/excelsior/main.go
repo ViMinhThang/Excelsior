@@ -67,7 +67,7 @@ Examples:
 		},
 	}
 
-	root.PersistentFlags().StringVarP(&model, "model", "m", "", "DeepSeek model (deepseek-chat, deepseek-reasoner)")
+	root.PersistentFlags().StringVarP(&model, "model", "m", "", "DeepSeek model (deepseek-v4-flash, deepseek-chat, deepseek-reasoner)")
 	root.PersistentFlags().StringVarP(&workspace, "workspace", "w", "", "Workspace root (default: cwd)")
 	root.PersistentFlags().StringVar(&system, "system", "", "Override system prompt")
 	root.PersistentFlags().StringVar(&sessionID, "session", "", "Session ID for persistence (.excelsior/sessions)")
@@ -86,7 +86,8 @@ Examples:
 		Use:   "models",
 		Short: "List recommended DeepSeek models",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Fprintln(cmd.OutOrStdout(), "deepseek-chat      — V3, general, tool-calling (default)")
+			fmt.Fprintln(cmd.OutOrStdout(), "deepseek-v4-flash  — V4 Flash, fast, tool-calling (default)")
+			fmt.Fprintln(cmd.OutOrStdout(), "deepseek-chat      — V3, general, tool-calling")
 			fmt.Fprintln(cmd.OutOrStdout(), "deepseek-reasoner  — R1, reasoning_content, slower but stronger")
 		},
 	})
@@ -116,7 +117,7 @@ func runAgent(ctx context.Context, cfg config.Config, model, workspace, system, 
 		model = cfg.Model
 	}
 	if model == "" {
-		model = "deepseek-chat"
+		model = "deepseek-v4-flash"
 	}
 	if system == "" {
 		system = agent.DefaultSystemPrompt
