@@ -14,20 +14,33 @@ type Envelope struct {
 
 // Types
 const (
-	TypeChatReq = "chat.req"
-	TypeDelta   = "delta"
-	TypeDone    = "done"
-	TypeError   = "error"
-	TypeAskReq  = "ask.req"
-	TypeAskResp = "ask.resp"
-	TypePing    = "ping"
-	TypePong    = "pong"
+	TypeChatReq     = "chat.req"
+	TypeDelta       = "delta"
+	TypeDone        = "done"
+	TypeError       = "error"
+	TypeAskReq      = "ask.req"
+	TypeAskResp     = "ask.resp"
+	TypePing        = "ping"
+	TypePong        = "pong"
+	TypeSessionList   = "session.list"
+	TypeSessionData   = "session.data"
+	TypeSessionCreate = "session.create"
+	TypeSessionDelete = "session.delete"
+	TypeSessionRename = "session.rename"
+	TypeWorkspaceSet  = "workspace.set"
 )
 
-// ChatReq is client → engine to start a turn.
+// WorkspaceSetReq sets active workspace path in engine
+type WorkspaceSetReq struct {
+	Workspace string `json:"workspace"`
+}
+
+
+// ChatReq is client → engine to start a turn. SessionID ties it to a session sidebar entry.
 type ChatReq struct {
-	Model    string        `json:"model"`
-	Messages []llm.Message `json:"messages"`
+	SessionID string        `json:"sessionId,omitempty"`
+	Model     string        `json:"model"`
+	Messages  []llm.Message `json:"messages"`
 }
 
 // Delta is engine → client streaming fragment (maps to agent.StreamEvent).
@@ -53,4 +66,36 @@ type AskResp struct {
 	Selected int    `json:"selected"` // 0..2 or -1 for manual
 	Answer   string `json:"answer"`
 	Label    string `json:"label"`
+}
+
+// Session management (unified for TUI/web/desktop)
+type SessionListReq struct{}
+type SessionListResp struct {
+	Sessions []SessionInfo `json:"sessions"`
+}
+type SessionInfo struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"` // first user message truncated
+	UpdatedAt string `json:"updatedAt"`
+	Count     int    `json:"count"`
+}
+type SessionCreateReq struct {
+	Title string `json:"title,omitempty"`
+}
+type SessionCreateResp struct {
+	ID string `json:"id"`
+}
+type SessionDeleteReq struct {
+	ID string `json:"id"`
+}
+type SessionDataReq struct {
+	ID string `json:"id"`
+}
+type SessionDataResp struct {
+	ID       string       `json:"id"`
+	Messages []llm.Message `json:"messages"`
+}
+type SessionRenameReq struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }

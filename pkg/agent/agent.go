@@ -13,6 +13,11 @@ import (
 	"excelsior/pkg/tools"
 )
 
+// LLM is the provider interface the agent depends on for streaming chat completions.
+type LLM interface {
+	StreamChat(ctx context.Context, req llm.ChatRequest, onDelta func(llm.Delta) error) (*llm.Message, error)
+}
+
 // ToolRegistry is the port the agent depends on — small interface for testability.
 type ToolRegistry interface {
 	Get(name string) (tools.Tool, bool)
@@ -22,10 +27,11 @@ type ToolRegistry interface {
 // Agent is the importable library. It owns the tool-call loop and streams
 // events to the caller so both CLI and TUI can render identically.
 type Agent struct {
-	LLM      *llm.Client
+	LLM      LLM
 	Tools    ToolRegistry
 	System   string
 	MaxIters int // tool-call loop cap
+	Model    string
 	Logger   *slog.Logger
 }
 
@@ -64,18 +70,28 @@ func (a *Agent) validate() error {
 	if a.LLM == nil {
 		return errors.New("agent: LLM not configured")
 	}
-	if strings.TrimSpace(a.LLM.APIKey) == "" {
-		return errors.New("agent: LLM APIKey is empty")
-	}
 	if a.MaxIters < 0 {
 		return fmt.Errorf("agent: MaxIters must be >=0, got %d", a.MaxIters)
 	}
 	return nil
 }
 
-// Run executes the agentic loop: LLM -> tool calls -> LLM ... until no more tool calls.
-// It streams via OnEvent and returns the final assistant message.
+type RunResult struct {
+	FinalMessage *llm.Message
+	Messages     []llm.Message
+}
+
+// Run executes the agentic loop and returns the final assistant message.
 func (a *Agent) Run(ctx context.Context, opts RunOptions) (*llm.Message, error) {
+	res, err := a.RunWithHistory(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return res.FinalMessage, nil
+}
+
+// RunWithHistory executes the agentic loop and returns both the final message and the full turn history.
+func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult, error) {
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
@@ -109,15 +125,22 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (*llm.Message, error) 
 		emit = func(StreamEvent) {}
 	}
 
+	model := a.Model
+	if model == "" {
+		if client, ok := a.LLM.(*llm.Client); ok && client.Model != "" {
+			model = client.Model
+		}
+	}
+
 	start := time.Now()
-	a.logger().Info("agent run start", "model", a.LLM.Model, "messages", len(messages), "maxIters", a.maxIters())
+	a.logger().Info("agent run start", "model", model, "messages", len(messages), "maxIters", a.maxIters())
 
 	for iter := 0; iter < a.maxIters(); iter++ {
 		if err := ctx.Err(); err != nil {
 			return nil, fmt.Errorf("agent: context canceled before iter %d: %w", iter, err)
 		}
 		req := llm.ChatRequest{
-			Model:    a.LLM.Model,
+			Model:    model,
 			Messages: messages,
 			Tools:    toolDefs,
 		}
@@ -152,9 +175,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (*llm.Message, error) 
 		messages = append(messages, *msg)
 
 		if len(msg.ToolCalls) == 0 {
+			if msg.Content == "" && msg.ReasoningContent == "" && iter < a.maxIters()-1 {
+				continue
+			}
 			emit(StreamEvent{Type: "done", Text: msg.Content, FinishReason: "stop"})
 			a.logger().Info("agent run done", "iters", iter+1, "totalDuration", time.Since(start))
-			return msg, nil
+			return &RunResult{FinalMessage: msg, Messages: messages}, nil
 		}
 
 		// Execute tools sequentially with per-tool timeout via context

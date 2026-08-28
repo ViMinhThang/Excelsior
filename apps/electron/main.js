@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const { spawn } = require('child_process');
 
 let engineProc = null;
@@ -28,12 +29,15 @@ function startEngineIfNeeded() {
     console.log('[engine] binary not found, expecting external engine at', ENGINE_ADDR);
     return;
   }
-  console.log('[engine] spawning', bin, 'engine --addr', ENGINE_ADDR);
-  engineProc = spawn(bin, ['engine', '--addr', ENGINE_ADDR], {
+  const workspaceRoot = path.resolve(__dirname, '../../');
+  console.log('[engine] spawning', bin, 'engine --addr', ENGINE_ADDR, 'in', workspaceRoot);
+  engineProc = spawn(bin, ['engine', '--addr', ENGINE_ADDR, '--workspace', workspaceRoot], {
     stdio: 'inherit',
+    cwd: workspaceRoot,
     env: process.env,
     detached: false
   });
+
   engineProc.on('error', (err) => dialog.showErrorBox('Engine failed to start', String(err)));
   engineProc.on('exit', (code) => {
     console.log('[engine] exited', code);
@@ -44,28 +48,48 @@ function startEngineIfNeeded() {
   });
 }
 
-function getFrontendURL() {
-  // In dev, Next.js runs on 3000; in prod, load static export from apps/web/dist
-  if (IS_DEV && process.env.ELECTRON_START_URL) return process.env.ELECTRON_START_URL;
+async function getFrontendURL() {
+  if (process.env.ELECTRON_START_URL) return process.env.ELECTRON_START_URL;
+
+  // In dev mode, probe for active Next.js hot-reload dev server at :3000
+  if (IS_DEV) {
+    const isDevRunning = await new Promise((resolve) => {
+      const req = http.get('http://localhost:3000', (res) => {
+        resolve(res.statusCode < 500);
+      });
+      req.on('error', () => resolve(false));
+      req.setTimeout(500, () => {
+        req.destroy();
+        resolve(false);
+      });
+    });
+
+    if (isDevRunning) {
+      console.log('[desktop] Active Next.js dev server found at http://localhost:3000 (hot reload active)');
+      return 'http://localhost:3000';
+    }
+  }
+
   const prodPaths = [
-    path.join(__dirname, '../web/dist/index.html'),
-    path.join(__dirname, '../gui/index.html'),
-    path.join(__dirname, 'index.html'),
+    path.resolve(__dirname, '../web/dist/index.html'),
+    path.resolve(__dirname, '../gui/index.html'),
+    path.resolve(__dirname, 'index.html'),
   ];
-  for (const p of prodPaths) if (fs.existsSync(p)) return `file://${p}`;
-  // Fallback to Next.js dev server
+  for (const p of prodPaths) {
+    if (fs.existsSync(p)) return p;
+  }
   return 'http://localhost:3000';
 }
 
-function createWindow() {
+async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#0a0a0a',
-    title: 'Excelsior',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    backgroundColor: '#0d0d0d',
+    title: 'excelsior',
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -76,10 +100,13 @@ function createWindow() {
     show: false
   });
 
-  const url = getFrontendURL();
-  console.log('[desktop] loading', url);
-  if (url.startsWith('file://')) mainWindow.loadFile(url.replace('file://', ''));
-  else mainWindow.loadURL(url);
+  const target = await getFrontendURL();
+  console.log('[desktop] loading', target);
+  if (target.startsWith('http://') || target.startsWith('https://')) {
+    mainWindow.loadURL(target);
+  } else {
+    mainWindow.loadFile(target);
+  }
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -87,20 +114,17 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // Menu
-  const menu = Menu.buildFromTemplate([
-    { role: 'appMenu', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'quit' }] },
-    { role: 'editMenu' },
-    { role: 'viewMenu' },
-    { role: 'windowMenu' },
-    { label: 'Engine', submenu: [
-      { label: `Engine: ${ENGINE_URL}`, enabled: false },
-      { label: 'Restart Engine', click: () => { if (engineProc) engineProc.kill(); startEngineIfNeeded(); } },
-      { label: 'Open DevTools', click: () => mainWindow.webContents.openDevTools() }
-    ]}
-  ]);
-  Menu.setApplicationMenu(menu);
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
+  Menu.setApplicationMenu(null);
 }
+
+
 
 // Single instance lock
 if (!app.requestSingleInstanceLock()) {
@@ -114,24 +138,46 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-app.whenReady().then(() => {
+// IPC Handlers
+ipcMain.handle('get-engine-url', () => ENGINE_URL);
+ipcMain.handle('open-folder-dialog', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Open Project Folder'
+  });
+  if (canceled || !filePaths || filePaths.length === 0) return null;
+  return filePaths[0];
+});
+
+ipcMain.on('window-control', (_event, action) => {
+  if (!mainWindow) return;
+  if (action === 'minimize') mainWindow.minimize();
+  else if (action === 'maximize') {
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
+  } else if (action === 'close') {
+    mainWindow.close();
+  }
+});
+
+ipcMain.on('toggle-devtools', () => {
+  if (mainWindow) {
+    mainWindow.webContents.toggleDevTools();
+  }
+});
+
+
+app.whenReady().then(async () => {
   startEngineIfNeeded();
-  createWindow();
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  await createWindow();
+  app.on('activate', async () => {
+    if (BrowserWindow.getAllWindows().length === 0) await createWindow();
+  });
 });
 
 app.on('window-all-closed', () => {
-  if (engineProc) try { engineProc.kill(); } catch {}
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') {
+    if (engineProc) engineProc.kill();
+    app.quit();
+  }
 });
-
-app.on('before-quit', () => {
-  if (engineProc) try { engineProc.kill(); } catch {}
-});
-
-ipcMain.handle('get-engine-url', () => ENGINE_URL);
-ipcMain.handle('get-versions', () => ({
-  app: app.getVersion(),
-  electron: process.versions.electron,
-  node: process.versions.node
-}));

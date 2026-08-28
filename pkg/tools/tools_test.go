@@ -47,6 +47,53 @@ func TestSecureJoin(t *testing.T) {
 	}
 }
 
+func TestRegistry_AllAndGet(t *testing.T) {
+	root := tmpWorkspace(t)
+	reg := DefaultRegistry(root)
+	if reg == nil {
+		t.Fatal("expected non-nil default registry")
+	}
+
+	all := reg.All()
+	if len(all) != 8 {
+		t.Errorf("expected 8 default tools, got %d", len(all))
+	}
+
+	expectedTools := []string{"view", "ls", "glob", "grep", "write", "edit", "bash", "askQuestion"}
+	for _, name := range expectedTools {
+		tool, ok := reg.Get(name)
+		if !ok || tool == nil {
+			t.Errorf("expected tool %q in registry, not found", name)
+		} else if tool.Name() != name {
+			t.Errorf("tool.Name mismatch: got %q, want %q", tool.Name(), name)
+		}
+	}
+
+	_, ok := reg.Get("nonexistent_tool")
+	if ok {
+		t.Error("expected nonexistent tool to return false")
+	}
+}
+
+func TestGlobTool(t *testing.T) {
+	root := tmpWorkspace(t)
+	gt := &GlobTool{Root: root}
+	args, _ := json.Marshal(map[string]string{"pattern": "*.txt"})
+	out, err := gt.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("glob err: %v", err)
+	}
+	if !contains(out, "hello.txt") {
+		t.Fatalf("expected hello.txt in glob output, got %q", out)
+	}
+
+	// Glob should reject traversal pattern
+	badArgs, _ := json.Marshal(map[string]string{"pattern": "../**/*.txt"})
+	if _, err := gt.Execute(context.Background(), badArgs); err == nil {
+		t.Fatal("expected error on traversal pattern")
+	}
+}
+
 func TestViewTool(t *testing.T) {
 	root := tmpWorkspace(t)
 	vt := &ViewTool{Root: root}
@@ -96,7 +143,16 @@ func TestViewTool(t *testing.T) {
 	}
 }
 
-func contains(s, substr string) bool { return len(s) >= len(substr) && (func() bool { for i := 0; i <= len(s)-len(substr); i++ { if s[i:i+len(substr)] == substr { return true } }; return false })() }
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (func() bool {
+		for i := 0; i <= len(s)-len(substr); i++ {
+			if s[i:i+len(substr)] == substr {
+				return true
+			}
+		}
+		return false
+	})()
+}
 
 func TestLsTool(t *testing.T) {
 	root := tmpWorkspace(t)

@@ -162,7 +162,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.upsertReasoning(ev.Reasoning)
 		case "tool_start":
 			if ev.ToolName != "" {
-				m.blocks = append(m.blocks, block{Role: "tool", Meta: ev.ToolName, Content: ev.ToolArgs})
+				// Upsert: if last block is the same tool, append args; otherwise new block
+				if len(m.blocks) > 0 && m.blocks[len(m.blocks)-1].Role == "tool" && m.blocks[len(m.blocks)-1].Meta == ev.ToolName {
+					m.blocks[len(m.blocks)-1].Content += ev.ToolArgs
+				} else {
+					m.blocks = append(m.blocks, block{Role: "tool", Meta: ev.ToolName, Content: ev.ToolArgs})
+				}
 				m.syncViewport()
 			}
 		case "tool_result":
@@ -242,8 +247,11 @@ func (m *model) handleCommand(cmd string) {
 	case "/model":
 		if len(parts) == 2 {
 			m.cfg.Model = parts[1]
-			if m.cfg.Agent != nil && m.cfg.Agent.LLM != nil {
-				m.cfg.Agent.LLM.Model = parts[1]
+			if m.cfg.Agent != nil {
+				m.cfg.Agent.Model = parts[1]
+				if c, ok := m.cfg.Agent.LLM.(*llm.Client); ok {
+					c.Model = parts[1]
+				}
 			}
 			m.blocks = append(m.blocks, block{Role: "system", Content: "Model → " + parts[1]})
 		} else {

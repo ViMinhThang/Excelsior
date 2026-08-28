@@ -26,6 +26,7 @@ func NewStore(dir string) *Store { return &Store{Dir: dir} }
 
 type Record struct {
 	ID        string        `json:"id"`
+	Title     string        `json:"title,omitempty"`
 	CreatedAt time.Time     `json:"createdAt"`
 	Messages  []llm.Message `json:"messages"`
 }
@@ -64,7 +65,8 @@ func (s *Store) path(id string) (string, error) {
 	return p, nil
 }
 
-func (s *Store) Save(ctx context.Context, id string, messages []llm.Message) error {
+// SaveWithTitle appends a record with a custom title and message history.
+func (s *Store) SaveWithTitle(ctx context.Context, id string, title string, messages []llm.Message) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("session save canceled: %w", err)
 	}
@@ -75,16 +77,15 @@ func (s *Store) Save(ctx context.Context, id string, messages []llm.Message) err
 	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
 		return fmt.Errorf("session mkdir: %w", err)
 	}
-	rec := Record{ID: id, CreatedAt: time.Now().UTC(), Messages: messages}
+	if messages == nil {
+		messages = []llm.Message{}
+	}
+	rec := Record{ID: id, Title: title, CreatedAt: time.Now().UTC(), Messages: messages}
 	b, err := json.Marshal(rec)
 	if err != nil {
 		return fmt.Errorf("session marshal: %w", err)
 	}
-	// Atomic append: we cannot atomically append via rename, but we can use
-	// O_APPEND with sync and handle corruption on Load. For stronger atomicity,
-	// write to temp then append via reading+rewrite is overkill. Instead, use
-	// file locking via O_APPEND + Sync and tolerate last-line corruption.
-	// We implement append with Sync for durability.
+
 	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("session open: %w", err)
@@ -100,13 +101,26 @@ func (s *Store) Save(ctx context.Context, id string, messages []llm.Message) err
 	if err := f.Sync(); err != nil {
 		return fmt.Errorf("session sync: %w", err)
 	}
-	// fsync dir
 	if d, err := os.Open(s.Dir); err == nil {
 		_ = d.Sync()
 		d.Close()
 	}
-	slog.Debug("session saved", "id", id, "messages", len(messages))
+	slog.Debug("session saved", "id", id, "title", title, "messages", len(messages))
 	return nil
+}
+
+// SaveWithTitleSimple is a convenience wrapper for SaveWithTitle with background context.
+func (s *Store) SaveWithTitleSimple(id string, title string, messages []llm.Message) error {
+	return s.SaveWithTitle(context.Background(), id, title, messages)
+}
+
+// Save preserves any previously saved custom title if present.
+func (s *Store) Save(ctx context.Context, id string, messages []llm.Message) error {
+	var title string
+	if existing, err := s.LoadRecord(ctx, id); err == nil && existing != nil {
+		title = existing.Title
+	}
+	return s.SaveWithTitle(ctx, id, title, messages)
 }
 
 // SaveSimple is a convenience wrapper with background context (for callers not needing ctx).
@@ -114,7 +128,22 @@ func (s *Store) SaveSimple(id string, messages []llm.Message) error {
 	return s.Save(context.Background(), id, messages)
 }
 
-func (s *Store) Load(ctx context.Context, id string) ([]llm.Message, error) {
+// Rename updates the title of a session by appending a new record entry.
+func (s *Store) Rename(ctx context.Context, id string, title string) error {
+	var msgs []llm.Message
+	if existing, err := s.LoadRecord(ctx, id); err == nil && existing != nil {
+		msgs = existing.Messages
+	}
+	return s.SaveWithTitle(ctx, id, title, msgs)
+}
+
+// RenameSimple is a convenience wrapper for Rename with background context.
+func (s *Store) RenameSimple(id string, title string) error {
+	return s.Rename(context.Background(), id, title)
+}
+
+// LoadRecord reads the last valid JSONL record for a session, returning its full metadata.
+func (s *Store) LoadRecord(ctx context.Context, id string) (*Record, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("session load canceled: %w", err)
 	}
@@ -143,9 +172,23 @@ func (s *Store) Load(ctx context.Context, id string) ([]llm.Message, error) {
 			slog.Warn("session corrupted line, skipping", "id", id, "line", i, "err", err)
 			continue
 		}
-		return rec.Messages, nil
+		return &rec, nil
 	}
 	return nil, fmt.Errorf("session %q: no valid record: %w", id, lastErr)
+}
+
+// LoadRecordSimple is a convenience wrapper for LoadRecord with background context.
+func (s *Store) LoadRecordSimple(id string) (*Record, error) {
+	return s.LoadRecord(context.Background(), id)
+}
+
+// Load returns the messages of the latest valid record for a session.
+func (s *Store) Load(ctx context.Context, id string) ([]llm.Message, error) {
+	rec, err := s.LoadRecord(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return rec.Messages, nil
 }
 
 func (s *Store) LoadSimple(id string) ([]llm.Message, error) {
@@ -194,6 +237,11 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	}
 	slog.Info("session deleted", "id", id)
 	return nil
+}
+
+// DeleteSimple is a convenience wrapper with background context.
+func (s *Store) DeleteSimple(id string) error {
+	return s.Delete(context.Background(), id)
 }
 
 // Prune deletes sessions older than maxAge based on file mtime.
