@@ -21,6 +21,18 @@ func TestFromEnv_Defaults(t *testing.T) {
 	}
 }
 
+func TestResolveModel(t *testing.T) {
+	if got := ResolveModel("deepseek-v4-pro"); got != "deepseek-reasoner" {
+		t.Fatalf("alias v4-pro got %q", got)
+	}
+	if got := ResolveModel("v4-pro"); got != "deepseek-reasoner" {
+		t.Fatalf("alias v4-pro short got %q", got)
+	}
+	if got := ResolveModel("deepseek-v4-flash"); got != "deepseek-v4-flash" {
+		t.Fatalf("no alias expected, got %q", got)
+	}
+}
+
 func TestValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -28,6 +40,7 @@ func TestValidate(t *testing.T) {
 		wantErr bool
 	}{
 		{"ok", Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Temperature: 0.7}, false},
+		{"ok v4-pro alias", Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-pro", Temperature: 0.7}, false},
 		{"no key", Config{APIKey: "", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}, true},
 		{"bad url", Config{APIKey: "sk-1", BaseURL: "://bad", Model: "deepseek-v4-flash"}, true},
 		{"bad temp", Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Temperature: 5}, true},

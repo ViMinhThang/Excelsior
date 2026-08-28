@@ -13,6 +13,7 @@ import (
 
 	"excelsior/pkg/agent"
 	"excelsior/pkg/llm"
+	"excelsior/pkg/tools"
 )
 
 // Config holds the TUI wiring. The agent is injected so the TUI is pure UI.
@@ -47,6 +48,7 @@ type model struct {
 	width         int
 	height        int
 	glam          *glamour.TermRenderer
+	askState      *askOverlay
 }
 
 func New(cfg Config) tea.Model {
@@ -112,7 +114,86 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.syncViewport()
 
+	case askRequestMsg:
+		m.askState = newAskOverlay(msg.Req, msg.RespChan)
+		return m, textinput.Blink
+
 	case tea.KeyMsg:
+		// If ask overlay is active, route keys there
+		if m.askState != nil {
+			switch msg.String() {
+			case "esc":
+				ch := m.askState.respChan
+				m.askState = nil
+				m.input.Focus()
+				select {
+				case ch <- tools.AskResponse{Selected: -1, Answer: ""}:
+				default:
+				}
+				return m, textinput.Blink
+			case "up", "shift+tab":
+				if m.askState.cursor > 0 {
+					m.askState.cursor--
+				}
+				if m.askState.cursor == 3 {
+					m.askState.input.Focus()
+				} else {
+					m.askState.input.Blur()
+				}
+				return m, nil
+			case "down", "tab":
+				if m.askState.cursor < 3 {
+					m.askState.cursor++
+				}
+				if m.askState.cursor == 3 {
+					m.askState.input.Focus()
+				} else {
+					m.askState.input.Blur()
+				}
+				return m, nil
+			case "enter":
+				var resp tools.AskResponse
+				if m.askState.cursor == 3 {
+					val := strings.TrimSpace(m.askState.input.Value())
+					if val == "" {
+						return m, nil
+					}
+					resp = tools.AskResponse{Selected: -1, Answer: val, Label: val}
+				} else {
+					opt := m.askState.req.Options[m.askState.cursor]
+					resp = tools.AskResponse{Selected: m.askState.cursor, Answer: opt, Label: opt}
+				}
+				ch := m.askState.respChan
+				m.askState = nil
+				m.input.Focus()
+				select {
+				case ch <- resp:
+				default:
+				}
+				return m, textinput.Blink
+			case "1", "2", "3":
+				idx := int(msg.String()[0] - '1')
+				if idx < len(m.askState.req.Options) {
+					opt := m.askState.req.Options[idx]
+					resp := tools.AskResponse{Selected: idx, Answer: opt, Label: opt}
+					ch := m.askState.respChan
+					m.askState = nil
+					m.input.Focus()
+					select {
+					case ch <- resp:
+					default:
+					}
+					return m, textinput.Blink
+				}
+				return m, nil
+			}
+			if m.askState.cursor == 3 {
+				var cmd tea.Cmd
+				m.askState.input, cmd = m.askState.input.Update(msg)
+				return m, cmd
+			}
+			return m, nil
+		}
 		// when streaming, allow Ctrl+C to cancel
 		if m.streaming {
 			switch msg.String() {
@@ -302,8 +383,27 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 	ch := make(chan agent.StreamEvent, 128)
 	m.streamCh = ch
 
+	// Interactive askQuestion handler — shows overlay and waits for user choice
+	handler := func(hctx context.Context, req tools.AskRequest) (tools.AskResponse, error) {
+		respCh := make(chan tools.AskResponse, 1)
+		if activeProgram != nil {
+			activeProgram.Send(askRequestMsg{Req: req, RespChan: respCh})
+		} else {
+			return tools.AskResponse{}, fmt.Errorf("no active TUI")
+		}
+		select {
+		case resp := <-respCh:
+			return resp, nil
+		case <-hctx.Done():
+			return tools.AskResponse{}, hctx.Err()
+		case <-ctx.Done():
+			return tools.AskResponse{}, ctx.Err()
+		}
+	}
+	ctxWithHandler := tools.WithQuestionHandler(ctx, handler)
+
 	go func() {
-		_, err := m.cfg.Agent.Run(ctx, agent.RunOptions{
+		_, err := m.cfg.Agent.Run(ctxWithHandler, agent.RunOptions{
 			Messages: msgs,
 			OnEvent: func(ev agent.StreamEvent) {
 				select {
@@ -401,9 +501,16 @@ func (m model) View() string {
 	scrollbar := m.scrollbarView()
 	body := lipgloss.JoinHorizontal(lipgloss.Top, viewportView, " ", scrollbar)
 
-	// input — single line only
+	// Ask overlay takes over body when active
+	if m.askState != nil {
+		body = m.askState.View(m.width)
+	}
+
+	// input — single line only (hidden behind ask overlay)
 	var inputView string
-	if m.streaming {
+	if m.askState != nil {
+		inputView = helpStyle.Render("  answering question…")
+	} else if m.streaming {
 		inputView = helpStyle.Render("  streaming… press esc to cancel")
 	} else {
 		inputView = m.input.View()

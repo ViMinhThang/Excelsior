@@ -35,6 +35,25 @@ func (c *Client) baseURL() string {
 	return "https://api.deepseek.com"
 }
 
+var modelAliases = map[string]string{
+	"deepseek-v4-pro": "deepseek-reasoner",
+	"v4-pro":          "deepseek-reasoner",
+}
+
+func resolveModel(m string) string {
+	m = strings.TrimSpace(m)
+	if a, ok := modelAliases[m]; ok {
+		return a
+	}
+	return m
+}
+
+// IsReasoner reports whether a model uses reasoning_content.
+func IsReasoner(model string) bool {
+	m := resolveModel(model)
+	return m == "deepseek-reasoner" || m == "deepseek-v4-pro"
+}
+
 func (c *Client) validate() error {
 	if strings.TrimSpace(c.APIKey) == "" {
 		return errors.New("deepseek: APIKey is empty (set DEEPSEEK_API_KEY)")
@@ -59,6 +78,8 @@ func (c *Client) httpClient() *http.Client {
 	}
 	return &http.Client{Timeout: 120 * time.Second}
 }
+
+func (c *Client) effectiveModel() string { return resolveModel(c.Model) }
 
 const (
 	maxErrorBody = 4 * 1024
@@ -177,10 +198,11 @@ func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(D
 	if err := c.validate(); err != nil {
 		return nil, err
 	}
-	// Default model
+	// Default model + alias resolve (v4-pro → reasoner)
 	if req.Model == "" {
 		req.Model = c.Model
 	}
+	req.Model = resolveModel(req.Model)
 	if req.Model == "" {
 		req.Model = "deepseek-v4-flash"
 	}

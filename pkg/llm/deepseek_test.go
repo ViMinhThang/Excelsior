@@ -78,6 +78,21 @@ func TestClient_Validate(t *testing.T) {
 	}
 }
 
+func TestResolveModel_Alias(t *testing.T) {
+	if got := resolveModel("deepseek-v4-pro"); got != "deepseek-reasoner" {
+		t.Fatalf("alias v4-pro %q", got)
+	}
+	if !IsReasoner("deepseek-v4-pro") {
+		t.Fatal("expected v4-pro to be reasoner")
+	}
+	if !IsReasoner("deepseek-reasoner") {
+		t.Fatal("expected reasoner")
+	}
+	if IsReasoner("deepseek-v4-flash") {
+		t.Fatal("v4-flash should not be reasoner")
+	}
+}
+
 func TestChat_SingleCall(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")

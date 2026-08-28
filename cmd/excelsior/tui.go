@@ -47,6 +47,7 @@ func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system stri
 	if model == "" {
 		model = cfg.Model
 	}
+	model = config.ResolveModel(model)
 	if model == "" {
 		model = "deepseek-v4-flash"
 	}

@@ -189,12 +189,14 @@ func writeAtomic(path string, data []byte, perm os.FileMode) error {
 type ViewTool struct{ Root string }
 
 func (t *ViewTool) Name() string        { return "view" }
-func (t *ViewTool) Description() string { return "Read file contents. Supports optional 1-based line range." }
+func (t *ViewTool) Description() string { return "Read file contents with pagination. Use offset/limit to avoid loading x000 lines; default 0/50, max limit 200." }
 func (t *ViewTool) Parameters() any {
 	return jsonSchema(map[string]any{
 		"filePath":  map[string]any{"type": "string", "description": "Path relative to workspace"},
-		"lineStart": map[string]any{"type": "integer", "description": "1-based start line"},
-		"lineEnd":   map[string]any{"type": "integer", "description": "1-based end line inclusive"},
+		"offset":    map[string]any{"type": "integer", "description": "0-based start line, default 0"},
+		"limit":     map[string]any{"type": "integer", "description": "Max lines to return, default 50, max 200"},
+		"lineStart": map[string]any{"type": "integer", "description": "Deprecated: 1-based start, use offset"},
+		"lineEnd":   map[string]any{"type": "integer", "description": "Deprecated: 1-based end inclusive"},
 	}, []string{"filePath"})
 }
 func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
@@ -203,6 +205,8 @@ func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	}
 	var a struct {
 		FilePath  string `json:"filePath"`
+		Offset    *int   `json:"offset"`
+		Limit     *int   `json:"limit"`
 		LineStart *int   `json:"lineStart"`
 		LineEnd   *int   `json:"lineEnd"`
 	}
@@ -212,14 +216,37 @@ func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if strings.TrimSpace(a.FilePath) == "" {
 		return "", errors.New("view: filePath is required")
 	}
-	if a.LineStart != nil && *a.LineStart < 1 {
-		return "", fmt.Errorf("view: lineStart must be >=1, got %d", *a.LineStart)
+	// Resolve pagination: prefer offset/limit, fallback to lineStart/lineEnd for compat
+	offset := 0
+	limit := 50
+	hasOffset := a.Offset != nil
+	hasLimit := a.Limit != nil
+	hasLegacy := a.LineStart != nil || a.LineEnd != nil
+	if hasOffset {
+		offset = *a.Offset
 	}
-	if a.LineEnd != nil && *a.LineEnd < 1 {
-		return "", fmt.Errorf("view: lineEnd must be >=1, got %d", *a.LineEnd)
+	if hasLimit {
+		limit = *a.Limit
 	}
-	if a.LineStart != nil && a.LineEnd != nil && *a.LineStart > *a.LineEnd {
-		return "", fmt.Errorf("view: lineStart %d > lineEnd %d", *a.LineStart, *a.LineEnd)
+	if hasLegacy && !hasOffset && !hasLimit {
+		// legacy mapping
+		if a.LineStart != nil {
+			offset = *a.LineStart - 1
+		}
+		if a.LineStart != nil && a.LineEnd != nil {
+			limit = *a.LineEnd - *a.LineStart + 1
+		} else if a.LineEnd != nil {
+			limit = *a.LineEnd
+		}
+	}
+	if offset < 0 {
+		return "", fmt.Errorf("view: offset must be >=0, got %d", offset)
+	}
+	if limit < 1 || limit > 200 {
+		return "", fmt.Errorf("view: limit must be 1..200, got %d", limit)
+	}
+	if hasLegacy && (hasOffset || hasLimit) && (a.LineStart != nil || a.LineEnd != nil) {
+		slog.Warn("view: both offset/limit and lineStart/lineEnd supplied, using offset/limit")
 	}
 	p, err := secureJoin(t.Root, a.FilePath)
 	if err != nil {
@@ -240,22 +267,20 @@ func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 		return "", fmt.Errorf("view: %w", err)
 	}
 	lines := strings.Split(string(b), "\n")
-	start := 1
-	end := len(lines)
-	if a.LineStart != nil {
-		start = *a.LineStart
-	}
-	if a.LineEnd != nil {
-		end = *a.LineEnd
-	}
+	total := len(lines)
+	start := offset + 1
 	if start < 1 {
 		start = 1
 	}
-	if end > len(lines) {
-		end = len(lines)
+	if start > total {
+		return "", fmt.Errorf("view: file has %d lines, offset %d out of range", total, offset)
 	}
-	if start > len(lines) {
-		return "", fmt.Errorf("view: file has %d lines, start %d out of range", len(lines), start)
+	end := offset + limit
+	if end < start {
+		end = start
+	}
+	if end > total {
+		end = total
 	}
 	w := strings.Builder{}
 	pad := len(fmt.Sprintf("%d", end))
@@ -265,7 +290,14 @@ func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 			w.WriteString("\n")
 		}
 	}
-	slog.Debug("view", "path", a.FilePath, "lines", end-start+1)
+	// Footer pagination hint when truncated
+	if end < total {
+		remaining := total - end
+		fmt.Fprintf(&w, "\n… %d of %d lines shown, %d more — use offset %d limit %d", end-offset, total, remaining, end, limit)
+	} else {
+		fmt.Fprintf(&w, "\n— %d lines total", total)
+	}
+	slog.Debug("view", "path", a.FilePath, "offset", offset, "limit", limit, "shown", end-start+1, "total", total)
 	return w.String(), nil
 }
 
@@ -672,20 +704,49 @@ func (t *BashTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 
 // ---- Ask ----
 
+type AskRequest struct {
+	Question    string   `json:"question"`
+	Options     []string `json:"options"` // expect 3, but handle any
+	AllowManual bool     `json:"allowManual"`
+}
+
+type AskResponse struct {
+	Selected int    `json:"selected"` // 0..2, -1 for manual/cancel
+	Label    string `json:"label"`
+	Answer   string `json:"answer"` // manual input or selected label
+}
+
+type QuestionHandler func(ctx context.Context, req AskRequest) (AskResponse, error)
+
+type contextKey string
+
+const questionHandlerKey contextKey = "questionHandler"
+
+// WithQuestionHandler injects a TUI/CLI prompt handler into context.
+func WithQuestionHandler(ctx context.Context, h QuestionHandler) context.Context {
+	return context.WithValue(ctx, questionHandlerKey, h)
+}
+func GetQuestionHandler(ctx context.Context) (QuestionHandler, bool) {
+	h, ok := ctx.Value(questionHandlerKey).(QuestionHandler)
+	return h, ok
+}
+
 type AskTool struct{}
 
 func (t *AskTool) Name() string        { return "askQuestion" }
-func (t *AskTool) Description() string { return "Ask the user a clarifying question. Use when requirements are ambiguous." }
+func (t *AskTool) Description() string { return "Ask the user a clarifying question. Provide exactly 3 options + manual input is always allowed." }
 func (t *AskTool) Parameters() any {
 	return jsonSchema(map[string]any{
-		"question": map[string]any{"type": "string"},
-		"options":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		"question":    map[string]any{"type": "string", "description": "Question to ask"},
+		"options":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Exactly 3 options"},
+		"allowManual": map[string]any{"type": "boolean", "description": "Allow manual input (default true)"},
 	}, []string{"question"})
 }
 func (t *AskTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var a struct {
-		Question string   `json:"question"`
-		Options  []string `json:"options"`
+		Question    string   `json:"question"`
+		Options     []string `json:"options"`
+		AllowManual *bool    `json:"allowManual"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", fmt.Errorf("askQuestion: invalid args: %w", err)
@@ -694,5 +755,36 @@ func (t *AskTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 	if a.Question == "" {
 		return "", errors.New("askQuestion: question is required")
 	}
-	return fmt.Sprintf("QUESTION: %s | OPTIONS: %s", a.Question, strings.Join(a.Options, ", ")), nil
+	// Normalize to 3 options: pad or truncate
+	opts := a.Options
+	if len(opts) > 3 {
+		opts = opts[:3]
+	}
+	for len(opts) < 3 {
+		opts = append(opts, fmt.Sprintf("Option %d", len(opts)+1))
+	}
+	allowManual := true
+	if a.AllowManual != nil {
+		allowManual = *a.AllowManual
+	}
+	// If a handler is injected (TUI), delegate interactively
+	if h, ok := GetQuestionHandler(ctx); ok && h != nil {
+		resp, err := h(ctx, AskRequest{Question: a.Question, Options: opts, AllowManual: allowManual})
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return "Question cancelled.", nil
+			}
+			return "", fmt.Errorf("askQuestion handler: %w", err)
+		}
+		if resp.Selected >= 0 && resp.Selected < len(opts) {
+			return fmt.Sprintf("User selected [%d]: %s", resp.Selected+1, resp.Label), nil
+		}
+		// Manual or cancel
+		if strings.TrimSpace(resp.Answer) == "" {
+			return "User provided no answer.", nil
+		}
+		return fmt.Sprintf("User answered: %s", resp.Answer), nil
+	}
+	// Headless fallback: return formatted prompt for LLM to see
+	return fmt.Sprintf("QUESTION: %s | OPTIONS: 1) %s  2) %s  3) %s  (or manual)", a.Question, opts[0], opts[1], opts[2]), nil
 }

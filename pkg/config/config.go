@@ -19,8 +19,23 @@ type Config struct {
 	Workspace   string
 }
 
+var ModelAliases = map[string]string{
+	"deepseek-v4-pro": "deepseek-reasoner",
+	"v4-pro":          "deepseek-reasoner",
+	"v4-flash":        "deepseek-v4-flash",
+}
+
+// ResolveModel resolves aliases (e.g. deepseek-v4-pro → deepseek-reasoner) and trims.
+func ResolveModel(m string) string {
+	m = strings.TrimSpace(m)
+	if aliased, ok := ModelAliases[m]; ok {
+		return aliased
+	}
+	return m
+}
+
 func FromEnv() Config {
-	m := os.Getenv("DEEPSEEK_MODEL")
+	m := ResolveModel(os.Getenv("DEEPSEEK_MODEL"))
 	if m == "" {
 		m = "deepseek-v4-flash"
 	}
@@ -59,15 +74,16 @@ func (c Config) Validate() error {
 	if c.MaxTokens < 0 {
 		return fmt.Errorf("MaxTokens must be >=0, got %d", c.MaxTokens)
 	}
-	// Allow-list models (extend as needed)
+	// Resolve alias before allow-list check
+	c.Model = ResolveModel(c.Model)
 	allowed := map[string]bool{
 		"deepseek-v4-flash": true,
 		"deepseek-chat":     true,
 		"deepseek-reasoner": true,
+		"deepseek-v4-pro":   true, // alias, allow original too
 	}
 	if !allowed[c.Model] {
-		// Not hard fail — just warn for forward compatibility, but validate in strict mode if needed
-		// For production, we allow any model but log warning via caller
+		// Not hard fail — just warn for forward compatibility
 	}
 	return nil
 }
