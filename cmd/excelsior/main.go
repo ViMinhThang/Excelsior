@@ -32,9 +32,10 @@ func main() {
 		Long: `Excelsior is a DeepSeek-first coding agent library + CLI.
 
 Examples:
+  excelsior                          # launch TUI (interactive)
+  excelsior tui                      # launch TUI explicitly
   excelsior "add tests for pkg/tools"
   excelsior -m deepseek-reasoner "explain this repo"
-  excelsior run --workspace . "refactor pkg/llm to support retries"
   echo "fix the bug in main.go" | excelsior`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -56,6 +57,10 @@ Examples:
 				}
 			}
 			if strings.TrimSpace(prompt) == "" {
+				// No prompt and no pipe: launch TUI if terminal, else show help
+				if isTerminal(os.Stdin) && isTerminal(os.Stdout) {
+					return runTUI(cmd, cfg, model, workspace, system)
+				}
 				return cmd.Help()
 			}
 			return runAgent(cmd.Context(), cfg, model, workspace, system, sessionID, prompt)
@@ -75,6 +80,8 @@ Examples:
 	}
 	root.AddCommand(runCmd)
 
+	root.AddCommand(newTUICommand(cfg, &model, &workspace, &system))
+
 	root.AddCommand(&cobra.Command{
 		Use:   "models",
 		Short: "List recommended DeepSeek models",
@@ -88,7 +95,7 @@ Examples:
 		Use:   "version",
 		Short: "Print version",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Fprintln(cmd.OutOrStdout(), "excelsior v0.1.0 (go + deepseek-native)")
+			fmt.Fprintln(cmd.OutOrStdout(), "excelsior v0.1.0 (go + deepseek-native + tui)")
 		},
 	})
 
