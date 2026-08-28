@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -25,9 +28,21 @@ func newTUICommand(cfg config.Config, modelFlag *string, workspaceFlag *string, 
 }
 
 func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system string) error {
-	if workspace == "" {
-		wd, _ := os.Getwd()
+	if workspace != "" {
+		workspace = strings.TrimSpace(workspace)
+	} else if cfg.Workspace != "" {
+		workspace = cfg.Workspace
+	} else {
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("getwd: %w", err)
+		}
 		workspace = wd
+	}
+	if !filepath.IsAbs(workspace) {
+		if abs, err := filepath.Abs(workspace); err == nil {
+			workspace = abs
+		}
 	}
 	if model == "" {
 		model = cfg.Model
@@ -38,19 +53,25 @@ func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system stri
 	if system == "" {
 		system = agent.DefaultSystemPrompt
 	}
-	if cfg.APIKey == "" {
-		fmt.Fprintln(os.Stderr, "warning: DEEPSEEK_API_KEY not set — TUI will start but agent calls will fail")
+	if err := cfg.Validate(); err != nil {
+		// For TUI, warn but allow to start (user can set key in /settings later)
+		fmt.Fprintln(os.Stderr, "warning:", err)
+		slog.Warn("config validation failed (TUI will start)", "err", err)
+	} else {
+		slog.Info("TUI start", "model", model, "workspace", workspace)
 	}
 
 	client := &llm.Client{
 		APIKey:  cfg.APIKey,
 		BaseURL: cfg.BaseURL,
 		Model:   model,
+		Logger:  slog.Default(),
 	}
 	ag := &agent.Agent{
 		LLM:    client,
 		Tools:  tools.DefaultRegistry(workspace),
 		System: system,
+		Logger: slog.Default(),
 	}
 
 	return tui.Run(tui.Config{

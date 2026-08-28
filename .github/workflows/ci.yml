@@ -1,0 +1,24 @@
+name: ci
+on:
+  push:
+    branches: [main, rework, v2]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+      - run: go vet ./...
+      - run: go test ./... -count=1
+      - run: go test -race ./... -count=1
+      - uses: golang/golangci-lint-action@v6
+        with:
+          version: v2.1
+      - run: govulncheck ./... || echo "govulncheck not installed, skipping"
+      - run: go build -o excelsior ./cmd/excelsior
+      - run: docker build -t excelsior:ci .

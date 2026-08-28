@@ -1,0 +1,6 @@
+.git
+.excelsior
+dist
+bin
+*.exe
+.env

@@ -1,0 +1,27 @@
+version: "2"
+linters:
+  enable:
+    - govet
+    - errcheck
+    - ineffassign
+    - unused
+    - staticcheck
+    - gosec
+    - gocritic
+    - misspell
+    - unconvert
+    - bodyclose
+  exclusions:
+    rules:
+      - linters: [gosec]
+        path: pkg/tools/bash_.*\.go
+        text: G204
+run:
+  timeout: 3m
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 20
+formatters:
+  enable:
+    - gofmt
+    - goimports

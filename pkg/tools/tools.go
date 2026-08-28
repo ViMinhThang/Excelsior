@@ -3,10 +3,20 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+)
+
+const (
+	maxFileReadSize  = 5 << 20  // 5 MiB for view
+	maxWriteSize     = 10 << 20 // 10 MiB for write/edit
+	maxGrepFileSize  = 2 << 20
+	maxGrepResults   = 200
+	maxCommandLength = 8 << 10
 )
 
 // Tool is the interface all agent tools implement.
@@ -42,7 +52,18 @@ func (r *Registry) All() []Tool {
 // DefaultRegistry returns the core 8 tools rooted at workspace.
 func DefaultRegistry(workspace string) *Registry {
 	if workspace == "" {
-		workspace, _ = os.Getwd()
+		var err error
+		workspace, err = os.Getwd()
+		if err != nil {
+			slog.Warn("tools: Getwd failed, using '.'", "err", err)
+			workspace = "."
+		}
+	}
+	// Ensure workspace is absolute for jail checks
+	if !filepath.IsAbs(workspace) {
+		if abs, err := filepath.Abs(workspace); err == nil {
+			workspace = abs
+		}
 	}
 	return NewRegistry(
 		&ViewTool{Root: workspace},
@@ -68,6 +89,101 @@ func jsonSchema(props map[string]any, required []string) map[string]any {
 	}
 }
 
+// secureJoin resolves p (relative) against root and ensures it stays within root.
+// It rejects absolute paths, traversal via "..", and symlink escapes (best-effort).
+func secureJoin(root, p string) (string, error) {
+	if p == "" {
+		return "", errors.New("path is empty")
+	}
+	if filepath.IsAbs(p) || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "\\") {
+		return "", fmt.Errorf("absolute paths not allowed: %q", p)
+	}
+	clean := filepath.Clean(filepath.FromSlash(p))
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path outside workspace: %q", p)
+	}
+	// Also reject any ".." segment inside (e.g. a/../b/../..)
+	parts := strings.Split(clean, string(filepath.Separator))
+	for _, part := range parts {
+		if part == ".." {
+			return "", fmt.Errorf("path outside workspace: %q", p)
+		}
+	}
+	full := filepath.Join(root, clean)
+	rel, err := filepath.Rel(root, full)
+	if err != nil {
+		return "", fmt.Errorf("path outside workspace: %w", err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path outside workspace: %q", p)
+	}
+	// Symlink escape check (best-effort, only if target exists)
+	if real, err := filepath.EvalSymlinks(full); err == nil {
+		// Also eval root symlink for accurate comparison
+		realRoot, _ := filepath.EvalSymlinks(root)
+		if realRoot == "" {
+			realRoot = root
+		}
+		rel2, err2 := filepath.Rel(realRoot, real)
+		if err2 == nil && (rel2 == ".." || strings.HasPrefix(rel2, ".."+string(filepath.Separator))) {
+			return "", fmt.Errorf("symlink outside workspace: %q", p)
+		}
+	} else {
+		// If file doesn't exist, check parent dir symlink
+		dir := filepath.Dir(full)
+		if realDir, err := filepath.EvalSymlinks(dir); err == nil {
+			realRoot, _ := filepath.EvalSymlinks(root)
+			if realRoot == "" {
+				realRoot = root
+			}
+			rel2, err2 := filepath.Rel(realRoot, realDir)
+			if err2 == nil && (rel2 == ".." || strings.HasPrefix(rel2, ".."+string(filepath.Separator))) {
+				return "", fmt.Errorf("parent symlink outside workspace: %q", p)
+			}
+		}
+	}
+	return full, nil
+}
+
+// writeAtomic writes data atomically via temp file + rename + fsync.
+func writeAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("mkdir: %w", err)
+	}
+	tmp, err := os.CreateTemp(dir, ".tmp-*")
+	if err != nil {
+		return fmt.Errorf("create temp: %w", err)
+	}
+	tmpName := tmp.Name()
+	// Ensure cleanup on failure
+	defer func() {
+		tmp.Close()
+		os.Remove(tmpName)
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		return fmt.Errorf("write temp: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		return fmt.Errorf("sync temp: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp: %w", err)
+	}
+	if err := os.Chmod(tmpName, perm); err != nil {
+		return fmt.Errorf("chmod: %w", err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("rename: %w", err)
+	}
+	// fsync dir for durability (best-effort)
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		d.Close()
+	}
+	return nil
+}
+
 // ---- View ----
 
 type ViewTool struct{ Root string }
@@ -81,16 +197,44 @@ func (t *ViewTool) Parameters() any {
 		"lineEnd":   map[string]any{"type": "integer", "description": "1-based end line inclusive"},
 	}, []string{"filePath"})
 }
-func (t *ViewTool) Execute(_ context.Context, args json.RawMessage) (string, error) {
+func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("view: context canceled: %w", err)
+	}
 	var a struct {
 		FilePath  string `json:"filePath"`
 		LineStart *int   `json:"lineStart"`
 		LineEnd   *int   `json:"lineEnd"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", err
+		return "", fmt.Errorf("view: invalid args: %w", err)
 	}
-	p := resolve(t.Root, a.FilePath)
+	if strings.TrimSpace(a.FilePath) == "" {
+		return "", errors.New("view: filePath is required")
+	}
+	if a.LineStart != nil && *a.LineStart < 1 {
+		return "", fmt.Errorf("view: lineStart must be >=1, got %d", *a.LineStart)
+	}
+	if a.LineEnd != nil && *a.LineEnd < 1 {
+		return "", fmt.Errorf("view: lineEnd must be >=1, got %d", *a.LineEnd)
+	}
+	if a.LineStart != nil && a.LineEnd != nil && *a.LineStart > *a.LineEnd {
+		return "", fmt.Errorf("view: lineStart %d > lineEnd %d", *a.LineStart, *a.LineEnd)
+	}
+	p, err := secureJoin(t.Root, a.FilePath)
+	if err != nil {
+		return "", fmt.Errorf("view: %w", err)
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		return "", fmt.Errorf("view: %w", err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("view: %q is a directory, not a file", a.FilePath)
+	}
+	if info.Size() > maxFileReadSize {
+		return "", fmt.Errorf("view: file too large (%d > %d bytes)", info.Size(), maxFileReadSize)
+	}
 	b, err := os.ReadFile(p)
 	if err != nil {
 		return "", fmt.Errorf("view: %w", err)
@@ -121,6 +265,7 @@ func (t *ViewTool) Execute(_ context.Context, args json.RawMessage) (string, err
 			w.WriteString("\n")
 		}
 	}
+	slog.Debug("view", "path", a.FilePath, "lines", end-start+1)
 	return w.String(), nil
 }
 
@@ -135,18 +280,31 @@ func (t *LsTool) Parameters() any {
 		"directoryPath": map[string]any{"type": "string", "description": "Directory, default '.'"},
 	}, nil)
 }
-func (t *LsTool) Execute(_ context.Context, args json.RawMessage) (string, error) {
+func (t *LsTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("ls: context canceled: %w", err)
+	}
 	var a struct {
 		DirectoryPath *string `json:"directoryPath"`
 	}
-	if len(args) > 0 && string(args) != "null" {
-		_ = json.Unmarshal(args, &a)
+	if len(args) > 0 && string(args) != "null" && strings.TrimSpace(string(args)) != "" {
+		if err := json.Unmarshal(args, &a); err != nil {
+			return "", fmt.Errorf("ls: invalid args: %w", err)
+		}
 	}
 	dir := "."
-	if a.DirectoryPath != nil {
+	if a.DirectoryPath != nil && strings.TrimSpace(*a.DirectoryPath) != "" {
 		dir = *a.DirectoryPath
 	}
-	p := resolve(t.Root, dir)
+	p, err := secureJoin(t.Root, dir)
+	if err != nil {
+		// Allow "." to be root even if secureJoin rejects? "." is valid
+		if dir == "." {
+			p = t.Root
+		} else {
+			return "", fmt.Errorf("ls: %w", err)
+		}
+	}
 	entries, err := os.ReadDir(p)
 	if err != nil {
 		return "", fmt.Errorf("ls: %w", err)
@@ -176,47 +334,73 @@ func (t *GlobTool) Parameters() any {
 		"pattern": map[string]any{"type": "string", "description": "Glob like **/*.go"},
 	}, []string{"pattern"})
 }
-func (t *GlobTool) Execute(_ context.Context, args json.RawMessage) (string, error) {
+func (t *GlobTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("glob: context canceled: %w", err)
+	}
 	var a struct{ Pattern string `json:"pattern"` }
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", err
+		return "", fmt.Errorf("glob: invalid args: %w", err)
+	}
+	a.Pattern = strings.TrimSpace(a.Pattern)
+	if a.Pattern == "" {
+		return "", errors.New("glob: pattern is required")
 	}
 	if filepath.IsAbs(a.Pattern) || strings.Contains(a.Pattern, "..") {
 		return "", fmt.Errorf("glob: pattern outside workspace")
 	}
-	// walk + match using filepath.Match per segment - simple impl using Glob + walk
+	// Validate pattern doesn't try to escape via absolute or ..
+	select {
+	case <-ctx.Done():
+		return "", fmt.Errorf("glob: context canceled: %w", ctx.Err())
+	default:
+	}
 	matches, err := filepath.Glob(filepath.Join(t.Root, a.Pattern))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("glob: %w", err)
 	}
-	// Also handle ** by walking if Glob didn't cover
 	if len(matches) == 0 && strings.Contains(a.Pattern, "**") {
-		matches = walkGlob(t.Root, a.Pattern)
+		matches = walkGlob(ctx, t.Root, a.Pattern)
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("glob: context canceled: %w", ctx.Err())
+		}
 	}
 	if len(matches) == 0 {
 		return "No files matched.", nil
 	}
 	rel := make([]string, 0, len(matches))
 	for _, m := range matches {
-		r, _ := filepath.Rel(t.Root, m)
+		r, err := filepath.Rel(t.Root, m)
+		if err != nil {
+			continue
+		}
 		rel = append(rel, filepath.ToSlash(r))
 	}
+	slog.Debug("glob", "pattern", a.Pattern, "matches", len(rel))
 	return strings.Join(rel, "\n"), nil
 }
 
-func walkGlob(root, pattern string) []string {
+func walkGlob(ctx context.Context, root, pattern string) []string {
 	var out []string
 	_ = filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			if info != nil && info.IsDir() && (info.Name() == ".git" || info.Name() == "node_modules") {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if info.Name() == ".git" || info.Name() == "node_modules" || info.Name() == ".excelsior" {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		rel, _ := filepath.Rel(root, p)
+		rel, err := filepath.Rel(root, p)
+		if err != nil {
+			return nil
+		}
 		rel = filepath.ToSlash(rel)
 		ok, _ := filepath.Match(pattern, rel)
-		// fallback: simple contains for **/*.ext
 		if !ok && strings.HasPrefix(pattern, "**/") {
 			suffix := strings.TrimPrefix(pattern, "**/")
 			if matched, _ := filepath.Match(suffix, filepath.Base(rel)); matched {
@@ -236,7 +420,7 @@ func walkGlob(root, pattern string) []string {
 type GrepTool struct{ Root string }
 
 func (t *GrepTool) Name() string        { return "grep" }
-func (t *GrepTool) Description() string { return "Search file contents by regex (ripgrep-style). Use for codebase search." }
+func (t *GrepTool) Description() string { return "Search file contents by substring (ripgrep-style). Use for codebase search." }
 func (t *GrepTool) Parameters() any {
 	return jsonSchema(map[string]any{
 		"pattern": map[string]any{"type": "string"},
@@ -244,65 +428,100 @@ func (t *GrepTool) Parameters() any {
 	}, []string{"pattern"})
 }
 func (t *GrepTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("grep: context canceled: %w", err)
+	}
 	var a struct {
 		Pattern string  `json:"pattern"`
 		Path    *string `json:"path"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", err
+		return "", fmt.Errorf("grep: invalid args: %w", err)
+	}
+	a.Pattern = strings.TrimSpace(a.Pattern)
+	if a.Pattern == "" {
+		return "", errors.New("grep: pattern is required")
 	}
 	dir := t.Root
-	if a.Path != nil && *a.Path != "" {
-		dir = resolve(t.Root, *a.Path)
+	if a.Path != nil && strings.TrimSpace(*a.Path) != "" {
+		var err error
+		dir, err = secureJoin(t.Root, *a.Path)
+		if err != nil {
+			return "", fmt.Errorf("grep: %w", err)
+		}
 	}
-	// Use Go's grep via walking to avoid rg dependency; fallback to rg if available
+	// Verify dir exists and is dir
+	if info, err := os.Stat(dir); err != nil {
+		return "", fmt.Errorf("grep: %w", err)
+	} else if !info.IsDir() {
+		return "", fmt.Errorf("grep: %q is not a directory", *a.Path)
+	}
 	return grepWalk(ctx, a.Pattern, dir, t.Root)
 }
 
-func grepWalk(_ context.Context, pattern, dir, root string) (string, error) {
-	// try rg first for speed if installed
-	// lightweight: just use Go regex walk (no external dep required for library)
-	// Keep it simple: use Go regexp
-	importRegex := func() string { return pattern }
-	_ = importRegex
-	// actual walk
+func grepWalk(ctx context.Context, pattern, dir, root string) (string, error) {
 	var out []string
 	count := 0
-	_ = filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			if info != nil && info.IsDir() && (info.Name() == ".git" || info.Name() == "node_modules" || info.Name() == ".excelsior") {
+	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if info.Name() == ".git" || info.Name() == "node_modules" || info.Name() == ".excelsior" {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		// skip binary
+		if info.Size() > maxGrepFileSize {
+			return nil
+		}
+		// Skip binary by extension heuristic
+		ext := strings.ToLower(filepath.Ext(p))
+		if ext == ".exe" || ext == ".dll" || ext == ".so" || ext == ".bin" {
+			return nil
+		}
 		b, err := os.ReadFile(p)
 		if err != nil {
 			return nil
 		}
-		if len(b) > 2_000_000 {
+		if len(b) > maxGrepFileSize {
 			return nil
 		}
 		text := string(b)
-		// simple substring search for now; agent can use regex but we do contains for speed
-		// Use proper regexp if pattern looks like regex
 		lines := strings.Split(text, "\n")
 		rel, _ := filepath.Rel(root, p)
 		rel = filepath.ToSlash(rel)
 		for i, line := range lines {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
 			if strings.Contains(line, pattern) {
+				// Truncate long lines
+				if len(line) > 500 {
+					line = line[:500] + "…"
+				}
 				out = append(out, fmt.Sprintf("%s:%d:%s", rel, i+1, line))
 				count++
-				if count >= 200 {
+				if count >= maxGrepResults {
 					return filepath.SkipAll
 				}
 			}
 		}
 		return nil
 	})
+	if err != nil && !errors.Is(err, filepath.SkipAll) && !errors.Is(err, context.Canceled) {
+		slog.Warn("grep walk error", "err", err)
+	}
+	if ctx.Err() != nil {
+		return "", fmt.Errorf("grep: context canceled: %w", ctx.Err())
+	}
 	if len(out) == 0 {
 		return "No matches.", nil
 	}
+	slog.Debug("grep", "pattern", pattern, "matches", len(out))
 	return strings.Join(out, "\n"), nil
 }
 
@@ -318,21 +537,32 @@ func (t *WriteTool) Parameters() any {
 		"content":  map[string]any{"type": "string"},
 	}, []string{"filePath", "content"})
 }
-func (t *WriteTool) Execute(_ context.Context, args json.RawMessage) (string, error) {
+func (t *WriteTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("write: context canceled: %w", err)
+	}
 	var a struct {
 		FilePath string `json:"filePath"`
 		Content  string `json:"content"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", err
+		return "", fmt.Errorf("write: invalid args: %w", err)
 	}
-	p := resolve(t.Root, a.FilePath)
-	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-		return "", err
+	a.FilePath = strings.TrimSpace(a.FilePath)
+	if a.FilePath == "" {
+		return "", errors.New("write: filePath is required")
 	}
-	if err := os.WriteFile(p, []byte(a.Content), 0o644); err != nil {
-		return "", err
+	if len(a.Content) > maxWriteSize {
+		return "", fmt.Errorf("write: content too large (%d > %d bytes)", len(a.Content), maxWriteSize)
 	}
+	p, err := secureJoin(t.Root, a.FilePath)
+	if err != nil {
+		return "", fmt.Errorf("write: %w", err)
+	}
+	if err := writeAtomic(p, []byte(a.Content), 0o644); err != nil {
+		return "", fmt.Errorf("write: %w", err)
+	}
+	slog.Info("write", "path", a.FilePath, "bytes", len(a.Content))
 	return fmt.Sprintf("Wrote %d bytes to %s", len(a.Content), a.FilePath), nil
 }
 
@@ -349,19 +579,38 @@ func (t *EditTool) Parameters() any {
 		"newText":  map[string]any{"type": "string"},
 	}, []string{"filePath", "oldText", "newText"})
 }
-func (t *EditTool) Execute(_ context.Context, args json.RawMessage) (string, error) {
+func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("edit: context canceled: %w", err)
+	}
 	var a struct {
 		FilePath string `json:"filePath"`
 		OldText  string `json:"oldText"`
 		NewText  string `json:"newText"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", err
+		return "", fmt.Errorf("edit: invalid args: %w", err)
 	}
-	p := resolve(t.Root, a.FilePath)
+	a.FilePath = strings.TrimSpace(a.FilePath)
+	if a.FilePath == "" {
+		return "", errors.New("edit: filePath is required")
+	}
+	if a.OldText == "" {
+		return "", errors.New("edit: oldText must be non-empty")
+	}
+	if len(a.NewText) > maxWriteSize {
+		return "", fmt.Errorf("edit: newText too large (%d > %d)", len(a.NewText), maxWriteSize)
+	}
+	p, err := secureJoin(t.Root, a.FilePath)
+	if err != nil {
+		return "", fmt.Errorf("edit: %w", err)
+	}
 	b, err := os.ReadFile(p)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("edit: %w", err)
+	}
+	if len(b) > maxWriteSize {
+		return "", fmt.Errorf("edit: file too large (%d > %d)", len(b), maxWriteSize)
 	}
 	content := string(b)
 	count := strings.Count(content, a.OldText)
@@ -372,9 +621,13 @@ func (t *EditTool) Execute(_ context.Context, args json.RawMessage) (string, err
 		return "", fmt.Errorf("edit: oldText matched %d times, must be unique", count)
 	}
 	content = strings.Replace(content, a.OldText, a.NewText, 1)
-	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-		return "", err
+	if len(content) > maxWriteSize {
+		return "", fmt.Errorf("edit: resulting file too large (%d > %d)", len(content), maxWriteSize)
 	}
+	if err := writeAtomic(p, []byte(content), 0o644); err != nil {
+		return "", fmt.Errorf("edit: %w", err)
+	}
+	slog.Info("edit", "path", a.FilePath)
 	return fmt.Sprintf("Edited %s", a.FilePath), nil
 }
 
@@ -383,21 +636,37 @@ func (t *EditTool) Execute(_ context.Context, args json.RawMessage) (string, err
 type BashTool struct{ Root string }
 
 func (t *BashTool) Name() string        { return "bash" }
-func (t *BashTool) Description() string { return "Execute a shell command in the workspace. Returns stdout+stderr." }
+func (t *BashTool) Description() string { return "Execute a shell command in the workspace. Returns stdout+stderr. Timeout 1s-120s." }
 func (t *BashTool) Parameters() any {
 	return jsonSchema(map[string]any{
 		"command": map[string]any{"type": "string", "description": "Shell command"},
-		"timeout": map[string]any{"type": "integer", "description": "Timeout ms, default 30000"},
+		"timeout": map[string]any{"type": "integer", "description": "Timeout ms, default 30000, min 1000 max 120000"},
 	}, []string{"command"})
 }
 func (t *BashTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", fmt.Errorf("bash: context canceled: %w", err)
+	}
 	var a struct {
 		Command string `json:"command"`
 		Timeout *int   `json:"timeout"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", err
+		return "", fmt.Errorf("bash: invalid args: %w", err)
 	}
+	a.Command = strings.TrimSpace(a.Command)
+	if a.Command == "" {
+		return "", errors.New("bash: command is required")
+	}
+	if len(a.Command) > maxCommandLength {
+		return "", fmt.Errorf("bash: command too long (%d > %d)", len(a.Command), maxCommandLength)
+	}
+	if a.Timeout != nil {
+		if *a.Timeout < 1000 || *a.Timeout > 120000 {
+			return "", fmt.Errorf("bash: timeout must be 1000..120000 ms, got %d", *a.Timeout)
+		}
+	}
+	slog.Info("bash", "command", a.Command, "dir", t.Root)
 	return runShell(ctx, t.Root, a.Command, a.Timeout)
 }
 
@@ -419,15 +688,11 @@ func (t *AskTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 		Options  []string `json:"options"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", err
+		return "", fmt.Errorf("askQuestion: invalid args: %w", err)
 	}
-	// In non-interactive mode we return a signal; the agent loop will surface it via callback.
+	a.Question = strings.TrimSpace(a.Question)
+	if a.Question == "" {
+		return "", errors.New("askQuestion: question is required")
+	}
 	return fmt.Sprintf("QUESTION: %s | OPTIONS: %s", a.Question, strings.Join(a.Options, ", ")), nil
-}
-
-func resolve(root, p string) string {
-	if filepath.IsAbs(p) {
-		return filepath.Clean(p)
-	}
-	return filepath.Join(root, filepath.FromSlash(p))
 }

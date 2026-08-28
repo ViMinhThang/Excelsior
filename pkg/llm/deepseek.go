@@ -5,9 +5,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"math"
+	"math/rand"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -18,8 +23,9 @@ import (
 type Client struct {
 	APIKey     string
 	BaseURL    string // default https://api.deepseek.com
-	Model      string // e.g. deepseek-chat, deepseek-reasoner
+	Model      string // e.g. deepseek-v4-flash, deepseek-reasoner
 	HTTPClient *http.Client
+	Logger     *slog.Logger
 }
 
 func (c *Client) baseURL() string {
@@ -29,11 +35,69 @@ func (c *Client) baseURL() string {
 	return "https://api.deepseek.com"
 }
 
+func (c *Client) validate() error {
+	if strings.TrimSpace(c.APIKey) == "" {
+		return errors.New("deepseek: APIKey is empty (set DEEPSEEK_API_KEY)")
+	}
+	u, err := url.Parse(c.baseURL())
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("deepseek: invalid BaseURL %q: %w", c.baseURL(), err)
+	}
+	return nil
+}
+
+func (c *Client) logger() *slog.Logger {
+	if c.Logger != nil {
+		return c.Logger
+	}
+	return slog.Default()
+}
+
 func (c *Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {
 		return c.HTTPClient
 	}
 	return &http.Client{Timeout: 120 * time.Second}
+}
+
+const (
+	maxErrorBody = 4 * 1024
+	maxSSLine    = 1 << 20 // 1 MiB per SSE line (prevent OOM)
+)
+
+// LLMError is a typed error for API failures.
+type LLMError struct {
+	StatusCode int
+	Body       string
+	Err        error
+}
+
+func (e *LLMError) Error() string {
+	if e.Body != "" {
+		return fmt.Sprintf("deepseek: %d %s", e.StatusCode, e.Body)
+	}
+	if e.Err != nil {
+		return fmt.Sprintf("deepseek: %d: %v", e.StatusCode, e.Err)
+	}
+	return fmt.Sprintf("deepseek: %d", e.StatusCode)
+}
+func (e *LLMError) Unwrap() error { return e.Err }
+
+// isRetryable returns true for transient failures.
+func isRetryable(status int, err error) bool {
+	if err != nil {
+		// network errors, context.Canceled is not retryable, but DeadlineExceeded maybe
+		if errors.Is(err, context.Canceled) {
+			return false
+		}
+		return true
+	}
+	switch status {
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout, http.StatusInternalServerError:
+		return true
+	default:
+		return false
+	}
 }
 
 // Message is a chat message. ReasoningContent is DeepSeek-specific (R1/reasoner).
@@ -58,8 +122,8 @@ type FuncCall struct {
 }
 
 type ToolDefinition struct {
-	Type     string       `json:"type"` // "function"
-	Function FuncDef      `json:"function"`
+	Type     string `json:"type"` // "function"
+	Function FuncDef `json:"function"`
 }
 
 type FuncDef struct {
@@ -108,23 +172,60 @@ type Usage struct {
 
 // StreamChat calls DeepSeek with stream=true and invokes onDelta for each fragment.
 // It handles SSE parsing (data: {...}) and aggregates tool-call deltas.
+// Retries transient failures with exponential backoff (up to 3 attempts).
 func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error) {
-	req.Stream = true
+	if err := c.validate(); err != nil {
+		return nil, err
+	}
+	// Default model
 	if req.Model == "" {
 		req.Model = c.Model
 	}
 	if req.Model == "" {
-		req.Model = "deepseek-chat"
+		req.Model = "deepseek-v4-flash"
 	}
+	req.Stream = true
 
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		msg, err := c.doStreamOnce(ctx, req, onDelta)
+		if err == nil {
+			return msg, nil
+		}
+		lastErr = err
+		var le *LLMError
+		status := 0
+		if errors.As(err, &le) {
+			status = le.StatusCode
+		}
+		if !isRetryable(status, err) || attempt == 2 {
+			break
+		}
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("deepseek stream canceled: %w", ctx.Err())
+		}
+		backoff := time.Duration(math.Pow(2, float64(attempt))*200) * time.Millisecond
+		jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+		backoff += jitter
+		c.logger().Warn("deepseek retry", "attempt", attempt+1, "status", status, "backoff", backoff, "err", err)
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			return nil, fmt.Errorf("deepseek stream canceled during backoff: %w", ctx.Err())
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *Client) doStreamOnce(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("deepseek: marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL()+"/chat/completions", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL()+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("deepseek: new request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
@@ -132,16 +233,22 @@ func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(D
 
 	resp, err := c.httpClient().Do(httpReq)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("deepseek: do request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("deepseek: %d %s", resp.StatusCode, string(b))
+		b, readErr := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
+		if readErr != nil {
+			return nil, &LLMError{StatusCode: resp.StatusCode, Err: readErr}
+		}
+		trimmed := strings.TrimSpace(string(b))
+		if len(trimmed) > 500 {
+			trimmed = trimmed[:500] + "…"
+		}
+		return nil, &LLMError{StatusCode: resp.StatusCode, Body: trimmed}
 	}
 
-	// Accumulate final message
 	var finalContent strings.Builder
 	var finalReasoning strings.Builder
 	toolCallBuilders := map[int]*ToolCall{}
@@ -150,35 +257,46 @@ func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(D
 
 	reader := bufio.NewReader(resp.Body)
 	for {
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("deepseek: context canceled: %w", ctx.Err())
+		default:
+		}
 		line, err := reader.ReadString('\n')
-		if err != nil && err != io.EOF {
-			return nil, err
+		// Guard against OOM: single line too large
+		if len(line) > maxSSLine {
+			return nil, fmt.Errorf("deepseek: SSE line too large (%d > %d)", len(line), maxSSLine)
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("deepseek: read SSE: %w", err)
 		}
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			continue
 		}
 		if !strings.HasPrefix(trimmed, "data:") {
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			continue
 		}
 		data := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
 		if data == "[DONE]" {
-			if err := onDelta(Delta{Done: true, FinishReason: finishReason, Usage: usage}); err != nil {
-				return nil, err
+			if onDelta != nil {
+				if err := onDelta(Delta{Done: true, FinishReason: finishReason, Usage: usage}); err != nil {
+					return nil, fmt.Errorf("deepseek: onDelta done: %w", err)
+				}
 			}
 			break
 		}
 
 		var chunk streamChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			// skip malformed chunk
-			if err == io.EOF {
+			c.logger().Warn("deepseek: skip malformed SSE chunk", "data", truncate(data, 500), "err", err)
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			continue
@@ -187,7 +305,7 @@ func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(D
 			if chunk.Usage != nil {
 				usage = chunk.Usage
 			}
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			}
 			continue
@@ -211,7 +329,6 @@ func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(D
 		if ch.Delta.Content != "" {
 			finalContent.WriteString(ch.Delta.Content)
 		}
-		// tool call deltas
 		for _, tc := range ch.Delta.ToolCalls {
 			b := toolCallBuilders[tc.Index]
 			if b == nil {
@@ -234,26 +351,22 @@ func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(D
 		}
 
 		if d.Content != "" || d.ReasoningContent != "" || len(d.ToolCalls) > 0 || d.FinishReason != "" {
-			if err := onDelta(d); err != nil {
-				return nil, err
+			if onDelta != nil {
+				if err := onDelta(d); err != nil {
+					return nil, fmt.Errorf("deepseek: onDelta: %w", err)
+				}
 			}
 		}
-
-		if ch.FinishReason != "" {
-			// wait for [DONE]
-		}
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 	}
 
-	// Build final assistant message
 	msg := &Message{
 		Role:             "assistant",
 		Content:          finalContent.String(),
 		ReasoningContent: finalReasoning.String(),
 	}
-	// flush tool calls in index order
 	if len(toolCallBuilders) > 0 {
 		maxIdx := -1
 		for k := range toolCallBuilders {
@@ -273,18 +386,17 @@ func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(D
 	return msg, nil
 }
 
-// NonStreaming helper for tests / simple calls.
+// Chat is a non-streaming helper (single request, no onDelta required).
 func (c *Client) Chat(ctx context.Context, req ChatRequest) (*Message, error) {
-	var final *Message
-	_, err := c.StreamChat(ctx, req, func(d Delta) error { return nil })
-	if err != nil {
-		return nil, err
+	req.Stream = true
+	return c.StreamChat(ctx, req, func(Delta) error { return nil })
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
 	}
-	// Re-run without callback to get final? StreamChat already returns final
-	// But we discarded it above; actually capture it properly:
-	// So redo with capture:
-	final, err = c.StreamChat(ctx, req, func(Delta) error { return nil })
-	return final, err
+	return s[:n] + "…"
 }
 
 // streamChunk mirrors DeepSeek's SSE chunk shape.
