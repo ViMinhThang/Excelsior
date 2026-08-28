@@ -1,0 +1,180 @@
+package tui
+
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
+
+func shortWorkspace(ws string, max int) string {
+	if max <= 0 {
+		return ws
+	}
+	if len(ws) <= max {
+		return ws
+	}
+	base := ws
+	if b := ws; len(b) > 0 {
+		if i := strings.LastIndex(b, string(filepath.Separator)); i > 0 {
+			if j := strings.LastIndex(b[:i], string(filepath.Separator)); j >= 0 {
+				base = "…" + b[j:]
+			} else {
+				base = "…" + b[i:]
+			}
+		}
+	}
+	if len(base) > max {
+		return "…" + base[len(base)-max+1:]
+	}
+	return base
+}
+
+func (m model) headerView() string {
+	wsShort := shortWorkspace(m.cfg.Workspace, m.width-30)
+	if wsShort == "" {
+		wsShort = m.cfg.Workspace
+	}
+	if len(wsShort) > 40 {
+		wsShort = "…" + wsShort[len(wsShort)-40:]
+	}
+	header := titleStyle.Render(" excelsior ") + statusStyle.Render(fmt.Sprintf(" %s • %s ", m.cfg.Model, wsShort))
+	if m.streaming {
+		header += toolStyle.Render(" ● streaming… (esc to cancel)")
+	}
+	return borderStyle.Width(m.width - 2).Render(header)
+}
+
+func (m model) bodyView() string {
+	m.viewport.SetContent(m.renderTranscript())
+	viewportView := m.viewport.View()
+	scrollbar := m.scrollbarView()
+	body := lipgloss.JoinHorizontal(lipgloss.Top, viewportView, " ", scrollbar)
+	if m.askState != nil {
+		body = m.askState.View(m.width)
+	}
+	return body
+}
+
+func (m model) inputView() string {
+	var v string
+	if m.askState != nil {
+		v = helpStyle.Render("  answering question…")
+	} else if m.streaming {
+		v = helpStyle.Render("  streaming… press esc to cancel")
+	} else {
+		v = m.input.View()
+	}
+	return borderStyle.Width(m.width - 2).Render(v)
+}
+
+func (m model) statusView() string {
+	if m.errMsg != "" {
+		return errorStyle.Render(m.errMsg)
+	}
+	return statusStyle.Render(fmt.Sprintf(" %d blocks  •  %d history msgs  •  ↑↓/PgUp/PgDn scroll ", len(m.blocks), len(m.cfg.History)))
+}
+
+func (m model) View() string {
+	if m.width == 0 {
+		return "loading…"
+	}
+	return m.headerView() + "\n" + m.bodyView() + "\n" + m.inputView() + "\n" + m.statusView()
+}
+
+func (m model) renderTranscript() string {
+	var sb strings.Builder
+	for _, b := range m.blocks {
+		switch b.Role {
+		case "system":
+			sb.WriteString(helpStyle.Render("· " + b.Content) + "\n\n")
+		case "user":
+			sb.WriteString(userPrefix.Render("You: ") + b.Content + "\n\n")
+		case "assistant":
+			if strings.TrimSpace(b.Content) == "" {
+				if m.streaming {
+					sb.WriteString(assistantStyle.Render("▌") + "\n\n")
+				}
+				continue
+			}
+			sb.WriteString(assistantStyle.Render(b.Content) + "\n\n")
+		case "reasoning":
+			sb.WriteString(reasonStyle.Render("… " + b.Content) + "\n\n")
+		case "tool":
+			meta := toolStyle.Render("◆ " + b.Meta)
+			body := b.Content
+			if len(body) > 800 {
+				body = body[:800] + "…"
+			}
+			w := m.width - 8
+			if w < 20 {
+				w = 20
+			}
+			boxed := toolResStyle.Width(w).Render(toolArgStyle.Render(body))
+			sb.WriteString(meta + "\n" + boxed + "\n\n")
+		case "error":
+			sb.WriteString(errorStyle.Render("✖ " + b.Content) + "\n\n")
+		}
+	}
+	return sb.String()
+}
+
+func (m *model) syncViewport() {
+	m.viewport.SetContent(m.renderTranscript())
+	m.viewport.GotoBottom()
+}
+
+func (m model) scrollbarView() string {
+	h := m.viewport.Height
+	if h <= 0 {
+		return ""
+	}
+	if m.viewport.TotalLineCount() <= h {
+		var sb strings.Builder
+		for i := 0; i < h; i++ {
+			sb.WriteString(scrollbarStyle.Render("│"))
+			if i < h-1 {
+				sb.WriteString("\n")
+			}
+		}
+		return sb.String()
+	}
+	percent := m.viewport.ScrollPercent()
+	if percent < 0 {
+		percent = 0
+	}
+	if percent > 1 {
+		percent = 1
+	}
+	total := m.viewport.TotalLineCount()
+	if total == 0 {
+		total = 1
+	}
+	thumbSize := h * h / total
+	if thumbSize < 1 {
+		thumbSize = 1
+	}
+	if thumbSize > h {
+		thumbSize = h
+	}
+	thumbPos := int(percent * float64(h-thumbSize))
+	if thumbPos < 0 {
+		thumbPos = 0
+	}
+	if thumbPos > h-thumbSize {
+		thumbPos = h - thumbSize
+	}
+	var sb strings.Builder
+	for i := 0; i < h; i++ {
+		if i >= thumbPos && i < thumbPos+thumbSize {
+			sb.WriteString(scrollbarThumbStyle.Render("█"))
+		} else {
+			sb.WriteString(scrollbarStyle.Render("│"))
+		}
+		if i < h-1 {
+			sb.WriteString("\n")
+		}
+	}
+	return sb.String()
+}
