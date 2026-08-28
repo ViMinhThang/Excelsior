@@ -1,0 +1,15 @@
+{
+  "name": "excelsior-desktop",
+  "version": "0.1.0",
+  "description": "Excelsior desktop — Electron shell for engine WS hub (monochrome)",
+  "main": "main.js",
+  "scripts": {
+    "dev": "electron .",
+    "build": "electron-builder --win --linux",
+    "start:engine": "go run ./cmd/excelsior engine --addr :17812"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.0.0"
+  }
+}
