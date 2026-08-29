@@ -14,7 +14,7 @@ linters:
   exclusions:
     rules:
       - linters: [gosec]
-        path: pkg/tools/bash_.*\.go
+        path: pkg/tools/bash\.go
         text: G204
 run:
   timeout: 3m

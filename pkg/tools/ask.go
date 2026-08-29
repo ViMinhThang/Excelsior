@@ -22,22 +22,22 @@ type AskResponse struct {
 
 type QuestionHandler func(ctx context.Context, req AskRequest) (AskResponse, error)
 
-type contextKey string
-
-const questionHandlerKey contextKey = "questionHandler"
+type questionHandlerKey struct{}
 
 func WithQuestionHandler(ctx context.Context, h QuestionHandler) context.Context {
-	return context.WithValue(ctx, questionHandlerKey, h)
+	return context.WithValue(ctx, questionHandlerKey{}, h)
 }
 func GetQuestionHandler(ctx context.Context) (QuestionHandler, bool) {
-	h, ok := ctx.Value(questionHandlerKey).(QuestionHandler)
+	h, ok := ctx.Value(questionHandlerKey{}).(QuestionHandler)
 	return h, ok
 }
 
 type AskTool struct{}
 
-func (t *AskTool) Name() string        { return "askQuestion" }
-func (t *AskTool) Description() string { return "Ask the user a clarifying question. Provide exactly 3 options + manual input is always allowed." }
+func (t *AskTool) Name() string { return "askQuestion" }
+func (t *AskTool) Description() string {
+	return "Ask the user a clarifying question. Provide exactly 3 options + manual input is always allowed."
+}
 func (t *AskTool) Parameters() any {
 	return jsonSchema(map[string]any{
 		"question":    map[string]any{"type": "string", "description": "Question to ask"},

@@ -1,4 +1,4 @@
-package tools
+package util
 
 import (
 	"fmt"
@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 )
 
-// writeAtomic writes via temp+rename+fsync for crash safety.
-func writeAtomic(path string, data []byte, perm os.FileMode) error {
+// WriteAtomic writes data via temp+rename+fsync for crash safety.
+func WriteAtomic(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("mkdir: %w", err)
 	}
 	tmp, err := os.CreateTemp(dir, ".tmp-*")
@@ -17,9 +17,12 @@ func writeAtomic(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("create temp: %w", err)
 	}
 	name := tmp.Name()
+	success := false
 	defer func() {
 		tmp.Close()
-		os.Remove(name)
+		if !success {
+			_ = os.Remove(name)
+		}
 	}()
 	if _, err := tmp.Write(data); err != nil {
 		return fmt.Errorf("write temp: %w", err)
@@ -36,9 +39,10 @@ func writeAtomic(path string, data []byte, perm os.FileMode) error {
 	if err := os.Rename(name, path); err != nil {
 		return fmt.Errorf("rename: %w", err)
 	}
+	success = true
 	if d, err := os.Open(dir); err == nil {
 		_ = d.Sync()
-		d.Close()
+		_ = d.Close()
 	}
 	return nil
 }

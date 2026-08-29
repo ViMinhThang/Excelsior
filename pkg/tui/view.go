@@ -6,38 +6,34 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+
+	"excelsior/pkg/util"
 )
 
 func shortWorkspace(ws string, max int) string {
-	if max <= 0 {
+	if max <= 0 || len(ws) <= max {
 		return ws
 	}
-	if len(ws) <= max {
-		return ws
-	}
-	base := ws
-	if b := ws; len(b) > 0 {
-		if i := strings.LastIndex(b, string(filepath.Separator)); i > 0 {
-			if j := strings.LastIndex(b[:i], string(filepath.Separator)); j >= 0 {
-				base = "…" + b[j:]
-			} else {
-				base = "…" + b[i:]
-			}
+	if i := strings.LastIndex(ws, string(filepath.Separator)); i > 0 {
+		if j := strings.LastIndex(ws[:i], string(filepath.Separator)); j >= 0 {
+			ws = "…" + ws[j:]
+		} else {
+			ws = "…" + ws[i:]
 		}
 	}
-	if len(base) > max {
-		return "…" + base[len(base)-max+1:]
+	if len(ws) > max {
+		return "…" + ws[len(ws)-max+1:]
 	}
-	return base
+	return ws
 }
 
 func (m model) headerView() string {
 	wsShort := shortWorkspace(m.cfg.Workspace, m.width-30)
-	if wsShort == "" {
-		wsShort = m.cfg.Workspace
-	}
 	if len(wsShort) > 40 {
 		wsShort = "…" + wsShort[len(wsShort)-40:]
+	}
+	if wsShort == "" {
+		wsShort = m.cfg.Workspace
 	}
 	header := titleStyle.Render(" excelsior ") + statusStyle.Render(fmt.Sprintf(" %s • %s ", m.cfg.Model, wsShort))
 	if m.streaming {
@@ -47,7 +43,6 @@ func (m model) headerView() string {
 }
 
 func (m model) bodyView() string {
-	m.viewport.SetContent(m.renderTranscript())
 	viewportView := m.viewport.View()
 	scrollbar := m.scrollbarView()
 	body := lipgloss.JoinHorizontal(lipgloss.Top, viewportView, " ", scrollbar)
@@ -88,7 +83,7 @@ func (m model) renderTranscript() string {
 	for _, b := range m.blocks {
 		switch b.Role {
 		case "system":
-			sb.WriteString(helpStyle.Render("· " + b.Content) + "\n\n")
+			sb.WriteString(helpStyle.Render("· "+b.Content) + "\n\n")
 		case "user":
 			sb.WriteString(userPrefix.Render("You: ") + b.Content + "\n\n")
 		case "assistant":
@@ -100,13 +95,10 @@ func (m model) renderTranscript() string {
 			}
 			sb.WriteString(assistantStyle.Render(b.Content) + "\n\n")
 		case "reasoning":
-			sb.WriteString(reasonStyle.Render("… " + b.Content) + "\n\n")
+			sb.WriteString(reasonStyle.Render("… "+b.Content) + "\n\n")
 		case "tool":
 			meta := toolStyle.Render("◆ " + b.Meta)
-			body := b.Content
-			if len(body) > 800 {
-				body = body[:800] + "…"
-			}
+			body := util.Truncate(b.Content, 800)
 			w := m.width - 8
 			if w < 20 {
 				w = 20
@@ -114,7 +106,7 @@ func (m model) renderTranscript() string {
 			boxed := toolResStyle.Width(w).Render(toolArgStyle.Render(body))
 			sb.WriteString(meta + "\n" + boxed + "\n\n")
 		case "error":
-			sb.WriteString(errorStyle.Render("✖ " + b.Content) + "\n\n")
+			sb.WriteString(errorStyle.Render("✖ "+b.Content) + "\n\n")
 		}
 	}
 	return sb.String()
@@ -130,10 +122,13 @@ func (m model) scrollbarView() string {
 	if h <= 0 {
 		return ""
 	}
+	bar := scrollbarStyle.Render("│")
+	thumb := scrollbarThumbStyle.Render("█")
 	if m.viewport.TotalLineCount() <= h {
 		var sb strings.Builder
+		sb.Grow(h * 4)
 		for i := 0; i < h; i++ {
-			sb.WriteString(scrollbarStyle.Render("│"))
+			sb.WriteString(bar)
 			if i < h-1 {
 				sb.WriteString("\n")
 			}
@@ -166,11 +161,12 @@ func (m model) scrollbarView() string {
 		thumbPos = h - thumbSize
 	}
 	var sb strings.Builder
+	sb.Grow(h * 4)
 	for i := 0; i < h; i++ {
 		if i >= thumbPos && i < thumbPos+thumbSize {
-			sb.WriteString(scrollbarThumbStyle.Render("█"))
+			sb.WriteString(thumb)
 		} else {
-			sb.WriteString(scrollbarStyle.Render("│"))
+			sb.WriteString(bar)
 		}
 		if i < h-1 {
 			sb.WriteString("\n")

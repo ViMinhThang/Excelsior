@@ -12,15 +12,15 @@ import (
 
 type ViewTool struct{ Root string }
 
-func (t *ViewTool) Name() string        { return "view" }
-func (t *ViewTool) Description() string { return "Read file contents with pagination. Use offset/limit to avoid loading x000 lines; default 0/50, max limit 200." }
+func (t *ViewTool) Name() string { return "view" }
+func (t *ViewTool) Description() string {
+	return "Read file contents with pagination. Use offset/limit; default 0/50, max limit 200."
+}
 func (t *ViewTool) Parameters() any {
 	return jsonSchema(map[string]any{
-		"filePath":  map[string]any{"type": "string", "description": "Path relative to workspace"},
-		"offset":    map[string]any{"type": "integer", "description": "0-based start line, default 0"},
-		"limit":     map[string]any{"type": "integer", "description": "Max lines to return, default 50, max 200"},
-		"lineStart": map[string]any{"type": "integer", "description": "Deprecated: 1-based start, use offset"},
-		"lineEnd":   map[string]any{"type": "integer", "description": "Deprecated: 1-based end inclusive"},
+		"filePath": map[string]any{"type": "string", "description": "Path relative to workspace"},
+		"offset":   map[string]any{"type": "integer", "description": "0-based start line, default 0"},
+		"limit":    map[string]any{"type": "integer", "description": "Max lines to return, default 50, max 200"},
 	}, []string{"filePath"})
 }
 func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
@@ -28,11 +28,9 @@ func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 		return "", fmt.Errorf("view: context canceled: %w", err)
 	}
 	var a struct {
-		FilePath  string `json:"filePath"`
-		Offset    *int   `json:"offset"`
-		Limit     *int   `json:"limit"`
-		LineStart *int   `json:"lineStart"`
-		LineEnd   *int   `json:"lineEnd"`
+		FilePath string `json:"filePath"`
+		Offset   *int   `json:"offset"`
+		Limit    *int   `json:"limit"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", fmt.Errorf("view: invalid args: %w", err)
@@ -41,32 +39,17 @@ func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 		return "", errors.New("view: filePath is required")
 	}
 	offset, limit := 0, 50
-	hasOffset, hasLimit := a.Offset != nil, a.Limit != nil
-	hasLegacy := a.LineStart != nil || a.LineEnd != nil
-	if hasOffset {
+	if a.Offset != nil {
 		offset = *a.Offset
 	}
-	if hasLimit {
+	if a.Limit != nil {
 		limit = *a.Limit
-	}
-	if hasLegacy && !hasOffset && !hasLimit {
-		if a.LineStart != nil {
-			offset = *a.LineStart - 1
-		}
-		if a.LineStart != nil && a.LineEnd != nil {
-			limit = *a.LineEnd - *a.LineStart + 1
-		} else if a.LineEnd != nil {
-			limit = *a.LineEnd
-		}
 	}
 	if offset < 0 {
 		return "", fmt.Errorf("view: offset must be >=0, got %d", offset)
 	}
 	if limit < 1 || limit > 200 {
 		return "", fmt.Errorf("view: limit must be 1..200, got %d", limit)
-	}
-	if hasLegacy && (hasOffset || hasLimit) && (a.LineStart != nil || a.LineEnd != nil) {
-		slog.Warn("view: both offset/limit and lineStart/lineEnd supplied, using offset/limit")
 	}
 	p, err := secureJoin(t.Root, a.FilePath)
 	if err != nil {
@@ -79,8 +62,8 @@ func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if info.IsDir() {
 		return "", fmt.Errorf("view: %q is a directory, not a file", a.FilePath)
 	}
-	if info.Size() > maxFileReadSize {
-		return "", fmt.Errorf("view: file too large (%d > %d bytes)", info.Size(), maxFileReadSize)
+	if info.Size() > MaxFileReadSize {
+		return "", fmt.Errorf("view: file too large (%d > %d bytes)", info.Size(), MaxFileReadSize)
 	}
 	b, err := os.ReadFile(p)
 	if err != nil {

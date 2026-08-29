@@ -2,11 +2,13 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 LDFLAGS := -X main.version=$(VERSION) -s -w
 BIN := excelsior
 PKG := ./...
+GOOS ?= $(shell go env GOOS)
+EXT := $(if $(filter windows,$(GOOS)),.exe,)
 
 .PHONY: build vet lint test race vuln run tidy clean docker
 
 build:
-	go build -ldflags "$(LDFLAGS)" -o $(BIN).exe ./cmd/excelsior
+	go build -ldflags "$(LDFLAGS)" -o $(BIN)$(EXT) ./cmd/excelsior
 
 build-all:
 	GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o dist/$(BIN)-linux-amd64 ./cmd/excelsior
@@ -38,5 +40,5 @@ docker:
 	docker build -t excelsior:$(VERSION) .
 
 clean:
-	rm -f $(BIN).exe
+	rm -f $(BIN) $(BIN).exe
 	rm -rf dist

@@ -1,11 +1,13 @@
 package tools
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 )
 
 // Standard resource limit constants
@@ -15,12 +17,6 @@ const (
 	MaxGrepFileSize  = 2 << 20  // 2 MB
 	MaxGrepResults   = 200      // maximum match lines returned
 	MaxCommandLength = 8 << 10  // 8 KB command length cap
-
-	maxFileReadSize  = MaxFileReadSize
-	maxWriteSize     = MaxWriteSize
-	maxGrepFileSize  = MaxGrepFileSize
-	maxGrepResults   = MaxGrepResults
-	maxCommandLength = MaxCommandLength
 )
 
 // Tool is the interface all agent tools implement.
@@ -46,28 +42,26 @@ func NewRegistry(ts ...Tool) *Registry {
 }
 
 // Get retrieves a tool by name.
-func (r *Registry) Get(name string) (Tool, bool) {
-	t, ok := r.tools[name]
-	return t, ok
-}
+func (r *Registry) Get(name string) (Tool, bool) { t, ok := r.tools[name]; return t, ok }
 
-// All returns all registered tools as a slice.
+// All returns all registered tools as a slice, sorted by name for determinism.
 func (r *Registry) All() []Tool {
 	out := make([]Tool, 0, len(r.tools))
 	for _, t := range r.tools {
 		out = append(out, t)
 	}
+	slices.SortFunc(out, func(a, b Tool) int { return cmp.Compare(a.Name(), b.Name()) })
 	return out
 }
 
-// DefaultRegistry returns the core 8 tools rooted at workspace.
-func DefaultRegistry(workspace string) *Registry {
+// resolveRoot normalizes workspace to an absolute path, defaulting to cwd.
+func resolveRoot(workspace string) string {
 	if workspace == "" {
-		var err error
-		workspace, err = os.Getwd()
-		if err != nil {
+		if wd, err := os.Getwd(); err == nil && wd != "" {
+			workspace = wd
+		} else {
 			slog.Warn("tools: Getwd failed, using '.'", "err", err)
-			workspace = "."
+			return "."
 		}
 	}
 	if !filepath.IsAbs(workspace) {
@@ -75,6 +69,12 @@ func DefaultRegistry(workspace string) *Registry {
 			workspace = abs
 		}
 	}
+	return workspace
+}
+
+// DefaultRegistry returns the core 8 tools rooted at workspace.
+func DefaultRegistry(workspace string) *Registry {
+	workspace = resolveRoot(workspace)
 	return NewRegistry(
 		&ViewTool{Root: workspace},
 		&LsTool{Root: workspace},
@@ -96,5 +96,14 @@ func jsonSchema(props map[string]any, required []string) map[string]any {
 		"type":       "object",
 		"properties": props,
 		"required":   required,
+	}
+}
+
+func isSkippedDir(name string) bool {
+	switch name {
+	case ".git", "node_modules", ".excelsior":
+		return true
+	default:
+		return false
 	}
 }

@@ -14,6 +14,8 @@ import (
 	"excelsior/pkg/tools"
 )
 
+var sharedDialer = websocket.Dialer{HandshakeTimeout: 10 * time.Second}
+
 // WSClient dials the engine hub for remote TUI/desktop/mobile.
 type WSClient struct {
 	URL    string // e.g. ws://localhost:17812/v1/ws
@@ -42,16 +44,18 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 	if u.Path == "" || u.Path == "/" {
 		u.Path = "/v1/ws"
 	}
-	dialer := websocket.Dialer{HandshakeTimeout: 10 * time.Second}
-	ws, _, err := dialer.DialContext(ctx, u.String(), nil)
+	ws, _, err := sharedDialer.DialContext(ctx, u.String(), nil)
 	if err != nil {
 		return fmt.Errorf("ws dial %s: %w", u.String(), err)
 	}
 	defer ws.Close()
 	ws.SetReadLimit(1 << 20)
 
-	env := protocol.Envelope{Ver: protocol.Ver, Type: protocol.TypeChatReq, Payload: req}
-	b, _ := json.Marshal(env)
+	env := protocol.NewEnvelope(protocol.TypeChatReq, req)
+	b, err := json.Marshal(env)
+	if err != nil {
+		return fmt.Errorf("ws marshal: %w", err)
+	}
 	if err := ws.WriteMessage(websocket.TextMessage, b); err != nil {
 		return fmt.Errorf("ws write chat.req: %w", err)
 	}
@@ -75,9 +79,8 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 		}
 		switch in.Type {
 		case protocol.TypeDelta:
-			raw, _ := json.Marshal(in.Payload)
 			var d protocol.Delta
-			if err := json.Unmarshal(raw, &d); err != nil {
+			if err := in.Decode(&d); err != nil {
 				continue
 			}
 			if onDelta != nil {
@@ -88,17 +91,15 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 		case protocol.TypeDone:
 			return nil
 		case protocol.TypeError:
-			raw, _ := json.Marshal(in.Payload)
 			var m map[string]string
-			_ = json.Unmarshal(raw, &m)
+			_ = in.Decode(&m)
 			if e, ok := m["error"]; ok {
 				return fmt.Errorf("engine error: %s", e)
 			}
-			return fmt.Errorf("engine error: %v", in.Payload)
+			return fmt.Errorf("engine error: %v", string(in.Payload))
 		case protocol.TypeAskReq:
-			raw, _ := json.Marshal(in.Payload)
 			var ar protocol.AskReq
-			if err := json.Unmarshal(raw, &ar); err != nil {
+			if err := in.Decode(&ar); err != nil {
 				c.logger().Warn("bad ask.req", "err", err)
 				continue
 			}
@@ -113,17 +114,11 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 				c.logger().Warn("ask handler error", "err", err)
 				resp = tools.AskResponse{Selected: -1, Answer: ""}
 			}
-			out := protocol.Envelope{
-				Ver:  protocol.Ver,
-				Type: protocol.TypeAskResp,
-				Payload: protocol.AskResp{
-					Selected: resp.Selected,
-					Answer:   resp.Answer,
-					Label:    resp.Label,
-				},
+			out := protocol.NewEnvelope(protocol.TypeAskResp, protocol.AskResp{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label})
+			b2, err := json.Marshal(out)
+			if err == nil {
+				_ = ws.WriteMessage(websocket.TextMessage, b2)
 			}
-			b2, _ := json.Marshal(out)
-			_ = ws.WriteMessage(websocket.TextMessage, b2)
 		case protocol.TypePong, protocol.TypePing:
 		default:
 			c.logger().Warn("ws unknown type", "type", in.Type)

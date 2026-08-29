@@ -190,7 +190,7 @@ func TestAllProtocolMessageTypesSerialization(t *testing.T) {
 				Ver:     Ver,
 				ID:      "test-id",
 				Type:    tc.msgType,
-				Payload: tc.payload,
+				Payload: MustMarshalPayload(tc.payload),
 			}
 
 			data, err := json.Marshal(env)

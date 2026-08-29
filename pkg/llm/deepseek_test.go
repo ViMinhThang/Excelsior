@@ -79,7 +79,7 @@ func TestClient_Validate(t *testing.T) {
 }
 
 func TestResolveModel_Alias(t *testing.T) {
-	if got := resolveModel("deepseek-v4-pro"); got != "deepseek-reasoner" {
+	if got := ResolveModel("deepseek-v4-pro"); got != "deepseek-reasoner" {
 		t.Fatalf("alias v4-pro %q", got)
 	}
 	if !IsReasoner("deepseek-v4-pro") {

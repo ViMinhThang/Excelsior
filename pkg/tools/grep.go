@@ -13,8 +13,10 @@ import (
 
 type GrepTool struct{ Root string }
 
-func (t *GrepTool) Name() string        { return "grep" }
-func (t *GrepTool) Description() string { return "Search file contents by substring (ripgrep-style). Use for codebase search." }
+func (t *GrepTool) Name() string { return "grep" }
+func (t *GrepTool) Description() string {
+	return "Search file contents by substring (ripgrep-style). Use for codebase search."
+}
 func (t *GrepTool) Parameters() any {
 	return jsonSchema(map[string]any{
 		"pattern": map[string]any{"type": "string"},
@@ -55,20 +57,24 @@ func (t *GrepTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 func grepWalk(ctx context.Context, pattern, dir, root string) (string, error) {
 	var out []string
 	count := 0
-	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if err != nil {
 			return nil
 		}
-		if info.IsDir() {
-			if info.Name() == ".git" || info.Name() == "node_modules" || info.Name() == ".excelsior" {
+		if d.IsDir() {
+			if isSkippedDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if info.Size() > maxGrepFileSize {
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if info.Size() > MaxGrepFileSize {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(p))
@@ -79,7 +85,7 @@ func grepWalk(ctx context.Context, pattern, dir, root string) (string, error) {
 		if err != nil {
 			return nil
 		}
-		if len(b) > maxGrepFileSize {
+		if len(b) > MaxGrepFileSize {
 			return nil
 		}
 		text := string(b)
@@ -96,7 +102,7 @@ func grepWalk(ctx context.Context, pattern, dir, root string) (string, error) {
 				}
 				out = append(out, fmt.Sprintf("%s:%d:%s", rel, i+1, line))
 				count++
-				if count >= maxGrepResults {
+				if count >= MaxGrepResults {
 					return filepath.SkipAll
 				}
 			}

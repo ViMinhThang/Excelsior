@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"excelsior/pkg/llm"
@@ -16,6 +15,7 @@ import (
 // LLM is the provider interface the agent depends on for streaming chat completions.
 type LLM interface {
 	StreamChat(ctx context.Context, req llm.ChatRequest, onDelta func(llm.Delta) error) (*llm.Message, error)
+	ModelName() string
 }
 
 // ToolRegistry is the port the agent depends on — small interface for testability.
@@ -52,6 +52,12 @@ type RunOptions struct {
 	OnEvent func(StreamEvent)
 }
 
+const (
+	defaultMaxIters = 20
+	maxToolResult   = 20_000
+	maxContextChars = 600_000
+)
+
 func (a *Agent) logger() *slog.Logger {
 	if a.Logger != nil {
 		return a.Logger
@@ -63,7 +69,7 @@ func (a *Agent) maxIters() int {
 	if a.MaxIters > 0 {
 		return a.MaxIters
 	}
-	return 20
+	return defaultMaxIters
 }
 
 func (a *Agent) validate() error {
@@ -74,6 +80,31 @@ func (a *Agent) validate() error {
 		return fmt.Errorf("agent: MaxIters must be >=0, got %d", a.MaxIters)
 	}
 	return nil
+}
+
+func (a *Agent) registry() ToolRegistry {
+	if a.Tools != nil {
+		return a.Tools
+	}
+	return tools.NewRegistry()
+}
+
+func (a *Agent) resolveModel() string {
+	if a.Model != "" {
+		return a.Model
+	}
+	if a.LLM != nil {
+		return a.LLM.ModelName()
+	}
+	return ""
+}
+
+func totalChars(msgs []llm.Message) int {
+	n := 0
+	for _, m := range msgs {
+		n += len(m.Content) + len(m.ReasoningContent)
+	}
+	return n
 }
 
 type RunResult struct {
@@ -95,43 +126,25 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
-	if a.Tools == nil {
-		a.Tools = tools.NewRegistry()
-	}
 	if len(opts.Messages) == 0 {
 		return nil, errors.New("agent: Messages is empty")
 	}
-	// Enforce context window guard (approx 200k tokens ~ 600k chars) — truncate if too large
-	const maxChars = 600_000
-	totalChars := 0
-	for _, m := range opts.Messages {
-		totalChars += len(m.Content) + len(m.ReasoningContent)
-	}
-	if totalChars > maxChars {
-		return nil, fmt.Errorf("agent: context too large (%d chars > %d)", totalChars, maxChars)
+	if n := totalChars(opts.Messages); n > maxContextChars {
+		return nil, fmt.Errorf("agent: context too large (%d chars > %d)", n, maxContextChars)
 	}
 
 	messages := append([]llm.Message(nil), opts.Messages...)
-	if a.System != "" {
-		hasSystem := len(messages) > 0 && messages[0].Role == "system"
-		if !hasSystem {
-			messages = append([]llm.Message{{Role: "system", Content: a.System}}, messages...)
-		}
+	if a.System != "" && (len(messages) == 0 || messages[0].Role != "system") {
+		messages = append([]llm.Message{{Role: "system", Content: a.System}}, messages...)
 	}
 
-	toolDefs := toLLMTools(a.Tools.All())
+	reg := a.registry()
+	toolDefs := toLLMTools(reg.All())
 	emit := opts.OnEvent
 	if emit == nil {
 		emit = func(StreamEvent) {}
 	}
-
-	model := a.Model
-	if model == "" {
-		if client, ok := a.LLM.(*llm.Client); ok && client.Model != "" {
-			model = client.Model
-		}
-	}
-
+	model := a.resolveModel()
 	start := time.Now()
 	a.logger().Info("agent run start", "model", model, "messages", len(messages), "maxIters", a.maxIters())
 
@@ -139,15 +152,10 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 		if err := ctx.Err(); err != nil {
 			return nil, fmt.Errorf("agent: context canceled before iter %d: %w", iter, err)
 		}
-		req := llm.ChatRequest{
-			Model:    model,
-			Messages: messages,
-			Tools:    toolDefs,
-		}
+		req := llm.ChatRequest{Model: model, Messages: messages, Tools: toolDefs}
 		if len(toolDefs) == 0 {
 			req.Tools = nil
 		}
-
 		a.logger().Debug("agent llm request", "iter", iter, "messages", len(messages))
 		llmStart := time.Now()
 		msg, err := a.LLM.StreamChat(ctx, req, func(d llm.Delta) error {
@@ -160,9 +168,6 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 			if d.Content != "" {
 				emit(StreamEvent{Type: "text", Text: d.Content})
 			}
-			for _, tc := range d.ToolCalls {
-				emit(StreamEvent{Type: "tool_start", ToolName: tc.Function.Name, ToolArgs: tc.Function.Arguments})
-			}
 			return nil
 		})
 		if err != nil {
@@ -171,7 +176,6 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 			return nil, fmt.Errorf("agent: LLM StreamChat iter %d: %w", iter, err)
 		}
 		a.logger().Debug("agent llm response", "iter", iter, "duration", time.Since(llmStart), "toolCalls", len(msg.ToolCalls))
-
 		messages = append(messages, *msg)
 
 		if len(msg.ToolCalls) == 0 {
@@ -182,45 +186,43 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 			a.logger().Info("agent run done", "iters", iter+1, "totalDuration", time.Since(start))
 			return &RunResult{FinalMessage: msg, Messages: messages}, nil
 		}
-
-		// Execute tools sequentially with per-tool timeout via context
-		for _, tc := range msg.ToolCalls {
-			if err := ctx.Err(); err != nil {
-				return nil, fmt.Errorf("agent: context canceled before tool %q: %w", tc.Function.Name, err)
-			}
-			emit(StreamEvent{Type: "tool_start", ToolName: tc.Function.Name, ToolCallID: tc.ID, ToolArgs: tc.Function.Arguments})
-			a.logger().Info("tool start", "name", tc.Function.Name, "callID", tc.ID)
-			toolStart := time.Now()
-			tool, ok := a.Tools.Get(tc.Function.Name)
-			var result string
-			if !ok {
-				result = fmt.Sprintf("error: unknown tool %q", tc.Function.Name)
-				a.logger().Warn("unknown tool", "name", tc.Function.Name)
-			} else {
-				out, execErr := tool.Execute(ctx, json.RawMessage(tc.Function.Arguments))
-				if execErr != nil {
-					result = fmt.Sprintf("error: %v", execErr)
-					a.logger().Warn("tool error", "name", tc.Function.Name, "err", execErr, "duration", time.Since(toolStart))
-				} else {
-					result = out
-					a.logger().Info("tool done", "name", tc.Function.Name, "duration", time.Since(toolStart), "resultChars", len(result))
-				}
-			}
-			// Truncate tool result for context window (keep LLM context manageable)
-			const maxToolResult = 20_000
-			if len(result) > maxToolResult {
-				result = result[:maxToolResult] + "\n[truncated]"
-			}
-			emit(StreamEvent{Type: "tool_result", ToolName: tc.Function.Name, ToolCallID: tc.ID, ToolResult: result})
-			messages = append(messages, llm.Message{
-				Role:       "tool",
-				ToolCallID: tc.ID,
-				Content:    result,
-			})
+		if err := a.execTools(ctx, reg, msg.ToolCalls, &messages, emit); err != nil {
+			return nil, err
 		}
 	}
-
 	return nil, fmt.Errorf("agent: max iterations (%d) reached", a.maxIters())
+}
+
+func (a *Agent) execTools(ctx context.Context, reg ToolRegistry, calls []llm.ToolCall, messages *[]llm.Message, emit func(StreamEvent)) error {
+	for _, tc := range calls {
+		if err := ctx.Err(); err != nil {
+			return fmt.Errorf("agent: context canceled before tool %q: %w", tc.Function.Name, err)
+		}
+		emit(StreamEvent{Type: "tool_start", ToolName: tc.Function.Name, ToolCallID: tc.ID, ToolArgs: tc.Function.Arguments})
+		start := time.Now()
+		result := a.callTool(ctx, reg, tc)
+		if len(result) > maxToolResult {
+			result = result[:maxToolResult] + "\n[truncated]"
+		}
+		a.logger().Info("tool done", "name", tc.Function.Name, "duration", time.Since(start), "resultChars", len(result))
+		emit(StreamEvent{Type: "tool_result", ToolName: tc.Function.Name, ToolCallID: tc.ID, ToolResult: result})
+		*messages = append(*messages, llm.Message{Role: "tool", ToolCallID: tc.ID, Content: result})
+	}
+	return nil
+}
+
+func (a *Agent) callTool(ctx context.Context, reg ToolRegistry, tc llm.ToolCall) string {
+	tool, ok := reg.Get(tc.Function.Name)
+	if !ok {
+		a.logger().Warn("unknown tool", "name", tc.Function.Name)
+		return fmt.Sprintf("error: unknown tool %q", tc.Function.Name)
+	}
+	out, err := tool.Execute(ctx, json.RawMessage(tc.Function.Arguments))
+	if err != nil {
+		a.logger().Warn("tool error", "name", tc.Function.Name, "err", err)
+		return fmt.Sprintf("error: %v", err)
+	}
+	return out
 }
 
 func toLLMTools(ts []tools.Tool) []llm.ToolDefinition {
@@ -246,10 +248,3 @@ Rules:
 - Prefer minimal, correct edits. Match project style.
 - After editing, verify with bash if relevant (go vet, go test, etc.).
 - Be concise. No superlatives.`
-
-func Truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return strings.TrimSpace(s[:n]) + "…"
-}

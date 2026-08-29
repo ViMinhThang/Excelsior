@@ -22,6 +22,8 @@ type MockLLM struct {
 	CallIndex int
 }
 
+func (m *MockLLM) ModelName() string { return "mock" }
+
 func (m *MockLLM) StreamChat(ctx context.Context, req llm.ChatRequest, onDelta func(llm.Delta) error) (*llm.Message, error) {
 	m.mu.Lock()
 	m.Calls = append(m.Calls, req)

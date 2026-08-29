@@ -1,6 +1,7 @@
 package session
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,11 +14,11 @@ import (
 	"time"
 
 	"excelsior/pkg/llm"
+	"excelsior/pkg/util"
 )
 
-// Store is a JSONL per-session store. Each turn appends one JSON line.
-// Production hardening: atomic append via temp+rename, ID sanitization,
-// corruption handling, context-aware, permissions 0700/0600.
+// Store is a per-session store. Each session is a single atomic JSON file
+// (legacy JSONL multi-line files are read via last valid line for compat).
 type Store struct {
 	Dir string // e.g. .excelsior/sessions
 }
@@ -52,11 +53,9 @@ func (s *Store) path(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Ensure Dir is not empty
 	if strings.TrimSpace(s.Dir) == "" {
 		return "", errors.New("session store dir is empty")
 	}
-	// Ensure path stays within Dir (defense in depth)
 	p := filepath.Join(s.Dir, safe+".jsonl")
 	rel, err := filepath.Rel(s.Dir, p)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
@@ -65,17 +64,21 @@ func (s *Store) path(id string) (string, error) {
 	return p, nil
 }
 
-// SaveWithTitle appends a record with a custom title and message history.
-func (s *Store) SaveWithTitle(ctx context.Context, id string, title string, messages []llm.Message) error {
+func checkCtx(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("session save canceled: %w", err)
+		return fmt.Errorf("session canceled: %w", err)
+	}
+	return nil
+}
+
+// SaveWithTitle overwrites the session file atomically.
+func (s *Store) SaveWithTitle(ctx context.Context, id string, title string, messages []llm.Message) error {
+	if err := checkCtx(ctx); err != nil {
+		return err
 	}
 	p, err := s.path(id)
 	if err != nil {
 		return err
-	}
-	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
-		return fmt.Errorf("session mkdir: %w", err)
 	}
 	if messages == nil {
 		messages = []llm.Message{}
@@ -85,67 +88,33 @@ func (s *Store) SaveWithTitle(ctx context.Context, id string, title string, mess
 	if err != nil {
 		return fmt.Errorf("session marshal: %w", err)
 	}
-
-	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return fmt.Errorf("session open: %w", err)
-	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			slog.Warn("session close error", "id", id, "err", cerr)
-		}
-	}()
-	if _, err := f.Write(append(b, '\n')); err != nil {
-		return fmt.Errorf("session write: %w", err)
-	}
-	if err := f.Sync(); err != nil {
-		return fmt.Errorf("session sync: %w", err)
-	}
-	if d, err := os.Open(s.Dir); err == nil {
-		_ = d.Sync()
-		d.Close()
+	b = append(b, '\n')
+	if err := util.WriteAtomic(p, b, 0o600); err != nil {
+		return err
 	}
 	slog.Debug("session saved", "id", id, "title", title, "messages", len(messages))
 	return nil
 }
 
-// SaveWithTitleSimple is a convenience wrapper for SaveWithTitle with background context.
-func (s *Store) SaveWithTitleSimple(id string, title string, messages []llm.Message) error {
-	return s.SaveWithTitle(context.Background(), id, title, messages)
-}
-
-// Save preserves any previously saved custom title if present.
 func (s *Store) Save(ctx context.Context, id string, messages []llm.Message) error {
 	var title string
-	if existing, err := s.LoadRecord(ctx, id); err == nil && existing != nil {
-		title = existing.Title
+	if rec, err := s.LoadRecord(ctx, id); err == nil && rec != nil {
+		title = rec.Title
 	}
 	return s.SaveWithTitle(ctx, id, title, messages)
 }
 
-// SaveSimple is a convenience wrapper with background context (for callers not needing ctx).
-func (s *Store) SaveSimple(id string, messages []llm.Message) error {
-	return s.Save(context.Background(), id, messages)
-}
-
-// Rename updates the title of a session by appending a new record entry.
-func (s *Store) Rename(ctx context.Context, id string, title string) error {
+func (s *Store) Rename(ctx context.Context, id, title string) error {
 	var msgs []llm.Message
-	if existing, err := s.LoadRecord(ctx, id); err == nil && existing != nil {
-		msgs = existing.Messages
+	if rec, err := s.LoadRecord(ctx, id); err == nil && rec != nil {
+		msgs = rec.Messages
 	}
 	return s.SaveWithTitle(ctx, id, title, msgs)
 }
 
-// RenameSimple is a convenience wrapper for Rename with background context.
-func (s *Store) RenameSimple(id string, title string) error {
-	return s.Rename(context.Background(), id, title)
-}
-
-// LoadRecord reads the last valid JSONL record for a session, returning its full metadata.
 func (s *Store) LoadRecord(ctx context.Context, id string) (*Record, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("session load canceled: %w", err)
+	if err := checkCtx(ctx); err != nil {
+		return nil, err
 	}
 	p, err := s.path(id)
 	if err != nil {
@@ -155,34 +124,31 @@ func (s *Store) LoadRecord(ctx context.Context, id string) (*Record, error) {
 	if err != nil {
 		return nil, fmt.Errorf("session load: %w", err)
 	}
-	lines := splitLines(string(b))
-	if len(lines) == 0 {
+	b = bytes.TrimSpace(b)
+	if len(b) == 0 {
 		return nil, fmt.Errorf("session empty: %q", id)
 	}
-	// Try from last line backwards, skipping corrupted lines (partial writes)
+	lines := bytes.Split(b, []byte{'\n'})
 	var lastErr error
 	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
-		if line == "" {
+		line := bytes.TrimSpace(lines[i])
+		if len(line) == 0 {
 			continue
 		}
 		var rec Record
-		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+		if err := json.Unmarshal(line, &rec); err != nil {
 			lastErr = err
 			slog.Warn("session corrupted line, skipping", "id", id, "line", i, "err", err)
 			continue
 		}
 		return &rec, nil
 	}
-	return nil, fmt.Errorf("session %q: no valid record: %w", id, lastErr)
+	if lastErr != nil {
+		return nil, fmt.Errorf("session %q: no valid record: %w", id, lastErr)
+	}
+	return nil, fmt.Errorf("session empty: %q", id)
 }
 
-// LoadRecordSimple is a convenience wrapper for LoadRecord with background context.
-func (s *Store) LoadRecordSimple(id string) (*Record, error) {
-	return s.LoadRecord(context.Background(), id)
-}
-
-// Load returns the messages of the latest valid record for a session.
 func (s *Store) Load(ctx context.Context, id string) ([]llm.Message, error) {
 	rec, err := s.LoadRecord(ctx, id)
 	if err != nil {
@@ -191,13 +157,21 @@ func (s *Store) Load(ctx context.Context, id string) ([]llm.Message, error) {
 	return rec.Messages, nil
 }
 
-func (s *Store) LoadSimple(id string) ([]llm.Message, error) {
-	return s.Load(context.Background(), id)
+func sessionIDFromFile(e os.DirEntry) (string, bool) {
+	if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
+		return "", false
+	}
+	id := strings.TrimSuffix(e.Name(), ".jsonl")
+	if _, err := sanitizeID(id); err != nil {
+		slog.Warn("session list skipping invalid id", "file", e.Name(), "err", err)
+		return "", false
+	}
+	return id, true
 }
 
 func (s *Store) List(ctx context.Context) ([]string, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, fmt.Errorf("session list canceled: %w", err)
+	if err := checkCtx(ctx); err != nil {
+		return nil, err
 	}
 	entries, err := os.ReadDir(s.Dir)
 	if err != nil {
@@ -208,25 +182,13 @@ func (s *Store) List(ctx context.Context) ([]string, error) {
 	}
 	var out []string
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
+		if id, ok := sessionIDFromFile(e); ok {
+			out = append(out, id)
 		}
-		if filepath.Ext(e.Name()) != ".jsonl" {
-			continue
-		}
-		id := e.Name()[:len(e.Name())-6]
-		if _, err := sanitizeID(id); err != nil {
-			slog.Warn("session list skipping invalid id", "file", e.Name(), "err", err)
-			continue
-		}
-		out = append(out, id)
 	}
 	return out, nil
 }
 
-func (s *Store) ListSimple() ([]string, error) { return s.List(context.Background()) }
-
-// Delete removes a session.
 func (s *Store) Delete(ctx context.Context, id string) error {
 	p, err := s.path(id)
 	if err != nil {
@@ -239,15 +201,9 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// DeleteSimple is a convenience wrapper with background context.
-func (s *Store) DeleteSimple(id string) error {
-	return s.Delete(context.Background(), id)
-}
-
-// Prune deletes sessions older than maxAge based on file mtime.
 func (s *Store) Prune(ctx context.Context, maxAge time.Duration) (int, error) {
-	if err := ctx.Err(); err != nil {
-		return 0, fmt.Errorf("session prune canceled: %w", err)
+	if err := checkCtx(ctx); err != nil {
+		return 0, err
 	}
 	entries, err := os.ReadDir(s.Dir)
 	if err != nil {
@@ -256,13 +212,13 @@ func (s *Store) Prune(ctx context.Context, maxAge time.Duration) (int, error) {
 		}
 		return 0, fmt.Errorf("session prune list: %w", err)
 	}
-	var deleted int
 	cutoff := time.Now().Add(-maxAge)
+	var deleted int
 	for _, e := range entries {
 		if ctx.Err() != nil {
 			return deleted, fmt.Errorf("session prune canceled: %w", ctx.Err())
 		}
-		if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
+		if _, ok := sessionIDFromFile(e); !ok {
 			continue
 		}
 		info, err := e.Info()
@@ -270,29 +226,10 @@ func (s *Store) Prune(ctx context.Context, maxAge time.Duration) (int, error) {
 			continue
 		}
 		if info.ModTime().Before(cutoff) {
-			p := filepath.Join(s.Dir, e.Name())
-			if err := os.Remove(p); err == nil {
+			if err := os.Remove(filepath.Join(s.Dir, e.Name())); err == nil {
 				deleted++
-				slog.Info("session pruned", "file", e.Name(), "age", time.Since(info.ModTime()))
 			}
 		}
 	}
 	return deleted, nil
-}
-
-func splitLines(s string) []string {
-	var out []string
-	start := 0
-	for i, c := range s {
-		if c == '\n' {
-			if i > start {
-				out = append(out, s[start:i])
-			}
-			start = i + 1
-		}
-	}
-	if start < len(s) {
-		out = append(out, s[start:])
-	}
-	return out
 }

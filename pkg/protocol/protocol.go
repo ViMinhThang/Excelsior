@@ -1,27 +1,61 @@
 package protocol
 
-import "excelsior/pkg/llm"
+import (
+	"encoding/json"
+
+	"excelsior/pkg/llm"
+)
 
 const Ver = "v1"
 
 // Envelope is the WS frame.
 type Envelope struct {
-	Ver     string      `json:"ver"`
-	ID      string      `json:"id,omitempty"`
-	Type    string      `json:"type"`
-	Payload interface{} `json:"payload,omitempty"`
+	Ver     string          `json:"ver"`
+	ID      string          `json:"id,omitempty"`
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload,omitempty"`
+}
+
+// Decode unmarshals Payload into v. Returns nil if payload is empty.
+func (e Envelope) Decode(v any) error {
+	if len(e.Payload) == 0 {
+		return nil
+	}
+	return json.Unmarshal(e.Payload, v)
+}
+
+// MustMarshalPayload marshals v to json.RawMessage. Panics on error (caller bug).
+func MustMarshalPayload(v any) json.RawMessage {
+	if v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// NewEnvelope creates a versioned envelope with JSON payload.
+func NewEnvelope(typ string, payload any) Envelope {
+	return Envelope{Ver: Ver, Type: typ, Payload: MustMarshalPayload(payload)}
+}
+
+// NewEnvelopeWithID creates a versioned envelope with ID and payload.
+func NewEnvelopeWithID(id, typ string, payload any) Envelope {
+	return Envelope{Ver: Ver, ID: id, Type: typ, Payload: MustMarshalPayload(payload)}
 }
 
 // Types
 const (
-	TypeChatReq     = "chat.req"
-	TypeDelta       = "delta"
-	TypeDone        = "done"
-	TypeError       = "error"
-	TypeAskReq      = "ask.req"
-	TypeAskResp     = "ask.resp"
-	TypePing        = "ping"
-	TypePong        = "pong"
+	TypeChatReq       = "chat.req"
+	TypeDelta         = "delta"
+	TypeDone          = "done"
+	TypeError         = "error"
+	TypeAskReq        = "ask.req"
+	TypeAskResp       = "ask.resp"
+	TypePing          = "ping"
+	TypePong          = "pong"
 	TypeSessionList   = "session.list"
 	TypeSessionData   = "session.data"
 	TypeSessionCreate = "session.create"
@@ -34,7 +68,6 @@ const (
 type WorkspaceSetReq struct {
 	Workspace string `json:"workspace"`
 }
-
 
 // ChatReq is client → engine to start a turn. SessionID ties it to a session sidebar entry.
 type ChatReq struct {
@@ -92,7 +125,7 @@ type SessionDataReq struct {
 	ID string `json:"id"`
 }
 type SessionDataResp struct {
-	ID       string       `json:"id"`
+	ID       string        `json:"id"`
 	Messages []llm.Message `json:"messages"`
 }
 type SessionRenameReq struct {

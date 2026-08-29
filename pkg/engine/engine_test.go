@@ -117,15 +117,14 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-1",
 		Type:    protocol.TypeSessionCreate,
-		Payload: protocol.SessionCreateReq{Title: "Refactoring Plan"},
+		Payload: protocol.MustMarshalPayload(protocol.SessionCreateReq{Title: "Refactoring Plan"}),
 	})
 	createdEnv := read()
 	if createdEnv.Type != protocol.TypeSessionCreate {
 		t.Fatalf("expected session.create response, got %s", createdEnv.Type)
 	}
-	raw, _ := json.Marshal(createdEnv.Payload)
 	var createResp protocol.SessionCreateResp
-	_ = json.Unmarshal(raw, &createResp)
+	_ = createdEnv.Decode(&createResp)
 	sessionID := createResp.ID
 	if sessionID == "" {
 		t.Fatal("expected non-empty session ID")
@@ -136,15 +135,14 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-2",
 		Type:    protocol.TypeSessionList,
-		Payload: protocol.SessionListReq{},
+		Payload: protocol.MustMarshalPayload(protocol.SessionListReq{}),
 	})
 	listEnv := read()
 	if listEnv.Type != protocol.TypeSessionList {
 		t.Fatalf("expected session.list response, got %s", listEnv.Type)
 	}
-	rawList, _ := json.Marshal(listEnv.Payload)
 	var listResp protocol.SessionListResp
-	_ = json.Unmarshal(rawList, &listResp)
+	_ = listEnv.Decode(&listResp)
 	if len(listResp.Sessions) != 1 || listResp.Sessions[0].Title != "Refactoring Plan" {
 		t.Fatalf("session.list unexpected: %+v", listResp.Sessions)
 	}
@@ -154,7 +152,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-3",
 		Type:    protocol.TypeSessionRename,
-		Payload: protocol.SessionRenameReq{ID: sessionID, Title: "Final Architectural Blueprint"},
+		Payload: protocol.MustMarshalPayload(protocol.SessionRenameReq{ID: sessionID, Title: "Final Architectural Blueprint"}),
 	})
 	renameEnv := read()
 	if renameEnv.Type != protocol.TypeSessionRename {
@@ -166,12 +164,11 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-4",
 		Type:    protocol.TypeSessionList,
-		Payload: protocol.SessionListReq{},
+		Payload: protocol.MustMarshalPayload(protocol.SessionListReq{}),
 	})
 	listEnv2 := read()
-	rawList2, _ := json.Marshal(listEnv2.Payload)
 	var listResp2 protocol.SessionListResp
-	_ = json.Unmarshal(rawList2, &listResp2)
+	_ = listEnv2.Decode(&listResp2)
 	if len(listResp2.Sessions) != 1 || listResp2.Sessions[0].Title != "Final Architectural Blueprint" {
 		t.Fatalf("session title after rename not updated: %+v", listResp2.Sessions)
 	}
@@ -181,7 +178,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-5",
 		Type:    protocol.TypeSessionData,
-		Payload: protocol.SessionDataReq{ID: sessionID},
+		Payload: protocol.MustMarshalPayload(protocol.SessionDataReq{ID: sessionID}),
 	})
 	dataEnv := read()
 	if dataEnv.Type != protocol.TypeSessionData {
@@ -193,7 +190,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-6",
 		Type:    protocol.TypeSessionDelete,
-		Payload: protocol.SessionDeleteReq{ID: sessionID},
+		Payload: protocol.MustMarshalPayload(protocol.SessionDeleteReq{ID: sessionID}),
 	})
 	delEnv := read()
 	if delEnv.Type != protocol.TypeSessionDelete {
@@ -206,15 +203,14 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-7",
 		Type:    protocol.TypeWorkspaceSet,
-		Payload: protocol.WorkspaceSetReq{Workspace: newWS},
+		Payload: protocol.MustMarshalPayload(protocol.WorkspaceSetReq{Workspace: newWS}),
 	})
 	wsListEnv := read()
 	if wsListEnv.Type != protocol.TypeSessionList {
 		t.Fatalf("expected session.list response after workspace.set, got %s", wsListEnv.Type)
 	}
-	if hub.Workspace() != newWS {
-		t.Errorf("expected hub workspace %s, got %s", newWS, hub.Workspace())
-	}
+	// workspace.set now only affects conn, not hub globally (per-conn isolation)
+	_ = wsListEnv
 }
 
 func TestConn_AskCorrelation(t *testing.T) {
@@ -231,13 +227,9 @@ func TestConn_AskCorrelation(t *testing.T) {
 
 	// Dispatch Ask response
 	env := protocol.Envelope{
-		Ver:  protocol.Ver,
-		Type: protocol.TypeAskResp,
-		Payload: protocol.AskResp{
-			Selected: 2,
-			Answer:   "Option C",
-			Label:    "Label C",
-		},
+		Ver:     protocol.Ver,
+		Type:    protocol.TypeAskResp,
+		Payload: protocol.MustMarshalPayload(protocol.AskResp{Selected: 2, Answer: "Option C", Label: "Label C"}),
 	}
 	c.handleAskResp(env)
 

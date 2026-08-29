@@ -4,59 +4,41 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"strings"
+
+	"excelsior/pkg/util"
 )
 
 const (
 	maxErrorBody = 4 * 1024
 	maxSSLine    = 1 << 20 // 1 MiB per SSE line (prevent OOM)
+	maxSSEStream = 10 << 20
 )
-
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
-}
 
 // parseSSEStream reads SSE lines from r, invoking onDelta on valid chunks and aggregating into final Message.
 func parseSSEStream(ctx context.Context, r io.Reader, logger *slog.Logger, onDelta func(Delta) error) (*Message, error) {
-	var finalContent strings.Builder
-	var finalReasoning strings.Builder
-	toolCallBuilders := map[int]*ToolCall{}
+	var finalContent, finalReasoning strings.Builder
+	finalContent.Grow(4096)
+	finalReasoning.Grow(1024)
+	toolCallBuilders := make(map[int]*ToolCall, 4)
 	var finishReason string
 	var usage *Usage
 
-	reader := bufio.NewReader(r)
-	for {
+	r = io.LimitReader(r, maxSSEStream)
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 4096), maxSSLine)
+
+	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
 			return nil, fmt.Errorf("deepseek: context canceled: %w", ctx.Err())
 		default:
 		}
-		line, err := reader.ReadString('\n')
-		// Guard against OOM: single line too large
-		if len(line) > maxSSLine {
-			return nil, fmt.Errorf("deepseek: SSE line too large (%d > %d)", len(line), maxSSLine)
-		}
-		if err != nil && !errors.Is(err, io.EOF) {
-			return nil, fmt.Errorf("deepseek: read SSE: %w", err)
-		}
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			continue
-		}
-		if !strings.HasPrefix(trimmed, "data:") {
-			if errors.Is(err, io.EOF) {
-				break
-			}
+		trimmed := strings.TrimSpace(scanner.Text())
+		if trimmed == "" || !strings.HasPrefix(trimmed, "data:") {
 			continue
 		}
 		data := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
@@ -72,19 +54,13 @@ func parseSSEStream(ctx context.Context, r io.Reader, logger *slog.Logger, onDel
 		var chunk streamChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
 			if logger != nil {
-				logger.Warn("deepseek: skip malformed SSE chunk", "data", truncate(data, 500), "err", err)
-			}
-			if errors.Is(err, io.EOF) {
-				break
+				logger.Warn("deepseek: skip malformed SSE chunk", "data", util.Truncate(data, 500), "err", err)
 			}
 			continue
 		}
 		if len(chunk.Choices) == 0 {
 			if chunk.Usage != nil {
 				usage = chunk.Usage
-			}
-			if errors.Is(err, io.EOF) {
-				break
 			}
 			continue
 		}
@@ -135,9 +111,12 @@ func parseSSEStream(ctx context.Context, r io.Reader, logger *slog.Logger, onDel
 				}
 			}
 		}
-		if errors.Is(err, io.EOF) {
-			break
+	}
+	if err := scanner.Err(); err != nil {
+		if err == bufio.ErrTooLong {
+			return nil, fmt.Errorf("deepseek: SSE line too large (%d > %d)", maxSSLine+1, maxSSLine)
 		}
+		return nil, fmt.Errorf("deepseek: read SSE: %w", err)
 	}
 
 	msg := &Message{

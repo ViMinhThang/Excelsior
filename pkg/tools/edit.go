@@ -8,12 +8,16 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+
+	"excelsior/pkg/util"
 )
 
 type EditTool struct{ Root string }
 
-func (t *EditTool) Name() string        { return "edit" }
-func (t *EditTool) Description() string { return "Replace exact text block in a file. oldText must appear exactly once." }
+func (t *EditTool) Name() string { return "edit" }
+func (t *EditTool) Description() string {
+	return "Replace exact text block in a file. oldText must appear exactly once."
+}
 func (t *EditTool) Parameters() any {
 	return jsonSchema(map[string]any{
 		"filePath": map[string]any{"type": "string"},
@@ -40,8 +44,8 @@ func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if a.OldText == "" {
 		return "", errors.New("edit: oldText must be non-empty")
 	}
-	if len(a.NewText) > maxWriteSize {
-		return "", fmt.Errorf("edit: newText too large (%d > %d)", len(a.NewText), maxWriteSize)
+	if len(a.NewText) > MaxWriteSize {
+		return "", fmt.Errorf("edit: newText too large (%d > %d)", len(a.NewText), MaxWriteSize)
 	}
 	p, err := secureJoin(t.Root, a.FilePath)
 	if err != nil {
@@ -51,8 +55,8 @@ func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if err != nil {
 		return "", fmt.Errorf("edit: %w", err)
 	}
-	if len(b) > maxWriteSize {
-		return "", fmt.Errorf("edit: file too large (%d > %d)", len(b), maxWriteSize)
+	if len(b) > MaxWriteSize {
+		return "", fmt.Errorf("edit: file too large (%d > %d)", len(b), MaxWriteSize)
 	}
 	content := string(b)
 	count := strings.Count(content, a.OldText)
@@ -63,10 +67,10 @@ func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 		return "", fmt.Errorf("edit: oldText matched %d times, must be unique", count)
 	}
 	content = strings.Replace(content, a.OldText, a.NewText, 1)
-	if len(content) > maxWriteSize {
-		return "", fmt.Errorf("edit: resulting file too large (%d > %d)", len(content), maxWriteSize)
+	if len(content) > MaxWriteSize {
+		return "", fmt.Errorf("edit: resulting file too large (%d > %d)", len(content), MaxWriteSize)
 	}
-	if err := writeAtomic(p, []byte(content), 0o644); err != nil {
+	if err := util.WriteAtomic(p, []byte(content), 0o644); err != nil {
 		return "", fmt.Errorf("edit: %w", err)
 	}
 	slog.Info("edit", "path", a.FilePath)

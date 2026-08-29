@@ -31,71 +31,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.askState != nil {
-			switch msg.String() {
-			case "esc":
-				ch := m.askState.respChan
-				m.askState = nil
-				m.input.Focus()
-				select {
-				case ch <- tools.AskResponse{Selected: -1, Answer: ""}:
-				default:
-				}
-				return m, textinput.Blink
-			case "up", "shift+tab":
-				if m.askState.cursor > 0 {
-					m.askState.cursor--
-				}
-				if m.askState.cursor == 3 {
-					m.askState.input.Focus()
-				} else {
-					m.askState.input.Blur()
-				}
-				return m, nil
-			case "down", "tab":
-				if m.askState.cursor < 3 {
-					m.askState.cursor++
-				}
-				if m.askState.cursor == 3 {
-					m.askState.input.Focus()
-				} else {
-					m.askState.input.Blur()
-				}
-				return m, nil
-			case "enter":
-				var resp tools.AskResponse
-				if m.askState.cursor == 3 {
-					val := strings.TrimSpace(m.askState.input.Value())
-					if val == "" {
-						return m, nil
-					}
-					resp = tools.AskResponse{Selected: -1, Answer: val, Label: val}
-				} else {
-					opt := m.askState.req.Options[m.askState.cursor]
-					resp = tools.AskResponse{Selected: m.askState.cursor, Answer: opt, Label: opt}
-				}
-				ch := m.askState.respChan
-				m.askState = nil
-				m.input.Focus()
-				select {
-				case ch <- resp:
-				default:
-				}
-				return m, textinput.Blink
-			case "1", "2", "3":
-				idx := int(msg.String()[0] - '1')
-				if idx < len(m.askState.req.Options) {
-					opt := m.askState.req.Options[idx]
-					resp := tools.AskResponse{Selected: idx, Answer: opt, Label: opt}
-					ch := m.askState.respChan
-					m.askState = nil
-					m.input.Focus()
-					select {
-					case ch <- resp:
-					default:
-					}
-					return m, textinput.Blink
-				}
-				return m, nil
+			if cmd, done := m.handleAskKey(msg); done {
+				return m, cmd
 			}
 			if m.askState.cursor == 3 {
 				var cmd tea.Cmd
@@ -183,6 +120,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case streamDoneMsg:
+		if m.cancel != nil {
+			m.cancel()
+		}
 		m.streaming = false
 		m.cancel = nil
 		m.streamCh = nil
@@ -219,6 +159,75 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *model) handleAskKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	switch msg.String() {
+	case "esc":
+		ch := m.askState.respChan
+		m.askState = nil
+		m.input.Focus()
+		select {
+		case ch <- tools.AskResponse{Selected: -1, Answer: ""}:
+		default:
+		}
+		return textinput.Blink, true
+	case "up", "shift+tab":
+		if m.askState.cursor > 0 {
+			m.askState.cursor--
+		}
+		m.syncAskFocus()
+		return nil, true
+	case "down", "tab":
+		if m.askState.cursor < 3 {
+			m.askState.cursor++
+		}
+		m.syncAskFocus()
+		return nil, true
+	case "enter":
+		var resp tools.AskResponse
+		if m.askState.cursor == 3 {
+			val := strings.TrimSpace(m.askState.input.Value())
+			if val == "" {
+				return nil, true
+			}
+			resp = tools.AskResponse{Selected: -1, Answer: val, Label: val}
+		} else {
+			opt := m.askState.req.Options[m.askState.cursor]
+			resp = tools.AskResponse{Selected: m.askState.cursor, Answer: opt, Label: opt}
+		}
+		ch := m.askState.respChan
+		m.askState = nil
+		m.input.Focus()
+		select {
+		case ch <- resp:
+		default:
+		}
+		return textinput.Blink, true
+	case "1", "2", "3":
+		idx := int(msg.String()[0] - '1')
+		if idx < len(m.askState.req.Options) {
+			opt := m.askState.req.Options[idx]
+			ch := m.askState.respChan
+			m.askState = nil
+			m.input.Focus()
+			select {
+			case ch <- tools.AskResponse{Selected: idx, Answer: opt, Label: opt}:
+			default:
+			}
+			return textinput.Blink, true
+		}
+		return nil, true
+	}
+	return nil, false
+}
+
+func (m *model) syncAskFocus() {
+	if m.askState.cursor == 3 {
+		m.askState.input.Focus()
+	} else {
+		m.askState.input.Blur()
+	}
+}
+
 func (m *model) upsertAssistant() {
 	if len(m.blocks) > 0 && m.blocks[len(m.blocks)-1].Role == "assistant" {
 		m.blocks[len(m.blocks)-1].Content = m.streamText.String()
@@ -249,9 +258,6 @@ func (m *model) handleCommand(cmd string) {
 			m.cfg.Model = parts[1]
 			if m.cfg.Agent != nil {
 				m.cfg.Agent.Model = parts[1]
-				if c, ok := m.cfg.Agent.LLM.(*llm.Client); ok {
-					c.Model = parts[1]
-				}
 			}
 			m.blocks = append(m.blocks, block{Role: "system", Content: "Model → " + parts[1]})
 		} else {

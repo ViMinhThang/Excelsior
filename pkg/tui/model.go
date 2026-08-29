@@ -32,17 +32,17 @@ type block struct {
 }
 
 type model struct {
-	cfg      Config
-	viewport viewport.Model
-	input    textinput.Model
-	blocks   []block
+	cfg           Config
+	viewport      viewport.Model
+	input         textinput.Model
+	blocks        []block
 	streaming     bool
 	streamText    *strings.Builder
 	streamThink   *strings.Builder
 	cancel        context.CancelFunc
 	streamCh      <-chan agent.StreamEvent
 	pendingPrompt string
-	errMsg       string
+	errMsg        string
 	width         int
 	height        int
 	askState      *askOverlay
@@ -82,5 +82,4 @@ func (m model) Init() tea.Cmd {
 
 // Messages for streaming
 type streamChunkMsg struct{ ev agent.StreamEvent }
-type streamDoneMsg struct{ final *llm.Message; err error }
-type streamErrMsg struct{ err error }
+type streamDoneMsg struct{ err error }

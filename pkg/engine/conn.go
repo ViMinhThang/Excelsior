@@ -23,6 +23,8 @@ type Conn struct {
 	mu        sync.RWMutex
 	askCh     chan protocol.AskResp
 	closed    bool
+	chatMu    sync.Mutex
+	chatting  bool
 }
 
 func newConn(hub *Hub, ws *websocket.Conn) *Conn {
@@ -33,25 +35,12 @@ func newConn(hub *Hub, ws *websocket.Conn) *Conn {
 	}
 }
 
-func (c *Conn) setAskChannel(ch chan protocol.AskResp) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.askCh = ch
-}
-
-func (c *Conn) clearAskChannel() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.askCh = nil
-}
-
+func (c *Conn) setAskChannel(ch chan protocol.AskResp) { c.mu.Lock(); c.askCh = ch; c.mu.Unlock() }
+func (c *Conn) clearAskChannel()                       { c.mu.Lock(); c.askCh = nil; c.mu.Unlock() }
 func (c *Conn) getAskChannel() (chan protocol.AskResp, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if c.askCh != nil {
-		return c.askCh, true
-	}
-	return nil, false
+	return c.askCh, c.askCh != nil
 }
 
 func (c *Conn) currentWorkspace() string {
@@ -73,13 +62,14 @@ func (c *Conn) sessionStore() *session.Store {
 }
 
 func (c *Conn) sendEnvelope(env protocol.Envelope) {
-	b, err := json.Marshal(env)
-	if err != nil {
+	c.mu.RLock()
+	closed := c.closed
+	c.mu.RUnlock()
+	if closed {
 		return
 	}
-	c.mu.RLock()
-	if c.closed {
-		c.mu.RUnlock()
+	b, err := json.Marshal(env)
+	if err != nil {
 		return
 	}
 	select {
@@ -87,16 +77,10 @@ func (c *Conn) sendEnvelope(env protocol.Envelope) {
 	default:
 		c.hub.logger().Warn("ws send buffer full, dropping envelope", "type", env.Type)
 	}
-	c.mu.RUnlock()
 }
 
 func (c *Conn) sendError(id, msg string) {
-	c.sendEnvelope(protocol.Envelope{
-		Ver:     protocol.Ver,
-		ID:      id,
-		Type:    protocol.TypeError,
-		Payload: map[string]string{"error": msg},
-	})
+	c.sendEnvelope(protocol.NewEnvelopeWithID(id, protocol.TypeError, map[string]string{"error": msg}))
 }
 
 func (c *Conn) close() {
@@ -157,26 +141,41 @@ func (c *Conn) readPump(ctx context.Context) {
 			c.sendError("", fmt.Sprintf("bad envelope: %v", err))
 			continue
 		}
+		if env.Ver != "" && env.Ver != protocol.Ver {
+			c.sendError(env.ID, fmt.Sprintf("unsupported ver %q, want %q", env.Ver, protocol.Ver))
+			continue
+		}
 
 		switch env.Type {
 		case protocol.TypeChatReq:
-			go c.handleChat(ctx, env)
+			c.chatMu.Lock()
+			if c.chatting {
+				c.chatMu.Unlock()
+				c.sendError(env.ID, "already streaming, wait for done")
+				continue
+			}
+			c.chatting = true
+			c.chatMu.Unlock()
+			go func(e protocol.Envelope) {
+				defer func() { c.chatMu.Lock(); c.chatting = false; c.chatMu.Unlock() }()
+				c.handleChat(ctx, e)
+			}(env)
 		case protocol.TypeAskResp:
 			c.handleAskResp(env)
 		case protocol.TypeSessionList:
-			go c.handleSessionList(env)
+			go c.handleSessionList(ctx, env)
 		case protocol.TypeSessionData:
-			go c.handleSessionData(env)
+			go c.handleSessionData(ctx, env)
 		case protocol.TypeSessionCreate:
-			go c.handleSessionCreate(env)
+			go c.handleSessionCreate(ctx, env)
 		case protocol.TypeSessionDelete:
-			go c.handleSessionDelete(env)
+			go c.handleSessionDelete(ctx, env)
 		case protocol.TypeSessionRename:
-			go c.handleSessionRename(env)
+			go c.handleSessionRename(ctx, env)
 		case protocol.TypeWorkspaceSet:
-			go c.handleWorkspaceSet(env)
+			go c.handleWorkspaceSet(ctx, env)
 		case protocol.TypePing:
-			c.sendEnvelope(protocol.Envelope{Ver: protocol.Ver, Type: protocol.TypePong})
+			c.sendEnvelope(protocol.NewEnvelope(protocol.TypePong, nil))
 		default:
 			c.sendError(env.ID, fmt.Sprintf("unknown type %q", env.Type))
 		}
@@ -184,9 +183,8 @@ func (c *Conn) readPump(ctx context.Context) {
 }
 
 func (c *Conn) handleAskResp(env protocol.Envelope) {
-	raw, _ := json.Marshal(env.Payload)
 	var resp protocol.AskResp
-	if err := json.Unmarshal(raw, &resp); err != nil {
+	if err := env.Decode(&resp); err != nil {
 		c.sendError(env.ID, fmt.Sprintf("bad ask.resp: %v", err))
 		return
 	}

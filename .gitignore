@@ -8,3 +8,8 @@ bin/
 *~
 node_modules
 .next
+apps/web/dist
+apps/electron/renderer
+apps/electron/dist
+apps/electron/node_modules
+apps/web/node_modules

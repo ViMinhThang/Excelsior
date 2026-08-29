@@ -24,7 +24,9 @@ func (t *GlobTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if err := ctx.Err(); err != nil {
 		return "", fmt.Errorf("glob: context canceled: %w", err)
 	}
-	var a struct{ Pattern string `json:"pattern"` }
+	var a struct {
+		Pattern string `json:"pattern"`
+	}
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", fmt.Errorf("glob: invalid args: %w", err)
 	}
@@ -67,15 +69,15 @@ func (t *GlobTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 
 func walkGlob(ctx context.Context, root, pattern string) []string {
 	var out []string
-	_ = filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if err != nil {
 			return nil
 		}
-		if info.IsDir() {
-			if info.Name() == ".git" || info.Name() == "node_modules" || info.Name() == ".excelsior" {
+		if d.IsDir() {
+			if isSkippedDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil

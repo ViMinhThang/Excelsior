@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"excelsior/pkg/util"
 )
 
 // Client is a DeepSeek-native provider. DeepSeek is OpenAI-compatible but has
@@ -32,6 +34,8 @@ func NewClient(apiKey, model string) *Client {
 		Model:  model,
 	}
 }
+
+func (c *Client) ModelName() string { return c.Model }
 
 func (c *Client) baseURL() string {
 	if c.BaseURL != "" {
@@ -58,25 +62,24 @@ func (c *Client) logger() *slog.Logger {
 	return slog.Default()
 }
 
+var defaultHTTPClient = &http.Client{Timeout: 120 * time.Second}
+
 func (c *Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {
 		return c.HTTPClient
 	}
-	return &http.Client{Timeout: 120 * time.Second}
+	return defaultHTTPClient
 }
 
 // StreamChat calls DeepSeek with stream=true and invokes onDelta for each fragment.
-// It handles SSE parsing (data: {...}) and aggregates tool-call deltas.
-// Retries transient failures with exponential backoff (up to 3 attempts).
 func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error) {
 	if err := c.validate(); err != nil {
 		return nil, err
 	}
-	// Default model + alias resolve (v4-pro → reasoner)
 	if req.Model == "" {
 		req.Model = c.Model
 	}
-	req.Model = resolveModel(req.Model)
+	req.Model = ResolveModel(req.Model)
 	if req.Model == "" {
 		req.Model = "deepseek-v4-flash"
 	}
@@ -116,7 +119,6 @@ func (c *Client) doStreamOnce(ctx context.Context, req ChatRequest, onDelta func
 	if err != nil {
 		return nil, fmt.Errorf("deepseek: marshal request: %w", err)
 	}
-
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL()+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("deepseek: new request: %w", err)
@@ -136,13 +138,8 @@ func (c *Client) doStreamOnce(ctx context.Context, req ChatRequest, onDelta func
 		if readErr != nil {
 			return nil, &LLMError{StatusCode: resp.StatusCode, Err: readErr}
 		}
-		trimmed := strings.TrimSpace(string(b))
-		if len(trimmed) > 500 {
-			trimmed = trimmed[:500] + "…"
-		}
-		return nil, &LLMError{StatusCode: resp.StatusCode, Body: trimmed}
+		return nil, &LLMError{StatusCode: resp.StatusCode, Body: util.Truncate(string(b), 500)}
 	}
-
 	return parseSSEStream(ctx, resp.Body, c.logger(), onDelta)
 }
 

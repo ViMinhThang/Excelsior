@@ -5,7 +5,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -29,29 +28,8 @@ func newTUICommand(cfg config.Config, modelFlag *string, workspaceFlag *string, 
 }
 
 func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system string) error {
-	if workspace != "" {
-		workspace = strings.TrimSpace(workspace)
-	} else if cfg.Workspace != "" {
-		workspace = cfg.Workspace
-	} else {
-		wd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("getwd: %w", err)
-		}
-		workspace = wd
-	}
-	if !filepath.IsAbs(workspace) {
-		if abs, err := filepath.Abs(workspace); err == nil {
-			workspace = abs
-		}
-	}
-	if model == "" {
-		model = cfg.Model
-	}
-	model = config.ResolveModel(model)
-	if model == "" {
-		model = "deepseek-v4-flash"
-	}
+	workspace = resolveWorkspaceOrCwd(workspace, cfg.Workspace)
+	model = normalizeModel(model, cfg.Model)
 	if system == "" {
 		system = agent.DefaultSystemPrompt
 	}
@@ -60,7 +38,6 @@ func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system stri
 		engineURL = strings.TrimSpace(v)
 	}
 	if err := cfg.Validate(); err != nil && engineURL == "" {
-		// For local TUI, warn but allow to start (user can set key in /settings later)
 		fmt.Fprintln(os.Stderr, "warning:", err)
 		slog.Warn("config validation failed (TUI will start)", "err", err)
 	} else if engineURL != "" {
@@ -69,30 +46,28 @@ func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system stri
 		slog.Info("TUI start", "model", model, "workspace", workspace)
 	}
 
-	// In TUI we silence logs — they would bleed into AltScreen (see screenshot)
 	discardLog := slog.New(slog.NewTextHandler(io.Discard, nil))
 	var ag *agent.Agent
 	if engineURL == "" {
-		client := &llm.Client{
-			APIKey:  cfg.APIKey,
-			BaseURL: cfg.BaseURL,
-			Model:   model,
-			Logger:  discardLog,
-		}
 		ag = &agent.Agent{
-			LLM:    client,
+			LLM:    &llm.Client{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: model, Logger: discardLog},
 			Tools:  tools.DefaultRegistry(workspace),
 			System: system,
 			Logger: discardLog,
 		}
 	}
+	return tui.Run(tui.Config{Agent: ag, Workspace: workspace, Model: model, EngineURL: engineURL})
+}
 
-	return tui.Run(tui.Config{
-		Agent:     ag,
-		Workspace: workspace,
-		Model:     model,
-		EngineURL: engineURL,
-	})
+func resolveWorkspaceOrCwd(flagWS, cfgWS string) string {
+	if ws, err := config.ResolveWorkspace(flagWS, cfgWS); err == nil {
+		return ws
+	}
+	// config.ResolveWorkspace already falls back to Getwd; only fallback left is "."
+	if ws, err := os.Getwd(); err == nil && ws != "" {
+		return ws
+	}
+	return "."
 }
 
 func isTerminal(f *os.File) bool {

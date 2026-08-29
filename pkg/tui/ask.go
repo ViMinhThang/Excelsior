@@ -44,7 +44,7 @@ func (a *askOverlay) View(width int) string {
 		}
 	}
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(" " + a.req.Question) + "\n\n")
+	b.WriteString(titleStyle.Render(" "+a.req.Question) + "\n\n")
 	for i, opt := range a.req.Options {
 		prefix := "  "
 		style := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))

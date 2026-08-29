@@ -3,12 +3,13 @@ package tui
 import (
 	"io"
 	"log/slog"
+	"sync/atomic"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // activeProgram is set while TUI runs so QuestionHandler can Send msgs from agent goroutine.
-var activeProgram *tea.Program
+var activeProgram atomic.Pointer[tea.Program]
 
 // Run launches the TUI and blocks until quit. It stays alive after each turn — only ctrl+c / /quit exits.
 // It silences slog to prevent log lines bleeding into the AltScreen (see screenshot).
@@ -19,8 +20,8 @@ func Run(cfg Config) error {
 	defer slog.SetDefault(prev)
 
 	p := tea.NewProgram(New(cfg), tea.WithAltScreen(), tea.WithMouseCellMotion())
-	activeProgram = p
-	defer func() { activeProgram = nil }()
+	activeProgram.Store(p)
+	defer activeProgram.Store(nil)
 	_, err := p.Run()
 	return err
 }

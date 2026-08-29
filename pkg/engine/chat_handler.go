@@ -2,7 +2,6 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -13,57 +12,17 @@ import (
 )
 
 func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
-	raw, _ := json.Marshal(env.Payload)
 	var req protocol.ChatReq
-	if err := json.Unmarshal(raw, &req); err != nil {
-		c.sendError(env.ID, fmt.Sprintf("bad chat.req: %v", err))
+	if !c.decodePayload(env, &req, "chat.req") {
 		return
 	}
 
-	askRespCh := make(chan protocol.AskResp, 1)
-
-	handler := func(hctx context.Context, rq tools.AskRequest) (tools.AskResponse, error) {
-		c.setAskChannel(askRespCh)
-		defer c.clearAskChannel()
-
-		askEnv := protocol.Envelope{
-			Ver:  protocol.Ver,
-			Type: protocol.TypeAskReq,
-			Payload: protocol.AskReq{
-				Question: rq.Question,
-				Options:  rq.Options,
-			},
-		}
-		c.sendEnvelope(askEnv)
-		c.hub.logger().Info("engine ask sent, awaiting client", "question", rq.Question)
-
-		select {
-		case resp := <-askRespCh:
-			return tools.AskResponse{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}, nil
-		case <-hctx.Done():
-			return tools.AskResponse{}, hctx.Err()
-		case <-ctx.Done():
-			return tools.AskResponse{}, ctx.Err()
-		}
-	}
-
-	client := &llm.Client{
-		APIKey:  c.hub.Config.APIKey,
-		BaseURL: c.hub.Config.BaseURL,
-		Model:   req.Model,
-		Logger:  c.hub.logger(),
-	}
-	if client.Model == "" {
-		client.Model = c.hub.Config.Model
-	}
-	if client.Model == "" {
-		client.Model = "deepseek-v4-flash"
-	}
-
-	wsDir := c.currentWorkspace()
+	askCh := make(chan protocol.AskResp, 1)
+	handler := c.askHandler(ctx, askCh)
+	client := c.llmClient(req.Model)
 	ag := &agent.Agent{
 		LLM:    client,
-		Tools:  tools.DefaultRegistry(wsDir),
+		Tools:  tools.DefaultRegistry(c.currentWorkspace()),
 		System: agent.DefaultSystemPrompt,
 		Logger: c.hub.logger(),
 	}
@@ -73,34 +32,10 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 		sessionID = fmt.Sprintf("%d", time.Now().UnixMilli())
 	}
 
-	var history []llm.Message
-	if msgs, err := c.sessionStore().LoadSimple(sessionID); err == nil {
-		for _, m := range msgs {
-			if m.Role == "system" && (m.Content == "New session" || m.Content == "(empty)") {
-				continue
-			}
-			history = append(history, m)
-		}
-	}
-	history = append(history, req.Messages...)
-
-	ctxWithHandler := tools.WithQuestionHandler(ctx, handler)
-
-	res, err := ag.RunWithHistory(ctxWithHandler, agent.RunOptions{
+	history := c.loadHistory(ctx, sessionID, req.Messages)
+	res, err := ag.RunWithHistory(tools.WithQuestionHandler(ctx, handler), agent.RunOptions{
 		Messages: history,
-		OnEvent: func(ev agent.StreamEvent) {
-			d := protocol.Delta{
-				Type:         ev.Type,
-				Text:         ev.Text,
-				Reasoning:    ev.Reasoning,
-				ToolName:     ev.ToolName,
-				ToolCallID:   ev.ToolCallID,
-				ToolArgs:     ev.ToolArgs,
-				ToolResult:   ev.ToolResult,
-				FinishReason: ev.FinishReason,
-			}
-			c.sendEnvelope(protocol.Envelope{Ver: protocol.Ver, Type: protocol.TypeDelta, Payload: d})
-		},
+		OnEvent:  c.deltaForwarder(),
 	})
 	if err != nil {
 		c.sendError(env.ID, err.Error())
@@ -108,24 +43,80 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 	}
 
 	if res != nil && len(res.Messages) > 0 {
-		var toSave []llm.Message
-		for _, m := range res.Messages {
-			if m.Role == "system" {
-				continue
-			}
-			toSave = append(toSave, m)
-		}
-		if saveErr := c.sessionStore().SaveSimple(sessionID, toSave); saveErr != nil {
-			c.hub.logger().Warn("failed to save session history", "id", sessionID, "err", saveErr)
+		toSave := filterSystemMessages(res.Messages)
+		if err := c.sessionStore().Save(ctx, sessionID, toSave); err != nil {
+			c.hub.logger().Warn("failed to save session history", "id", sessionID, "err", err)
 		} else {
 			c.hub.logger().Info("saved session history", "id", sessionID, "messages", len(toSave))
 		}
 	}
 
-	c.sendEnvelope(protocol.Envelope{
-		Ver:     protocol.Ver,
-		ID:      env.ID,
-		Type:    protocol.TypeDone,
-		Payload: map[string]string{"sessionId": sessionID},
-	})
+	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeDone, map[string]string{"sessionId": sessionID}))
+}
+
+func (c *Conn) llmClient(model string) *llm.Client {
+	if model == "" {
+		model = c.hub.Config.Model
+	}
+	if model == "" {
+		model = "deepseek-v4-flash"
+	}
+	return &llm.Client{
+		APIKey:  c.hub.Config.APIKey,
+		BaseURL: c.hub.Config.BaseURL,
+		Model:   model,
+		Logger:  c.hub.logger(),
+	}
+}
+
+func (c *Conn) loadHistory(ctx context.Context, sessionID string, incoming []llm.Message) []llm.Message {
+	var history []llm.Message
+	if msgs, err := c.sessionStore().Load(ctx, sessionID); err == nil {
+		for _, m := range msgs {
+			if m.Role == "system" && (m.Content == "New session" || m.Content == "(empty)") {
+				continue
+			}
+			history = append(history, m)
+		}
+	}
+	return append(history, incoming...)
+}
+
+func filterSystemMessages(msgs []llm.Message) []llm.Message {
+	out := make([]llm.Message, 0, len(msgs))
+	for _, m := range msgs {
+		if m.Role != "system" {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+func (c *Conn) deltaForwarder() func(agent.StreamEvent) {
+	return func(ev agent.StreamEvent) {
+		d := protocol.Delta{
+			Type: ev.Type, Text: ev.Text, Reasoning: ev.Reasoning,
+			ToolName: ev.ToolName, ToolCallID: ev.ToolCallID,
+			ToolArgs: ev.ToolArgs, ToolResult: ev.ToolResult,
+			FinishReason: ev.FinishReason,
+		}
+		c.sendEnvelope(protocol.NewEnvelope(protocol.TypeDelta, d))
+	}
+}
+
+func (c *Conn) askHandler(parentCtx context.Context, askCh chan protocol.AskResp) tools.QuestionHandler {
+	return func(hctx context.Context, rq tools.AskRequest) (tools.AskResponse, error) {
+		c.setAskChannel(askCh)
+		defer c.clearAskChannel()
+		c.sendEnvelope(protocol.NewEnvelope(protocol.TypeAskReq, protocol.AskReq{Question: rq.Question, Options: rq.Options}))
+		c.hub.logger().Info("engine ask sent, awaiting client", "question", rq.Question)
+		select {
+		case resp := <-askCh:
+			return tools.AskResponse{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}, nil
+		case <-hctx.Done():
+			return tools.AskResponse{}, hctx.Err()
+		case <-parentCtx.Done():
+			return tools.AskResponse{}, parentCtx.Err()
+		}
+	}
 }

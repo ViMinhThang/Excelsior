@@ -1,13 +1,25 @@
 package llm
 
-import "excelsior/pkg/config"
+import "strings"
 
-func resolveModel(m string) string { return config.ResolveModel(m) }
+var modelAliases = map[string]string{
+	"deepseek-v4-pro": "deepseek-reasoner",
+	"v4-pro":          "deepseek-reasoner",
+	"v4-flash":        "deepseek-v4-flash",
+}
+
+// ResolveModel resolves aliases (e.g. deepseek-v4-pro → deepseek-reasoner) and trims.
+func ResolveModel(m string) string {
+	m = strings.TrimSpace(m)
+	if aliased, ok := modelAliases[m]; ok {
+		return aliased
+	}
+	return m
+}
 
 // IsReasoner reports whether a model uses reasoning_content.
 func IsReasoner(model string) bool {
-	m := resolveModel(model)
-	return m == "deepseek-reasoner"
+	return ResolveModel(model) == "deepseek-reasoner"
 }
 
 // Message is a chat message. ReasoningContent is DeepSeek-specific (R1/reasoner).

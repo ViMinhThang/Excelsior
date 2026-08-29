@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+
+	"excelsior/pkg/util"
 )
 
 type WriteTool struct{ Root string }
@@ -34,14 +36,14 @@ func (t *WriteTool) Execute(ctx context.Context, args json.RawMessage) (string, 
 	if a.FilePath == "" {
 		return "", errors.New("write: filePath is required")
 	}
-	if len(a.Content) > maxWriteSize {
-		return "", fmt.Errorf("write: content too large (%d > %d bytes)", len(a.Content), maxWriteSize)
+	if len(a.Content) > MaxWriteSize {
+		return "", fmt.Errorf("write: content too large (%d > %d bytes)", len(a.Content), MaxWriteSize)
 	}
 	p, err := secureJoin(t.Root, a.FilePath)
 	if err != nil {
 		return "", fmt.Errorf("write: %w", err)
 	}
-	if err := writeAtomic(p, []byte(a.Content), 0o644); err != nil {
+	if err := util.WriteAtomic(p, []byte(a.Content), 0o644); err != nil {
 		return "", fmt.Errorf("write: %w", err)
 	}
 	slog.Info("write", "path", a.FilePath, "bytes", len(a.Content))

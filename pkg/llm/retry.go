@@ -4,27 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
-	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 )
 
-// RetryPolicy controls retry for transient failures.
+// RetryPolicy controls retry for transient failures with exponential backoff.
 type RetryPolicy struct {
 	MaxRetries int
 	BaseDelay  time.Duration
 }
 
 func (p RetryPolicy) shouldRetry(status int, err error, attempt int) (bool, time.Duration) {
-	if attempt >= p.MaxRetries {
+	if attempt >= p.MaxRetries || !isRetryable(status, err) {
 		return false, 0
 	}
-	if !isRetryable(status, err) {
-		return false, 0
-	}
-	backoff := time.Duration(math.Pow(2, float64(attempt))*float64(p.BaseDelay)) + time.Duration(rand.Int63n(int64(p.BaseDelay)))
-	return true, backoff
+	// Deterministic exponential backoff — lean, no global rand lock.
+	return true, p.BaseDelay << uint(attempt)
 }
 
 var defaultRetry = RetryPolicy{MaxRetries: 2, BaseDelay: 200 * time.Millisecond}
@@ -51,11 +47,22 @@ func (e *LLMError) Unwrap() error { return e.Err }
 // isRetryable returns true for transient failures.
 func isRetryable(status int, err error) bool {
 	if err != nil {
-		// network errors, context.Canceled is not retryable, but DeadlineExceeded maybe
 		if errors.Is(err, context.Canceled) {
 			return false
 		}
-		return true
+		var le *LLMError
+		if errors.As(err, &le) {
+			// typed LLM error — check status below
+		} else {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return true
+			}
+			msg := err.Error()
+			if strings.Contains(msg, "marshal") || strings.Contains(msg, "invalid BaseURL") {
+				return false
+			}
+			return true // network errors are retryable
+		}
 	}
 	switch status {
 	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout, http.StatusInternalServerError:

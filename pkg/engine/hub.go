@@ -3,9 +3,11 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -14,15 +16,17 @@ import (
 	"excelsior/pkg/protocol"
 )
 
+// workspace holds the hub's workspace root using lock-free atomic pointer for type-safe concurrent reads.
+
 // Hub is the WS daemon. One Hub serves many clients; each turn is per-conn.
 type Hub struct {
 	Addr   string // e.g. :17812
 	Config config.Config
 	Logger *slog.Logger
 
-	mu        sync.RWMutex
-	clients   map[*Conn]struct{}
-	workspace string
+	mu      sync.RWMutex
+	clients map[*Conn]struct{}
+	ws      atomic.Pointer[string]
 }
 
 // NewHub initializes a Hub with configuration and workspace.
@@ -30,13 +34,14 @@ func NewHub(cfg config.Config, workspace string) *Hub {
 	if workspace == "" {
 		workspace = cfg.Workspace
 	}
-	return &Hub{
-		Config:    cfg,
-		Addr:      ":17812",
-		Logger:    slog.Default(),
-		clients:   make(map[*Conn]struct{}),
-		workspace: workspace,
+	h := &Hub{
+		Config:  cfg,
+		Addr:    ":17812",
+		Logger:  slog.Default(),
+		clients: make(map[*Conn]struct{}),
 	}
+	h.ws.Store(&workspace)
+	return h
 }
 
 func (h *Hub) logger() *slog.Logger {
@@ -46,32 +51,29 @@ func (h *Hub) logger() *slog.Logger {
 	return slog.Default()
 }
 
-// Workspace returns the current workspace root directory in a thread-safe manner.
+// Workspace returns the current workspace root directory (lock-free).
 func (h *Hub) Workspace() string {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.workspace
+	if v := h.ws.Load(); v != nil {
+		return *v
+	}
+	return ""
 }
 
-// SetWorkspace updates the workspace root directory in a thread-safe manner.
-func (h *Hub) SetWorkspace(ws string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.workspace = ws
-}
+// SetWorkspace updates the workspace root directory (lock-free).
+func (h *Hub) SetWorkspace(ws string) { h.ws.Store(&ws) }
 
 // Register registers a connection with the hub.
 func (h *Hub) Register(c *Conn) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	h.clients[c] = struct{}{}
+	h.mu.Unlock()
 }
 
 // Unregister removes a connection from the hub.
 func (h *Hub) Unregister(c *Conn) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	delete(h.clients, c)
+	h.mu.Unlock()
 }
 
 // Broadcast sends an envelope to all connected clients.
@@ -81,8 +83,16 @@ func (h *Hub) Broadcast(env protocol.Envelope) {
 		return
 	}
 	h.mu.RLock()
-	defer h.mu.RUnlock()
+	if len(h.clients) == 0 {
+		h.mu.RUnlock()
+		return
+	}
+	conns := make([]*Conn, 0, len(h.clients))
 	for c := range h.clients {
+		conns = append(conns, c)
+	}
+	h.mu.RUnlock()
+	for _, c := range conns {
 		select {
 		case c.send <- b:
 		default:
@@ -96,7 +106,7 @@ func (h *Hub) Handler() http.Handler {
 	mux.HandleFunc("/v1/ws", h.serveWS)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+		_, _ = w.Write([]byte("ok")) //nolint:errcheck
 	})
 	return mux
 }
@@ -111,7 +121,7 @@ func (h *Hub) ListenAndServe(ctx context.Context) error {
 		_ = srv.Shutdown(shCtx)
 	}()
 	h.logger().Info("engine listening", "addr", h.Addr, "workspace", h.Workspace(), "model", h.Config.Model)
-	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+	if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
