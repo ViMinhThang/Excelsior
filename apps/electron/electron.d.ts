@@ -1,11 +1,10 @@
 /**
  * Type declarations for the Electron preload bridge.
  * This file describes the `window.electronAPI` injected via preload.js
- * (contextIsolation=true). It is consumed by apps/web when running inside
- * Electron — web checks `(window as any).electronAPI` and degrades gracefully
- * in the browser.
+ * (contextIsolation=true). It is consumed by the frontend (app/page.tsx)
+ * when running inside Electron.
  *
- * Keep in sync with apps/electron/preload.js and apps/web/app/page.tsx.
+ * Keep in sync with apps/electron/preload.js and app/page.tsx.
  */
 
 export interface ElectronAPI {

@@ -34,7 +34,7 @@ function devUp(url,ms=600){return new Promise(r=>{const q=http.get(url,s=>r(s.st
 async function frontendTarget(){
   if(process.env.ELECTRON_START_URL) return {kind:'url',value:process.env.ELECTRON_START_URL};
   if(IS_DEV && await devUp('http://localhost:3000')) return {kind:'url',value:'http://localhost:3000'};
-  for(const p of [path.join(process.resourcesPath,'web-dist','index.html'),path.resolve(__dirname,'../web/dist/index.html'),path.resolve(__dirname,'renderer/index.html')])
+  for(const p of [path.join(process.resourcesPath,'dist/index.html'),path.resolve(__dirname,'dist/index.html'),path.resolve(__dirname,'renderer/index.html')])
     if(fs.existsSync(p)) return {kind:'file',value:p};
   return {kind:'url',value:'http://localhost:3000'};
 }

@@ -9,10 +9,6 @@ bin/
 node_modules
 .next
 **/.next
-apps/web/dist
-apps/electron/renderer
-apps/electron/dist
-apps/electron/node_modules
-apps/web/node_modules
 .agents/
 coverage
+renderer/

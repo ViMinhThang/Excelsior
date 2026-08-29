@@ -1,20 +1,26 @@
 {
   "name": "excelsior-desktop",
   "version": "0.1.0",
-  "description": "Excelsior desktop — Electron shell reusing apps/web frontend over WS hub (pkg/protocol)",
+  "description": "Excelsior desktop — Electron shell with integrated Next.js frontend over WS hub (pkg/protocol)",
   "main": "main.js",
+  "private": true,
   "scripts": {
-    "dev": "npm --prefix ../web run dev",
-    "dev:web": "npm --prefix ../web run dev",
+    "dev": "next dev -p 3000",
     "dev:desktop": "electron .",
     "dev:engine": "go run ../../cmd/excelsior engine --addr :17812",
-    "dev:all": "concurrently \"npm run dev:web\" \"wait-on http://localhost:3000 && npm run dev:desktop\"",
-    "build:web": "npm --prefix ../web run build",
-    "copy:web": "node scripts/copy-web-dist.js",
-    "build": "npm run build:web && npm run copy:web && electron-builder --win --linux",
-    "build:win": "npm run build:web && npm run copy:web && electron-builder --win",
-    "pack": "npm run build:web && npm run copy:web && electron-builder --dir",
+    "dev:all": "concurrently \"npm run dev\" \"wait-on http://localhost:3000 && npm run dev:desktop\"",
+    "build": "next build && electron-builder --win --linux",
+    "build:win": "next build && electron-builder --win",
+    "pack": "next build && electron-builder --dir",
+    "start": "next start",
+    "lint": "next lint",
     "start:engine": "go run ../../cmd/excelsior engine --addr :17812"
+  },
+  "dependencies": {
+    "highlight.js": "^11.12.0",
+    "next": "^16.3.3",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "build": {
     "appId": "com.excelsior.desktop",
@@ -22,16 +28,9 @@
     "files": [
       "main.js",
       "preload.js",
-      "renderer/**/*"
+      "dist/**/*"
     ],
     "extraResources": [
-      {
-        "from": "../web/dist",
-        "to": "web-dist",
-        "filter": [
-          "**/*"
-        ]
-      },
       {
         "from": "../../excelsior.exe",
         "to": "excelsior.exe"
@@ -49,9 +48,16 @@
     "asar": true
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "autoprefixer": "^10.4.0",
     "concurrently": "^8.2.2",
     "electron": "^44.0.0",
     "electron-builder": "^26.15.3",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.5.0",
     "wait-on": "^7.2.0"
   }
 }

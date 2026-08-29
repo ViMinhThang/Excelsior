@@ -1,29 +1,29 @@
 # Excelsior Desktop (Electron)
 
-Frameless Electron shell that **reuses the web frontend** (`apps/web`) verbatim. No duplicated UI code — the desktop loads the same Next.js static export that the browser does, over the same `ws://localhost:17812/v1/ws` `pkg/protocol` hub as the TUI.
+Frameless Electron shell with **integrated Next.js frontend** (formerly `apps/web`, now inside `apps/electron`). The desktop loads its own static export over the same `ws://localhost:17812/v1/ws` `pkg/protocol` hub as the TUI.
 
 ```
-apps/web/app/page.tsx        ─┐
-apps/web/components/*         ├─► Next.js static export (apps/web/dist/)
-apps/web/lib/protocol.ts     ─┘         │
-                                        ▼
-                               apps/electron/renderer/  (copy of dist)
-                                        │
-                               apps/electron/main.js ─► BrowserWindow (file://)
-                               apps/electron/preload.js ─► window.electronAPI
+apps/electron/app/page.tsx        ─┐
+apps/electron/components/*         ├─► Next.js static export (apps/electron/dist/)
+apps/electron/lib/protocol.ts     ─┘         │
+                                         ▼
+                                apps/electron/dist/  (Next export)
+                                         │
+                                apps/electron/main.js ─► BrowserWindow (file://)
+                                apps/electron/preload.js ─► window.electronAPI
 ```
 
-## How it reuses the web frontend
+## How the frontend lives inside Electron
 
-- **Single source of truth:** `apps/web` owns all UI: `page.tsx`, `Sidebar`, `Composer`, `MarkdownRenderer`, `MenuBar`, `SettingsModal`, etc., plus `lib/protocol.ts` mirroring `pkg/protocol`.
-- **Export for Electron:** `apps/web/next.config.js` uses `output: "export"` + `assetPrefix: "./"` so `npm run build` produces pure HTML/CSS/JS in `apps/web/dist` that works on `file://` (no server needed). This same `dist` is what the browser serves and what Electron loads.
-- **Bridge:** `apps/electron/preload.js` exposes `window.electronAPI` (contextIsolation + sandbox). `apps/web/app/page.tsx` already detects it:
+- **Single source of truth:** `apps/electron` now owns all UI: `app/page.tsx`, `components/Sidebar`, `Composer`, `MarkdownRenderer`, `MenuBar`, `SettingsModal`, etc., plus `lib/protocol.ts` mirroring `pkg/protocol`. Former `apps/web` has been nuked — all code lives in `apps/electron`.
+- **Export for Electron:** `next.config.js` uses `output: "export"` + `assetPrefix: "./"` so `npm run build` (now `npm run build` in `apps/electron`) produces pure HTML/CSS/JS in `apps/electron/dist` that works on `file://`.
+- **Bridge:** `preload.js` exposes `window.electronAPI` (contextIsolation + sandbox). `app/page.tsx` detects it:
   ```ts
   const api = (window as any).electronAPI;
   if (api?.getEngineUrl) setEngineUrl(await api.getEngineUrl());
   if (api?.openFolderDialog) chosenPath = await api.openFolderDialog();
   ```
-  In the browser the API is absent and the web falls back to `prompt()`.
+  Desktop-only: `page.tsx` shows a banner and blocks `openFolder` when not in Electron (browser standalone disabled).
 
 ## Run (desktop-only)
 
@@ -34,7 +34,7 @@ apps/web/lib/protocol.ts     ─┘         │
 go build -o excelsior.exe ./cmd/excelsior
 
 # 2a. Dev — frontend only (no engine)
-cd apps/electron && npm i && npm run dev               # = npm --prefix ../web run dev → http://localhost:3000 (frontend only)
+cd apps/electron && npm i && npm run dev               # next dev -p 3000 → http://localhost:3000 (frontend only)
 
 # 2b. Dev — engine only (run separately)
 cd apps/electron && npm run dev:engine                 # go run ../../cmd/excelsior engine --addr :17812
@@ -45,11 +45,12 @@ go run ./cmd/excelsior engine --addr :17812
 cd apps/electron && npm run dev:desktop                # electron . → loads http://localhost:3000 if up, else file://
 
 # 2d. Full stack (frontend + desktop together, engine still separate)
-cd apps/electron && npm run dev:all                    # concurrently: dev:web + wait-on → dev:desktop
+cd apps/electron && npm run dev:all                    # concurrently: dev + wait-on → dev:desktop
 
 # 2e. Prod-like (static file://, no dev server)
-cd apps/web && npm run build                           # NODE_ENV=production -> dist/
-cd apps/electron && npm run copy:web && npm run dev:desktop  # loads file://.../renderer/index.html
+cd apps/electron && npm run build                      # next build (export) -> dist/ → electron-builder
+# or
+npm run build && npm run pack                          # unpacked dir for testing
 ```
 
 Engine auto-spawn: **Disabled in dev** by default. Electron no longer spawns `../../excelsior(.exe)` unless `EXCELSIOR_AUTO_ENGINE=1`. In packaged builds it auto-spawns. To run engine externally:
@@ -72,7 +73,7 @@ npm run build:win    # Windows only
 npm run pack         # unpacked dir for testing (no installer)
 ```
 
-`extraResources` copies `apps/web/dist` to `resources/web-dist` in the packaged app, and `renderer/` is bundled via `files`. `main.js` probes both locations plus the dev server.
+`extraResources` copies `excelsior.exe` to resources, and `dist/` is bundled via `files`. `main.js` probes `dist/index.html` plus the dev server.
 
 ## Env
 
