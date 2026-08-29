@@ -1,25 +1,12 @@
 package llm
 
-import "strings"
+import (
+	"excelsior/pkg/config"
+)
 
-var modelAliases = map[string]string{
-	"deepseek-v4-pro": "deepseek-reasoner",
-	"v4-pro":          "deepseek-reasoner",
-	"v4-flash":        "deepseek-v4-flash",
-}
-
-// ResolveModel resolves aliases (e.g. deepseek-v4-pro → deepseek-reasoner) and trims.
+// ResolveModel trims whitespace and returns the model ID (no alias mapping).
 func ResolveModel(m string) string {
-	m = strings.TrimSpace(m)
-	if aliased, ok := modelAliases[m]; ok {
-		return aliased
-	}
-	return m
-}
-
-// IsReasoner reports whether a model uses reasoning_content.
-func IsReasoner(model string) bool {
-	return ResolveModel(model) == "deepseek-reasoner"
+	return config.ResolveModel(m)
 }
 
 // Message is a chat message. ReasoningContent is DeepSeek-specific (R1/reasoner).
@@ -32,22 +19,26 @@ type Message struct {
 	Name             string     `json:"name,omitempty"`
 }
 
+// ToolCall is a model-requested function invocation in an assistant message.
 type ToolCall struct {
 	ID       string   `json:"id"`
 	Type     string   `json:"type"` // "function"
 	Function FuncCall `json:"function"`
 }
 
+// FuncCall holds the function name and JSON-encoded arguments.
 type FuncCall struct {
 	Name      string `json:"name"`
 	Arguments string `json:"arguments"` // JSON string
 }
 
+// ToolDefinition describes a callable tool for the model (OpenAI function calling).
 type ToolDefinition struct {
 	Type     string  `json:"type"` // "function"
 	Function FuncDef `json:"function"`
 }
 
+// FuncDef is the function metadata inside a [ToolDefinition].
 type FuncDef struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -76,6 +67,7 @@ type Delta struct {
 	Usage            *Usage
 }
 
+// ToolCallDelta is an incremental tool-call fragment within a [Delta].
 type ToolCallDelta struct {
 	Index    int
 	ID       string
@@ -86,6 +78,7 @@ type ToolCallDelta struct {
 	}
 }
 
+// Usage reports token counts when provided by the API.
 type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`

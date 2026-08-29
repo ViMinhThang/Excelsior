@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"excelsior/pkg/agent"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/tools"
 )
@@ -252,12 +253,12 @@ func (m *model) handleCommand(cmd string) {
 	case "/clear":
 		m.blocks = m.blocks[:2]
 	case "/help":
-		m.blocks = append(m.blocks, block{Role: "system", Content: "Commands: /clear, /help, /model [deepseek-chat|deepseek-reasoner], /quit"})
+		m.blocks = append(m.blocks, block{Role: "system", Content: "Commands: /clear, /help, /model [deepseek-v4-flash|deepseek-v4-pro], /quit"})
 	case "/model":
 		if len(parts) == 2 {
 			m.cfg.Model = parts[1]
-			if m.cfg.Agent != nil {
-				m.cfg.Agent.Model = parts[1]
+			if ag, ok := m.cfg.Agent.(*agent.Agent); ok && ag != nil {
+				ag.Model = parts[1]
 			}
 			m.blocks = append(m.blocks, block{Role: "system", Content: "Model → " + parts[1]})
 		} else {

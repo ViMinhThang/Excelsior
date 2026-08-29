@@ -10,6 +10,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"excelsior/pkg/agent"
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
 )
@@ -22,6 +23,8 @@ type Conn struct {
 	workspace string
 	mu        sync.RWMutex
 	askCh     chan protocol.AskResp
+	done      chan struct{}
+	closeOnce sync.Once
 	closed    bool
 	chatMu    sync.Mutex
 	chatting  bool
@@ -32,6 +35,16 @@ func newConn(hub *Hub, ws *websocket.Conn) *Conn {
 		hub:  hub,
 		ws:   ws,
 		send: make(chan []byte, 128),
+		done: make(chan struct{}),
+	}
+}
+
+func (c *Conn) isClosed() bool {
+	select {
+	case <-c.done:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -57,25 +70,51 @@ func (c *Conn) sessionDir() string {
 	return filepath.Join(c.currentWorkspace(), ".excelsior", "sessions")
 }
 
-func (c *Conn) sessionStore() *session.Store {
-	return session.NewStore(c.sessionDir())
+func (c *Conn) sessionStore() session.Store {
+	if c.hub.SessionStore != nil {
+		return c.hub.SessionStore
+	}
+	return session.NewDirStore(c.sessionDir())
+}
+
+func (c *Conn) getAgent(model string) (agent.Runner, error) {
+	factory := c.hub.AgentFactory
+	if factory == nil {
+		factory = &DefaultAgentFactory{
+			Config: c.hub.Config,
+			Logger: c.hub.logger(),
+		}
+	}
+	return factory.NewAgent(model, c.currentWorkspace())
 }
 
 func (c *Conn) sendEnvelope(env protocol.Envelope) {
-	c.mu.RLock()
-	closed := c.closed
-	c.mu.RUnlock()
-	if closed {
+	if c.isClosed() {
 		return
 	}
 	b, err := json.Marshal(env)
 	if err != nil {
 		return
 	}
-	select {
-	case c.send <- b:
-	default:
-		c.hub.logger().Warn("ws send buffer full, dropping envelope", "type", env.Type)
+	if env.Type == protocol.TypeDelta {
+		select {
+		case <-c.done:
+			return
+		case c.send <- b:
+			return
+		default:
+			c.hub.logger().Warn("ws send buffer full, dropping envelope", "type", env.Type)
+		}
+	} else {
+		// Guaranteed backpressure delivery for control and termination envelopes
+		select {
+		case <-c.done:
+			return
+		case c.send <- b:
+			return
+		case <-time.After(5 * time.Second):
+			c.hub.logger().Warn("ws send control envelope timed out", "type", env.Type)
+		}
 	}
 }
 
@@ -84,41 +123,54 @@ func (c *Conn) sendError(id, msg string) {
 }
 
 func (c *Conn) close() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return
-	}
-	c.closed = true
-	c.askCh = nil
-	close(c.send)
-	_ = c.ws.Close()
+	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		c.closed = true
+		c.askCh = nil
+		c.mu.Unlock()
+		close(c.done)
+		if c.ws != nil {
+			_ = c.ws.Close()
+		}
+	})
 }
 
 func (c *Conn) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	defer func() {
+		ticker.Stop()
+		c.close()
+	}()
 	for {
 		select {
-		case msg, ok := <-c.send:
-			_ = c.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if !ok {
+		case <-c.done:
+			if c.ws != nil {
 				_ = c.ws.WriteMessage(websocket.CloseMessage, []byte{})
-				return
 			}
-			if err := c.ws.WriteMessage(websocket.TextMessage, msg); err != nil {
-				return
+			return
+		case msg := <-c.send:
+			if c.ws != nil {
+				_ = c.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if err := c.ws.WriteMessage(websocket.TextMessage, msg); err != nil {
+					return
+				}
 			}
 		case <-ticker.C:
-			_ = c.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := c.ws.WriteMessage(websocket.PingMessage, nil); err != nil {
-				return
+			if c.ws != nil {
+				_ = c.ws.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				if err := c.ws.WriteMessage(websocket.PingMessage, nil); err != nil {
+					return
+				}
 			}
 		}
 	}
 }
 
 func (c *Conn) readPump(ctx context.Context) {
+	defer c.close()
+	if c.ws == nil {
+		return
+	}
 	c.ws.SetReadLimit(1 << 20)
 	_ = c.ws.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.ws.SetPongHandler(func(string) error {

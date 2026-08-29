@@ -17,11 +17,12 @@ import (
 // Config holds the TUI wiring. The agent is injected so the TUI is pure UI.
 // If EngineURL is set (ws://...), TUI talks to remote engine via WS; otherwise it runs Agent locally.
 type Config struct {
-	Agent     *agent.Agent
-	Workspace string
-	Model     string // for status bar
-	History   []llm.Message
-	EngineURL string // e.g. ws://localhost:17812/v1/ws, empty = local
+	Agent         agent.Runner
+	Workspace     string
+	Model         string // for status bar
+	History       []llm.Message
+	EngineURL     string // e.g. ws://localhost:17812/v1/ws, empty = local
+	AskDispatcher *AskDispatcher
 }
 
 // block is a rendered turn in the transcript.

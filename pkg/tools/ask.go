@@ -8,30 +8,38 @@ import (
 	"strings"
 )
 
+// AskRequest is the input to a [QuestionHandler].
 type AskRequest struct {
 	Question    string   `json:"question"`
 	Options     []string `json:"options"`
 	AllowManual bool     `json:"allowManual"`
 }
 
+// AskResponse is the user's answer to an [AskRequest].
 type AskResponse struct {
-	Selected int    `json:"selected"`
-	Label    string `json:"label"`
-	Answer   string `json:"answer"`
+	Selected int    `json:"selected"` // 0..2, or -1 for manual text
+	Label    string `json:"label"`    // selected option label
+	Answer   string `json:"answer"`   // manual input when Selected==-1
 }
 
+// QuestionHandler is called by [AskTool.Execute] to prompt the user.
+// Install it with [WithQuestionHandler]; retrieve with [GetQuestionHandler].
 type QuestionHandler func(ctx context.Context, req AskRequest) (AskResponse, error)
 
 type questionHandlerKey struct{}
 
+// WithQuestionHandler returns a context carrying h for [AskTool] to invoke.
 func WithQuestionHandler(ctx context.Context, h QuestionHandler) context.Context {
 	return context.WithValue(ctx, questionHandlerKey{}, h)
 }
+
+// GetQuestionHandler retrieves the handler installed by [WithQuestionHandler].
 func GetQuestionHandler(ctx context.Context) (QuestionHandler, bool) {
 	h, ok := ctx.Value(questionHandlerKey{}).(QuestionHandler)
 	return h, ok
 }
 
+// AskTool asks the user a clarifying question with 3 options + manual input.
 type AskTool struct{}
 
 func (t *AskTool) Name() string { return "askQuestion" }
@@ -46,17 +54,20 @@ func (t *AskTool) Parameters() any {
 	}, []string{"question"})
 }
 func (t *AskTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", &ToolError{Tool: "askQuestion", Op: "prompt", Err: err}
+	}
 	var a struct {
 		Question    string   `json:"question"`
 		Options     []string `json:"options"`
 		AllowManual *bool    `json:"allowManual"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", fmt.Errorf("askQuestion: invalid args: %w", err)
+		return "", &ToolError{Tool: "askQuestion", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
 	}
 	a.Question = strings.TrimSpace(a.Question)
 	if a.Question == "" {
-		return "", errors.New("askQuestion: question is required")
+		return "", &ToolError{Tool: "askQuestion", Op: "validate", Err: fmt.Errorf("%w: question is required", ErrInvalidArguments)}
 	}
 	opts := a.Options
 	if len(opts) > 3 {
@@ -75,7 +86,7 @@ func (t *AskTool) Execute(ctx context.Context, args json.RawMessage) (string, er
 			if errors.Is(err, context.Canceled) {
 				return "Question cancelled.", nil
 			}
-			return "", fmt.Errorf("askQuestion handler: %w", err)
+			return "", &ToolError{Tool: "askQuestion", Op: "prompt", Err: err}
 		}
 		if resp.Selected >= 0 && resp.Selected < len(opts) {
 			return fmt.Sprintf("User selected [%d]: %s", resp.Selected+1, resp.Label), nil

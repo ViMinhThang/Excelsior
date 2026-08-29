@@ -14,15 +14,18 @@ import (
 
 	"excelsior/pkg/config"
 	"excelsior/pkg/protocol"
+	"excelsior/pkg/session"
 )
 
 // workspace holds the hub's workspace root using lock-free atomic pointer for type-safe concurrent reads.
 
 // Hub is the WS daemon. One Hub serves many clients; each turn is per-conn.
 type Hub struct {
-	Addr   string // e.g. :17812
-	Config config.Config
-	Logger *slog.Logger
+	Addr         string // e.g. :17812
+	Config       config.Config
+	Logger       *slog.Logger
+	AgentFactory AgentFactory   // Injectable factory (defaults to DefaultAgentFactory)
+	SessionStore session.Store  // Injectable session store (defaults to DirStore)
 
 	mu      sync.RWMutex
 	clients map[*Conn]struct{}

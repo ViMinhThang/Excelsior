@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,6 +10,7 @@ import (
 	"strings"
 )
 
+// GlobTool finds files by glob pattern (supports **).
 type GlobTool struct{ Root string }
 
 func (t *GlobTool) Name() string        { return "glob" }
@@ -22,34 +22,38 @@ func (t *GlobTool) Parameters() any {
 }
 func (t *GlobTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", fmt.Errorf("glob: context canceled: %w", err)
+		return "", &ToolError{Tool: "glob", Op: "glob", Err: err}
 	}
 	var a struct {
 		Pattern string `json:"pattern"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", fmt.Errorf("glob: invalid args: %w", err)
+		return "", &ToolError{Tool: "glob", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
 	}
 	a.Pattern = strings.TrimSpace(a.Pattern)
 	if a.Pattern == "" {
-		return "", errors.New("glob: pattern is required")
+		return "", &ToolError{Tool: "glob", Op: "validate", Err: fmt.Errorf("%w: pattern is required", ErrInvalidArguments)}
 	}
 	if filepath.IsAbs(a.Pattern) || strings.Contains(a.Pattern, "..") {
-		return "", fmt.Errorf("glob: pattern outside workspace")
+		return "", &ToolError{Tool: "glob", Op: "security", Err: fmt.Errorf("%w: pattern outside workspace", ErrPathOutsideWorkspace)}
 	}
 	select {
 	case <-ctx.Done():
-		return "", fmt.Errorf("glob: context canceled: %w", ctx.Err())
+		return "", &ToolError{Tool: "glob", Op: "glob", Err: ctx.Err()}
 	default:
 	}
 	matches, err := filepath.Glob(filepath.Join(t.Root, a.Pattern))
 	if err != nil {
-		return "", fmt.Errorf("glob: %w", err)
+		return "", &ToolError{Tool: "glob", Op: "glob", Err: err}
 	}
 	if len(matches) == 0 && strings.Contains(a.Pattern, "**") {
-		matches = walkGlob(ctx, t.Root, a.Pattern)
+		var walkErr error
+		matches, walkErr = walkGlob(ctx, t.Root, a.Pattern)
+		if walkErr != nil {
+			return "", &ToolError{Tool: "glob", Op: "glob", Err: walkErr}
+		}
 		if ctx.Err() != nil {
-			return "", fmt.Errorf("glob: context canceled: %w", ctx.Err())
+			return "", &ToolError{Tool: "glob", Op: "glob", Err: ctx.Err()}
 		}
 	}
 	if len(matches) == 0 {
@@ -67,9 +71,9 @@ func (t *GlobTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	return strings.Join(rel, "\n"), nil
 }
 
-func walkGlob(ctx context.Context, root, pattern string) []string {
+func walkGlob(ctx context.Context, root, pattern string) ([]string, error) {
 	var out []string
-	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -99,5 +103,8 @@ func walkGlob(ctx context.Context, root, pattern string) []string {
 		}
 		return nil
 	})
-	return out
+	if err != nil && ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return out, err
 }

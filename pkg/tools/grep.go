@@ -11,6 +11,7 @@ import (
 	"strings"
 )
 
+// GrepTool searches file contents by substring (ripgrep-style).
 type GrepTool struct{ Root string }
 
 func (t *GrepTool) Name() string { return "grep" }
@@ -25,31 +26,33 @@ func (t *GrepTool) Parameters() any {
 }
 func (t *GrepTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", fmt.Errorf("grep: context canceled: %w", err)
+		return "", &ToolError{Tool: "grep", Op: "grep", Err: err}
 	}
 	var a struct {
 		Pattern string  `json:"pattern"`
 		Path    *string `json:"path"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", fmt.Errorf("grep: invalid args: %w", err)
+		return "", &ToolError{Tool: "grep", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
 	}
 	a.Pattern = strings.TrimSpace(a.Pattern)
 	if a.Pattern == "" {
-		return "", errors.New("grep: pattern is required")
+		return "", &ToolError{Tool: "grep", Op: "validate", Err: fmt.Errorf("%w: pattern is required", ErrInvalidArguments)}
 	}
 	dir := t.Root
+	displayPath := "."
 	if a.Path != nil && strings.TrimSpace(*a.Path) != "" {
+		displayPath = *a.Path
 		var err error
 		dir, err = secureJoin(t.Root, *a.Path)
 		if err != nil {
-			return "", fmt.Errorf("grep: %w", err)
+			return "", &ToolError{Tool: "grep", Op: "security", Path: displayPath, Err: err}
 		}
 	}
 	if info, err := os.Stat(dir); err != nil {
-		return "", fmt.Errorf("grep: %w", err)
+		return "", &ToolError{Tool: "grep", Op: "stat", Path: displayPath, Err: err}
 	} else if !info.IsDir() {
-		return "", fmt.Errorf("grep: %q is not a directory", *a.Path)
+		return "", &ToolError{Tool: "grep", Op: "stat", Path: displayPath, Err: fmt.Errorf("%w: %q is not a directory", ErrNotADirectory, displayPath)}
 	}
 	return grepWalk(ctx, a.Pattern, dir, t.Root)
 }
@@ -61,7 +64,7 @@ func grepWalk(ctx context.Context, pattern, dir, root string) (string, error) {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if err != nil {
+		if err != nil || d == nil {
 			return nil
 		}
 		if d.IsDir() {
@@ -71,7 +74,7 @@ func grepWalk(ctx context.Context, pattern, dir, root string) (string, error) {
 			return nil
 		}
 		info, err := d.Info()
-		if err != nil {
+		if err != nil || info == nil {
 			return nil
 		}
 		if info.Size() > MaxGrepFileSize {
@@ -113,7 +116,7 @@ func grepWalk(ctx context.Context, pattern, dir, root string) (string, error) {
 		slog.Warn("grep walk error", "err", err)
 	}
 	if ctx.Err() != nil {
-		return "", fmt.Errorf("grep: context canceled: %w", ctx.Err())
+		return "", &ToolError{Tool: "grep", Op: "grep", Err: ctx.Err()}
 	}
 	if len(out) == 0 {
 		return "No matches.", nil

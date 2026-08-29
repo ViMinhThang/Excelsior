@@ -1,4 +1,8 @@
-// Package session persists conversation turns as JSONL, one record per line.
-// IDs are sanitized, files are 0600/0700, writes are synced, and corrupted
-// lines are skipped on Load. Context is respected throughout.
+// Package session persists conversation turns as atomic JSON files
+// (legacy JSONL multi-line files are read via last valid line for compat).
+// IDs are sanitized (alphanumeric + ._-), directories are 0700 and files
+// 0600, writes are atomic (temp+rename+fsync), and corrupted lines are
+// skipped on Load. All methods respect context cancellation.
+//
+// Each session is stored as .excelsior/sessions/<id>.jsonl in the workspace.
 package session

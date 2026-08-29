@@ -346,6 +346,13 @@ func TestAgent_MaxIterationsCap(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "max iterations (3) reached") {
 		t.Fatalf("expected max iterations reached error, got %v", err)
 	}
+	if !errors.Is(err, ErrMaxIterationsReached) {
+		t.Fatalf("expected errors.Is(err, ErrMaxIterationsReached), got %v", err)
+	}
+	var agentErr *AgentError
+	if !errors.As(err, &agentErr) || agentErr.Phase != "loop" {
+		t.Fatalf("expected *AgentError with Phase 'loop', got %+v", agentErr)
+	}
 }
 
 func TestAgent_ContextCancellationBeforeRun(t *testing.T) {
@@ -361,6 +368,9 @@ func TestAgent_ContextCancellationBeforeRun(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error on canceled context")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected errors.Is(err, context.Canceled), got %v", err)
 	}
 }
 
@@ -405,6 +415,9 @@ func TestAgent_ContextTooLargeGuard(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "context too large") {
 		t.Fatalf("expected context too large error, got %v", err)
+	}
+	if !errors.Is(err, ErrContextTooLarge) {
+		t.Fatalf("expected errors.Is(err, ErrContextTooLarge), got %v", err)
 	}
 }
 
@@ -455,17 +468,85 @@ func TestAgent_ValidationErrors(t *testing.T) {
 	agNil := &Agent{}
 	if _, err := agNil.Run(context.Background(), RunOptions{Messages: []llm.Message{{Role: "user", Content: "hi"}}}); err == nil {
 		t.Error("expected error for nil LLM")
+	} else if !errors.Is(err, ErrLLMNotConfigured) {
+		t.Errorf("expected ErrLLMNotConfigured, got %v", err)
 	}
 
 	// Negative MaxIters
 	agNeg := &Agent{LLM: &MockLLM{}, MaxIters: -1}
 	if _, err := agNeg.Run(context.Background(), RunOptions{Messages: []llm.Message{{Role: "user", Content: "hi"}}}); err == nil {
 		t.Error("expected error for negative MaxIters")
+	} else if !errors.Is(err, ErrInvalidConfig) && !errors.Is(err, ErrInvalidMaxIterations) {
+		t.Errorf("expected ErrInvalidMaxIterations, got %v", err)
 	}
 
 	// Empty messages
 	agEmpty := &Agent{LLM: &MockLLM{}}
 	if _, err := agEmpty.Run(context.Background(), RunOptions{Messages: nil}); err == nil {
 		t.Error("expected error for empty messages")
+	} else if !errors.Is(err, ErrEmptyMessages) {
+		t.Errorf("expected ErrEmptyMessages, got %v", err)
 	}
 }
+
+func TestAgent_NilLLMMessageGuard(t *testing.T) {
+	mock := &MockLLM{
+		Responses: []MockTurnResponse{
+			{
+				Message: nil, // Nil message with nil error!
+			},
+		},
+	}
+	ag := &Agent{
+		LLM: mock,
+	}
+
+	_, err := ag.Run(context.Background(), RunOptions{
+		Messages: []llm.Message{{Role: "user", Content: "hello"}},
+	})
+	if err == nil {
+		t.Fatal("expected error on nil LLM message")
+	}
+	if !errors.Is(err, ErrNilLLMMessage) {
+		t.Fatalf("expected errors.Is(err, ErrNilLLMMessage), got %v", err)
+	}
+}
+
+func TestAgentError_FormattingAndUnwrap(t *testing.T) {
+	ae1 := &AgentError{
+		Phase:     "tool_exec",
+		Iteration: 2,
+		ToolName:  "view",
+		Msg:       "execution failed",
+		Err:       ErrUnknownTool,
+	}
+	if !errors.Is(ae1, ErrUnknownTool) {
+		t.Errorf("expected Is(ErrUnknownTool)")
+	}
+	if ae1.Unwrap() != ErrUnknownTool {
+		t.Errorf("expected Unwrap() to return ErrUnknownTool")
+	}
+	if !strings.Contains(ae1.Error(), "tool_exec") || !strings.Contains(ae1.Error(), "view") {
+		t.Errorf("expected phase and tool in error string: %s", ae1.Error())
+	}
+
+	sentinels := []error{
+		ErrMaxIterationsReached, ErrContextTooLarge, ErrEmptyMessages,
+		ErrLLMNotConfigured, ErrInvalidConfig, ErrNilLLMMessage, ErrUnknownTool,
+	}
+	for _, s := range sentinels {
+		ae := &AgentError{Err: s}
+		if !errors.Is(ae, s) {
+			t.Errorf("expected Is(%v) on AgentError", s)
+		}
+	}
+
+	aeEmpty := &AgentError{}
+	if aeEmpty.Error() != "agent" {
+		t.Errorf("expected 'agent', got %q", aeEmpty.Error())
+	}
+	if aeEmpty.Is(nil) {
+		t.Error("Is(nil) should be false")
+	}
+}
+

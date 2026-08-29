@@ -8,6 +8,7 @@ import (
 	"strings"
 )
 
+// LsTool lists directory contents (names + trailing "/" for dirs).
 type LsTool struct{ Root string }
 
 func (t *LsTool) Name() string        { return "ls" }
@@ -19,14 +20,14 @@ func (t *LsTool) Parameters() any {
 }
 func (t *LsTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", fmt.Errorf("ls: context canceled: %w", err)
+		return "", &ToolError{Tool: "ls", Op: "list", Err: err}
 	}
 	var a struct {
 		DirectoryPath *string `json:"directoryPath"`
 	}
 	if len(args) > 0 && string(args) != "null" && strings.TrimSpace(string(args)) != "" {
 		if err := json.Unmarshal(args, &a); err != nil {
-			return "", fmt.Errorf("ls: invalid args: %w", err)
+			return "", &ToolError{Tool: "ls", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
 		}
 	}
 	dir := "."
@@ -38,12 +39,12 @@ func (t *LsTool) Execute(ctx context.Context, args json.RawMessage) (string, err
 		if dir == "." {
 			p = t.Root
 		} else {
-			return "", fmt.Errorf("ls: %w", err)
+			return "", &ToolError{Tool: "ls", Op: "security", Path: dir, Err: err}
 		}
 	}
 	entries, err := os.ReadDir(p)
 	if err != nil {
-		return "", fmt.Errorf("ls: %w", err)
+		return "", &ToolError{Tool: "ls", Op: "list", Path: dir, Err: err}
 	}
 	if len(entries) == 0 {
 		return "Directory is empty.", nil

@@ -1,7 +1,10 @@
 package config
 
 import (
+	"errors"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -22,28 +25,86 @@ func TestFromEnv_Defaults(t *testing.T) {
 }
 
 func TestResolveModel(t *testing.T) {
-	if got := ResolveModel("deepseek-v4-pro"); got != "deepseek-reasoner" {
-		t.Fatalf("alias v4-pro got %q", got)
-	}
-	if got := ResolveModel("v4-pro"); got != "deepseek-reasoner" {
-		t.Fatalf("alias v4-pro short got %q", got)
+	if got := ResolveModel("deepseek-v4-pro"); got != "deepseek-v4-pro" {
+		t.Fatalf("expected deepseek-v4-pro, got %q", got)
 	}
 	if got := ResolveModel("deepseek-v4-flash"); got != "deepseek-v4-flash" {
-		t.Fatalf("no alias expected, got %q", got)
+		t.Fatalf("expected deepseek-v4-flash, got %q", got)
+	}
+	if got := ResolveModel("  deepseek-v4-flash  "); got != "deepseek-v4-flash" {
+		t.Fatalf("expected trimmed deepseek-v4-flash, got %q", got)
 	}
 }
 
 func TestValidate(t *testing.T) {
 	tests := []struct {
-		name    string
-		cfg     Config
-		wantErr bool
+		name      string
+		cfg       Config
+		wantErr   bool
+		targetErr error
+		field     string
 	}{
-		{"ok", Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Temperature: 0.7}, false},
-		{"ok v4-pro alias", Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-pro", Temperature: 0.7}, false},
-		{"no key", Config{APIKey: "", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}, true},
-		{"bad url", Config{APIKey: "sk-1", BaseURL: "://bad", Model: "deepseek-v4-flash"}, true},
-		{"bad temp", Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Temperature: 5}, true},
+		{
+			name:      "ok",
+			cfg:       Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Temperature: 0.7},
+			wantErr:   false,
+			targetErr: nil,
+		},
+		{
+			name:      "ok v4-pro",
+			cfg:       Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-pro", Temperature: 0.7},
+			wantErr:   false,
+			targetErr: nil,
+		},
+		{
+			name:      "no key",
+			cfg:       Config{APIKey: "", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"},
+			wantErr:   true,
+			targetErr: ErrMissingAPIKey,
+			field:     "APIKey",
+		},
+		{
+			name:      "no model",
+			cfg:       Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: ""},
+			wantErr:   true,
+			targetErr: ErrMissingModel,
+			field:     "Model",
+		},
+		{
+			name:      "bad url scheme missing",
+			cfg:       Config{APIKey: "sk-1", BaseURL: "localhost:8080", Model: "deepseek-v4-flash"},
+			wantErr:   true,
+			targetErr: ErrInvalidBaseURL,
+			field:     "BaseURL",
+		},
+		{
+			name:      "bad url malformed",
+			cfg:       Config{APIKey: "sk-1", BaseURL: "://bad", Model: "deepseek-v4-flash"},
+			wantErr:   true,
+			targetErr: ErrInvalidBaseURL,
+			field:     "BaseURL",
+		},
+		{
+			name:      "bad url ftp",
+			cfg:       Config{APIKey: "sk-1", BaseURL: "ftp://api.deepseek.com", Model: "deepseek-v4-flash"},
+			wantErr:   true,
+			targetErr: ErrInvalidBaseURL,
+			field:     "BaseURL",
+		},
+		{
+			name:      "bad temp high",
+			cfg:       Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Temperature: 5},
+			wantErr:   true,
+			targetErr: ErrInvalidTemperature,
+			field:     "Temperature",
+		},
+		{
+			name:      "bad temp low",
+			cfg:       Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash", Temperature: -0.5},
+			wantErr:   true,
+			targetErr: ErrInvalidTemperature,
+			field:     "Temperature",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -51,7 +112,167 @@ func TestValidate(t *testing.T) {
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("Validate err=%v wantErr=%v", err, tc.wantErr)
 			}
+			if tc.targetErr != nil {
+				if !errors.Is(err, tc.targetErr) {
+					t.Errorf("expected errors.Is(err, %v) to be true, got %v", tc.targetErr, err)
+				}
+				var cfgErr *ConfigError
+				if !errors.As(err, &cfgErr) {
+					t.Fatalf("expected errors.As(err, &cfgErr) to be true, got %v", err)
+				}
+				if cfgErr.Field != tc.field {
+					t.Errorf("expected field %q, got %q", tc.field, cfgErr.Field)
+				}
+			}
 		})
 	}
 	_ = os.Getenv // keep import
 }
+
+func TestResolveWorkspace_Sentinels(t *testing.T) {
+	dir := t.TempDir()
+	filePath := filepath.Join(dir, "file.txt")
+	if err := os.WriteFile(filePath, []byte("test"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Valid dir
+	ws, err := ResolveWorkspace(dir, "")
+	if err != nil || ws != dir {
+		t.Fatalf("ResolveWorkspace valid dir err=%v ws=%q", err, ws)
+	}
+
+	// Not a directory
+	_, err = ResolveWorkspace(filePath, "")
+	if err == nil || !errors.Is(err, ErrWorkspaceNotDir) {
+		t.Fatalf("expected ErrWorkspaceNotDir for file path, got %v", err)
+	}
+	if !errors.Is(err, ErrNotADirectory) {
+		t.Fatalf("expected ErrNotADirectory alias to match, got %v", err)
+	}
+
+	// Non-existent dir
+	_, err = ResolveWorkspace(filepath.Join(dir, "nonexistent"), "")
+	if err == nil || !errors.Is(err, ErrWorkspaceNotFound) {
+		t.Fatalf("expected ErrWorkspaceNotFound for nonexistent path, got %v", err)
+	}
+
+	// Structured ConfigError check
+	var cfgErr *ConfigError
+	if !errors.As(err, &cfgErr) {
+		t.Fatalf("expected *ConfigError, got %T: %v", err, err)
+	}
+	if cfgErr.Field != "Workspace" {
+		t.Errorf("expected Field 'Workspace', got %q", cfgErr.Field)
+	}
+}
+
+func TestConfigError_FormattingAndUnwrap(t *testing.T) {
+	err1 := &ConfigError{Message: "Custom msg", Err: ErrMissingAPIKey}
+	if !errors.Is(err1, ErrMissingAPIKey) {
+		t.Errorf("expected Is(ErrMissingAPIKey)")
+	}
+	if err1.Unwrap() != ErrMissingAPIKey {
+		t.Errorf("expected Unwrap() to return ErrMissingAPIKey")
+	}
+	if !strings.Contains(err1.Error(), "Custom msg") {
+		t.Errorf("expected custom msg in error string: %s", err1.Error())
+	}
+
+	err2 := &ConfigError{Field: "Model", Err: ErrMissingModel}
+	if !errors.Is(err2, ErrMissingModel) {
+		t.Errorf("expected Is(ErrMissingModel)")
+	}
+
+	err3 := &ConfigError{Field: "BaseURL"}
+	if !errors.Is(err3, ErrInvalidBaseURL) {
+		t.Errorf("expected Is(ErrInvalidBaseURL)")
+	}
+
+	err4 := &ConfigError{Field: "Temperature"}
+	if !errors.Is(err4, ErrInvalidTemperature) {
+		t.Errorf("expected Is(ErrInvalidTemperature)")
+	}
+
+	errEmpty := &ConfigError{}
+	if errEmpty.Error() != "config error" {
+		t.Errorf("expected 'config error', got %q", errEmpty.Error())
+	}
+	if errEmpty.Is(nil) {
+		t.Errorf("Is(nil) should be false")
+	}
+}
+
+func TestFromEnv_Full(t *testing.T) {
+	t.Setenv("DEEPSEEK_API_KEY", "sk-custom-key")
+	t.Setenv("DEEPSEEK_BASE_URL", "https://custom.api.com")
+	t.Setenv("DEEPSEEK_MODEL", "deepseek-v4-pro")
+	t.Setenv("EXCELSIOR_WORKSPACE", "/custom/ws")
+	t.Setenv("EXCELSIOR_ENGINE", "ws://localhost:17812/v1/ws")
+
+	cfg := FromEnv()
+	if cfg.APIKey != "sk-custom-key" {
+		t.Errorf("expected APIKey 'sk-custom-key', got %q", cfg.APIKey)
+	}
+	if cfg.BaseURL != "https://custom.api.com" {
+		t.Errorf("expected BaseURL 'https://custom.api.com', got %q", cfg.BaseURL)
+	}
+	if cfg.Model != "deepseek-v4-pro" {
+		t.Errorf("expected Model 'deepseek-v4-pro', got %q", cfg.Model)
+	}
+	if cfg.Workspace != "/custom/ws" {
+		t.Errorf("expected Workspace '/custom/ws', got %q", cfg.Workspace)
+	}
+	if cfg.EngineURL != "ws://localhost:17812/v1/ws" {
+		t.Errorf("expected EngineURL 'ws://localhost:17812/v1/ws', got %q", cfg.EngineURL)
+	}
+}
+
+func TestResolveWorkspace_RelativeAndCwd(t *testing.T) {
+	// Fallback to CWD when both are empty
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws, err := ResolveWorkspace("", "")
+	if err != nil {
+		t.Fatalf("ResolveWorkspace empty failed: %v", err)
+	}
+	if ws != cwd {
+		t.Errorf("expected cwd %q, got %q", cwd, ws)
+	}
+
+	// Relative path resolution
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "sub")
+	_ = os.Mkdir(sub, 0o755)
+
+	rel, _ := filepath.Rel(dir, sub)
+	origWd, _ := os.Getwd()
+	_ = os.Chdir(dir)
+	defer os.Chdir(origWd)
+
+	res, err := ResolveWorkspace(rel, "")
+	if err != nil {
+		t.Fatalf("ResolveWorkspace relative failed: %v", err)
+	}
+	if res != sub {
+		t.Errorf("expected %q, got %q", sub, res)
+	}
+}
+
+func TestValidate_TemperatureBoundaries(t *testing.T) {
+	// Temperature 0.0 is valid
+	cfg0 := Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "v4", Temperature: 0.0}
+	if err := cfg0.Validate(); err != nil {
+		t.Errorf("expected temp 0.0 to be valid, got %v", err)
+	}
+
+	// Temperature 2.0 is valid
+	cfg2 := Config{APIKey: "sk-1", BaseURL: "https://api.deepseek.com", Model: "v4", Temperature: 2.0}
+	if err := cfg2.Validate(); err != nil {
+		t.Errorf("expected temp 2.0 to be valid, got %v", err)
+	}
+}
+
+

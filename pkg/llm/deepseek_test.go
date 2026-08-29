@@ -3,6 +3,7 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -73,23 +74,41 @@ func TestStreamChat_Retry(t *testing.T) {
 
 func TestClient_Validate(t *testing.T) {
 	c := &Client{APIKey: "", BaseURL: "https://api.deepseek.com"}
-	if _, err := c.StreamChat(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "hi"}}}, nil); err == nil || !strings.Contains(err.Error(), "APIKey") {
-		t.Fatalf("expected APIKey error, got %v", err)
+	_, err := c.StreamChat(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "hi"}}}, nil)
+	if err == nil {
+		t.Fatal("expected error for empty APIKey")
+	}
+	if !strings.Contains(err.Error(), "APIKey") {
+		t.Fatalf("expected APIKey in error string, got %v", err)
+	}
+	if !errors.Is(err, ErrMissingAPIKey) {
+		t.Fatalf("expected errors.Is(err, ErrMissingAPIKey), got %v", err)
+	}
+	var llmErr *LLMError
+	if !errors.As(err, &llmErr) {
+		t.Fatalf("expected errors.As(err, &llmErr), got %v", err)
+	}
+	if llmErr.Kind != ErrorKindAuth {
+		t.Errorf("expected ErrorKindAuth, got %v", llmErr.Kind)
+	}
+
+	// Invalid BaseURL
+	c2 := &Client{APIKey: "sk-test", BaseURL: "://bad"}
+	_, err2 := c2.StreamChat(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "hi"}}}, nil)
+	if err2 == nil || !errors.Is(err2, ErrInvalidBaseURL) {
+		t.Fatalf("expected ErrInvalidBaseURL, got %v", err2)
 	}
 }
 
 func TestResolveModel_Alias(t *testing.T) {
-	if got := ResolveModel("deepseek-v4-pro"); got != "deepseek-reasoner" {
-		t.Fatalf("alias v4-pro %q", got)
+	if got := ResolveModel("deepseek-v4-pro"); got != "deepseek-v4-pro" {
+		t.Fatalf("expected deepseek-v4-pro, got %q", got)
 	}
-	if !IsReasoner("deepseek-v4-pro") {
-		t.Fatal("expected v4-pro to be reasoner")
+	if got := ResolveModel("deepseek-v4-flash"); got != "deepseek-v4-flash" {
+		t.Fatalf("expected deepseek-v4-flash, got %q", got)
 	}
-	if !IsReasoner("deepseek-reasoner") {
-		t.Fatal("expected reasoner")
-	}
-	if IsReasoner("deepseek-v4-flash") {
-		t.Fatal("v4-flash should not be reasoner")
+	if got := ResolveModel("  deepseek-v4-pro  "); got != "deepseek-v4-pro" {
+		t.Fatalf("expected trimmed deepseek-v4-pro, got %q", got)
 	}
 }
 
@@ -109,3 +128,62 @@ func TestChat_SingleCall(t *testing.T) {
 		t.Fatalf("msg %q", msg.Content)
 	}
 }
+
+func TestLLM_ErrorKindAndHelpers(t *testing.T) {
+	kinds := []ErrorKind{
+		ErrorKindUnknown,
+		ErrorKindAuth,
+		ErrorKindRateLimit,
+		ErrorKindServer,
+		ErrorKindValidation,
+		ErrorKindNetwork,
+		ErrorKindStream,
+	}
+	for _, k := range kinds {
+		if k.String() == "" {
+			t.Errorf("expected non-empty String() for ErrorKind %d", k)
+		}
+	}
+
+	c := NewClient("sk-123", "deepseek-v4-pro")
+	if c.ModelName() != "deepseek-v4-pro" {
+		t.Errorf("expected ModelName 'deepseek-v4-pro', got %q", c.ModelName())
+	}
+}
+
+func TestSSE_UsageAndMalformedChunks(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		chunks := []string{
+			`data: not-a-json-object`, // malformed, should be skipped
+			`data: {"choices":[]}`,    // empty choices, should be skipped
+			`data: {"usage":{"prompt_tokens":15,"completion_tokens":25,"total_tokens":40}}`,
+			`data: {"choices":[{"delta":{"content":"Response with usage."}}]}`,
+			`data: [DONE]`,
+		}
+		for _, c := range chunks {
+			w.Write([]byte(c + "\n"))
+			w.(http.Flusher).Flush()
+		}
+	}))
+	defer srv.Close()
+
+	c := &Client{APIKey: "sk-test", BaseURL: srv.URL, HTTPClient: srv.Client()}
+	var lastUsage *Usage
+	msg, err := c.StreamChat(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "hi"}}}, func(d Delta) error {
+		if d.Usage != nil {
+			lastUsage = d.Usage
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("StreamChat failed: %v", err)
+	}
+	if msg.Content != "Response with usage." {
+		t.Errorf("expected 'Response with usage.', got %q", msg.Content)
+	}
+	if lastUsage == nil || lastUsage.TotalTokens != 40 {
+		t.Errorf("expected usage TotalTokens == 40, got %+v", lastUsage)
+	}
+}
+

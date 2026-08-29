@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -13,9 +12,13 @@ import (
 )
 
 // LLM is the provider interface the agent depends on for streaming chat completions.
-type LLM interface {
-	StreamChat(ctx context.Context, req llm.ChatRequest, onDelta func(llm.Delta) error) (*llm.Message, error)
-	ModelName() string
+type LLM = llm.Provider
+
+// Runner defines the execution interface for an agentic turn.
+// It allows consumers (e.g. WebSocket engine, TUI) to execute turns against
+// either real Agent loops or mock runners.
+type Runner interface {
+	RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult, error)
 }
 
 // ToolRegistry is the port the agent depends on — small interface for testability.
@@ -35,20 +38,28 @@ type Agent struct {
 	Logger   *slog.Logger
 }
 
+var _ Runner = (*Agent)(nil)
+
+// StreamEvent is one fragment emitted during [Agent.Run].
+// Type is one of "text", "reasoning", "tool_start", "tool_result", "done", "error".
 type StreamEvent struct {
 	Type         string // "text" | "reasoning" | "tool_start" | "tool_result" | "done" | "error"
-	Text         string
-	Reasoning    string
-	ToolName     string
-	ToolCallID   string
-	ToolArgs     string
-	ToolResult   string
-	FinishReason string
+	Text         string // delta text for Type=="text" or final text for "done"/"error"
+	Reasoning    string // delta reasoning for Type=="reasoning" (deepseek-reasoner)
+	ToolName     string // tool name for Type=="tool_start"/"tool_result"
+	ToolCallID   string // provider tool_call_id
+	ToolArgs     string // JSON arguments for Type=="tool_start"
+	ToolResult   string // tool output for Type=="tool_result"
+	FinishReason string // "stop" etc. for Type=="done"
 }
 
+// RunOptions controls a single [Agent.Run] invocation.
 type RunOptions struct {
+	// Messages is the conversation history excluding the system prompt.
+	// Must contain at least one user message.
 	Messages []llm.Message
-	// OnEvent is called for every streaming fragment. Must be non-nil for streaming UX.
+	// OnEvent is called for every streaming fragment. If nil, events are dropped.
+	// It must not block for long; it is invoked synchronously on the Run goroutine.
 	OnEvent func(StreamEvent)
 }
 
@@ -74,10 +85,10 @@ func (a *Agent) maxIters() int {
 
 func (a *Agent) validate() error {
 	if a.LLM == nil {
-		return errors.New("agent: LLM not configured")
+		return &AgentError{Phase: "validate", Err: ErrLLMNotConfigured}
 	}
 	if a.MaxIters < 0 {
-		return fmt.Errorf("agent: MaxIters must be >=0, got %d", a.MaxIters)
+		return &AgentError{Phase: "validate", Err: fmt.Errorf("%w, got %d", ErrInvalidMaxIterations, a.MaxIters)}
 	}
 	return nil
 }
@@ -107,12 +118,15 @@ func totalChars(msgs []llm.Message) int {
 	return n
 }
 
+// RunResult is the outcome of [Agent.RunWithHistory].
 type RunResult struct {
-	FinalMessage *llm.Message
-	Messages     []llm.Message
+	FinalMessage *llm.Message // last assistant message (with any reasoning_content)
+	Messages     []llm.Message // full history including system prompt, tool outputs, and final message
 }
 
 // Run executes the agentic loop and returns the final assistant message.
+// It is a convenience wrapper around [Agent.RunWithHistory] when only the
+// final message is needed.
 func (a *Agent) Run(ctx context.Context, opts RunOptions) (*llm.Message, error) {
 	res, err := a.RunWithHistory(ctx, opts)
 	if err != nil {
@@ -121,16 +135,18 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (*llm.Message, error) 
 	return res.FinalMessage, nil
 }
 
-// RunWithHistory executes the agentic loop and returns both the final message and the full turn history.
+// RunWithHistory executes the agentic loop until the model stops calling tools
+// or MaxIters is reached. It streams deltas via opts.OnEvent, executes tools
+// via the ToolRegistry, and returns the complete history.
 func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult, error) {
 	if err := a.validate(); err != nil {
 		return nil, err
 	}
 	if len(opts.Messages) == 0 {
-		return nil, errors.New("agent: Messages is empty")
+		return nil, &AgentError{Phase: "validate", Err: ErrEmptyMessages}
 	}
 	if n := totalChars(opts.Messages); n > maxContextChars {
-		return nil, fmt.Errorf("agent: context too large (%d chars > %d)", n, maxContextChars)
+		return nil, &AgentError{Phase: "validate", Err: fmt.Errorf("%w (%d chars > %d)", ErrContextTooLarge, n, maxContextChars)}
 	}
 
 	messages := append([]llm.Message(nil), opts.Messages...)
@@ -150,7 +166,7 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 
 	for iter := 0; iter < a.maxIters(); iter++ {
 		if err := ctx.Err(); err != nil {
-			return nil, fmt.Errorf("agent: context canceled before iter %d: %w", iter, err)
+			return nil, &AgentError{Phase: "context", Iteration: iter, Err: fmt.Errorf("agent: context canceled before iter %d: %w", iter, err)}
 		}
 		req := llm.ChatRequest{Model: model, Messages: messages, Tools: toolDefs}
 		if len(toolDefs) == 0 {
@@ -160,7 +176,7 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 		llmStart := time.Now()
 		msg, err := a.LLM.StreamChat(ctx, req, func(d llm.Delta) error {
 			if ctx.Err() != nil {
-				return fmt.Errorf("agent onDelta canceled: %w", ctx.Err())
+				return &AgentError{Phase: "delta_callback", Iteration: iter + 1, Err: fmt.Errorf("agent onDelta canceled: %w", ctx.Err())}
 			}
 			if d.ReasoningContent != "" {
 				emit(StreamEvent{Type: "reasoning", Reasoning: d.ReasoningContent})
@@ -173,7 +189,12 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 		if err != nil {
 			a.logger().Error("agent llm error", "iter", iter, "duration", time.Since(llmStart), "err", err)
 			emit(StreamEvent{Type: "error", Text: err.Error()})
-			return nil, fmt.Errorf("agent: LLM StreamChat iter %d: %w", iter, err)
+			return nil, &AgentError{Phase: "stream_chat", Iteration: iter + 1, Err: fmt.Errorf("agent: LLM StreamChat iter %d: %w", iter, err)}
+		}
+		if msg == nil {
+			a.logger().Error("agent llm returned nil message", "iter", iter)
+			emit(StreamEvent{Type: "error", Text: ErrNilLLMMessage.Error()})
+			return nil, &AgentError{Phase: "stream_chat", Iteration: iter + 1, Err: ErrNilLLMMessage}
 		}
 		a.logger().Debug("agent llm response", "iter", iter, "duration", time.Since(llmStart), "toolCalls", len(msg.ToolCalls))
 		messages = append(messages, *msg)
@@ -190,13 +211,13 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 			return nil, err
 		}
 	}
-	return nil, fmt.Errorf("agent: max iterations (%d) reached", a.maxIters())
+	return nil, &AgentError{Phase: "loop", Iteration: a.maxIters(), Err: fmt.Errorf("max iterations (%d) reached: %w", a.maxIters(), ErrMaxIterationsReached)}
 }
 
 func (a *Agent) execTools(ctx context.Context, reg ToolRegistry, calls []llm.ToolCall, messages *[]llm.Message, emit func(StreamEvent)) error {
 	for _, tc := range calls {
 		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("agent: context canceled before tool %q: %w", tc.Function.Name, err)
+			return &AgentError{Phase: "tool_exec", ToolName: tc.Function.Name, Err: fmt.Errorf("agent: context canceled before tool %q: %w", tc.Function.Name, err)}
 		}
 		emit(StreamEvent{Type: "tool_start", ToolName: tc.Function.Name, ToolCallID: tc.ID, ToolArgs: tc.Function.Arguments})
 		start := time.Now()

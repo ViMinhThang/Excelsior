@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"excelsior/pkg/util"
 )
 
+// EditTool replaces an exact text block in a file. oldText must appear exactly once.
 type EditTool struct{ Root string }
 
 func (t *EditTool) Name() string { return "edit" }
@@ -27,7 +27,7 @@ func (t *EditTool) Parameters() any {
 }
 func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", fmt.Errorf("edit: context canceled: %w", err)
+		return "", &ToolError{Tool: "edit", Op: "replace", Err: err}
 	}
 	var a struct {
 		FilePath string `json:"filePath"`
@@ -35,43 +35,43 @@ func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 		NewText  string `json:"newText"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", fmt.Errorf("edit: invalid args: %w", err)
+		return "", &ToolError{Tool: "edit", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
 	}
 	a.FilePath = strings.TrimSpace(a.FilePath)
 	if a.FilePath == "" {
-		return "", errors.New("edit: filePath is required")
+		return "", &ToolError{Tool: "edit", Op: "validate", Err: fmt.Errorf("%w: filePath is required", ErrInvalidArguments)}
 	}
 	if a.OldText == "" {
-		return "", errors.New("edit: oldText must be non-empty")
+		return "", &ToolError{Tool: "edit", Op: "validate", Path: a.FilePath, Err: fmt.Errorf("%w: oldText must be non-empty", ErrInvalidArguments)}
 	}
 	if len(a.NewText) > MaxWriteSize {
-		return "", fmt.Errorf("edit: newText too large (%d > %d)", len(a.NewText), MaxWriteSize)
+		return "", &ToolError{Tool: "edit", Op: "validate", Path: a.FilePath, Err: fmt.Errorf("%w: newText too large (%d > %d)", ErrFileTooLarge, len(a.NewText), MaxWriteSize)}
 	}
 	p, err := secureJoin(t.Root, a.FilePath)
 	if err != nil {
-		return "", fmt.Errorf("edit: %w", err)
+		return "", &ToolError{Tool: "edit", Op: "security", Path: a.FilePath, Err: err}
 	}
 	b, err := os.ReadFile(p)
 	if err != nil {
-		return "", fmt.Errorf("edit: %w", err)
+		return "", &ToolError{Tool: "edit", Op: "read", Path: a.FilePath, Err: err}
 	}
 	if len(b) > MaxWriteSize {
-		return "", fmt.Errorf("edit: file too large (%d > %d)", len(b), MaxWriteSize)
+		return "", &ToolError{Tool: "edit", Op: "read", Path: a.FilePath, Err: fmt.Errorf("%w: file too large (%d > %d)", ErrFileTooLarge, len(b), MaxWriteSize)}
 	}
 	content := string(b)
 	count := strings.Count(content, a.OldText)
 	if count == 0 {
-		return "", fmt.Errorf("edit: oldText not found")
+		return "", &ToolError{Tool: "edit", Op: "replace", Path: a.FilePath, Err: ErrTextNotFound}
 	}
 	if count > 1 {
-		return "", fmt.Errorf("edit: oldText matched %d times, must be unique", count)
+		return "", &ToolError{Tool: "edit", Op: "replace", Path: a.FilePath, Err: fmt.Errorf("%w: oldText matched %d times, must be unique", ErrAmbiguousMatch, count)}
 	}
 	content = strings.Replace(content, a.OldText, a.NewText, 1)
 	if len(content) > MaxWriteSize {
-		return "", fmt.Errorf("edit: resulting file too large (%d > %d)", len(content), MaxWriteSize)
+		return "", &ToolError{Tool: "edit", Op: "replace", Path: a.FilePath, Err: fmt.Errorf("%w: resulting file too large (%d > %d)", ErrFileTooLarge, len(content), MaxWriteSize)}
 	}
 	if err := util.WriteAtomic(p, []byte(content), 0o644); err != nil {
-		return "", fmt.Errorf("edit: %w", err)
+		return "", &ToolError{Tool: "edit", Op: "write", Path: a.FilePath, Err: err}
 	}
 	slog.Info("edit", "path", a.FilePath)
 	return fmt.Sprintf("Edited %s", a.FilePath), nil

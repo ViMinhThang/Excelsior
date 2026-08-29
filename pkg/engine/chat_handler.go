@@ -8,6 +8,7 @@ import (
 	"excelsior/pkg/agent"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/protocol"
+	"excelsior/pkg/session"
 	"excelsior/pkg/tools"
 )
 
@@ -19,12 +20,11 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 
 	askCh := make(chan protocol.AskResp, 1)
 	handler := c.askHandler(ctx, askCh)
-	client := c.llmClient(req.Model)
-	ag := &agent.Agent{
-		LLM:    client,
-		Tools:  tools.DefaultRegistry(c.currentWorkspace()),
-		System: agent.DefaultSystemPrompt,
-		Logger: c.hub.logger(),
+
+	ag, err := c.getAgent(req.Model)
+	if err != nil {
+		c.sendError(env.ID, fmt.Sprintf("create agent: %v", err))
+		return
 	}
 
 	sessionID := req.SessionID
@@ -44,7 +44,12 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 
 	if res != nil && len(res.Messages) > 0 {
 		toSave := filterSystemMessages(res.Messages)
-		if err := c.sessionStore().Save(ctx, sessionID, toSave); err != nil {
+		rec, loadErr := c.sessionStore().Load(sessionID)
+		if loadErr != nil {
+			rec = session.Record{ID: sessionID, CreatedAt: time.Now().UTC()}
+		}
+		rec.Messages = toSave
+		if err := c.sessionStore().Save(rec); err != nil {
 			c.hub.logger().Warn("failed to save session history", "id", sessionID, "err", err)
 		} else {
 			c.hub.logger().Info("saved session history", "id", sessionID, "messages", len(toSave))
@@ -54,25 +59,10 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeDone, map[string]string{"sessionId": sessionID}))
 }
 
-func (c *Conn) llmClient(model string) *llm.Client {
-	if model == "" {
-		model = c.hub.Config.Model
-	}
-	if model == "" {
-		model = "deepseek-v4-flash"
-	}
-	return &llm.Client{
-		APIKey:  c.hub.Config.APIKey,
-		BaseURL: c.hub.Config.BaseURL,
-		Model:   model,
-		Logger:  c.hub.logger(),
-	}
-}
-
 func (c *Conn) loadHistory(ctx context.Context, sessionID string, incoming []llm.Message) []llm.Message {
 	var history []llm.Message
-	if msgs, err := c.sessionStore().Load(ctx, sessionID); err == nil {
-		for _, m := range msgs {
+	if rec, err := c.sessionStore().Load(sessionID); err == nil {
+		for _, m := range rec.Messages {
 			if m.Role == "system" && (m.Content == "New session" || m.Content == "(empty)") {
 				continue
 			}

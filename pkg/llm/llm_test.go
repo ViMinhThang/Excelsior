@@ -26,7 +26,7 @@ func TestStreamChat_ReasoningAndToolCalls(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := &Client{APIKey: "sk-test", BaseURL: srv.URL, Model: "deepseek-reasoner", HTTPClient: srv.Client()}
+	c := &Client{APIKey: "sk-test", BaseURL: srv.URL, Model: "deepseek-v4-pro", HTTPClient: srv.Client()}
 	var reasoningDeltas []string
 	var toolCallDeltas []ToolCallDelta
 
@@ -98,6 +98,22 @@ func TestRetryPolicy_IsRetryable(t *testing.T) {
 	if !isRetryable(0, errors.New("connection reset by peer")) {
 		t.Error("generic network error should be retryable")
 	}
+
+	// Typed LLMError retryability checks
+	rateLimitErr := &LLMError{StatusCode: 429, Kind: ErrorKindRateLimit, Err: ErrRateLimit}
+	if !rateLimitErr.IsRetryable() || !isRetryable(0, rateLimitErr) {
+		t.Error("LLMError with 429 should be retryable")
+	}
+
+	authErr := &LLMError{StatusCode: 401, Kind: ErrorKindAuth, Err: ErrAuthFailed}
+	if authErr.IsRetryable() || isRetryable(0, authErr) {
+		t.Error("LLMError with 401 should NOT be retryable")
+	}
+
+	validationErr := &LLMError{StatusCode: 400, Kind: ErrorKindValidation, Err: ErrInvalidRequest}
+	if validationErr.IsRetryable() || isRetryable(0, validationErr) {
+		t.Error("LLMError with 400 should NOT be retryable")
+	}
 }
 
 func TestRetryPolicy_Backoff(t *testing.T) {
@@ -133,4 +149,86 @@ func TestSSE_LineTooLarge(t *testing.T) {
 	if !strings.Contains(err.Error(), "SSE line too large") {
 		t.Errorf("unexpected error message: %v", err)
 	}
+	if !errors.Is(err, ErrLineTooLarge) {
+		t.Errorf("expected errors.Is(err, ErrLineTooLarge), got %v", err)
+	}
+	var llmErr *LLMError
+	if !errors.As(err, &llmErr) {
+		t.Fatalf("expected errors.As(err, &llmErr), got %v", err)
+	}
+	if llmErr.Kind != ErrorKindStream {
+		t.Errorf("expected ErrorKindStream, got %v", llmErr.Kind)
+	}
 }
+
+func TestClient_ValidationAndChatHelper(t *testing.T) {
+	// Missing API Key
+	cNoKey := &Client{}
+	_, err := cNoKey.StreamChat(context.Background(), ChatRequest{}, nil)
+	if err == nil || !errors.Is(err, ErrMissingAPIKey) {
+		t.Fatalf("expected ErrMissingAPIKey, got %v", err)
+	}
+
+	// Invalid BaseURL
+	cBadURL := &Client{APIKey: "sk-test", BaseURL: "://invalid"}
+	_, err = cBadURL.StreamChat(context.Background(), ChatRequest{}, nil)
+	if err == nil || !errors.Is(err, ErrInvalidBaseURL) {
+		t.Fatalf("expected ErrInvalidBaseURL, got %v", err)
+	}
+
+	// Chat helper
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"pong\"}}]}\ndata: [DONE]\n"))
+	}))
+	defer srv.Close()
+
+	c := &Client{APIKey: "sk-test", BaseURL: srv.URL, HTTPClient: srv.Client()}
+	msg, err := c.Chat(context.Background(), ChatRequest{Messages: []Message{{Role: "user", Content: "ping"}}})
+	if err != nil {
+		t.Fatalf("Chat helper failed: %v", err)
+	}
+	if msg.Content != "pong" {
+		t.Fatalf("expected 'pong', got %q", msg.Content)
+	}
+}
+
+func TestLLMError_SentinelsAndFormatting(t *testing.T) {
+	errs := []struct {
+		err       *LLMError
+		target    error
+		retryable bool
+	}{
+		{&LLMError{StatusCode: 401, Err: ErrAuthFailed}, ErrAuthFailed, false},
+		{&LLMError{StatusCode: 403, Err: ErrAuthFailed}, ErrAuthFailed, false},
+		{&LLMError{StatusCode: 429, Err: ErrRateLimit}, ErrRateLimit, true},
+		{&LLMError{StatusCode: 500, Err: ErrServerUnavailable}, ErrServerUnavailable, true},
+		{&LLMError{StatusCode: 503, Err: ErrServerUnavailable}, ErrServerUnavailable, true},
+		{&LLMError{StatusCode: 400, Err: ErrInvalidRequest}, ErrInvalidRequest, false},
+		{&LLMError{Kind: ErrorKindStream, Err: ErrStreamInterrupted}, ErrStreamInterrupted, true},
+	}
+
+	for _, tc := range errs {
+		if !errors.Is(tc.err, tc.target) {
+			t.Errorf("expected errors.Is(%v, %v)", tc.err, tc.target)
+		}
+		if tc.err.IsRetryable() != tc.retryable {
+			t.Errorf("expected retryable=%v for %+v", tc.retryable, tc.err)
+		}
+		if tc.err.Unwrap() != tc.target {
+			t.Errorf("expected Unwrap() to return %v", tc.target)
+		}
+		if tc.err.Error() == "" {
+			t.Errorf("expected non-empty Error string")
+		}
+	}
+
+	emptyErr := &LLMError{}
+	if emptyErr.Error() != "deepseek error" {
+		t.Errorf("expected 'deepseek error', got %q", emptyErr.Error())
+	}
+	if emptyErr.Is(nil) {
+		t.Error("Is(nil) should be false")
+	}
+}
+

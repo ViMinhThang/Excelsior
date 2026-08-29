@@ -1,243 +1,158 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  WindowMinimizeIcon,
-  WindowMaximizeIcon,
-  WindowCloseIcon
-} from "./Icons";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { WindowCloseIcon, WindowMaximizeIcon, WindowMinimizeIcon } from "./Icons";
 
-interface MenuBarProps {
+type MenuId = "file" | "view" | "window" | null;
+
+type MenuBarProps = {
   onNewChat: () => void;
   onOpenFolder: () => void;
   onOpenSettings: () => void;
   onToggleSidebar: () => void;
   currentTheme: string;
   onSaveTheme: (theme: string) => void;
-  wsState?: "connecting" | "connected" | "disconnected" | "error";
-  projectName?: string;
-}
+};
 
-export default function MenuBar({
-  onNewChat,
-  onOpenFolder,
-  onOpenSettings,
-  onToggleSidebar,
-  currentTheme,
-  onSaveTheme
-}: MenuBarProps) {
-  const [openMenu, setOpenMenu] = useState<"file" | "view" | "window" | null>(null);
-  const barRef = useRef<HTMLDivElement>(null);
+type MenuItemProps = {
+  onClick: () => void;
+  children: React.ReactNode;
+  kbd?: string;
+  danger?: boolean;
+};
+
+const THEMES = ["default-dark", "default-light", "rose-pine-dark", "rose-pine-light"] as const;
+
+const MenuItem = React.memo(function MenuItem({ onClick, children, kbd, danger }: MenuItemProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex justify-between items-center ${danger ? "text-rose-400" : ""}`}
+    >
+      <span>{children}</span>
+      {kbd && <span className="text-[10px] text-[var(--text-dim)] font-mono">{kbd}</span>}
+    </button>
+  );
+});
+
+function MenuBar({ onNewChat, onOpenFolder, onOpenSettings, onToggleSidebar, currentTheme, onSaveTheme }: MenuBarProps) {
+  const [openMenu, setOpenMenu] = useState<MenuId>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) {
-        setOpenMenu(null);
-      }
+    const handler = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpenMenu(null);
     };
-    window.addEventListener("mousedown", handleClickOutside);
-    return () => window.removeEventListener("mousedown", handleClickOutside);
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
   }, []);
 
-  const handleWindowControl = (action: "minimize" | "maximize" | "close") => {
-    const electronAPI = (window as any).electronAPI;
-    if (electronAPI?.windowControl) {
-      electronAPI.windowControl(action);
-    }
-  };
+  const handleWindowControl = useCallback((action: "minimize" | "maximize" | "close") => {
+    window.electronAPI?.windowControl?.(action);
+  }, []);
+
+  const toggleMenu = useCallback((id: MenuId) => {
+    setOpenMenu((prev) => (prev === id ? null : id));
+  }, []);
+
+  const closeMenu = useCallback(() => setOpenMenu(null), []);
 
   return (
     <div
-      ref={barRef}
-      className="h-9 px-2 flex items-center justify-between select-none bg-[var(--bg-sidebar)] text-[var(--text-muted)] text-[13px] shrink-0 z-40 transition-colors"
-      style={{ WebkitAppRegion: "drag" } as any}
+      ref={rootRef}
+      className="h-9 px-2 flex items-center justify-between bg-[var(--bg-sidebar)] text-[var(--text-muted)] text-[13px] shrink-0 z-40"
+      style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
-      {/* Left: File | View | Window menus */}
-      <div
-        className="flex items-center gap-1"
-        style={{ WebkitAppRegion: "no-drag" } as any}
-      >
-        {/* File Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setOpenMenu(openMenu === "file" ? null : "file")}
-            className={`px-2.5 py-1 rounded-md hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-main)] transition-colors ${
-              openMenu === "file" ? "bg-[var(--bg-card-hover)] text-[var(--text-main)] font-medium" : ""
-            }`}
-          >
-            File
-          </button>
-          {openMenu === "file" && (
-            <div
-              className="absolute left-0 top-full mt-1.5 w-48 bg-[var(--bg-card)] rounded-xl shadow-2xl py-1.5 text-xs text-[var(--text-main)] z-50 animate-fade-in"
-              onClick={() => setOpenMenu(null)}
+      <nav className="flex items-center gap-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties} aria-label="Application menu">
+        {(["file", "view", "window"] as const).map((menu) => (
+          <div key={menu} className="relative">
+            <button
+              type="button"
+              onClick={() => toggleMenu(menu)}
+              aria-expanded={openMenu === menu}
+              aria-haspopup="menu"
+              className={`px-2.5 py-1 rounded-md hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-main)] capitalize ${openMenu === menu ? "bg-[var(--bg-card-hover)] text-[var(--text-main)] font-medium" : ""}`}
             >
-              <div
-                onClick={onNewChat}
-                className="px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between"
-              >
-                <span>New Chat</span>
-                <span className="text-[10px] text-[var(--text-dim)] font-mono">Ctrl+N</span>
-              </div>
-              <div
-                onClick={onOpenFolder}
-                className="px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between"
-              >
-                <span>Open Folder...</span>
-                <span className="text-[10px] text-[var(--text-dim)] font-mono">Ctrl+O</span>
-              </div>
-              <div className="my-1.5 h-[1px] bg-[var(--bg-input)]" />
-              <div
-                onClick={onOpenSettings}
-                className="px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between font-medium text-[var(--accent)]"
-              >
-                <span>Settings...</span>
-                <span className="text-[10px] text-[var(--text-dim)] font-mono">Ctrl+,</span>
-              </div>
-              <div className="my-1.5 h-[1px] bg-[var(--bg-input)]" />
-              <div
-                onClick={() => handleWindowControl("close")}
-                className="px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer text-rose-400 flex items-center justify-between"
-              >
-                <span>Exit</span>
-                <span className="text-[10px] text-[var(--text-dim)] font-mono">Alt+F4</span>
-              </div>
-            </div>
-          )}
-        </div>
+              {menu}
+            </button>
 
-        {/* View Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setOpenMenu(openMenu === "view" ? null : "view")}
-            className={`px-2.5 py-1 rounded-md hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-main)] transition-colors ${
-              openMenu === "view" ? "bg-[var(--bg-card-hover)] text-[var(--text-main)] font-medium" : ""
-            }`}
-          >
-            View
-          </button>
-          {openMenu === "view" && (
-            <div
-              className="absolute left-0 top-full mt-1.5 w-48 bg-[var(--bg-card)] rounded-xl shadow-2xl py-1.5 text-xs text-[var(--text-main)] z-50 animate-fade-in"
-              onClick={() => setOpenMenu(null)}
-            >
+            {openMenu === menu && (
               <div
-                onClick={onToggleSidebar}
-                className="px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between"
+                role="menu"
+                className="absolute left-0 top-full mt-1.5 w-48 bg-[var(--bg-card)] rounded-xl shadow-2xl py-1.5 text-xs z-50 animate-fade-in"
+                onClick={closeMenu}
               >
-                <span>Toggle Sidebar</span>
-                <span className="text-[10px] text-[var(--text-dim)] font-mono">Ctrl+B</span>
-              </div>
-              <div className="my-1.5 h-[1px] bg-[var(--bg-input)]" />
-              <div className="px-3 py-1 text-[10px] text-[var(--text-dim)] font-semibold uppercase">
-                Theme
-              </div>
-              <div
-                onClick={() => onSaveTheme("default-dark")}
-                className={`px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between ${
-                  currentTheme === "default-dark" ? "text-[var(--accent)] font-semibold" : ""
-                }`}
-              >
-                <span>Default Dark</span>
-                {currentTheme === "default-dark" && <span>✓</span>}
-              </div>
-              <div
-                onClick={() => onSaveTheme("rose-pine-dark")}
-                className={`px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between ${
-                  currentTheme === "rose-pine-dark" ? "text-[var(--accent)] font-semibold" : ""
-                }`}
-              >
-                <span>Rosé Pine Dark</span>
-                {currentTheme === "rose-pine-dark" && <span>✓</span>}
-              </div>
-              <div
-                onClick={() => onSaveTheme("rose-pine-light")}
-                className={`px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between ${
-                  currentTheme === "rose-pine-light" ? "text-[var(--accent)] font-semibold" : ""
-                }`}
-              >
-                <span>Rosé Pine Light</span>
-                {currentTheme === "rose-pine-light" && <span>✓</span>}
-              </div>
-              <div className="my-1.5 h-[1px] bg-[var(--bg-input)]" />
-              <div
-                onClick={() => {
-                  const electronAPI = (window as any).electronAPI;
-                  if (electronAPI?.toggleDevTools) electronAPI.toggleDevTools();
-                }}
-                className="px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between"
-              >
-                <span>Developer Tools</span>
-                <span className="text-[10px] text-[var(--text-dim)] font-mono">F12</span>
-              </div>
-            </div>
+                {menu === "file" && (
+                  <>
+                    <MenuItem onClick={onNewChat} kbd="Ctrl+N">New Chat</MenuItem>
+                    <MenuItem onClick={onOpenFolder} kbd="Ctrl+O">Open Folder…</MenuItem>
+                    <div className="my-1.5 h-px bg-[var(--bg-input)]" />
+                    <MenuItem onClick={onOpenSettings} kbd="Ctrl+,">Settings…</MenuItem>
+                    <div className="my-1.5 h-px bg-[var(--bg-input)]" />
+                    <MenuItem onClick={() => handleWindowControl("close")} danger kbd="Alt+F4">Exit</MenuItem>
+                  </>
+                )}
 
-          )}
-        </div>
+                {menu === "view" && (
+                  <>
+                    <MenuItem onClick={onToggleSidebar} kbd="Ctrl+B">Toggle Sidebar</MenuItem>
+                    <div className="my-1.5 h-px bg-[var(--bg-input)]" />
+                    <div className="px-3 py-1 text-[10px] text-[var(--text-dim)] font-semibold uppercase">Theme</div>
+                    {THEMES.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={currentTheme === t}
+                        onClick={() => onSaveTheme(t)}
+                        className={`w-full text-left px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex justify-between ${currentTheme === t ? "text-[var(--accent)] font-semibold" : ""}`}
+                      >
+                        <span>{t}</span>
+                        {currentTheme === t && <span aria-hidden>✓</span>}
+                      </button>
+                    ))}
+                    <div className="my-1.5 h-px bg-[var(--bg-input)]" />
+                    <MenuItem onClick={() => window.electronAPI?.toggleDevTools?.()} kbd="F12">Developer Tools</MenuItem>
+                  </>
+                )}
 
-        {/* Window Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setOpenMenu(openMenu === "window" ? null : "window")}
-            className={`px-2.5 py-1 rounded-md hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-main)] transition-colors ${
-              openMenu === "window" ? "bg-[var(--bg-card-hover)] text-[var(--text-main)] font-medium" : ""
-            }`}
-          >
-            Window
-          </button>
-          {openMenu === "window" && (
-            <div
-              className="absolute left-0 top-full mt-1.5 w-44 bg-[var(--bg-card)] rounded-xl shadow-2xl py-1.5 text-xs text-[var(--text-main)] z-50 animate-fade-in"
-              onClick={() => setOpenMenu(null)}
-            >
-              <div
-                onClick={() => handleWindowControl("minimize")}
-                className="px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between"
-              >
-                <span>Minimize</span>
+                {menu === "window" && (
+                  <>
+                    <MenuItem onClick={() => handleWindowControl("minimize")}>Minimize</MenuItem>
+                    <MenuItem onClick={() => handleWindowControl("maximize")}>Maximize / Restore</MenuItem>
+                    <div className="my-1.5 h-px bg-[var(--bg-input)]" />
+                    <MenuItem onClick={() => handleWindowControl("close")} danger>Close</MenuItem>
+                  </>
+                )}
               </div>
-              <div
-                onClick={() => handleWindowControl("maximize")}
-                className="px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between"
-              >
-                <span>Maximize / Restore</span>
-              </div>
-              <div className="my-1.5 h-[1px] bg-[var(--bg-input)]" />
-              <div
-                onClick={() => handleWindowControl("close")}
-                className="px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer text-rose-400 flex items-center justify-between"
-              >
-                <span>Close</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+            )}
+          </div>
+        ))}
+      </nav>
 
-      {/* Middle: Draggable space */}
-      <div className="flex-1 h-full" />
+      <div className="flex-1 h-full" aria-hidden />
 
-      {/* Right: Window Controls */}
-      <div
-        className="flex items-center h-full"
-        style={{ WebkitAppRegion: "no-drag" } as any}
-      >
+      <div className="flex items-center h-full" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         <button
+          type="button"
+          aria-label="Minimize window"
           onClick={() => handleWindowControl("minimize")}
-          className="h-full px-3.5 text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] flex items-center justify-center transition-colors"
-          title="Minimize"
+          className="h-full px-3.5 text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)]"
         >
           <WindowMinimizeIcon className="w-3.5 h-3.5" />
         </button>
         <button
+          type="button"
+          aria-label="Maximize window"
           onClick={() => handleWindowControl("maximize")}
-          className="h-full px-3.5 text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] flex items-center justify-center transition-colors"
-          title="Maximize"
+          className="h-full px-3.5 text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)]"
         >
           <WindowMaximizeIcon className="w-3.5 h-3.5" />
         </button>
         <button
+          type="button"
+          aria-label="Close window"
           onClick={() => handleWindowControl("close")}
-          className="h-full px-3.5 text-[var(--text-dim)] hover:text-white hover:bg-rose-600 flex items-center justify-center transition-colors"
-          title="Close"
+          className="h-full px-3.5 text-[var(--text-dim)] hover:text-white hover:bg-rose-600"
         >
           <WindowCloseIcon className="w-3.5 h-3.5" />
         </button>
@@ -245,3 +160,5 @@ export default function MenuBar({
     </div>
   );
 }
+
+export default React.memo(MenuBar);

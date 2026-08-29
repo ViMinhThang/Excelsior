@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -13,6 +12,8 @@ import (
 	"time"
 )
 
+// BashTool executes a shell command in the workspace directory.
+// On Windows it uses PowerShell, elsewhere sh. Output is stdout+stderr combined.
 type BashTool struct{ Root string }
 
 func (t *BashTool) Name() string { return "bash" }
@@ -27,25 +28,25 @@ func (t *BashTool) Parameters() any {
 }
 func (t *BashTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", fmt.Errorf("bash: context canceled: %w", err)
+		return "", &ToolError{Tool: "bash", Op: "exec", Err: err}
 	}
 	var a struct {
 		Command string `json:"command"`
 		Timeout *int   `json:"timeout"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", fmt.Errorf("bash: invalid args: %w", err)
+		return "", &ToolError{Tool: "bash", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
 	}
 	a.Command = strings.TrimSpace(a.Command)
 	if a.Command == "" {
-		return "", errors.New("bash: command is required")
+		return "", &ToolError{Tool: "bash", Op: "validate", Err: fmt.Errorf("%w: command is required", ErrInvalidArguments)}
 	}
 	if len(a.Command) > MaxCommandLength {
-		return "", fmt.Errorf("bash: command too long (%d > %d)", len(a.Command), MaxCommandLength)
+		return "", &ToolError{Tool: "bash", Op: "validate", Err: fmt.Errorf("%w: length %d exceeds max %d", ErrCommandTooLong, len(a.Command), MaxCommandLength)}
 	}
 	if a.Timeout != nil {
 		if *a.Timeout < 1000 || *a.Timeout > 120000 {
-			return "", fmt.Errorf("bash: timeout must be 1000..120000 ms, got %d", *a.Timeout)
+			return "", &ToolError{Tool: "bash", Op: "validate", Err: fmt.Errorf("%w: timeout must be 1000..120000 ms, got %d", ErrInvalidArguments, *a.Timeout)}
 		}
 	}
 	slog.Info("bash", "command", a.Command, "dir", t.Root)

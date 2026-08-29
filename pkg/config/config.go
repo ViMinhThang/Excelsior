@@ -1,20 +1,25 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"excelsior/pkg/llm"
 )
 
 const (
-	DefaultModel   = "deepseek-v4-flash"
+	// DefaultModel is used when DEEPSEEK_MODEL is unset.
+	DefaultModel = "deepseek-v4-flash"
+	// DefaultBaseURL is the DeepSeek API base URL.
 	DefaultBaseURL = "https://api.deepseek.com"
 )
+
+// ResolveModel trims whitespace and returns the model ID.
+// Only two models are supported: deepseek-v4-flash and deepseek-v4-pro (no aliases).
+func ResolveModel(m string) string {
+	return strings.TrimSpace(m)
+}
 
 // Config holds DeepSeek-first settings. Env vars are the source of truth;
 // flags override them.
@@ -28,9 +33,6 @@ type Config struct {
 	EngineURL   string // ws://... for remote engine (TUI/desktop/mobile)
 }
 
-// ResolveModel resolves aliases and trims via llm.ResolveModel (single source of truth).
-func ResolveModel(m string) string { return llm.ResolveModel(m) }
-
 func envOr(key, fallback string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
@@ -38,6 +40,8 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+// FromEnv reads configuration from environment variables.
+// Defaults: BaseURL=https://api.deepseek.com, Model=deepseek-v4-flash, Temperature=0.7.
 func FromEnv() Config {
 	return Config{
 		APIKey:      strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")),
@@ -52,20 +56,52 @@ func FromEnv() Config {
 // Validate returns error if config is invalid for production use.
 func (c Config) Validate() error {
 	if strings.TrimSpace(c.APIKey) == "" {
-		return errors.New("DEEPSEEK_API_KEY is required")
+		return &ConfigError{
+			Field:   "APIKey",
+			Message: "DEEPSEEK_API_KEY is required",
+			Err:     ErrMissingAPIKey,
+		}
 	}
 	if strings.TrimSpace(c.Model) == "" {
-		return errors.New("model is required")
+		return &ConfigError{
+			Field:   "Model",
+			Message: "model is required",
+			Err:     ErrMissingModel,
+		}
 	}
-	u, err := url.Parse(strings.TrimSpace(c.BaseURL))
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return fmt.Errorf("invalid BaseURL %q: %w", c.BaseURL, err)
+	base := strings.TrimSpace(c.BaseURL)
+	u, err := url.Parse(base)
+	if err != nil {
+		return &ConfigError{
+			Field:   "BaseURL",
+			Value:   c.BaseURL,
+			Message: fmt.Sprintf("invalid BaseURL %q", c.BaseURL),
+			Err:     fmt.Errorf("%w: %v", ErrInvalidBaseURL, err),
+		}
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return &ConfigError{
+			Field:   "BaseURL",
+			Value:   c.BaseURL,
+			Message: fmt.Sprintf("invalid BaseURL %q: scheme and host required", c.BaseURL),
+			Err:     ErrInvalidBaseURL,
+		}
 	}
 	if u.Scheme != "https" && u.Scheme != "http" {
-		return fmt.Errorf("BaseURL scheme must be https or http, got %q", u.Scheme)
+		return &ConfigError{
+			Field:   "BaseURL",
+			Value:   c.BaseURL,
+			Message: fmt.Sprintf("BaseURL scheme must be https or http, got %q", u.Scheme),
+			Err:     ErrInvalidBaseURL,
+		}
 	}
 	if c.Temperature < 0 || c.Temperature > 2 {
-		return fmt.Errorf("temperature must be 0..2, got %v", c.Temperature)
+		return &ConfigError{
+			Field:   "Temperature",
+			Value:   c.Temperature,
+			Message: fmt.Sprintf("temperature must be 0..2, got %v", c.Temperature),
+			Err:     ErrInvalidTemperature,
+		}
 	}
 	return nil
 }
@@ -80,20 +116,47 @@ func ResolveWorkspace(flagWS, cfgWS string) (string, error) {
 		var err error
 		ws, err = os.Getwd()
 		if err != nil {
-			return "", fmt.Errorf("getwd: %w", err)
+			return "", &ConfigError{
+				Field:   "Workspace",
+				Message: "failed to get current working directory",
+				Err:     fmt.Errorf("%w: %v", ErrInvalidWorkspace, err),
+			}
 		}
 	}
 	if !filepath.IsAbs(ws) {
 		abs, err := filepath.Abs(ws)
 		if err != nil {
-			return "", fmt.Errorf("workspace: %w", err)
+			return "", &ConfigError{
+				Field:   "Workspace",
+				Value:   ws,
+				Message: "failed to resolve absolute path",
+				Err:     fmt.Errorf("%w: %v", ErrInvalidWorkspace, err),
+			}
 		}
 		ws = abs
 	}
 	if info, err := os.Stat(ws); err != nil {
-		return "", fmt.Errorf("workspace %q: %w", ws, err)
+		if os.IsNotExist(err) {
+			return "", &ConfigError{
+				Field:   "Workspace",
+				Value:   ws,
+				Message: fmt.Sprintf("workspace %q: %v", ws, err),
+				Err:     fmt.Errorf("%w: %v", ErrWorkspaceNotFound, err),
+			}
+		}
+		return "", &ConfigError{
+			Field:   "Workspace",
+			Value:   ws,
+			Message: fmt.Sprintf("workspace %q: %v", ws, err),
+			Err:     fmt.Errorf("%w: %v", ErrInvalidWorkspace, err),
+		}
 	} else if !info.IsDir() {
-		return "", fmt.Errorf("workspace %q is not a directory", ws)
+		return "", &ConfigError{
+			Field:   "Workspace",
+			Value:   ws,
+			Message: fmt.Sprintf("workspace %q is not a directory", ws),
+			Err:     ErrWorkspaceNotDir,
+		}
 	}
 	return ws, nil
 }

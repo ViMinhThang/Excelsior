@@ -34,7 +34,7 @@ func (c *WSClient) logger() *slog.Logger {
 func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDelta func(protocol.Delta) error, askHandler tools.QuestionHandler) error {
 	u, err := url.Parse(c.URL)
 	if err != nil {
-		return fmt.Errorf("ws parse url: %w", err)
+		return &EngineError{Op: "dial", Err: fmt.Errorf("%w: %v", ErrInvalidURL, err)}
 	}
 	if u.Scheme == "http" {
 		u.Scheme = "ws"
@@ -46,7 +46,7 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 	}
 	ws, _, err := sharedDialer.DialContext(ctx, u.String(), nil)
 	if err != nil {
-		return fmt.Errorf("ws dial %s: %w", u.String(), err)
+		return &EngineError{Op: "dial", Err: fmt.Errorf("%w: %v", ErrConnectionFailed, err)}
 	}
 	defer ws.Close()
 	ws.SetReadLimit(1 << 20)
@@ -54,23 +54,23 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 	env := protocol.NewEnvelope(protocol.TypeChatReq, req)
 	b, err := json.Marshal(env)
 	if err != nil {
-		return fmt.Errorf("ws marshal: %w", err)
+		return &EngineError{Op: "write", MsgType: protocol.TypeChatReq, Err: fmt.Errorf("ws marshal: %w", err)}
 	}
 	if err := ws.WriteMessage(websocket.TextMessage, b); err != nil {
-		return fmt.Errorf("ws write chat.req: %w", err)
+		return &EngineError{Op: "write", MsgType: protocol.TypeChatReq, Err: fmt.Errorf("%w: %v", ErrConnectionClosed, err)}
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			_ = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			return fmt.Errorf("ws context canceled: %w", ctx.Err())
+			return &EngineError{Op: "read", Err: fmt.Errorf("ws context canceled: %w", ctx.Err())}
 		default:
 		}
 		ws.SetReadDeadline(time.Now().Add(60 * time.Second))
 		_, data, err := ws.ReadMessage()
 		if err != nil {
-			return fmt.Errorf("ws read: %w", err)
+			return &EngineError{Op: "read", Err: fmt.Errorf("%w: %v", ErrConnectionClosed, err)}
 		}
 		var in protocol.Envelope
 		if err := json.Unmarshal(data, &in); err != nil {
@@ -94,9 +94,9 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 			var m map[string]string
 			_ = in.Decode(&m)
 			if e, ok := m["error"]; ok {
-				return fmt.Errorf("engine error: %s", e)
+				return &EngineError{Op: "chat", Err: fmt.Errorf("%w: %s", ErrRemoteEngine, e)}
 			}
-			return fmt.Errorf("engine error: %v", string(in.Payload))
+			return &EngineError{Op: "chat", Err: fmt.Errorf("%w: %v", ErrRemoteEngine, string(in.Payload))}
 		case protocol.TypeAskReq:
 			var ar protocol.AskReq
 			if err := in.Decode(&ar); err != nil {
@@ -105,7 +105,10 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 			}
 			if askHandler == nil {
 				askHandler = func(ctx context.Context, rq tools.AskRequest) (tools.AskResponse, error) {
-					// fallback auto-select
+					// fallback auto-select with empty options guard
+					if len(rq.Options) == 0 {
+						return tools.AskResponse{Selected: -1, Answer: "", Label: ""}, nil
+					}
 					return tools.AskResponse{Selected: 0, Answer: rq.Options[0], Label: rq.Options[0]}, nil
 				}
 			}

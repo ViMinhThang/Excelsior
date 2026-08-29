@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -10,15 +9,15 @@ import (
 // secureJoin jails p within root, rejecting absolutes, traversal and symlink escapes.
 func secureJoin(root, p string) (string, error) {
 	if strings.TrimSpace(p) == "" {
-		return "", errors.New("path is empty")
+		return "", &ToolError{Op: "security", Path: p, Err: ErrEmptyPath}
 	}
 	if filepath.IsAbs(p) || strings.HasPrefix(p, "/") || strings.HasPrefix(p, "\\") {
-		return "", fmt.Errorf("absolute paths not allowed: %q", p)
+		return "", &ToolError{Op: "security", Path: p, Err: fmt.Errorf("%w: %q", ErrAbsolutePath, p)}
 	}
 	clean := filepath.Clean(filepath.FromSlash(p))
 	full := filepath.Join(root, clean)
 	if rel, err := filepath.Rel(root, full); err != nil || isOutside(rel) {
-		return "", fmt.Errorf("path outside workspace: %q", p)
+		return "", &ToolError{Op: "security", Path: p, Err: fmt.Errorf("%w: %q", ErrPathOutsideWorkspace, p)}
 	}
 	// Symlink escape: check real path of target or its parent.
 	checkPath := full
@@ -31,7 +30,7 @@ func secureJoin(root, p string) (string, error) {
 			realRoot = rr
 		}
 		if rel, err := filepath.Rel(realRoot, real); err == nil && isOutside(rel) {
-			return "", fmt.Errorf("symlink outside workspace: %q", p)
+			return "", &ToolError{Op: "security", Path: p, Err: fmt.Errorf("%w: symlink outside workspace: %q", ErrPathOutsideWorkspace, p)}
 		}
 	}
 	return full, nil

@@ -23,25 +23,6 @@ func waitForChunk(ch <-chan agent.StreamEvent) tea.Cmd {
 	}
 }
 
-func tuiAskHandler(parentCtx context.Context) tools.QuestionHandler {
-	return func(hctx context.Context, req tools.AskRequest) (tools.AskResponse, error) {
-		respCh := make(chan tools.AskResponse, 1)
-		prog := activeProgram.Load()
-		if prog == nil {
-			return tools.AskResponse{}, fmt.Errorf("no active TUI")
-		}
-		prog.Send(askRequestMsg{Req: req, RespChan: respCh})
-		select {
-		case resp := <-respCh:
-			return resp, nil
-		case <-hctx.Done():
-			return tools.AskResponse{}, hctx.Err()
-		case <-parentCtx.Done():
-			return tools.AskResponse{}, parentCtx.Err()
-		}
-	}
-}
-
 func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.TODO())
 	m.cancel = cancel
@@ -57,9 +38,17 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 	ch := make(chan agent.StreamEvent, 128)
 	m.streamCh = ch
 
+	var handler tools.QuestionHandler
+	if m.cfg.AskDispatcher != nil {
+		handler = m.cfg.AskDispatcher.Handler(ctx)
+	} else {
+		handler = func(hctx context.Context, req tools.AskRequest) (tools.AskResponse, error) {
+			return tools.AskResponse{}, fmt.Errorf("no ask dispatcher configured")
+		}
+	}
+
 	if m.cfg.EngineURL != "" {
 		wsClient := &engine.WSClient{URL: m.cfg.EngineURL}
-		handler := tuiAskHandler(ctx)
 		go func() {
 			chatReq := protocol.ChatReq{Model: m.cfg.Model, Messages: msgs}
 			err := wsClient.StreamRemote(ctx, chatReq, func(d protocol.Delta) error {
@@ -92,9 +81,9 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	ctxWithHandler := tools.WithQuestionHandler(ctx, tuiAskHandler(ctx))
+	ctxWithHandler := tools.WithQuestionHandler(ctx, handler)
 	go func() {
-		_, err := m.cfg.Agent.Run(ctxWithHandler, agent.RunOptions{
+		_, err := m.cfg.Agent.RunWithHistory(ctxWithHandler, agent.RunOptions{
 			Messages: msgs,
 			OnEvent: func(ev agent.StreamEvent) {
 				select {

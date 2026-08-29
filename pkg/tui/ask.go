@@ -1,13 +1,61 @@
 package tui
 
 import (
+	"context"
+	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"excelsior/pkg/tools"
 )
+
+// UISink defines the interface for delivering messages to an interactive UI event loop.
+type UISink interface {
+	Send(msg tea.Msg)
+}
+
+// AskDispatcher coordinates between background agent tool execution and the interactive UI.
+type AskDispatcher struct {
+	sink atomic.Pointer[UISink]
+}
+
+// NewAskDispatcher creates a fresh dispatcher instance.
+func NewAskDispatcher() *AskDispatcher {
+	return &AskDispatcher{}
+}
+
+// SetSink attaches the active UI message sink.
+func (d *AskDispatcher) SetSink(sink UISink) {
+	if sink == nil {
+		d.sink.Store(nil)
+		return
+	}
+	d.sink.Store(&sink)
+}
+
+// Handler returns a QuestionHandler that bridges tool requests to the UI sink.
+func (d *AskDispatcher) Handler(parentCtx context.Context) tools.QuestionHandler {
+	return func(hctx context.Context, req tools.AskRequest) (tools.AskResponse, error) {
+		sinkPtr := d.sink.Load()
+		if sinkPtr == nil || *sinkPtr == nil {
+			return tools.AskResponse{}, fmt.Errorf("no active TUI sink")
+		}
+		respCh := make(chan tools.AskResponse, 1)
+		(*sinkPtr).Send(askRequestMsg{Req: req, RespChan: respCh})
+		select {
+		case resp := <-respCh:
+			return resp, nil
+		case <-hctx.Done():
+			return tools.AskResponse{}, hctx.Err()
+		case <-parentCtx.Done():
+			return tools.AskResponse{}, parentCtx.Err()
+		}
+	}
+}
 
 // askRequestMsg is sent from the agent goroutine (via QuestionHandler) to the Bubble Tea program.
 type askRequestMsg struct {

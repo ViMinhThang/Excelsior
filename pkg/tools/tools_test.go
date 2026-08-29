@@ -3,8 +3,10 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -27,22 +29,26 @@ func tmpWorkspace(t *testing.T) string {
 func TestSecureJoin(t *testing.T) {
 	root := t.TempDir()
 	tests := []struct {
-		p       string
-		wantErr bool
+		p         string
+		wantErr   bool
+		targetErr error
 	}{
-		{"a.txt", false},
-		{"sub/a.go", false},
-		{"../escape", true},
-		{"/etc/passwd", true},
-		{"\\etc\\passwd", true},
-		{"C:\\Windows\\System32", true},
-		{"a.txt", false},
-		{"", true},
+		{"a.txt", false, nil},
+		{"sub/a.go", false, nil},
+		{"../escape", true, ErrPathOutsideWorkspace},
+		{"/etc/passwd", true, ErrAbsolutePath},
+		{"\\etc\\passwd", true, ErrAbsolutePath},
+		{"C:\\Windows\\System32", true, ErrAbsolutePath},
+		{"a.txt", false, nil},
+		{"", true, ErrEmptyPath},
 	}
 	for _, tc := range tests {
 		_, err := secureJoin(root, tc.p)
 		if (err != nil) != tc.wantErr {
 			t.Errorf("secureJoin %q err=%v wantErr=%v", tc.p, err, tc.wantErr)
+		}
+		if tc.targetErr != nil && !errors.Is(err, tc.targetErr) {
+			t.Errorf("secureJoin %q expected errors.Is(err, %v), got %v", tc.p, tc.targetErr, err)
 		}
 	}
 }
@@ -91,6 +97,8 @@ func TestGlobTool(t *testing.T) {
 	badArgs, _ := json.Marshal(map[string]string{"pattern": "../**/*.txt"})
 	if _, err := gt.Execute(context.Background(), badArgs); err == nil {
 		t.Fatal("expected error on traversal pattern")
+	} else if !errors.Is(err, ErrPathOutsideWorkspace) {
+		t.Fatalf("expected ErrPathOutsideWorkspace, got %v", err)
 	}
 }
 
@@ -130,6 +138,8 @@ func TestViewTool(t *testing.T) {
 	argsBad, _ := json.Marshal(map[string]any{"filePath": "hello.txt", "offset": 0, "limit": 999})
 	if _, err := vt.Execute(context.Background(), argsBad); err == nil {
 		t.Fatal("expected limit validation error")
+	} else if !errors.Is(err, ErrInvalidArguments) {
+		t.Fatalf("expected ErrInvalidArguments, got %v", err)
 	}
 	// legacy lineStart/lineEnd compat
 	argsLeg, _ := json.Marshal(map[string]any{"filePath": "hello.txt", "lineStart": 1, "lineEnd": 1})
@@ -140,6 +150,8 @@ func TestViewTool(t *testing.T) {
 	args2, _ := json.Marshal(map[string]string{"filePath": "../escape"})
 	if _, err := vt.Execute(context.Background(), args2); err == nil {
 		t.Fatal("expected traversal error")
+	} else if !errors.Is(err, ErrPathOutsideWorkspace) {
+		t.Fatalf("expected ErrPathOutsideWorkspace, got %v", err)
 	}
 }
 
@@ -182,6 +194,14 @@ func TestWriteAndEditTool(t *testing.T) {
 	eArgs2, _ := json.Marshal(map[string]string{"filePath": "out.txt", "oldText": "", "newText": "x"})
 	if _, err := et.Execute(context.Background(), eArgs2); err == nil {
 		t.Fatal("expected empty oldText error")
+	} else if !errors.Is(err, ErrInvalidArguments) {
+		t.Fatalf("expected ErrInvalidArguments, got %v", err)
+	}
+
+	// oldText not found
+	eArgsNotFound, _ := json.Marshal(map[string]string{"filePath": "out.txt", "oldText": "nonexistent_pattern", "newText": "x"})
+	if _, err := et.Execute(context.Background(), eArgsNotFound); err == nil || !errors.Is(err, ErrTextNotFound) {
+		t.Fatalf("expected ErrTextNotFound, got %v", err)
 	}
 }
 
@@ -191,10 +211,14 @@ func TestBashTool_Validation(t *testing.T) {
 	// empty command
 	if _, err := bt.Execute(context.Background(), json.RawMessage(`{"command":""}`)); err == nil {
 		t.Fatal("expected empty command error")
+	} else if !errors.Is(err, ErrInvalidArguments) {
+		t.Fatalf("expected ErrInvalidArguments, got %v", err)
 	}
 	// bad timeout
 	if _, err := bt.Execute(context.Background(), json.RawMessage(`{"command":"echo hi","timeout":999999}`)); err == nil {
 		t.Fatal("expected timeout validation error")
+	} else if !errors.Is(err, ErrInvalidArguments) {
+		t.Fatalf("expected ErrInvalidArguments, got %v", err)
 	}
 }
 
@@ -213,6 +237,17 @@ func TestGrepTool(t *testing.T) {
 	args2, _ := json.Marshal(map[string]string{"pattern": ""})
 	if _, err := gt.Execute(context.Background(), args2); err == nil {
 		t.Fatal("expected empty pattern error")
+	} else if !errors.Is(err, ErrInvalidArguments) {
+		t.Fatalf("expected ErrInvalidArguments, got %v", err)
+	}
+
+	// Test nil Path does not panic on non-dir stat error
+	fileRoot := filepath.Join(root, "hello.txt")
+	gtFile := &GrepTool{Root: fileRoot}
+	args3, _ := json.Marshal(map[string]any{"pattern": "hello", "path": nil})
+	_, err = gtFile.Execute(context.Background(), args3)
+	if err == nil || !errors.Is(err, ErrNotADirectory) {
+		t.Fatalf("expected ErrNotADirectory for file root, got %v", err)
 	}
 }
 
@@ -258,3 +293,75 @@ func TestAskTool(t *testing.T) {
 		t.Fatalf("manual response missing: %q", out3)
 	}
 }
+
+func TestToolError_FormattingAndUnwrap(t *testing.T) {
+	te1 := &ToolError{
+		Tool: "edit",
+		Op:   "replace",
+		Path: "file.go",
+		Msg:  "failed to edit",
+		Err:  ErrAmbiguousMatch,
+	}
+	if !errors.Is(te1, ErrAmbiguousMatch) {
+		t.Errorf("expected Is(ErrAmbiguousMatch)")
+	}
+	if !errors.Is(te1, ErrOldTextAmbiguous) {
+		t.Errorf("expected Is(ErrOldTextAmbiguous) alias")
+	}
+	if te1.Unwrap() != ErrAmbiguousMatch {
+		t.Errorf("expected Unwrap() to return ErrAmbiguousMatch")
+	}
+	if !strings.Contains(te1.Error(), "failed to edit") {
+		t.Errorf("expected error message in string: %s", te1.Error())
+	}
+
+	sentinels := []error{
+		ErrToolNotFound, ErrInvalidArguments, ErrEmptyPath, ErrAbsolutePath,
+		ErrPathOutsideWorkspace, ErrFileTooLarge, ErrCommandTooLong, ErrCommandTimeout,
+		ErrTextNotFound, ErrNotADirectory, ErrIsADirectory, ErrOffsetOutOfRange,
+	}
+	for _, s := range sentinels {
+		te := &ToolError{Err: s}
+		if !errors.Is(te, s) {
+			t.Errorf("expected Is(%v) on ToolError", s)
+		}
+	}
+
+	teEmpty := &ToolError{}
+	if teEmpty.Error() != "tools" {
+		t.Errorf("expected 'tools', got %q", teEmpty.Error())
+	}
+	if teEmpty.Is(nil) {
+		t.Error("Is(nil) should be false")
+	}
+}
+
+func TestToolParametersSchemas(t *testing.T) {
+	root := tmpWorkspace(t)
+	reg := DefaultRegistry(root)
+	for _, tool := range reg.All() {
+		if tool.Name() == "" {
+			t.Error("empty tool name")
+		}
+		if tool.Description() == "" {
+			t.Errorf("tool %s has empty description", tool.Name())
+		}
+		if tool.Parameters() == nil {
+			t.Errorf("tool %s has nil parameters", tool.Name())
+		}
+	}
+}
+
+func TestEditTool_AmbiguousMatch(t *testing.T) {
+	root := tmpWorkspace(t)
+	filePath := filepath.Join(root, "duplicate.txt")
+	_ = os.WriteFile(filePath, []byte("repeat\nrepeat\n"), 0o644)
+
+	et := &EditTool{Root: root}
+	args, _ := json.Marshal(map[string]string{"filePath": "duplicate.txt", "oldText": "repeat", "newText": "replaced"})
+	_, err := et.Execute(context.Background(), args)
+	if err == nil || !errors.Is(err, ErrAmbiguousMatch) {
+		t.Fatalf("expected ErrAmbiguousMatch for repeated text, got %v", err)
+	}
+}
+

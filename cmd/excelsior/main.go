@@ -51,7 +51,7 @@ Examples:
   excelsior                          # launch TUI (interactive)
   excelsior tui                      # launch TUI explicitly
   excelsior "add tests for pkg/tools"
-  excelsior -m deepseek-reasoner "explain this repo"
+  excelsior -m deepseek-v4-pro "explain this repo"
   echo "fix the bug in main.go" | excelsior`,
 		Args: cobra.ArbitraryArgs,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
@@ -70,7 +70,7 @@ Examples:
 			return runAgent(cmd.Context(), cfg, *model, *workspace, *system, *sessionID, prompt)
 		},
 	}
-	root.PersistentFlags().StringVarP(model, "model", "m", "", "DeepSeek model (deepseek-v4-flash, deepseek-v4-pro→reasoner, deepseek-chat, deepseek-reasoner)")
+	root.PersistentFlags().StringVarP(model, "model", "m", "", "DeepSeek model (deepseek-v4-flash, deepseek-v4-pro)")
 	root.PersistentFlags().StringVarP(workspace, "workspace", "w", "", "Workspace root (default: cwd)")
 	root.PersistentFlags().StringVar(system, "system", "", "Override system prompt")
 	root.PersistentFlags().StringVar(sessionID, "session", "", "Session ID for persistence (.excelsior/sessions)")
@@ -91,9 +91,7 @@ func newModelsCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			for _, line := range []string{
 				"deepseek-v4-flash  — V4 Flash, fast, tool-calling (default)",
-				"deepseek-v4-pro    — V4 Pro (alias to deepseek-reasoner), reasoning",
-				"deepseek-chat      — V3, general, tool-calling",
-				"deepseek-reasoner  — R1, reasoning_content, slower but stronger",
+				"deepseek-v4-pro    — V4 Pro, reasoning",
 			} {
 				fmt.Fprintln(cmd.OutOrStdout(), line)
 			}
@@ -175,7 +173,13 @@ func runAgent(ctx context.Context, cfg config.Config, model, workspace, system, 
 	fmt.Fprintln(os.Stderr, "")
 	if sessionID != "" && res != nil {
 		toSave := res.Messages
-		if err := session.NewStore(filepath.Join(workspace, ".excelsior", "sessions")).Save(ctx, sessionID, toSave); err != nil {
+		store := session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
+		rec, err := store.Load(sessionID)
+		if err != nil {
+			rec = session.Record{ID: sessionID}
+		}
+		rec.Messages = toSave
+		if err := store.Save(rec); err != nil {
 			slog.Warn("session save failed", "id", sessionID, "err", err)
 		}
 	}
@@ -197,13 +201,13 @@ func loadHistory(ctx context.Context, workspace, sessionID string) []llm.Message
 	if sessionID == "" {
 		return nil
 	}
-	store := session.NewStore(filepath.Join(workspace, ".excelsior", "sessions"))
-	msgs, err := store.Load(ctx, sessionID)
+	store := session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
+	rec, err := store.Load(sessionID)
 	if err == nil {
-		slog.Info("session loaded", "id", sessionID, "messages", len(msgs))
-		return msgs
+		slog.Info("session loaded", "id", sessionID, "messages", len(rec.Messages))
+		return rec.Messages
 	}
-	if !errors.Is(err, os.ErrNotExist) {
+	if !errors.Is(err, session.ErrSessionNotFound) && !errors.Is(err, os.ErrNotExist) {
 		slog.Warn("session load failed, starting fresh", "id", sessionID, "err", err)
 	}
 	return nil

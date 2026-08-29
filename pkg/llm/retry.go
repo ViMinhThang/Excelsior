@@ -3,9 +3,7 @@ package llm
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -25,25 +23,6 @@ func (p RetryPolicy) shouldRetry(status int, err error, attempt int) (bool, time
 
 var defaultRetry = RetryPolicy{MaxRetries: 2, BaseDelay: 200 * time.Millisecond}
 
-// LLMError is a typed error for API failures.
-type LLMError struct {
-	StatusCode int
-	Body       string
-	Err        error
-}
-
-func (e *LLMError) Error() string {
-	if e.Body != "" {
-		return fmt.Sprintf("deepseek: %d %s", e.StatusCode, e.Body)
-	}
-	if e.Err != nil {
-		return fmt.Sprintf("deepseek: %d: %v", e.StatusCode, e.Err)
-	}
-	return fmt.Sprintf("deepseek: %d", e.StatusCode)
-}
-
-func (e *LLMError) Unwrap() error { return e.Err }
-
 // isRetryable returns true for transient failures.
 func isRetryable(status int, err error) bool {
 	if err != nil {
@@ -52,17 +31,13 @@ func isRetryable(status int, err error) bool {
 		}
 		var le *LLMError
 		if errors.As(err, &le) {
-			// typed LLM error — check status below
-		} else {
-			if errors.Is(err, context.DeadlineExceeded) {
-				return true
-			}
-			msg := err.Error()
-			if strings.Contains(msg, "marshal") || strings.Contains(msg, "invalid BaseURL") {
-				return false
-			}
-			return true // network errors are retryable
+			return le.IsRetryable()
 		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			return true
+		}
+		// Any other error that is not an LLMError is assumed to be a network error if not canceled
+		return true
 	}
 	switch status {
 	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout, http.StatusInternalServerError:
@@ -70,4 +45,9 @@ func isRetryable(status int, err error) bool {
 	default:
 		return false
 	}
+}
+
+// IsRetryable reports whether err is a transient retryable failure.
+func IsRetryable(err error) bool {
+	return isRetryable(0, err)
 }

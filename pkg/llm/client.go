@@ -22,12 +22,13 @@ import (
 type Client struct {
 	APIKey     string
 	BaseURL    string // default https://api.deepseek.com
-	Model      string // e.g. deepseek-v4-flash, deepseek-reasoner
+	Model      string // e.g. deepseek-v4-flash, deepseek-v4-pro
 	HTTPClient *http.Client
 	Logger     *slog.Logger
 }
 
-// NewClient returns a new Client instance.
+// NewClient returns a new [Client] with the given API key and model.
+// BaseURL defaults to https://api.deepseek.com when empty.
 func NewClient(apiKey, model string) *Client {
 	return &Client{
 		APIKey: apiKey,
@@ -35,6 +36,7 @@ func NewClient(apiKey, model string) *Client {
 	}
 }
 
+// ModelName returns the configured model name.
 func (c *Client) ModelName() string { return c.Model }
 
 func (c *Client) baseURL() string {
@@ -46,11 +48,26 @@ func (c *Client) baseURL() string {
 
 func (c *Client) validate() error {
 	if strings.TrimSpace(c.APIKey) == "" {
-		return errors.New("deepseek: APIKey is empty (set DEEPSEEK_API_KEY)")
+		return &LLMError{
+			Kind:  ErrorKindAuth,
+			Model: c.Model,
+			Err:   ErrMissingAPIKey,
+		}
 	}
 	u, err := url.Parse(c.baseURL())
-	if err != nil || u.Scheme == "" || u.Host == "" {
-		return fmt.Errorf("deepseek: invalid BaseURL %q: %w", c.baseURL(), err)
+	if err != nil {
+		return &LLMError{
+			Kind:  ErrorKindValidation,
+			Model: c.Model,
+			Err:   fmt.Errorf("%w: %v", ErrInvalidBaseURL, err),
+		}
+	}
+	if u.Scheme == "" || u.Host == "" {
+		return &LLMError{
+			Kind:  ErrorKindValidation,
+			Model: c.Model,
+			Err:   fmt.Errorf("%w: missing scheme or host in %q", ErrInvalidBaseURL, c.baseURL()),
+		}
 	}
 	return nil
 }
@@ -62,7 +79,7 @@ func (c *Client) logger() *slog.Logger {
 	return slog.Default()
 }
 
-var defaultHTTPClient = &http.Client{Timeout: 120 * time.Second}
+var defaultHTTPClient = &http.Client{}
 
 func (c *Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {
@@ -71,7 +88,10 @@ func (c *Client) httpClient() *http.Client {
 	return defaultHTTPClient
 }
 
-// StreamChat calls DeepSeek with stream=true and invokes onDelta for each fragment.
+// StreamChat calls POST /chat/completions with stream=true and invokes onDelta
+// for each SSE fragment. It retries transient 429/5xx errors with exponential
+// backoff. The returned *Message aggregates Content, ReasoningContent, and
+// ToolCalls from the stream.
 func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error) {
 	if err := c.validate(); err != nil {
 		return nil, err
@@ -117,11 +137,11 @@ func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(D
 func (c *Client) doStreamOnce(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("deepseek: marshal request: %w", err)
+		return nil, &LLMError{Kind: ErrorKindValidation, Model: req.Model, Err: fmt.Errorf("marshal request: %w", err)}
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL()+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("deepseek: new request: %w", err)
+		return nil, &LLMError{Kind: ErrorKindValidation, Model: req.Model, Err: fmt.Errorf("new request: %w", err)}
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
@@ -129,21 +149,48 @@ func (c *Client) doStreamOnce(ctx context.Context, req ChatRequest, onDelta func
 
 	resp, err := c.httpClient().Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("deepseek: do request: %w", err)
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
+		return nil, &LLMError{Kind: ErrorKindNetwork, Model: req.Model, Err: err}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		b, readErr := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
-		if readErr != nil {
-			return nil, &LLMError{StatusCode: resp.StatusCode, Err: readErr}
+		var underlying error = readErr
+		var kind ErrorKind
+		switch resp.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			kind = ErrorKindAuth
+			underlying = ErrAuthFailed
+		case http.StatusTooManyRequests:
+			kind = ErrorKindRateLimit
+			underlying = ErrRateLimit
+		case http.StatusBadRequest:
+			kind = ErrorKindValidation
+			underlying = ErrInvalidRequest
+		default:
+			if resp.StatusCode >= 500 && resp.StatusCode <= 599 {
+				kind = ErrorKindServer
+				underlying = ErrServerUnavailable
+			} else {
+				kind = ErrorKindUnknown
+			}
 		}
-		return nil, &LLMError{StatusCode: resp.StatusCode, Body: util.Truncate(string(b), 500)}
+		return nil, &LLMError{
+			StatusCode: resp.StatusCode,
+			Kind:       kind,
+			Model:      req.Model,
+			Body:       util.Truncate(string(b), 500),
+			Err:        underlying,
+		}
 	}
 	return parseSSEStream(ctx, resp.Body, c.logger(), onDelta)
 }
 
-// Chat is a non-streaming helper (single request, no onDelta required).
+// Chat is a non-streaming helper that calls [Client.StreamChat] and discards
+// per-delta callbacks. Useful for tests or single-turn completions.
 func (c *Client) Chat(ctx context.Context, req ChatRequest) (*Message, error) {
 	req.Stream = true
 	return c.StreamChat(ctx, req, func(Delta) error { return nil })

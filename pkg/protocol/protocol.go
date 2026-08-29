@@ -2,10 +2,12 @@ package protocol
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"excelsior/pkg/llm"
 )
 
+// Ver is the protocol version string applied to every [Envelope].
 const Ver = "v1"
 
 // Envelope is the WS frame.
@@ -21,19 +23,49 @@ func (e Envelope) Decode(v any) error {
 	if len(e.Payload) == 0 {
 		return nil
 	}
-	return json.Unmarshal(e.Payload, v)
+	if err := json.Unmarshal(e.Payload, v); err != nil {
+		return &ProtocolError{
+			Op:      "decode",
+			MsgType: e.Type,
+			Ver:     e.Ver,
+			Err:     fmt.Errorf("%w: %v", ErrInvalidPayload, err),
+		}
+	}
+	return nil
 }
 
-// MustMarshalPayload marshals v to json.RawMessage. Panics on error (caller bug).
-func MustMarshalPayload(v any) json.RawMessage {
+// MarshalPayload marshals v to json.RawMessage safely without panicking.
+// Returns nil, nil if v is nil.
+func MarshalPayload(v any) (json.RawMessage, error) {
 	if v == nil {
-		return nil
+		return nil, nil
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
-		panic(err)
+		return nil, &ProtocolError{
+			Op:  "marshal",
+			Err: fmt.Errorf("%w: %v", ErrInvalidPayload, err),
+		}
+	}
+	return b, nil
+}
+
+// MustMarshalPayload marshals v to json.RawMessage. Returns nil on error instead of panicking.
+func MustMarshalPayload(v any) json.RawMessage {
+	b, err := MarshalPayload(v)
+	if err != nil {
+		return nil
 	}
 	return b
+}
+
+// BuildEnvelope creates a versioned envelope, returning a ProtocolError if payload serialization fails.
+func BuildEnvelope(id, typ string, payload any) (Envelope, error) {
+	raw, err := MarshalPayload(payload)
+	if err != nil {
+		return Envelope{}, err
+	}
+	return Envelope{Ver: Ver, ID: id, Type: typ, Payload: raw}, nil
 }
 
 // NewEnvelope creates a versioned envelope with JSON payload.
@@ -46,7 +78,7 @@ func NewEnvelopeWithID(id, typ string, payload any) Envelope {
 	return Envelope{Ver: Ver, ID: id, Type: typ, Payload: MustMarshalPayload(payload)}
 }
 
-// Types
+// Message types for [Envelope.Type].
 const (
 	TypeChatReq       = "chat.req"
 	TypeDelta         = "delta"
@@ -101,33 +133,51 @@ type AskResp struct {
 	Label    string `json:"label"`
 }
 
-// Session management (unified for TUI/web/desktop)
+// Session management (unified for TUI/web/desktop).
+
+// SessionListReq requests the session list.
 type SessionListReq struct{}
+
+// SessionListResp contains the session list.
 type SessionListResp struct {
 	Sessions []SessionInfo `json:"sessions"`
 }
+
+// SessionInfo is a summary entry for the session sidebar.
 type SessionInfo struct {
 	ID        string `json:"id"`
 	Title     string `json:"title"` // first user message truncated
 	UpdatedAt string `json:"updatedAt"`
 	Count     int    `json:"count"`
 }
+
+// SessionCreateReq creates a new session.
 type SessionCreateReq struct {
 	Title string `json:"title,omitempty"`
 }
+
+// SessionCreateResp is the result of [TypeSessionCreate].
 type SessionCreateResp struct {
 	ID string `json:"id"`
 }
+
+// SessionDeleteReq deletes a session.
 type SessionDeleteReq struct {
 	ID string `json:"id"`
 }
+
+// SessionDataReq requests the full message history for a session.
 type SessionDataReq struct {
 	ID string `json:"id"`
 }
+
+// SessionDataResp contains the full message history for a session.
 type SessionDataResp struct {
 	ID       string        `json:"id"`
 	Messages []llm.Message `json:"messages"`
 }
+
+// SessionRenameReq renames a session.
 type SessionRenameReq struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`

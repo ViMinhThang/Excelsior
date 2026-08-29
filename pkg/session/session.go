@@ -4,130 +4,126 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"excelsior/pkg/llm"
 	"excelsior/pkg/util"
 )
 
-// Store is a per-session store. Each session is a single atomic JSON file
-// (legacy JSONL multi-line files are read via last valid line for compat).
-type Store struct {
-	Dir string // e.g. .excelsior/sessions
-}
-
-func NewStore(dir string) *Store { return &Store{Dir: dir} }
-
-type Record struct {
-	ID        string        `json:"id"`
-	Title     string        `json:"title,omitempty"`
-	CreatedAt time.Time     `json:"createdAt"`
-	Messages  []llm.Message `json:"messages"`
-}
-
 var validID = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{1,63}$`)
 
 func sanitizeID(id string) (string, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return "", errors.New("session id is empty")
+		return "", &SessionError{Op: "validate", Err: ErrEmptySessionID}
 	}
 	if strings.Contains(id, "/") || strings.Contains(id, "\\") || strings.Contains(id, "..") {
-		return "", fmt.Errorf("invalid session id %q: must not contain path separators", id)
+		return "", &SessionError{Op: "validate", SessionID: id, Err: fmt.Errorf("invalid session id %q: %w: must not contain path separators", id, ErrInvalidSessionID)}
 	}
 	if !validID.MatchString(id) {
-		return "", fmt.Errorf("invalid session id %q: must match %s", id, validID.String())
+		return "", &SessionError{Op: "validate", SessionID: id, Err: fmt.Errorf("invalid session id %q: %w: must match %s", id, ErrInvalidSessionID, validID.String())}
 	}
 	return id, nil
 }
 
-func (s *Store) path(id string) (string, error) {
+// DirStore implements [Store] persisting sessions as atomic JSONL files on disk.
+type DirStore struct {
+	Dir string // Directory path e.g. .excelsior/sessions
+	mu  sync.RWMutex
+}
+
+// Compile-time interface check.
+var _ Store = (*DirStore)(nil)
+
+// NewDirStore returns a DirStore rooted at dir.
+func NewDirStore(dir string) *DirStore {
+	return &DirStore{Dir: dir}
+}
+
+// NewStore is a constructor alias for NewDirStore.
+func NewStore(dir string) *DirStore {
+	return NewDirStore(dir)
+}
+
+// New is a constructor alias for NewDirStore.
+func New(dir string) *DirStore {
+	return NewDirStore(dir)
+}
+
+func (s *DirStore) path(id string) (string, error) {
 	safe, err := sanitizeID(id)
 	if err != nil {
 		return "", err
 	}
 	if strings.TrimSpace(s.Dir) == "" {
-		return "", errors.New("session store dir is empty")
+		return "", &SessionError{Op: "path", SessionID: id, Err: ErrStoreDirEmpty}
 	}
 	p := filepath.Join(s.Dir, safe+".jsonl")
 	rel, err := filepath.Rel(s.Dir, p)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("session path outside store dir: %q", id)
+		return "", &SessionError{Op: "path", SessionID: id, Path: p, Err: fmt.Errorf("session path outside store dir: %q: %w", id, ErrInvalidSessionID)}
 	}
 	return p, nil
 }
 
-func checkCtx(ctx context.Context) error {
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("session canceled: %w", err)
-	}
-	return nil
-}
+// Save persists a session record atomically to disk.
+func (s *DirStore) Save(rec Record) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-// SaveWithTitle overwrites the session file atomically.
-func (s *Store) SaveWithTitle(ctx context.Context, id string, title string, messages []llm.Message) error {
-	if err := checkCtx(ctx); err != nil {
-		return err
-	}
-	p, err := s.path(id)
+	p, err := s.path(rec.ID)
 	if err != nil {
 		return err
 	}
-	if messages == nil {
-		messages = []llm.Message{}
+	if rec.CreatedAt.IsZero() {
+		rec.CreatedAt = time.Now().UTC()
 	}
-	rec := Record{ID: id, Title: title, CreatedAt: time.Now().UTC(), Messages: messages}
+	rec.UpdatedAt = time.Now().UTC()
+	if rec.Messages == nil {
+		rec.Messages = []llm.Message{}
+	}
+
 	b, err := json.Marshal(rec)
 	if err != nil {
-		return fmt.Errorf("session marshal: %w", err)
+		return &SessionError{Op: "save", SessionID: rec.ID, Err: fmt.Errorf("session marshal: %w", err)}
 	}
 	b = append(b, '\n')
 	if err := util.WriteAtomic(p, b, 0o600); err != nil {
-		return err
+		return &SessionError{Op: "save", SessionID: rec.ID, Path: p, Err: err}
 	}
-	slog.Debug("session saved", "id", id, "title", title, "messages", len(messages))
+	slog.Debug("session saved", "id", rec.ID, "title", rec.Title, "messages", len(rec.Messages))
 	return nil
 }
 
-func (s *Store) Save(ctx context.Context, id string, messages []llm.Message) error {
-	var title string
-	if rec, err := s.LoadRecord(ctx, id); err == nil && rec != nil {
-		title = rec.Title
-	}
-	return s.SaveWithTitle(ctx, id, title, messages)
-}
+// Load retrieves a session record by ID from disk.
+func (s *DirStore) Load(id string) (Record, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-func (s *Store) Rename(ctx context.Context, id, title string) error {
-	var msgs []llm.Message
-	if rec, err := s.LoadRecord(ctx, id); err == nil && rec != nil {
-		msgs = rec.Messages
-	}
-	return s.SaveWithTitle(ctx, id, title, msgs)
-}
-
-func (s *Store) LoadRecord(ctx context.Context, id string) (*Record, error) {
-	if err := checkCtx(ctx); err != nil {
-		return nil, err
-	}
 	p, err := s.path(id)
 	if err != nil {
-		return nil, err
+		return Record{}, err
 	}
 	b, err := os.ReadFile(p)
 	if err != nil {
-		return nil, fmt.Errorf("session load: %w", err)
+		if os.IsNotExist(err) {
+			return Record{}, &SessionError{Op: "load", SessionID: id, Path: p, Err: fmt.Errorf("session load: %w: %v", ErrSessionNotFound, err)}
+		}
+		return Record{}, &SessionError{Op: "load", SessionID: id, Path: p, Err: fmt.Errorf("session load: %w", err)}
 	}
 	b = bytes.TrimSpace(b)
 	if len(b) == 0 {
-		return nil, fmt.Errorf("session empty: %q", id)
+		return Record{}, &SessionError{Op: "load", SessionID: id, Path: p, Err: fmt.Errorf("session empty: %q: %w", id, ErrEmptySession)}
 	}
+
 	lines := bytes.Split(b, []byte{'\n'})
 	var lastErr error
 	for i := len(lines) - 1; i >= 0; i-- {
@@ -141,84 +137,176 @@ func (s *Store) LoadRecord(ctx context.Context, id string) (*Record, error) {
 			slog.Warn("session corrupted line, skipping", "id", id, "line", i, "err", err)
 			continue
 		}
-		return &rec, nil
+		if rec.ID == "" {
+			rec.ID = id
+		}
+		if rec.UpdatedAt.IsZero() {
+			rec.UpdatedAt = rec.CreatedAt
+		}
+		return rec, nil
 	}
 	if lastErr != nil {
-		return nil, fmt.Errorf("session %q: no valid record: %w", id, lastErr)
+		return Record{}, &SessionError{Op: "load", SessionID: id, Path: p, Err: fmt.Errorf("session %q: no valid record: %w: %v", id, ErrCorruptedSession, lastErr)}
 	}
-	return nil, fmt.Errorf("session empty: %q", id)
+	return Record{}, &SessionError{Op: "load", SessionID: id, Path: p, Err: fmt.Errorf("session empty: %q: %w", id, ErrEmptySession)}
 }
 
-func (s *Store) Load(ctx context.Context, id string) ([]llm.Message, error) {
-	rec, err := s.LoadRecord(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	return rec.Messages, nil
-}
+// List returns metadata summaries for all sessions, sorted by UpdatedAt descending.
+func (s *DirStore) List() ([]SessionMeta, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
-func sessionIDFromFile(e os.DirEntry) (string, bool) {
-	if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
-		return "", false
-	}
-	id := strings.TrimSuffix(e.Name(), ".jsonl")
-	if _, err := sanitizeID(id); err != nil {
-		slog.Warn("session list skipping invalid id", "file", e.Name(), "err", err)
-		return "", false
-	}
-	return id, true
-}
-
-func (s *Store) List(ctx context.Context) ([]string, error) {
-	if err := checkCtx(ctx); err != nil {
-		return nil, err
+	if strings.TrimSpace(s.Dir) == "" {
+		return nil, &SessionError{Op: "list", Err: ErrStoreDirEmpty}
 	}
 	entries, err := os.ReadDir(s.Dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("session list: %w", err)
+		return nil, &SessionError{Op: "list", Err: fmt.Errorf("session list: %w", err)}
 	}
-	var out []string
+
+	var metas []SessionMeta
 	for _, e := range entries {
-		if id, ok := sessionIDFromFile(e); ok {
-			out = append(out, id)
+		if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
+			continue
 		}
+		id := strings.TrimSuffix(e.Name(), ".jsonl")
+		if _, err := sanitizeID(id); err != nil {
+			continue
+		}
+		// Load record to get accurate metadata
+		p := filepath.Join(s.Dir, e.Name())
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue
+		}
+		b = bytes.TrimSpace(b)
+		if len(b) == 0 {
+			continue
+		}
+		lines := bytes.Split(b, []byte{'\n'})
+		var rec Record
+		found := false
+		for i := len(lines) - 1; i >= 0; i-- {
+			line := bytes.TrimSpace(lines[i])
+			if len(line) == 0 {
+				continue
+			}
+			if err := json.Unmarshal(line, &rec); err == nil {
+				found = true
+				break
+			}
+		}
+		if !found {
+			continue
+		}
+		if rec.ID == "" {
+			rec.ID = id
+		}
+		updatedAt := rec.UpdatedAt
+		if updatedAt.IsZero() {
+			updatedAt = rec.CreatedAt
+		}
+		metas = append(metas, SessionMeta{
+			ID:        rec.ID,
+			Title:     rec.Title,
+			CreatedAt: rec.CreatedAt,
+			UpdatedAt: updatedAt,
+			MsgCount:  len(rec.Messages),
+		})
 	}
-	return out, nil
+
+	sort.Slice(metas, func(i, j int) bool {
+		return metas[i].UpdatedAt.After(metas[j].UpdatedAt)
+	})
+	return metas, nil
 }
 
-func (s *Store) Delete(ctx context.Context, id string) error {
+// Delete removes the session file for id. Missing files return nil (idempotent).
+func (s *DirStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	p, err := s.path(id)
 	if err != nil {
 		return err
 	}
 	if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("session delete: %w", err)
+		return &SessionError{Op: "delete", SessionID: id, Path: p, Err: fmt.Errorf("session delete: %w", err)}
 	}
 	slog.Info("session deleted", "id", id)
 	return nil
 }
 
-func (s *Store) Prune(ctx context.Context, maxAge time.Duration) (int, error) {
-	if err := checkCtx(ctx); err != nil {
-		return 0, err
+// Latest returns the most recently updated session record.
+func (s *DirStore) Latest() (Record, error) {
+	metas, err := s.List()
+	if err != nil {
+		return Record{}, err
+	}
+	if len(metas) == 0 {
+		return Record{}, &SessionError{Op: "latest", Err: ErrSessionNotFound}
+	}
+	return s.Load(metas[0].ID)
+}
+
+// SaveWithTitle saves a session with a title and messages.
+func (s *DirStore) SaveWithTitle(ctx context.Context, id, title string, messages []llm.Message) error {
+	if err := ctx.Err(); err != nil {
+		return &SessionError{Op: "save", SessionID: id, Err: err}
+	}
+	return s.Save(Record{ID: id, Title: title, Messages: messages})
+}
+
+// LoadRecord retrieves a pointer to Record for backward compatibility.
+func (s *DirStore) LoadRecord(ctx context.Context, id string) (*Record, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, &SessionError{Op: "load", SessionID: id, Err: err}
+	}
+	rec, err := s.Load(id)
+	if err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+// Rename updates the title of an existing session record.
+func (s *DirStore) Rename(ctx context.Context, id, title string) error {
+	if err := ctx.Err(); err != nil {
+		return &SessionError{Op: "rename", SessionID: id, Err: err}
+	}
+	rec, err := s.Load(id)
+	if err != nil {
+		return err
+	}
+	rec.Title = title
+	return s.Save(rec)
+}
+
+// Prune deletes sessions whose ModTime is older than maxAge and returns the count deleted.
+func (s *DirStore) Prune(ctx context.Context, maxAge time.Duration) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if strings.TrimSpace(s.Dir) == "" {
+		return 0, &SessionError{Op: "prune", Err: ErrStoreDirEmpty}
 	}
 	entries, err := os.ReadDir(s.Dir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, nil
 		}
-		return 0, fmt.Errorf("session prune list: %w", err)
+		return 0, &SessionError{Op: "prune", Err: fmt.Errorf("session prune list: %w", err)}
 	}
 	cutoff := time.Now().Add(-maxAge)
 	var deleted int
 	for _, e := range entries {
 		if ctx.Err() != nil {
-			return deleted, fmt.Errorf("session prune canceled: %w", ctx.Err())
+			return deleted, &SessionError{Op: "prune", Err: fmt.Errorf("session prune canceled: %w", ctx.Err())}
 		}
-		if _, ok := sessionIDFromFile(e); !ok {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
 			continue
 		}
 		info, err := e.Info()

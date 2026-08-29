@@ -18,7 +18,8 @@ const (
 	maxSSEStream = 10 << 20
 )
 
-// parseSSEStream reads SSE lines from r, invoking onDelta on valid chunks and aggregating into final Message.
+// parseSSEStream reads SSE lines from r, invoking onDelta for each valid
+// chunk and aggregating Content/ReasoningContent/ToolCalls into the final Message.
 func parseSSEStream(ctx context.Context, r io.Reader, logger *slog.Logger, onDelta func(Delta) error) (*Message, error) {
 	var finalContent, finalReasoning strings.Builder
 	finalContent.Grow(4096)
@@ -114,9 +115,9 @@ func parseSSEStream(ctx context.Context, r io.Reader, logger *slog.Logger, onDel
 	}
 	if err := scanner.Err(); err != nil {
 		if err == bufio.ErrTooLong {
-			return nil, fmt.Errorf("deepseek: SSE line too large (%d > %d)", maxSSLine+1, maxSSLine)
+			return nil, &LLMError{Kind: ErrorKindStream, Err: fmt.Errorf("deepseek: SSE line too large (%d > %d): %w", maxSSLine+1, maxSSLine, ErrLineTooLarge)}
 		}
-		return nil, fmt.Errorf("deepseek: read SSE: %w", err)
+		return nil, &LLMError{Kind: ErrorKindStream, Err: fmt.Errorf("deepseek: %w: %v", ErrStreamInterrupted, err)}
 	}
 
 	msg := &Message{

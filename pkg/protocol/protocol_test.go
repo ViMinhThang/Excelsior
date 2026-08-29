@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"excelsior/pkg/llm"
@@ -241,3 +242,140 @@ func TestChatReqRoundTrip(t *testing.T) {
 		t.Errorf("reasoning content not preserved: got %q", decoded.Messages[2].ReasoningContent)
 	}
 }
+
+func TestMustMarshalPayload_NonPanicking(t *testing.T) {
+	// Pass an un-marshalable type (channel) to MustMarshalPayload
+	ch := make(chan int)
+	result := MustMarshalPayload(ch)
+	if result != nil {
+		t.Errorf("expected nil result for un-marshalable type, got %v", result)
+	}
+}
+
+func TestMarshalPayload_Errors(t *testing.T) {
+	ch := make(chan int)
+	raw, err := MarshalPayload(ch)
+	if err == nil {
+		t.Fatal("expected error from MarshalPayload on un-marshalable channel")
+	}
+	if raw != nil {
+		t.Errorf("expected nil raw on error, got %v", raw)
+	}
+	if !errors.Is(err, ErrInvalidPayload) {
+		t.Errorf("expected errors.Is(err, ErrInvalidPayload), got %v", err)
+	}
+	var protoErr *ProtocolError
+	if !errors.As(err, &protoErr) {
+		t.Fatalf("expected errors.As(err, &protoErr), got %v", err)
+	}
+	if protoErr.Op != "marshal" {
+		t.Errorf("expected Op 'marshal', got %q", protoErr.Op)
+	}
+}
+
+func TestEnvelopeDecode_Errors(t *testing.T) {
+	env := Envelope{
+		Ver:     Ver,
+		Type:    TypeChatReq,
+		Payload: json.RawMessage(`{not-valid-json`),
+	}
+	var req ChatReq
+	err := env.Decode(&req)
+	if err == nil {
+		t.Fatal("expected error decoding invalid json")
+	}
+	if !errors.Is(err, ErrInvalidPayload) {
+		t.Errorf("expected errors.Is(err, ErrInvalidPayload), got %v", err)
+	}
+	var protoErr *ProtocolError
+	if !errors.As(err, &protoErr) {
+		t.Fatalf("expected *ProtocolError, got %v", err)
+	}
+	if protoErr.Op != "decode" || protoErr.MsgType != TypeChatReq {
+		t.Errorf("unexpected ProtocolError fields: %+v", protoErr)
+	}
+}
+
+func TestBuildEnvelope(t *testing.T) {
+	env, err := BuildEnvelope("id-1", TypePing, nil)
+	if err != nil {
+		t.Fatalf("BuildEnvelope failed: %v", err)
+	}
+	if env.Ver != Ver || env.ID != "id-1" || env.Type != TypePing {
+		t.Errorf("unexpected envelope: %+v", env)
+	}
+
+	ch := make(chan int)
+	_, err = BuildEnvelope("id-2", TypePing, ch)
+	if err == nil || !errors.Is(err, ErrInvalidPayload) {
+		t.Fatalf("expected ErrInvalidPayload for channel payload, got %v", err)
+	}
+}
+
+func TestNewEnvelopeHelpers(t *testing.T) {
+	env1 := NewEnvelope(TypePing, map[string]string{"foo": "bar"})
+	if env1.Ver != Ver || env1.Type != TypePing || env1.ID != "" {
+		t.Errorf("unexpected NewEnvelope: %+v", env1)
+	}
+
+	env2 := NewEnvelopeWithID("id-99", TypeDone, map[string]string{"status": "ok"})
+	if env2.Ver != Ver || env2.Type != TypeDone || env2.ID != "id-99" {
+		t.Errorf("unexpected NewEnvelopeWithID: %+v", env2)
+	}
+
+	// Decode empty payload
+	envEmpty := Envelope{Ver: Ver, Type: TypePong}
+	var dummy map[string]string
+	if err := envEmpty.Decode(&dummy); err != nil {
+		t.Errorf("Decode on empty payload should succeed, got %v", err)
+	}
+}
+
+func TestProtocolError_FormattingAndUnwrap(t *testing.T) {
+	pe1 := &ProtocolError{
+		Op:      "decode",
+		MsgType: TypeChatReq,
+		Ver:     "v1",
+		Msg:     "malformed json body",
+		Err:     ErrInvalidPayload,
+	}
+	if !errors.Is(pe1, ErrInvalidPayload) {
+		t.Errorf("expected Is(ErrInvalidPayload)")
+	}
+	if pe1.Unwrap() != ErrInvalidPayload {
+		t.Errorf("expected Unwrap() to return underlying error")
+	}
+	s := pe1.Error()
+	if s == "" {
+		t.Error("expected non-empty Error string")
+	}
+
+	pe2 := &ProtocolError{
+		Op:  "validate",
+		Err: ErrUnsupportedVersion,
+	}
+	if !errors.Is(pe2, ErrUnsupportedVersion) {
+		t.Errorf("expected Is(ErrUnsupportedVersion)")
+	}
+
+	pe3 := &ProtocolError{
+		Err: ErrCorruptEnvelope,
+	}
+	if !errors.Is(pe3, ErrCorruptEnvelope) {
+		t.Errorf("expected Is(ErrCorruptEnvelope)")
+	}
+
+	pe4 := &ProtocolError{
+		Err: ErrUnknownType,
+	}
+	if !errors.Is(pe4, ErrUnknownType) {
+		t.Errorf("expected Is(ErrUnknownType)")
+	}
+
+	peEmpty := &ProtocolError{}
+	if peEmpty.Is(nil) {
+		t.Error("Is(nil) should be false")
+	}
+}
+
+

@@ -1,164 +1,149 @@
-import React, { useState, useRef } from "react";
-import {
-  ChevronDownIcon,
-  PlusIcon,
-  SendArrowIcon
-} from "./Icons";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDownIcon, PlusIcon, SendArrowIcon } from "./Icons";
 
 export const AVAILABLE_MODELS = [
   { id: "deepseek-v4-flash", name: "deepseek-v4-flash", badge: "Flash" },
-  { id: "deepseek-v4-pro", name: "deepseek-v4-pro", badge: "Pro" }
-];
+  { id: "deepseek-v4-pro", name: "deepseek-v4-pro", badge: "Pro" },
+] as const;
 
-interface ComposerProps {
-  mode: "centered" | "docked";
+export type ComposerMode = "centered" | "docked";
+
+type ComposerProps = {
+  mode: ComposerMode;
   selectedModel: string;
-  onSelectModel: (modelId: string) => void;
+  onSelectModel: (id: string) => void;
   onSend: (text: string) => void;
   disabled?: boolean;
   isStreaming?: boolean;
-}
+};
 
-export default function Composer({
-  mode,
-  selectedModel,
-  onSelectModel,
-  onSend,
-  disabled = false,
-  isStreaming = false
-}: ComposerProps) {
+function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStreaming }: ComposerProps) {
   const [text, setText] = useState("");
-  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const activeModelObj =
-    AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const handleSend = () => {
-    const trimmed = text.trim();
-    if (!trimmed || disabled || isStreaming) return;
-    onSend(trimmed);
-    setText("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
-  };
-
-  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
-    }
-  };
-
+  const activeModel = AVAILABLE_MODELS.find((m) => m.id === selectedModel) ?? AVAILABLE_MODELS[0];
   const canSend = text.trim().length > 0 && !disabled && !isStreaming;
 
-  const composerCard = (
-    <div className="w-full bg-[var(--bg-card)] focus-within:bg-[var(--bg-card)] rounded-2xl p-3.5 shadow-[var(--card-shadow)] transition-all flex flex-col justify-between min-h-[108px]">
+  const resize = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, []);
 
-      {/* Input Area */}
+  const handleSend = useCallback(() => {
+    const trimmed = text.trim();
+    if (!trimmed || !canSend) return;
+    onSend(trimmed);
+    setText("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
+  }, [canSend, onSend, text]);
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend]
+  );
+
+  // Close model menu on outside click
+  useEffect(() => {
+    if (!modelMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setModelMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [modelMenuOpen]);
+
+  const card = (
+    <div className="w-full bg-[var(--bg-card)] rounded-2xl p-3.5 shadow-[var(--card-shadow)] flex flex-col min-h-[108px]">
       <textarea
         ref={textareaRef}
         rows={1}
         value={text}
-        onChange={handleInput}
+        onChange={(e) => {
+          setText(e.target.value);
+          resize();
+        }}
         onKeyDown={handleKeyDown}
         placeholder="Ask anything, @ to mention, / for actions"
         disabled={disabled || isStreaming}
+        aria-label="Composer input"
         className="w-full bg-transparent text-[var(--text-main)] placeholder-[var(--text-dim)] text-[13.5px] outline-none resize-none px-1 py-1 min-h-[44px] max-h-[220px] leading-relaxed selectable-text"
       />
-
-      {/* Bottom Action Bar */}
-      <div className="flex items-center justify-between pt-2 mt-1 select-none">
-        {/* Left: Plus attach button & Model selector */}
+      <div className="flex items-center justify-between pt-2 mt-1">
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="w-6 h-6 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] transition-colors"
-            title="Attach file or context"
+            aria-label="Attach"
+            className="w-6 h-6 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)]"
           >
             <PlusIcon className="w-3.5 h-3.5" />
           </button>
 
-          {/* Model dropdown pill */}
-          <div className="relative">
+          <div className="relative" ref={containerRef}>
             <button
               type="button"
-              onClick={() => setShowModelPicker(!showModelPicker)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[12px] bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors font-medium"
+              onClick={() => setModelMenuOpen((v) => !v)}
+              aria-expanded={modelMenuOpen}
+              aria-haspopup="menu"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[12px] bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] text-[var(--text-muted)] font-medium"
             >
-              <span>{activeModelObj.name}</span>
+              <span>{activeModel.name}</span>
               <ChevronDownIcon className="w-3 h-3 text-[var(--text-dim)]" />
             </button>
 
-            {showModelPicker && (
+            {modelMenuOpen && (
               <div
-                className="absolute left-0 bottom-full mb-2 w-56 bg-[var(--bg-card)] rounded-xl shadow-2xl py-1.5 z-50 text-xs text-[var(--text-main)]"
-                onClick={() => setShowModelPicker(false)}
+                role="menu"
+                className="absolute left-0 bottom-full mb-2 w-56 bg-[var(--bg-card)] rounded-xl shadow-2xl py-1.5 z-50 text-xs"
               >
-
-                <div className="px-3 py-1 text-[11px] text-[var(--text-dim)] font-semibold uppercase">
-                  Select Model
-                </div>
+                <div className="px-3 py-1 text-[11px] text-[var(--text-dim)] font-semibold uppercase">Select Model</div>
                 {AVAILABLE_MODELS.map((m) => (
-                  <div
+                  <button
                     key={m.id}
-                    onClick={() => onSelectModel(m.id)}
-                    className={`px-3 py-2 hover:bg-[var(--bg-card-hover)] cursor-pointer flex items-center justify-between transition-colors ${
-                      m.id === activeModelObj.id ? "text-[var(--text-main)] bg-[var(--bg-input)] font-medium" : ""
-                    }`}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      onSelectModel(m.id);
+                      setModelMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 hover:bg-[var(--bg-card-hover)] cursor-pointer flex justify-between ${m.id === activeModel.id ? "bg-[var(--bg-input)] font-medium" : ""}`}
                   >
                     <span>{m.name}</span>
-                    <span className="text-[10px] text-[var(--text-dim)] bg-[var(--bg-canvas)] px-1.5 py-0.5 rounded">
-                      {m.badge}
-                    </span>
-                  </div>
+                    <span className="text-[10px] text-[var(--text-dim)] bg-[var(--bg-canvas)] px-1.5 py-0.5 rounded">{m.badge}</span>
+                  </button>
                 ))}
               </div>
             )}
           </div>
         </div>
 
-        {/* Right: Submit Button */}
-        <div className="flex items-center">
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={!canSend}
-            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${
-              canSend
-                ? "bg-[var(--text-main)] text-[var(--bg-card)] hover:opacity-90 shadow-md cursor-pointer active:scale-95"
-                : "bg-[var(--bg-input)] text-[var(--text-dim)] cursor-not-allowed"
-            }`}
-            title="Send (Enter)"
-          >
-            <SendArrowIcon className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleSend}
+          disabled={!canSend}
+          aria-label="Send message"
+          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${canSend ? "bg-[var(--text-main)] text-[var(--bg-card)] shadow-md active:scale-95" : "bg-[var(--bg-input)] text-[var(--text-dim)] cursor-not-allowed"}`}
+        >
+          <SendArrowIcon className="w-3.5 h-3.5" />
+        </button>
       </div>
     </div>
   );
 
   if (mode === "docked") {
-    return (
-      <div className="w-full max-w-3xl mx-auto px-4 pb-4">
-        {composerCard}
-      </div>
-    );
+    return <div className="w-full max-w-3xl mx-auto px-4 pb-4">{card}</div>;
   }
-
-  // Centered Mode (Landing View)
-  return (
-    <div className="w-full max-w-2xl mx-auto">
-      {composerCard}
-    </div>
-  );
+  return <div className="w-full max-w-2xl mx-auto">{card}</div>;
 }
+
+export default React.memo(Composer);

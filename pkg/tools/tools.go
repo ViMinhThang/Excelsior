@@ -10,13 +10,13 @@ import (
 	"slices"
 )
 
-// Standard resource limit constants
+// Resource limits for tool execution.
 const (
-	MaxFileReadSize  = 5 << 20  // 5 MB
-	MaxWriteSize     = 10 << 20 // 10 MB
-	MaxGrepFileSize  = 2 << 20  // 2 MB
-	MaxGrepResults   = 200      // maximum match lines returned
-	MaxCommandLength = 8 << 10  // 8 KB command length cap
+	MaxFileReadSize  = 5 << 20  // 5 MB per view
+	MaxWriteSize     = 10 << 20 // 10 MB per write
+	MaxGrepFileSize  = 2 << 20  // 2 MB per file scanned
+	MaxGrepResults   = 200      // maximum match lines returned by grep
+	MaxCommandLength = 8 << 10  // 8 KB command length cap for bash
 )
 
 // Tool is the interface all agent tools implement.
