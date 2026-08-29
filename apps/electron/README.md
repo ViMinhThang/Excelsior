@@ -25,25 +25,34 @@ apps/web/lib/protocol.ts     ─┘         │
   ```
   In the browser the API is absent and the web falls back to `prompt()`.
 
-## Run
+## Run (desktop-only)
+
+> Web standalone has been removed — the Next.js frontend in `apps/web` is **renderer-only** for Electron. Browser `http://localhost:3000` is still used for HMR, but the app is only intended to run inside Electron.
 
 ```bash
 # 1. Build the Go engine
 go build -o excelsior.exe ./cmd/excelsior
 
-# 2a. Dev with HMR (Next dev server at :3000, Electron auto-detects it)
-cd apps/web && npm i && npm run dev &         # http://localhost:3000
-cd apps/electron && npm i && npm run dev      # loads http://localhost:3000
+# 2a. Dev — frontend only (no engine)
+cd apps/electron && npm i && npm run dev               # = npm --prefix ../web run dev → http://localhost:3000 (frontend only)
 
-# 2b. Or with hot-reload + electron together
-cd apps/electron && npm run dev:all           # concurrently + wait-on
+# 2b. Dev — engine only (run separately)
+cd apps/electron && npm run dev:engine                 # go run ../../cmd/excelsior engine --addr :17812
+# or
+go run ./cmd/excelsior engine --addr :17812
 
-# 2c. Prod-like (static file://, no dev server)
-cd apps/web && npm run build                  # NODE_ENV=production -> dist/
-cd apps/electron && npm run copy:web && npm run dev  # loads file://.../renderer/index.html
+# 2c. Dev — desktop shell only (requires frontend + engine already running)
+cd apps/electron && npm run dev:desktop                # electron . → loads http://localhost:3000 if up, else file://
+
+# 2d. Full stack (frontend + desktop together, engine still separate)
+cd apps/electron && npm run dev:all                    # concurrently: dev:web + wait-on → dev:desktop
+
+# 2e. Prod-like (static file://, no dev server)
+cd apps/web && npm run build                           # NODE_ENV=production -> dist/
+cd apps/electron && npm run copy:web && npm run dev:desktop  # loads file://.../renderer/index.html
 ```
 
-Engine auto-spawn: Electron spawns `../../excelsior(.exe) engine --addr :17812` unless `EXCELSIOR_AUTO_ENGINE=0`.
+Engine auto-spawn: **Disabled in dev** by default. Electron no longer spawns `../../excelsior(.exe)` unless `EXCELSIOR_AUTO_ENGINE=1`. In packaged builds it auto-spawns. To run engine externally:
 
 ```bash
 # run engine externally

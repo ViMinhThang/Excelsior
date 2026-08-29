@@ -15,7 +15,13 @@ function getEngineBin() {
   return null;
 }
 function startEngine() {
+  // Desktop-only: dev (npm run dev) is frontend-only, engine must be started separately via `npm run dev:engine` or `go run`.
+  // Auto-spawn only for packaged builds or when explicitly opted in.
   if (process.env.EXCELSIOR_AUTO_ENGINE==='0') return;
+  if (IS_DEV && process.env.EXCELSIOR_AUTO_ENGINE!=='1') {
+    console.log('[engine] dev mode: not auto-spawning (run `npm run dev:engine` separately or set EXCELSIOR_AUTO_ENGINE=1)');
+    return;
+  }
   const bin=getEngineBin();
   if(!bin) return console.log('[engine] no binary, expect external at',ENGINE_ADDR);
   const cwd=path.resolve(__dirname,'../../');

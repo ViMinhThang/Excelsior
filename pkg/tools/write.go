@@ -47,5 +47,29 @@ func (t *WriteTool) Execute(ctx context.Context, args json.RawMessage) (string, 
 		return "", &ToolError{Tool: "write", Op: "write", Path: a.FilePath, Err: err}
 	}
 	slog.Info("write", "path", a.FilePath, "bytes", len(a.Content))
-	return fmt.Sprintf("Wrote %d bytes to %s", len(a.Content), a.FilePath), nil
+	// Include a preview of the written content as a fenced code block so the
+	// web/TUI "View output" can render syntax-highlighted code.
+	ext := ""
+	if dot := strings.LastIndex(a.FilePath, "."); dot != -1 {
+		ext = strings.ToLower(strings.TrimPrefix(a.FilePath[dot:], "."))
+	}
+	langMap := map[string]string{
+		"tsx": "tsx", "ts": "typescript", "js": "javascript", "jsx": "jsx",
+		"py": "python", "go": "go", "json": "json", "md": "markdown",
+		"css": "css", "html": "html", "yaml": "yaml", "yml": "yaml",
+		"sh": "bash", "bash": "bash", "sql": "sql", "rs": "rust",
+	}
+	lang := langMap[ext]
+	if lang == "" {
+		lang = ext
+	}
+	preview := a.Content
+	const maxPreview = 8000
+	if len(preview) > maxPreview {
+		preview = preview[:maxPreview] + "\n… truncated"
+	}
+	if lang != "" {
+		return fmt.Sprintf("Wrote %d bytes to %s\n\n```%s\n%s\n```", len(a.Content), a.FilePath, lang, preview), nil
+	}
+	return fmt.Sprintf("Wrote %d bytes to %s\n\n%s", len(a.Content), a.FilePath, preview), nil
 }

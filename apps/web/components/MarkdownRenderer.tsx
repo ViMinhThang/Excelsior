@@ -167,8 +167,78 @@ function UserBubble({ text }: { text: string }) {
   );
 }
 
+function inferToolLanguage(content: string, meta?: string): string {
+  const lowerMeta = (meta || "").toLowerCase();
+  // Try to extract file extension from content summary like "Wrote ... to path/file.tsx" or from first lines
+  const extMatch = content.match(/\.([a-z0-9]{1,5})\b/m);
+  if (extMatch) {
+    const ext = extMatch[1].toLowerCase();
+    const map: Record<string, string> = {
+      tsx: "tsx",
+      ts: "typescript",
+      js: "javascript",
+      jsx: "jsx",
+      py: "python",
+      go: "go",
+      rs: "rust",
+      json: "json",
+      md: "markdown",
+      css: "css",
+      html: "html",
+      yaml: "yaml",
+      yml: "yaml",
+      sh: "bash",
+      bash: "bash",
+      sql: "sql",
+    };
+    if (map[ext]) return map[ext];
+    return ext;
+  }
+  if (lowerMeta.includes("bash") || lowerMeta.includes("shell")) return "bash";
+  // fallback: let CodeBlock auto-detect
+  return "";
+}
+
 function ToolBlock({ content, meta }: { content: string; meta?: string }) {
   const isLong = content.includes("\n") && content.trim().length > 80;
+  const hasFence = content.includes("```");
+  const fallbackLang = useMemo(() => inferToolLanguage(content, meta), [content, meta]);
+
+  // Parse fenced blocks for rich rendering (reuse same logic as useMarkdownChunks)
+  const toolChunks = useMemo(() => {
+    if (!hasFence) return null;
+    const chunks: { type: "code" | "text"; content: string; lang?: string }[] = [];
+    let remaining = content;
+    while (remaining.length > 0) {
+      const start = remaining.indexOf("```");
+      if (start === -1) {
+        chunks.push({ type: "text", content: remaining });
+        break;
+      }
+      if (start > 0) chunks.push({ type: "text", content: remaining.slice(0, start) });
+      const after = remaining.slice(start + 3);
+      const end = after.indexOf("```");
+      if (end === -1) {
+        const nl = after.indexOf("\n");
+        chunks.push({
+          type: "code",
+          content: nl > -1 ? after.slice(nl + 1) : after,
+          lang: nl > -1 ? after.slice(0, nl).trim() : fallbackLang,
+        });
+        break;
+      }
+      const block = after.slice(0, end);
+      const nl = block.indexOf("\n");
+      chunks.push({
+        type: "code",
+        content: nl > -1 ? block.slice(nl + 1) : block,
+        lang: nl > -1 ? block.slice(0, nl).trim() || fallbackLang : fallbackLang,
+      });
+      remaining = after.slice(end + 3);
+    }
+    return chunks;
+  }, [content, hasFence, fallbackLang]);
+
   return (
     <div className="my-1.5 text-xs font-mono">
       <div className="flex gap-2 whitespace-nowrap overflow-x-auto text-[12px]">
@@ -178,8 +248,22 @@ function ToolBlock({ content, meta }: { content: string; meta?: string }) {
       {isLong && (
         <details className="mt-1.5">
           <summary className="text-[var(--text-dim)] cursor-pointer text-[11px]">View output</summary>
-          <div className="mt-1.5 bg-[var(--bg-input)] rounded-xl p-3 font-mono text-[11.5px] max-h-64 overflow-y-auto whitespace-pre-wrap selectable-text">
-            {content}
+          <div className="mt-1.5 max-h-80 overflow-y-auto selectable-text">
+            {hasFence && toolChunks ? (
+              <div className="space-y-2">
+                {toolChunks.map((ch, i) =>
+                  ch.type === "code" ? (
+                    <CodeBlock key={i} language={ch.lang || fallbackLang} code={ch.content} />
+                  ) : ch.content.trim() ? (
+                    <div key={i} className="bg-[var(--bg-input)] rounded-xl p-3 font-mono text-[11.5px] whitespace-pre-wrap text-[var(--text-main)]">
+                      {ch.content.trim()}
+                    </div>
+                  ) : null
+                )}
+              </div>
+            ) : (
+              <CodeBlock language={fallbackLang} code={content} />
+            )}
           </div>
         </details>
       )}

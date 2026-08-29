@@ -41,6 +41,10 @@ export default function Page() {
   } = useEngine(engineUrl);
 
   const transcriptRef = React.useRef<HTMLDivElement>(null);
+  const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
+  useEffect(() => {
+    setIsDesktop(typeof window !== "undefined" && !!(window as unknown as { electronAPI?: unknown }).electronAPI);
+  }, []);
 
   // Keep engine ref in sync with local activeId (source of truth for outbound messages)
   useEffect(() => {
@@ -144,10 +148,13 @@ export default function Page() {
   );
 
   const handleOpenFolder = useCallback(async () => {
+    if (isDesktop === false) {
+      setBlocks((prev) => [...prev, { role: "error" as const, content: "Open folder is desktop-only. Run the Electron app (`apps/electron`) to use the file dialog." }]);
+      return;
+    }
     let picked: string | null = null;
     const api = window.electronAPI;
     if (api?.openFolderDialog) picked = await api.openFolderDialog();
-    else picked = window.prompt("Enter project folder path:", projectName);
 
     if (!picked) return;
 
@@ -249,6 +256,13 @@ export default function Page() {
           currentTheme={theme}
           onSaveTheme={setTheme}
         />
+        {isDesktop === false && (
+          <div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs text-center">
+            Desktop-only build — browser standalone is disabled. Run <code className="px-1 py-0.5 bg-black/20 rounded">npm run dev</code> (frontend) +{" "}
+            <code className="px-1 py-0.5 bg-black/20 rounded">npm run dev:engine</code> and{" "}
+            <code className="px-1 py-0.5 bg-black/20 rounded">npm run dev:desktop</code> in <code className="px-1 py-0.5 bg-black/20 rounded">apps/electron</code>.
+          </div>
+        )}
 
         <div className="flex flex-1 min-h-0 overflow-hidden bg-[var(--bg-sidebar)]">
           <Sidebar

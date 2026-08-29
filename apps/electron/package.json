@@ -4,9 +4,11 @@
   "description": "Excelsior desktop — Electron shell reusing apps/web frontend over WS hub (pkg/protocol)",
   "main": "main.js",
   "scripts": {
-    "dev": "electron .",
+    "dev": "npm --prefix ../web run dev",
     "dev:web": "npm --prefix ../web run dev",
-    "dev:all": "concurrently \"npm run dev:web\" \"wait-on http://localhost:3000 && npm run dev\"",
+    "dev:desktop": "electron .",
+    "dev:engine": "go run ../../cmd/excelsior engine --addr :17812",
+    "dev:all": "concurrently \"npm run dev:web\" \"wait-on http://localhost:3000 && npm run dev:desktop\"",
     "build:web": "npm --prefix ../web run build",
     "copy:web": "node scripts/copy-web-dist.js",
     "build": "npm run build:web && npm run copy:web && electron-builder --win --linux",

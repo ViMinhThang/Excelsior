@@ -17,4 +17,6 @@ var (
 	borderStyle         = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("252")).Padding(0, 1)
 	scrollbarStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
 	scrollbarThumbStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
+	codeHeaderStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Background(lipgloss.Color("236")).Padding(0, 1).Bold(true)
+	codeBlockStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("240")).Padding(0, 1)
 )

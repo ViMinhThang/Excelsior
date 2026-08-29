@@ -93,18 +93,43 @@ func (m model) renderTranscript() string {
 				}
 				continue
 			}
-			sb.WriteString(assistantStyle.Render(b.Content) + "\n\n")
+			// Syntax-highlight fenced code blocks (```lang) via chroma
+			if strings.Contains(b.Content, "```") {
+				w := m.width - 8
+				if w < 40 {
+					w = 40
+				}
+				rendered := renderMarkdownWithHighlight(b.Content, w)
+				sb.WriteString(rendered + "\n\n")
+			} else {
+				sb.WriteString(assistantStyle.Render(b.Content) + "\n\n")
+			}
 		case "reasoning":
 			sb.WriteString(reasonStyle.Render("… "+b.Content) + "\n\n")
 		case "tool":
 			meta := toolStyle.Render("◆ " + b.Meta)
-			body := util.Truncate(b.Content, 800)
+			body := util.Truncate(b.Content, 4000)
 			w := m.width - 8
 			if w < 20 {
 				w = 20
 			}
-			boxed := toolResStyle.Width(w).Render(toolArgStyle.Render(body))
-			sb.WriteString(meta + "\n" + boxed + "\n\n")
+			// Highlight tool output: if it contains fenced code, render with markdown highlight;
+			// if it looks like code (e.g. view/write output), highlight via chroma.
+			var rendered string
+			if strings.Contains(body, "```") {
+				rendered = renderMarkdownWithHighlight(body, w)
+			} else if isCodeLike(body) {
+				lang := inferToolLang(body, b.Meta)
+				highlighted := HighlightCode(body, lang)
+				header := ""
+				if lang != "" {
+					header = codeHeaderStyle.Render(lang) + "\n"
+				}
+				rendered = header + codeBlockStyle.Width(w).Render(highlighted)
+			} else {
+				rendered = toolResStyle.Width(w).Render(toolArgStyle.Render(body))
+			}
+			sb.WriteString(meta + "\n" + rendered + "\n\n")
 		case "error":
 			sb.WriteString(errorStyle.Render("✖ "+b.Content) + "\n\n")
 		}
