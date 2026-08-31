@@ -21,16 +21,45 @@ func ResolveModel(m string) string {
 	return strings.TrimSpace(m)
 }
 
+// PermissionMode controls mutating tool approval.
+type PermissionMode string
+
+const (
+	PermissionAsk   PermissionMode = "ask"
+	PermissionAllow PermissionMode = "allow"
+	PermissionDeny  PermissionMode = "deny"
+)
+
+// ParsePermissionMode validates a permission mode string (case-insensitive).
+func ParsePermissionMode(s string) (PermissionMode, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "", "ask":
+		return PermissionAsk, nil
+	case "allow":
+		return PermissionAllow, nil
+	case "deny":
+		return PermissionDeny, nil
+	default:
+		return "", &ConfigError{
+			Field:   "Permission",
+			Value:   s,
+			Message: fmt.Sprintf("invalid permission mode %q: must be ask|allow|deny", s),
+			Err:     ErrInvalidPermission,
+		}
+	}
+}
+
 // Config holds DeepSeek-first settings. Env vars are the source of truth;
 // flags override them.
 type Config struct {
-	APIKey      string
-	BaseURL     string
-	Model       string
-	MaxTokens   int
+	APIKey     string
+	BaseURL    string
+	Model      string
+	MaxTokens  int
 	Temperature float64
-	Workspace   string
-	EngineURL   string // ws://... for remote engine (TUI/desktop/mobile)
+	Workspace  string
+	EngineURL  string // ws://... for remote engine (TUI/desktop/mobile)
+	Permission PermissionMode
 }
 
 func envOr(key, fallback string) string {
@@ -43,14 +72,31 @@ func envOr(key, fallback string) string {
 // FromEnv reads configuration from environment variables.
 // Defaults: BaseURL=https://api.deepseek.com, Model=deepseek-v4-flash, Temperature=0.7.
 func FromEnv() Config {
-	return Config{
+	perm, _ := ParsePermissionMode(envOr("EXCELSIOR_PERMISSION", "ask"))
+	cfg := Config{
 		APIKey:      strings.TrimSpace(os.Getenv("DEEPSEEK_API_KEY")),
 		BaseURL:     envOr("DEEPSEEK_BASE_URL", DefaultBaseURL),
 		Model:       ResolveModel(envOr("DEEPSEEK_MODEL", DefaultModel)),
 		Temperature: 0.7,
 		Workspace:   strings.TrimSpace(os.Getenv("EXCELSIOR_WORKSPACE")),
 		EngineURL:   strings.TrimSpace(os.Getenv("EXCELSIOR_ENGINE")),
+		Permission:  perm,
 	}
+	// Merge persisted settings if env not explicitly set to allow
+	// Settings file can provide sticky "allow all" toggle.
+	if envOr("EXCELSIOR_PERMISSION", "") == "" {
+		ws := cfg.Workspace
+		if ws == "" {
+			if cwd, err := os.Getwd(); err == nil {
+				ws = cwd
+			}
+		}
+		s := LoadSettings(ws)
+		if ep := s.EffectivePermission(""); ep != "" {
+			cfg.Permission = ep
+		}
+	}
+	return cfg
 }
 
 // Validate returns error if config is invalid for production use.

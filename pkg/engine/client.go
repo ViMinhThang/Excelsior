@@ -31,7 +31,8 @@ func (c *WSClient) logger() *slog.Logger {
 
 // StreamRemote sends a chat.req and streams deltas via onDelta.
 // askHandler is called when engine sends ask.req; it should show UI and return choice.
-func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDelta func(protocol.Delta) error, askHandler tools.QuestionHandler) error {
+// permHandler is called when engine sends permission.req for write/edit/bash.
+func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDelta func(protocol.Delta) error, askHandler tools.QuestionHandler, permHandler tools.PermissionHandler) error {
 	u, err := url.Parse(c.URL)
 	if err != nil {
 		return &EngineError{Op: "dial", Err: fmt.Errorf("%w: %v", ErrInvalidURL, err)}
@@ -118,6 +119,28 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 				resp = tools.AskResponse{Selected: -1, Answer: ""}
 			}
 			out := protocol.NewEnvelope(protocol.TypeAskResp, protocol.AskResp{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label})
+			b2, err := json.Marshal(out)
+			if err == nil {
+				_ = ws.WriteMessage(websocket.TextMessage, b2)
+			}
+		case protocol.TypePermissionReq:
+			var pr protocol.PermissionReq
+			if err := in.Decode(&pr); err != nil {
+				c.logger().Warn("bad permission.req", "err", err)
+				continue
+			}
+			if permHandler == nil {
+				// default deny when no handler (safe default for once-per-call)
+				permHandler = func(ctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
+					return tools.PermissionResponse{Approved: false}, nil
+				}
+			}
+			presp, err := permHandler(ctx, tools.PermissionRequest{Tool: pr.Tool, FilePath: pr.FilePath, Preview: pr.Preview, Command: pr.Command})
+			if err != nil {
+				c.logger().Warn("permission handler error", "err", err)
+				presp = tools.PermissionResponse{Approved: false}
+			}
+			out := protocol.NewEnvelope(protocol.TypePermissionResp, protocol.PermissionResp{Approved: presp.Approved})
 			b2, err := json.Marshal(out)
 			if err == nil {
 				_ = ws.WriteMessage(websocket.TextMessage, b2)

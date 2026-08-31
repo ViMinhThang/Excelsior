@@ -106,7 +106,7 @@ func TestStreamRemote_AskHandlerEmptyAndNilOptions(t *testing.T) {
 			defer srv.Close()
 
 			client := &WSClient{URL: srv.URL}
-			err := client.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-chat"}, nil, tc.customHandler)
+			err := client.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-chat"}, nil, tc.customHandler, nil)
 			if err != nil {
 				t.Fatalf("StreamRemote failed: %v", err)
 			}

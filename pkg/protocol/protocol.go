@@ -86,6 +86,8 @@ const (
 	TypeError         = "error"
 	TypeAskReq        = "ask.req"
 	TypeAskResp       = "ask.resp"
+	TypePermissionReq  = "permission.req"
+	TypePermissionResp = "permission.resp"
 	TypePing          = "ping"
 	TypePong          = "pong"
 	TypeSessionList   = "session.list"
@@ -94,6 +96,8 @@ const (
 	TypeSessionDelete = "session.delete"
 	TypeSessionRename = "session.rename"
 	TypeWorkspaceSet  = "workspace.set"
+	TypeSettingsGet   = "settings.get"
+	TypeSettingsSet   = "settings.set"
 )
 
 // WorkspaceSetReq sets active workspace path in engine
@@ -131,6 +135,19 @@ type AskResp struct {
 	Selected int    `json:"selected"` // 0..2 or -1 for manual
 	Answer   string `json:"answer"`
 	Label    string `json:"label"`
+}
+
+// PermissionReq is engine → client when agent requests mutating operation approval.
+type PermissionReq struct {
+	Tool     string `json:"tool"`               // "write" | "edit" | "bash"
+	FilePath string `json:"filePath,omitempty"`
+	Preview  string `json:"preview,omitempty"`
+	Command  string `json:"command,omitempty"`
+}
+
+// PermissionResp is client → engine with user decision.
+type PermissionResp struct {
+	Approved bool `json:"approved"`
 }
 
 // Session management (unified for TUI/web/desktop).
@@ -181,4 +198,25 @@ type SessionDataResp struct {
 type SessionRenameReq struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+}
+
+// SettingsGetReq requests current settings (e.g. permission mode).
+type SettingsGetReq struct{}
+
+// SettingsGetResp returns current settings.
+type SettingsGetResp struct {
+	Permission string `json:"permission"` // ask|allow|deny
+	AllowAll   bool   `json:"allowAll"`
+}
+
+// SettingsSetReq updates settings. Only provided fields are updated.
+type SettingsSetReq struct {
+	Permission *string `json:"permission,omitempty"`
+	AllowAll   *bool   `json:"allowAll,omitempty"`
+}
+
+// SettingsSetResp confirms updated settings.
+type SettingsSetResp struct {
+	Permission string `json:"permission"`
+	AllowAll   bool   `json:"allowAll"`
 }

@@ -23,6 +23,7 @@ type Conn struct {
 	workspace string
 	mu        sync.RWMutex
 	askCh     chan protocol.AskResp
+	permCh    chan protocol.PermissionResp
 	done      chan struct{}
 	closeOnce sync.Once
 	closed    bool
@@ -54,6 +55,14 @@ func (c *Conn) getAskChannel() (chan protocol.AskResp, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.askCh, c.askCh != nil
+}
+
+func (c *Conn) setPermChannel(ch chan protocol.PermissionResp) { c.mu.Lock(); c.permCh = ch; c.mu.Unlock() }
+func (c *Conn) clearPermChannel()                             { c.mu.Lock(); c.permCh = nil; c.mu.Unlock() }
+func (c *Conn) getPermChannel() (chan protocol.PermissionResp, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.permCh, c.permCh != nil
 }
 
 func (c *Conn) currentWorkspace() string {
@@ -127,6 +136,7 @@ func (c *Conn) close() {
 		c.mu.Lock()
 		c.closed = true
 		c.askCh = nil
+		c.permCh = nil
 		c.mu.Unlock()
 		close(c.done)
 		if c.ws != nil {
@@ -214,6 +224,8 @@ func (c *Conn) readPump(ctx context.Context) {
 			}(env)
 		case protocol.TypeAskResp:
 			c.handleAskResp(env)
+		case protocol.TypePermissionResp:
+			c.handlePermissionResp(env)
 		case protocol.TypeSessionList:
 			go c.handleSessionList(ctx, env)
 		case protocol.TypeSessionData:
@@ -226,6 +238,10 @@ func (c *Conn) readPump(ctx context.Context) {
 			go c.handleSessionRename(ctx, env)
 		case protocol.TypeWorkspaceSet:
 			go c.handleWorkspaceSet(ctx, env)
+		case protocol.TypeSettingsGet:
+			go c.handleSettingsGet(ctx, env)
+		case protocol.TypeSettingsSet:
+			go c.handleSettingsSet(ctx, env)
 		case protocol.TypePing:
 			c.sendEnvelope(protocol.NewEnvelope(protocol.TypePong, nil))
 		default:
@@ -243,6 +259,22 @@ func (c *Conn) handleAskResp(env protocol.Envelope) {
 	c.hub.logger().Info("received client ask response", "selected", resp.Selected, "answer", resp.Answer)
 
 	if ch, ok := c.getAskChannel(); ok {
+		select {
+		case ch <- resp:
+		default:
+		}
+	}
+}
+
+func (c *Conn) handlePermissionResp(env protocol.Envelope) {
+	var resp protocol.PermissionResp
+	if err := env.Decode(&resp); err != nil {
+		c.sendError(env.ID, fmt.Sprintf("bad permission.resp: %v", err))
+		return
+	}
+	c.hub.logger().Info("received client permission response", "approved", resp.Approved)
+
+	if ch, ok := c.getPermChannel(); ok {
 		select {
 		case ch <- resp:
 		default:

@@ -17,12 +17,14 @@ import (
 // Config holds the TUI wiring. The agent is injected so the TUI is pure UI.
 // If EngineURL is set (ws://...), TUI talks to remote engine via WS; otherwise it runs Agent locally.
 type Config struct {
-	Agent         agent.Runner
-	Workspace     string
-	Model         string // for status bar
-	History       []llm.Message
-	EngineURL     string // e.g. ws://localhost:17812/v1/ws, empty = local
-	AskDispatcher *AskDispatcher
+	Agent                agent.Runner
+	Workspace            string
+	Model                string // for status bar
+	History              []llm.Message
+	EngineURL            string // e.g. ws://localhost:17812/v1/ws, empty = local
+	AskDispatcher        *AskDispatcher
+	PermissionDispatcher *PermissionDispatcher
+	Permission           string // ask|allow|deny — argv parsed, passed from main
 }
 
 // block is a rendered turn in the transcript.
@@ -47,6 +49,7 @@ type model struct {
 	width         int
 	height        int
 	askState      *askOverlay
+	permState     *permissionOverlay
 }
 
 func New(cfg Config) tea.Model {

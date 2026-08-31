@@ -19,7 +19,29 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 	}
 
 	askCh := make(chan protocol.AskResp, 1)
-	handler := c.askHandler(ctx, askCh)
+	askHandler := c.askHandler(ctx, askCh)
+	permCh := make(chan protocol.PermissionResp, 1)
+	permHandler := c.permissionHandler(ctx, permCh)
+
+	// Headless / flag-driven fallback when permission mode is allow/deny and client won't prompt.
+	// The handler itself respects mode; we wrap context to ensure mutating tools are gated.
+	switch c.hub.Config.Permission {
+	case "allow":
+		if permHandler == nil {
+			permHandler = func(hctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
+				return tools.PermissionResponse{Approved: true}, nil
+			}
+		}
+	case "deny":
+		if permHandler == nil {
+			permHandler = func(hctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
+				return tools.PermissionResponse{Approved: false}, nil
+			}
+		}
+	}
+	// Build context with both handlers (permission first, then question on top).
+	ctxWithTools := tools.WithPermissionHandler(ctx, permHandler)
+	ctxWithTools = tools.WithQuestionHandler(ctxWithTools, askHandler)
 
 	ag, err := c.getAgent(req.Model)
 	if err != nil {
@@ -33,7 +55,7 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 	}
 
 	history := c.loadHistory(ctx, sessionID, req.Messages)
-	res, err := ag.RunWithHistory(tools.WithQuestionHandler(ctx, handler), agent.RunOptions{
+	res, err := ag.RunWithHistory(ctxWithTools, agent.RunOptions{
 		Messages: history,
 		OnEvent:  c.deltaForwarder(),
 	})
@@ -107,6 +129,32 @@ func (c *Conn) askHandler(parentCtx context.Context, askCh chan protocol.AskResp
 			return tools.AskResponse{}, hctx.Err()
 		case <-parentCtx.Done():
 			return tools.AskResponse{}, parentCtx.Err()
+		}
+	}
+}
+
+func (c *Conn) permissionHandler(parentCtx context.Context, permCh chan protocol.PermissionResp) tools.PermissionHandler {
+	return func(hctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
+		// If hub is in allow/deny mode, answer immediately without client round-trip.
+		switch c.hub.Config.Permission {
+		case "allow":
+			return tools.PermissionResponse{Approved: true}, nil
+		case "deny":
+			return tools.PermissionResponse{Approved: false}, nil
+		}
+		c.setPermChannel(permCh)
+		defer c.clearPermChannel()
+		c.sendEnvelope(protocol.NewEnvelope(protocol.TypePermissionReq, protocol.PermissionReq{
+			Tool: rq.Tool, FilePath: rq.FilePath, Preview: rq.Preview, Command: rq.Command,
+		}))
+		c.hub.logger().Info("engine permission sent, awaiting client", "tool", rq.Tool, "file", rq.FilePath, "command", rq.Command)
+		select {
+		case resp := <-permCh:
+			return tools.PermissionResponse{Approved: resp.Approved}, nil
+		case <-hctx.Done():
+			return tools.PermissionResponse{}, hctx.Err()
+		case <-parentCtx.Done():
+			return tools.PermissionResponse{}, parentCtx.Err()
 		}
 	}
 }

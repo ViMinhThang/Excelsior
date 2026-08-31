@@ -28,10 +28,11 @@ var version = "v0.1.0"
 func main() {
 	setupLogger()
 	cfg := config.FromEnv()
-	var model, workspace, system, sessionID, engineURL string
+	var model, workspace, system, sessionID, engineURL, permission string
+	var yolo bool
 	var verbose bool
 
-	root := newRootCommand(cfg, &model, &workspace, &system, &sessionID, &engineURL, &verbose)
+	root := newRootCommand(cfg, &model, &workspace, &system, &sessionID, &engineURL, &permission, &yolo, &verbose)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -41,7 +42,7 @@ func main() {
 	}
 }
 
-func newRootCommand(cfg config.Config, model, workspace, system, sessionID, engineURL *string, verbose *bool) *cobra.Command {
+func newRootCommand(cfg config.Config, model, workspace, system, sessionID, engineURL, permission *string, yolo *bool, verbose *bool) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "excelsior",
 		Short: "Excelsior — DeepSeek-native coding agent (Go)",
@@ -52,14 +53,34 @@ Examples:
   excelsior tui                      # launch TUI explicitly
   excelsior "add tests for pkg/tools"
   excelsior -m deepseek-v4-pro "explain this repo"
-  echo "fix the bug in main.go" | excelsior`,
+  echo "fix the bug in main.go" | excelsior
+  excelsior --yolo "run all commands without asking"  # same as --permission allow`,
 		Args: cobra.ArbitraryArgs,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if *verbose {
 				slog.SetLogLoggerLevel(slog.LevelDebug)
 			}
+			// yolo / allow-all setting: if set, override to allow without asking
+			if *yolo {
+				cfg.Permission = config.PermissionAllow
+			} else if *permission != "" {
+				pm, err := config.ParsePermissionMode(*permission)
+				if err != nil {
+					return err
+				}
+				cfg.Permission = pm
+			}
+			// propagate resolved cfg for subcommands via context
+			cmd.SetContext(context.WithValue(cmd.Context(), configKey{}, cfg))
+			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// resolve cfg from context (may have permission override)
+			if v := cmd.Context().Value(configKey{}); v != nil {
+				if c, ok := v.(config.Config); ok {
+					cfg = c
+				}
+			}
 			prompt := resolvePrompt(args)
 			if prompt == "" {
 				if isTerminal(os.Stdin) && isTerminal(os.Stdout) {
@@ -75,6 +96,9 @@ Examples:
 	root.PersistentFlags().StringVar(system, "system", "", "Override system prompt")
 	root.PersistentFlags().StringVar(sessionID, "session", "", "Session ID for persistence (.excelsior/sessions)")
 	root.PersistentFlags().StringVar(engineURL, "engine", "", "WebSocket engine URL (e.g. ws://localhost:17812/v1/ws)")
+	root.PersistentFlags().StringVar(permission, "permission", "", "Permission mode: ask|allow|deny (default ask, overrides EXCELSIOR_PERMISSION)")
+	root.PersistentFlags().BoolVar(yolo, "yolo", false, "Allow all commands without asking (same as --permission allow)")
+	root.PersistentFlags().BoolVar(yolo, "allow-all", false, "Allow all commands without asking (alias for --yolo)")
 	root.PersistentFlags().BoolVarP(verbose, "verbose", "v", false, "Verbose logging (debug)")
 
 	root.AddCommand(&cobra.Command{Use: "run [prompt]", Short: "Run a single turn (alias for root)", Args: cobra.ArbitraryArgs, RunE: root.RunE})
@@ -134,6 +158,8 @@ func setupLogger() {
 	slog.SetDefault(slog.New(handler))
 }
 
+type configKey struct{}
+
 func runAgent(ctx context.Context, cfg config.Config, model, workspace, system, sessionID, prompt string) error {
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("config: %w", err)
@@ -155,6 +181,25 @@ func runAgent(ctx context.Context, cfg config.Config, model, workspace, system, 
 		return fmt.Errorf("prompt too large (%d > 200000 chars)", len(prompt))
 	}
 
+	// Permission handler for headless CLI: argv-driven, once per call, sequential.
+	var permHandler tools.PermissionHandler
+	switch cfg.Permission {
+	case config.PermissionAllow:
+		permHandler = func(ctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
+			return tools.PermissionResponse{Approved: true}, nil
+		}
+	case config.PermissionDeny:
+		permHandler = func(ctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
+			return tools.PermissionResponse{Approved: false}, nil
+		}
+	default: // ask but no TUI in headless mode: deny with hint
+		permHandler = func(ctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
+			slog.Warn("permission denied (no TUI, use --permission allow)", "tool", req.Tool, "file", req.FilePath, "command", req.Command)
+			return tools.PermissionResponse{Approved: false}, nil
+		}
+	}
+	ctx = tools.WithPermissionHandler(ctx, permHandler)
+
 	ag := &agent.Agent{
 		LLM:    &llm.Client{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: model, Logger: slog.Default()},
 		Tools:  tools.DefaultRegistry(workspace),
@@ -164,7 +209,7 @@ func runAgent(ctx context.Context, cfg config.Config, model, workspace, system, 
 
 	history := loadHistory(ctx, workspace, sessionID)
 	messages := append(append([]llm.Message(nil), history...), llm.Message{Role: "user", Content: prompt})
-	slog.Info("agent run", "model", model, "workspace", workspace, "session", sessionID)
+	slog.Info("agent run", "model", model, "workspace", workspace, "session", sessionID, "permission", cfg.Permission)
 
 	res, err := ag.RunWithHistory(ctx, agent.RunOptions{Messages: messages, OnEvent: agentEventPrinter})
 	if err != nil {

@@ -46,7 +46,9 @@ func (m model) bodyView() string {
 	viewportView := m.viewport.View()
 	scrollbar := m.scrollbarView()
 	body := lipgloss.JoinHorizontal(lipgloss.Top, viewportView, " ", scrollbar)
-	if m.askState != nil {
+	if m.permState != nil {
+		body = m.permState.View(m.width)
+	} else if m.askState != nil {
 		body = m.askState.View(m.width)
 	}
 	return body
@@ -54,7 +56,9 @@ func (m model) bodyView() string {
 
 func (m model) inputView() string {
 	var v string
-	if m.askState != nil {
+	if m.permState != nil {
+		v = helpStyle.Render("  permission required — y/n, ←→, enter…")
+	} else if m.askState != nil {
 		v = helpStyle.Render("  answering question…")
 	} else if m.streaming {
 		v = helpStyle.Render("  streaming… press esc to cancel")

@@ -47,6 +47,13 @@ func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if len(a.NewText) > MaxWriteSize {
 		return "", &ToolError{Tool: "edit", Op: "validate", Path: a.FilePath, Err: fmt.Errorf("%w: newText too large (%d > %d)", ErrFileTooLarge, len(a.NewText), MaxWriteSize)}
 	}
+	preview := a.OldText + "\n→\n" + a.NewText
+	if len(preview) > 8000 {
+		preview = preview[:8000] + "\n… truncated"
+	}
+	if err := checkPermission(ctx, "edit", PermissionRequest{Tool: "edit", FilePath: a.FilePath, Preview: preview}); err != nil {
+		return "", err
+	}
 	p, err := secureJoin(t.Root, a.FilePath)
 	if err != nil {
 		return "", &ToolError{Tool: "edit", Op: "security", Path: a.FilePath, Err: err}

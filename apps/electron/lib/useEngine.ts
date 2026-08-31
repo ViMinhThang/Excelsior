@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AskReq, Delta, SessionInfo } from "./protocol";
+import type { AskReq, Delta, SessionInfo, PermissionReq } from "./protocol";
 
 export type BlockRole = "system" | "user" | "assistant" | "reason" | "tool" | "error";
 export type Block = { role: BlockRole; content: string; meta?: string };
@@ -11,10 +11,14 @@ type PendingAsk = AskReq & {
   _resolve: (r: { selected: number; answer: string; label: string }) => void;
 };
 
+type PendingPermission = PermissionReq & {
+  _resolve: (r: { approved: boolean }) => void;
+};
+
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 10000;
 
-export function useEngine(engineUrl: string) {
+export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
   const wsRef = useRef<WebSocket | null>(null);
   const activeIdRef = useRef<string | null>(null);
 
@@ -23,6 +27,12 @@ export function useEngine(engineUrl: string) {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [ask, setAsk] = useState<PendingAsk | null>(null);
+  const [permission, setPermission] = useState<PendingPermission | null>(null);
+
+  const allowAllRef = useRef<boolean>(!!opts?.allowAll);
+  useEffect(() => {
+    allowAllRef.current = !!opts?.allowAll;
+  }, [opts?.allowAll]);
 
   const send = useCallback(
     (type: string, payload: unknown) => {
@@ -210,6 +220,31 @@ export function useEngine(engineUrl: string) {
               }
               setAsk(null);
             });
+            return;
+          }
+
+          if (type === "permission.req") {
+            // Setting: auto-allow all commands without asking (client-side fast-path)
+            if (allowAllRef.current) {
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ ver: "v1", type: "permission.resp", payload: { approved: true } }));
+              }
+              setBlocks((p) => [...p, { role: "tool", content: `Auto-allowed ${ (payload as PermissionReq).tool } (Allow-all setting)`, meta: "permission →" }]);
+              return;
+            }
+            const pr = payload as PermissionReq;
+            let resolveP!: (r: { approved: boolean }) => void;
+            const promiseP = new Promise<{ approved: boolean }>((r) => {
+              resolveP = r;
+            });
+            setPermission({ ...pr, _resolve: resolveP });
+            void promiseP.then((resp) => {
+              if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ ver: "v1", type: "permission.resp", payload: resp }));
+              }
+              setPermission(null);
+            });
+            return;
           }
         } catch (err) {
           console.error("[useEngine] message handler error", err);
@@ -237,6 +272,8 @@ export function useEngine(engineUrl: string) {
     setStreaming,
     ask,
     setAsk,
+    permission,
+    setPermission,
     send,
     activeIdRef,
     setActiveId,

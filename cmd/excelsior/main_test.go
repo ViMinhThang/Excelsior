@@ -85,10 +85,11 @@ func TestCLI_ResolvePrompt(t *testing.T) {
 
 func TestCLI_RootCommandFlags(t *testing.T) {
 	cfg := config.Config{}
-	var model, workspace, system, sessionID, engineURL string
+	var model, workspace, system, sessionID, engineURL, permission string
+	var yolo bool
 	var verbose bool
 
-	root := newRootCommand(cfg, &model, &workspace, &system, &sessionID, &engineURL, &verbose)
+	root := newRootCommand(cfg, &model, &workspace, &system, &sessionID, &engineURL, &permission, &yolo, &verbose)
 	root.SetArgs([]string{"--model", "deepseek-v4-pro", "--workspace", "/tmp/ws", "--verbose", "version"})
 
 	if err := root.ExecuteContext(context.Background()); err != nil {

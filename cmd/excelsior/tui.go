@@ -28,6 +28,22 @@ func newTUICommand(cfg config.Config, modelFlag *string, workspaceFlag *string, 
 }
 
 func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system string) error {
+	// cfg may have permission override from root PersistentPreRunE context (including yolo)
+	if v := cmd.Context().Value(configKey{}); v != nil {
+		if c, ok := v.(config.Config); ok {
+			cfg = c
+		}
+	} else {
+		if yolo, _ := cmd.Root().PersistentFlags().GetBool("yolo"); yolo {
+			cfg.Permission = config.PermissionAllow
+		} else if yolo, _ := cmd.Root().PersistentFlags().GetBool("allow-all"); yolo {
+			cfg.Permission = config.PermissionAllow
+		} else if v, _ := cmd.Root().PersistentFlags().GetString("permission"); v != "" {
+			if pm, err := config.ParsePermissionMode(v); err == nil {
+				cfg.Permission = pm
+			}
+		}
+	}
 	workspace = resolveWorkspaceOrCwd(workspace, cfg.Workspace)
 	model = normalizeModel(model, cfg.Model)
 	if system == "" {
@@ -56,7 +72,7 @@ func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system stri
 			Logger: discardLog,
 		}
 	}
-	return tui.Run(tui.Config{Agent: ag, Workspace: workspace, Model: model, EngineURL: engineURL})
+	return tui.Run(tui.Config{Agent: ag, Workspace: workspace, Model: model, EngineURL: engineURL, Permission: string(cfg.Permission)})
 }
 
 func resolveWorkspaceOrCwd(flagWS, cfgWS string) string {

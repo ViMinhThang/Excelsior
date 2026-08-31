@@ -49,6 +49,9 @@ func (t *BashTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 			return "", &ToolError{Tool: "bash", Op: "validate", Err: fmt.Errorf("%w: timeout must be 1000..120000 ms, got %d", ErrInvalidArguments, *a.Timeout)}
 		}
 	}
+	if err := checkPermission(ctx, "bash", PermissionRequest{Tool: "bash", Command: a.Command}); err != nil {
+		return "", err
+	}
 	slog.Info("bash", "command", a.Command, "dir", t.Root)
 	return runShell(ctx, t.Root, a.Command, a.Timeout)
 }

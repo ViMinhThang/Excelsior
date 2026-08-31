@@ -18,11 +18,16 @@ func Run(cfg Config) error {
 	if cfg.AskDispatcher == nil {
 		cfg.AskDispatcher = NewAskDispatcher()
 	}
+	if cfg.PermissionDispatcher == nil {
+		cfg.PermissionDispatcher = NewPermissionDispatcher()
+	}
 
 	p := tea.NewProgram(New(cfg), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	var sink UISink = p
 	cfg.AskDispatcher.SetSink(sink)
+	cfg.PermissionDispatcher.SetSink(sink)
 	defer cfg.AskDispatcher.SetSink(nil)
+	defer cfg.PermissionDispatcher.SetSink(nil)
 
 	_, err := p.Run()
 	return err

@@ -42,6 +42,17 @@ export type AskResp = {
   label: string;
 };
 
+export type PermissionReq = {
+  tool: string;
+  filePath?: string;
+  preview?: string;
+  command?: string;
+};
+
+export type PermissionResp = {
+  approved: boolean;
+};
+
 export type SessionInfo = {
   id: string;
   title: string;
@@ -66,4 +77,10 @@ export type EngineMessage =
   | { type: "session.delete"; payload: { deleted?: string } }
   | { type: "session.rename"; payload: unknown }
   | { type: "ask.req"; payload: AskReq }
+  | { type: "permission.req"; payload: PermissionReq }
+  | { type: "settings.get"; payload: SettingsGetResp }
+  | { type: "settings.set"; payload: SettingsSetResp }
   | { type: string; payload: unknown };
+
+export type SettingsGetResp = { permission: string; allowAll: boolean };
+export type SettingsSetResp = { permission: string; allowAll: boolean };

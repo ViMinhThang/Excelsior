@@ -211,7 +211,7 @@ func TestWSClient_StreamRemote_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	client := &WSClient{URL: srv.URL}
-	_ = client.StreamRemote(ctx, protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil)
+	_ = client.StreamRemote(ctx, protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil, nil)
 }
 
 func TestEngine_HandleChat_AlreadyStreaming(t *testing.T) {

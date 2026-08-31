@@ -19,6 +19,8 @@ type SettingsModalProps = {
   onSaveDefaultModel: (model: string) => void;
   currentTheme: string;
   onSaveTheme: (theme: string) => void;
+  allowAll: boolean;
+  onSaveAllowAll: (allow: boolean) => void;
 };
 
 function SettingsModal({
@@ -31,10 +33,13 @@ function SettingsModal({
   onSaveDefaultModel,
   currentTheme,
   onSaveTheme,
+  allowAll,
+  onSaveAllowAll,
 }: SettingsModalProps) {
   const [draftUrl, setDraftUrl] = useState(engineUrl);
   const [draftModel, setDraftModel] = useState(defaultModel);
   const [draftTheme, setDraftTheme] = useState(currentTheme);
+  const [draftAllowAll, setDraftAllowAll] = useState(allowAll);
   const [saved, setSaved] = useState(false);
 
   // Keep drafts in sync when modal re-opens or props change
@@ -43,19 +48,21 @@ function SettingsModal({
       setDraftUrl(engineUrl);
       setDraftModel(defaultModel);
       setDraftTheme(currentTheme);
+      setDraftAllowAll(allowAll);
     }
-  }, [isOpen, engineUrl, defaultModel, currentTheme]);
+  }, [isOpen, engineUrl, defaultModel, currentTheme, allowAll]);
 
   const handleSave = useCallback(() => {
     onSaveEngineUrl(draftUrl.trim());
     onSaveDefaultModel(draftModel);
     onSaveTheme(draftTheme);
+    onSaveAllowAll(draftAllowAll);
     setSaved(true);
     window.setTimeout(() => {
       setSaved(false);
       onClose();
     }, 600);
-  }, [draftUrl, draftModel, draftTheme, onClose, onSaveDefaultModel, onSaveEngineUrl, onSaveTheme]);
+  }, [draftUrl, draftModel, draftTheme, draftAllowAll, onClose, onSaveDefaultModel, onSaveEngineUrl, onSaveTheme, onSaveAllowAll]);
 
   const handleThemeChange = useCallback(
     (next: string) => {
@@ -136,6 +143,21 @@ function SettingsModal({
               <span className="text-[var(--text-dim)]">Default: ws://localhost:17812/v1/ws</span>
               <span className={`font-medium ${statusColor}`}>● {engineState}</span>
             </div>
+          </label>
+
+          <label className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl cursor-pointer">
+            <input
+              type="checkbox"
+              checked={draftAllowAll}
+              onChange={(e) => setDraftAllowAll(e.target.checked)}
+              className="mt-0.5 accent-amber-500 w-4 h-4"
+            />
+            <span className="flex-1">
+              <span className="block font-semibold text-[var(--text-main)] text-xs">Allow all commands without asking</span>
+              <span className="block text-[11px] text-[var(--text-muted)] mt-0.5">
+                When enabled, write / edit / bash run automatically without permission prompts. Use with care — equivalent to <code className="px-1 py-0.5 bg-black/20 rounded">--permission allow</code> / <code className="px-1 py-0.5 bg-black/20 rounded">--yolo</code>.
+              </span>
+            </span>
           </label>
 
           <div className="p-3 bg-[var(--bg-canvas)] rounded-xl text-[11.5px] text-[var(--text-muted)]">

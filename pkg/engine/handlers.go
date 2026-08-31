@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"excelsior/pkg/config"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
@@ -145,4 +146,66 @@ func (c *Conn) handleWorkspaceSet(ctx context.Context, env protocol.Envelope) {
 		c.hub.logger().Info("switched workspace (per-conn)", "workspace", target)
 	}
 	c.handleSessionList(ctx, env)
+}
+
+func (c *Conn) handleSettingsGet(ctx context.Context, env protocol.Envelope) {
+	s := config.LoadSettings(c.currentWorkspace())
+	perm := string(c.hub.Config.Permission)
+	if perm == "" {
+		perm = string(s.EffectivePermission(config.PermissionAsk))
+		if perm == "" {
+			perm = "ask"
+		}
+	}
+	allowAll := perm == "allow"
+	if s.AllowAll != nil {
+		allowAll = *s.AllowAll
+	}
+	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSettingsGet, protocol.SettingsGetResp{Permission: perm, AllowAll: allowAll}))
+}
+
+func (c *Conn) handleSettingsSet(ctx context.Context, env protocol.Envelope) {
+	var req protocol.SettingsSetReq
+	if !c.decodePayload(env, &req, "settings.set") {
+		return
+	}
+	s := config.LoadSettings(c.currentWorkspace())
+	updated := false
+	if req.Permission != nil {
+		pm, err := config.ParsePermissionMode(*req.Permission)
+		if err != nil {
+			c.sendError(env.ID, err.Error())
+			return
+		}
+		s.Permission = pm
+		updated = true
+	}
+	if req.AllowAll != nil {
+		s.AllowAll = req.AllowAll
+		if *req.AllowAll {
+			s.Permission = config.PermissionAllow
+		} else if s.Permission == config.PermissionAllow {
+			s.Permission = config.PermissionAsk
+		}
+		updated = true
+	}
+	if updated {
+		if err := config.SaveSettings(c.currentWorkspace(), s); err != nil {
+			c.sendError(env.ID, fmt.Sprintf("save settings: %v", err))
+			return
+		}
+		if eff := s.EffectivePermission(""); eff != "" {
+			c.hub.Config.Permission = eff
+		}
+		c.hub.logger().Info("settings updated", "permission", s.Permission, "allowAll", s.AllowAll)
+	}
+	perm := string(s.Permission)
+	if perm == "" {
+		perm = "ask"
+	}
+	allowAll := perm == "allow"
+	if s.AllowAll != nil {
+		allowAll = *s.AllowAll
+	}
+	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSettingsSet, protocol.SettingsSetResp{Permission: perm, AllowAll: allowAll}))
 }

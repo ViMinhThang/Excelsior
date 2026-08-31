@@ -46,6 +46,23 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 			return tools.AskResponse{}, fmt.Errorf("no ask dispatcher configured")
 		}
 	}
+	var permHandler tools.PermissionHandler
+	permMode := m.cfg.Permission
+	if permMode == "allow" {
+		permHandler = func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
+			return tools.PermissionResponse{Approved: true}, nil
+		}
+	} else if permMode == "deny" {
+		permHandler = func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
+			return tools.PermissionResponse{Approved: false}, nil
+		}
+	} else if m.cfg.PermissionDispatcher != nil {
+		permHandler = m.cfg.PermissionDispatcher.Handler(ctx)
+	} else {
+		permHandler = func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
+			return tools.PermissionResponse{Approved: false}, fmt.Errorf("no permission dispatcher configured")
+		}
+	}
 
 	if m.cfg.EngineURL != "" {
 		wsClient := &engine.WSClient{URL: m.cfg.EngineURL}
@@ -63,7 +80,7 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 					return ctx.Err()
 				}
 				return nil
-			}, handler)
+			}, handler, permHandler)
 			if err != nil {
 				select {
 				case ch <- agent.StreamEvent{Type: "error", Text: err.Error()}:
@@ -81,7 +98,8 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	ctxWithHandler := tools.WithQuestionHandler(ctx, handler)
+	ctxWithPerm := tools.WithPermissionHandler(ctx, permHandler)
+	ctxWithHandler := tools.WithQuestionHandler(ctxWithPerm, handler)
 	go func() {
 		_, err := m.cfg.Agent.RunWithHistory(ctxWithHandler, agent.RunOptions{
 			Messages: msgs,

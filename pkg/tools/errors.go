@@ -50,6 +50,8 @@ var (
 
 	// ErrOffsetOutOfRange is returned when a line offset exceeds file line count.
 	ErrOffsetOutOfRange = errors.New("line offset out of range")
+
+	// ErrPermissionDenied is defined in permission.go
 )
 
 // ToolError is a structured error carrying tool name, operation, path, and underlying cause.
@@ -129,6 +131,8 @@ func (e *ToolError) Is(target error) bool {
 		return errors.Is(e.Err, ErrOffsetOutOfRange)
 	case ErrToolNotFound:
 		return errors.Is(e.Err, ErrToolNotFound)
+	case ErrPermissionDenied:
+		return errors.Is(e.Err, ErrPermissionDenied)
 	default:
 		return false
 	}

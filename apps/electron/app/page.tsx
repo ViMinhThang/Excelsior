@@ -6,6 +6,7 @@ import Composer from "../components/Composer";
 import SettingsModal from "../components/SettingsModal";
 import MenuBar from "../components/MenuBar";
 import AskDialog from "../components/AskDialog";
+import PermissionDialog from "../components/PermissionDialog";
 import Transcript from "../components/Transcript";
 import { useEngine } from "../lib/useEngine";
 import { cleanTitle, formatTimeAgo } from "../lib/format";
@@ -22,6 +23,13 @@ export default function Page() {
   const [projectName, setProjectName] = useState(DEFAULT_PROJECT);
   const [engineUrl, setEngineUrl] = useState(ENGINE_URL_FALLBACK);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [allowAll, setAllowAll] = useState<boolean>(false);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(STORAGE_KEYS.allowAll);
+      if (v) setAllowAll(JSON.parse(v) as boolean);
+    } catch {}
+  }, []);
 
   const { theme, setTheme } = useThemeContext();
   const { knownFolders, setKnownFolders } = useKnownFolders();
@@ -35,10 +43,11 @@ export default function Page() {
     streaming,
     setStreaming,
     ask,
+    permission,
     send,
     activeIdRef,
     setActiveId: setEngineActiveId,
-  } = useEngine(engineUrl);
+  } = useEngine(engineUrl, { allowAll });
 
   const transcriptRef = React.useRef<HTMLDivElement>(null);
   const [isDesktop, setIsDesktop] = useState<boolean | null>(null);
@@ -57,6 +66,18 @@ export default function Page() {
       if (url) setEngineUrl(url);
     });
   }, []);
+
+  // Sync allow-all setting to engine when connected
+  useEffect(() => {
+    if (wsState !== "connected") return;
+    try {
+      const v = localStorage.getItem(STORAGE_KEYS.allowAll);
+      const allow = v ? (JSON.parse(v) as boolean) : allowAll;
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ ver: "v1", type: "settings.set", payload: { allowAll: allow, permission: allow ? "allow" : "ask" } }));
+      }
+    } catch {}
+  }, [wsState]);
 
   // Mirror engine-selected session into local state when sessions/blocks change
   useEffect(() => {
@@ -243,6 +264,23 @@ export default function Page() {
     [ask]
   );
 
+  const handlePermissionDecision = useCallback(
+    (approved: boolean) => {
+      if (!permission) return;
+      permission._resolve({ approved });
+    },
+    [permission]
+  );
+
+  const handleSaveAllowAll = useCallback((next: boolean) => {
+    setAllowAll(next);
+    try { localStorage.setItem(STORAGE_KEYS.allowAll, JSON.stringify(next)); } catch {}
+    // also sync to engine for server-side fast-path persistence
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ ver: "v1", type: "settings.set", payload: { allowAll: next, permission: next ? "allow" : "ask" } }));
+    }
+  }, []);
+
   const isLanding = !activeId && blocks.length === 0;
 
   return (
@@ -312,6 +350,7 @@ export default function Page() {
             )}
 
             {ask && <AskDialog ask={ask} onAnswer={handleAnswerAsk} />}
+            {permission && <PermissionDialog permission={permission} onDecision={handlePermissionDecision} />}
           </main>
         </div>
 
@@ -325,6 +364,8 @@ export default function Page() {
           onSaveDefaultModel={setModel}
           currentTheme={theme}
           onSaveTheme={setTheme}
+          allowAll={allowAll}
+          onSaveAllowAll={handleSaveAllowAll}
         />
       </div>
     </ErrorBoundary>

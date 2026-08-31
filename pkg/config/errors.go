@@ -29,6 +29,9 @@ var (
 
 	// ErrNotADirectory is an alias sentinel for ErrWorkspaceNotDir.
 	ErrNotADirectory = ErrWorkspaceNotDir
+
+	// ErrInvalidPermission is returned when permission mode is not ask|allow|deny.
+	ErrInvalidPermission = errors.New("invalid permission mode")
 )
 
 // ConfigError represents a structured configuration or validation failure.

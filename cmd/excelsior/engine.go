@@ -19,6 +19,16 @@ func newEngineCommand(cfg config.Config, workspaceFlag *string) *cobra.Command {
   excelsior engine --addr :17812 --workspace .
   excelsior tui --engine ws://localhost:17812/v1/ws`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// permission may be overridden via root flag context
+			if v := cmd.Context().Value(configKey{}); v != nil {
+				if c, ok := v.(config.Config); ok {
+					cfg = c
+				}
+			} else if v, _ := cmd.Root().PersistentFlags().GetString("permission"); v != "" {
+				if pm, err := config.ParsePermissionMode(v); err == nil {
+					cfg.Permission = pm
+				}
+			}
 			ws, err := config.ResolveWorkspace(*workspaceFlag, cfg.Workspace)
 			if err != nil {
 				slog.Warn("workspace resolve failed, using '.'", "err", err)

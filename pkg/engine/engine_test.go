@@ -317,7 +317,7 @@ func TestEngine_AskHandlerEmptyOptionsGuard(t *testing.T) {
 	defer srv.Close()
 
 	client := &WSClient{URL: srv.URL}
-	err := client.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil)
+	err := client.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("StreamRemote failed: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestEngine_TypedEngineErrorInspection(t *testing.T) {
 	defer srv.Close()
 
 	client := &WSClient{URL: srv.URL}
-	err := client.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil)
+	err := client.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error from StreamRemote on TypeError")
 	}
@@ -360,7 +360,7 @@ func TestEngine_TypedEngineErrorInspection(t *testing.T) {
 
 	// Invalid URL check
 	clientBad := &WSClient{URL: "://invalid-url"}
-	errBad := clientBad.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil)
+	errBad := clientBad.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil, nil)
 	if errBad == nil || !errors.Is(errBad, ErrInvalidURL) {
 		t.Fatalf("expected ErrInvalidURL, got %v", errBad)
 	}

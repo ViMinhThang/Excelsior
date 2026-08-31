@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"excelsior/pkg/agent"
+	"excelsior/pkg/config"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/tools"
 )
@@ -30,7 +31,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.askState = newAskOverlay(msg.Req, msg.RespChan)
 		return m, textinput.Blink
 
+	case permissionRequestMsg:
+		m.permState = newPermissionOverlay(msg.Req, msg.RespChan)
+		return m, textinput.Blink
+
 	case tea.KeyMsg:
+		if m.permState != nil {
+			if cmd, done := m.handlePermissionKey(msg); done {
+				return m, cmd
+			}
+			return m, nil
+		}
 		if m.askState != nil {
 			if cmd, done := m.handleAskKey(msg); done {
 				return m, cmd
@@ -229,6 +240,47 @@ func (m *model) syncAskFocus() {
 	}
 }
 
+func (m *model) handlePermissionKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	switch msg.String() {
+	case "esc", "n", "N":
+		ch := m.permState.respChan
+		m.permState = nil
+		m.input.Focus()
+		select {
+		case ch <- tools.PermissionResponse{Approved: false}:
+		default:
+		}
+		return textinput.Blink, true
+	case "y", "Y":
+		ch := m.permState.respChan
+		m.permState = nil
+		m.input.Focus()
+		select {
+		case ch <- tools.PermissionResponse{Approved: true}:
+		default:
+		}
+		return textinput.Blink, true
+	case "left", "right", "tab", "shift+tab":
+		if m.permState.cursor == 0 {
+			m.permState.cursor = 1
+		} else {
+			m.permState.cursor = 0
+		}
+		return nil, true
+	case "enter":
+		approved := m.permState.cursor == 0
+		ch := m.permState.respChan
+		m.permState = nil
+		m.input.Focus()
+		select {
+		case ch <- tools.PermissionResponse{Approved: approved}:
+		default:
+		}
+		return textinput.Blink, true
+	}
+	return nil, false
+}
+
 func (m *model) upsertAssistant() {
 	if len(m.blocks) > 0 && m.blocks[len(m.blocks)-1].Role == "assistant" {
 		m.blocks[len(m.blocks)-1].Content = m.streamText.String()
@@ -253,7 +305,7 @@ func (m *model) handleCommand(cmd string) {
 	case "/clear":
 		m.blocks = m.blocks[:2]
 	case "/help":
-		m.blocks = append(m.blocks, block{Role: "system", Content: "Commands: /clear, /help, /model [deepseek-v4-flash|deepseek-v4-pro], /quit"})
+		m.blocks = append(m.blocks, block{Role: "system", Content: "Commands: /clear, /help, /model [deepseek-v4-flash|deepseek-v4-pro], /permission [ask|allow|deny], /yolo, /quit"})
 	case "/model":
 		if len(parts) == 2 {
 			m.cfg.Model = parts[1]
@@ -264,9 +316,62 @@ func (m *model) handleCommand(cmd string) {
 		} else {
 			m.blocks = append(m.blocks, block{Role: "system", Content: "Current model: " + m.cfg.Model})
 		}
+	case "/permission", "/perm":
+		if len(parts) == 2 {
+			switch parts[1] {
+			case "ask", "allow", "deny":
+				m.cfg.Permission = parts[1]
+				// persist to workspace settings for sticky setting
+				if err := savePermissionSetting(m.cfg.Workspace, parts[1]); err != nil {
+					m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save permission setting: " + err.Error()})
+				} else {
+					m.blocks = append(m.blocks, block{Role: "system", Content: "Permission → " + parts[1] + " (saved to .excelsior/settings.json)"})
+				}
+			default:
+				m.blocks = append(m.blocks, block{Role: "error", Content: "Usage: /permission [ask|allow|deny]"})
+			}
+		} else {
+			perm := m.cfg.Permission
+			if perm == "" {
+				perm = "ask"
+			}
+			m.blocks = append(m.blocks, block{Role: "system", Content: "Current permission: " + perm + " (use /permission allow to auto-allow all)"})
+		}
+	case "/yolo", "/allow-all", "/allow":
+		m.cfg.Permission = "allow"
+		if err := savePermissionSetting(m.cfg.Workspace, "allow"); err != nil {
+			m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save: " + err.Error()})
+		} else {
+			m.blocks = append(m.blocks, block{Role: "system", Content: "YOLO mode enabled → all commands auto-allowed (permission=allow, saved)"})
+		}
+	case "/deny", "/ask":
+		perm := strings.TrimPrefix(parts[0], "/")
+		m.cfg.Permission = perm
+		if err := savePermissionSetting(m.cfg.Workspace, perm); err != nil {
+			m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save: " + err.Error()})
+		} else {
+			m.blocks = append(m.blocks, block{Role: "system", Content: "Permission → " + perm + " (saved)"})
+		}
 	case "/quit", "/exit", "/q":
 		m.blocks = append(m.blocks, block{Role: "system", Content: "Use Ctrl+C to quit"})
 	default:
 		m.blocks = append(m.blocks, block{Role: "system", Content: "Unknown command: " + parts[0] + "  (try /help)"})
 	}
+}
+
+func savePermissionSetting(workspace, perm string) error {
+	pm, err := config.ParsePermissionMode(perm)
+	if err != nil {
+		return err
+	}
+	s := config.LoadSettings(workspace)
+	s.Permission = pm
+	if pm == config.PermissionAllow {
+		t := true
+		s.AllowAll = &t
+	} else {
+		f := false
+		s.AllowAll = &f
+	}
+	return config.SaveSettings(workspace, s)
 }

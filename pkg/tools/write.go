@@ -39,6 +39,14 @@ func (t *WriteTool) Execute(ctx context.Context, args json.RawMessage) (string, 
 	if len(a.Content) > MaxWriteSize {
 		return "", &ToolError{Tool: "write", Op: "validate", Path: a.FilePath, Err: fmt.Errorf("%w: content too large (%d > %d bytes)", ErrFileTooLarge, len(a.Content), MaxWriteSize)}
 	}
+	// Permission gate — once per call, sequentially (handled by caller loop).
+	permPreview := a.Content
+	if len(permPreview) > 8000 {
+		permPreview = permPreview[:8000] + "\n… truncated"
+	}
+	if err := checkPermission(ctx, "write", PermissionRequest{Tool: "write", FilePath: a.FilePath, Preview: permPreview}); err != nil {
+		return "", err
+	}
 	p, err := secureJoin(t.Root, a.FilePath)
 	if err != nil {
 		return "", &ToolError{Tool: "write", Op: "security", Path: a.FilePath, Err: err}

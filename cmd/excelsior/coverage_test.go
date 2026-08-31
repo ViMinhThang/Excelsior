@@ -161,9 +161,10 @@ func TestCLI_ResolvePromptFromArgs_Multiple(t *testing.T) {
 // TestCLI_RunCommandConstruction verifies the run subcommand alias is registered.
 func TestCLI_RunCommandConstruction(t *testing.T) {
 	cfg := config.Config{}
-	var model, workspace, system, sessionID, engineURL string
+	var model, workspace, system, sessionID, engineURL, permission string
+	var yolo bool
 	var verbose bool
-	root := newRootCommand(cfg, &model, &workspace, &system, &sessionID, &engineURL, &verbose)
+	root := newRootCommand(cfg, &model, &workspace, &system, &sessionID, &engineURL, &permission, &yolo, &verbose)
 	var found bool
 	for _, sub := range root.Commands() {
 		if sub.Use == "run [prompt]" {
