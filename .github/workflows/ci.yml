@@ -16,7 +16,7 @@ jobs:
       - run: go vet ./...
       - run: go test ./... -count=1
       - run: go test -race ./... -count=1
-      - uses: golang/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v6
         with:
           version: v2.1
       - run: govulncheck ./... || echo "govulncheck not installed, skipping"
