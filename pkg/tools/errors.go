@@ -2,7 +2,7 @@ package tools
 
 import (
 	"errors"
-	"strings"
+	"fmt"
 )
 
 var (
@@ -64,33 +64,29 @@ type ToolError struct {
 }
 
 func (e *ToolError) Error() string {
-	var b strings.Builder
-	if e.Tool != "" {
-		b.WriteString(e.Tool)
-	} else {
-		b.WriteString("tools")
+	tool := e.Tool
+	if tool == "" {
+		tool = "tools"
 	}
+	meta := ""
 	if e.Op != "" {
-		b.WriteString(": [")
-		b.WriteString(e.Op)
-		b.WriteString("]")
+		meta = fmt.Sprintf(": [%s]", e.Op)
 	}
+	path := ""
 	if e.Path != "" {
-		b.WriteString(" ")
-		b.WriteString(e.Path)
+		path = " " + e.Path
+	}
+	base := tool + meta + path
+	if e.Msg != "" && e.Err != nil {
+		return fmt.Sprintf("%s: %s: %v", base, e.Msg, e.Err)
 	}
 	if e.Msg != "" {
-		b.WriteString(": ")
-		b.WriteString(e.Msg)
-		if e.Err != nil {
-			b.WriteString(": ")
-			b.WriteString(e.Err.Error())
-		}
-	} else if e.Err != nil {
-		b.WriteString(": ")
-		b.WriteString(e.Err.Error())
+		return fmt.Sprintf("%s: %s", base, e.Msg)
 	}
-	return b.String()
+	if e.Err != nil {
+		return fmt.Sprintf("%s: %v", base, e.Err)
+	}
+	return base
 }
 
 func (e *ToolError) Unwrap() error {

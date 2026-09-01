@@ -25,6 +25,8 @@ import (
 	"excelsior/pkg/tools"
 )
 
+func mustMarshal(v any) json.RawMessage { b, _ := json.Marshal(v); return b }
+
 func TestHub_WorkspaceConcurrency(t *testing.T) {
 	cfg := config.Config{Model: "deepseek-v4-flash"}
 	hub := NewHub(cfg, "/initial/workspace")
@@ -122,7 +124,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-1",
 		Type:    protocol.TypeSessionCreate,
-		Payload: protocol.MustMarshalPayload(protocol.SessionCreateReq{Title: "Refactoring Plan"}),
+		Payload: mustMarshal(protocol.SessionCreateReq{Title: "Refactoring Plan"}),
 	})
 	createdEnv := read()
 	if createdEnv.Type != protocol.TypeSessionCreate {
@@ -140,7 +142,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-2",
 		Type:    protocol.TypeSessionList,
-		Payload: protocol.MustMarshalPayload(protocol.SessionListReq{}),
+		Payload: mustMarshal(protocol.SessionListReq{}),
 	})
 	listEnv := read()
 	if listEnv.Type != protocol.TypeSessionList {
@@ -157,7 +159,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-3",
 		Type:    protocol.TypeSessionRename,
-		Payload: protocol.MustMarshalPayload(protocol.SessionRenameReq{ID: sessionID, Title: "Final Architectural Blueprint"}),
+		Payload: mustMarshal(protocol.SessionRenameReq{ID: sessionID, Title: "Final Architectural Blueprint"}),
 	})
 	renameEnv := read()
 	if renameEnv.Type != protocol.TypeSessionRename {
@@ -169,7 +171,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-4",
 		Type:    protocol.TypeSessionList,
-		Payload: protocol.MustMarshalPayload(protocol.SessionListReq{}),
+		Payload: mustMarshal(protocol.SessionListReq{}),
 	})
 	listEnv2 := read()
 	var listResp2 protocol.SessionListResp
@@ -183,7 +185,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-5",
 		Type:    protocol.TypeSessionData,
-		Payload: protocol.MustMarshalPayload(protocol.SessionDataReq{ID: sessionID}),
+		Payload: mustMarshal(protocol.SessionDataReq{ID: sessionID}),
 	})
 	dataEnv := read()
 	if dataEnv.Type != protocol.TypeSessionData {
@@ -195,7 +197,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-6",
 		Type:    protocol.TypeSessionDelete,
-		Payload: protocol.MustMarshalPayload(protocol.SessionDeleteReq{ID: sessionID}),
+		Payload: mustMarshal(protocol.SessionDeleteReq{ID: sessionID}),
 	})
 	delEnv := read()
 	if delEnv.Type != protocol.TypeSessionDelete {
@@ -208,7 +210,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		Ver:     protocol.Ver,
 		ID:      "req-7",
 		Type:    protocol.TypeWorkspaceSet,
-		Payload: protocol.MustMarshalPayload(protocol.WorkspaceSetReq{Workspace: newWS}),
+		Payload: mustMarshal(protocol.WorkspaceSetReq{Workspace: newWS}),
 	})
 	wsListEnv := read()
 	if wsListEnv.Type != protocol.TypeSessionList {
@@ -234,7 +236,7 @@ func TestConn_AskCorrelation(t *testing.T) {
 	env := protocol.Envelope{
 		Ver:     protocol.Ver,
 		Type:    protocol.TypeAskResp,
-		Payload: protocol.MustMarshalPayload(protocol.AskResp{Selected: 2, Answer: "Option C", Label: "Label C"}),
+		Payload: mustMarshal(protocol.AskResp{Selected: 2, Answer: "Option C", Label: "Label C"}),
 	}
 	c.handleAskResp(env)
 
@@ -384,14 +386,6 @@ func (m *mockRunner) RunWithHistory(ctx context.Context, opts agent.RunOptions) 
 	}, nil
 }
 
-type mockFactory struct {
-	runner agent.Runner
-}
-
-func (f *mockFactory) NewAgent(model, workspace string) (agent.Runner, error) {
-	return f.runner, nil
-}
-
 func TestHub_MockAgentFactory(t *testing.T) {
 	memStore := session.NewMemoryStore()
 	runner := &mockRunner{
@@ -408,7 +402,7 @@ func TestHub_MockAgentFactory(t *testing.T) {
 
 	hub := NewHub(config.Config{Model: "deepseek-v4-flash"}, "/test/ws")
 	hub.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub.AgentFactory = &mockFactory{runner: runner}
+	hub.NewAgent = func(model, workspace string) (agent.Runner, error) { return runner, nil }
 	hub.SessionStore = memStore
 
 	srv := httptest.NewServer(hub.Handler())
@@ -627,7 +621,7 @@ func (f *mockFailingRunner) RunWithHistory(ctx context.Context, opts agent.RunOp
 func TestEngine_HandleChat_ErrorBranch(t *testing.T) {
 	hub := NewHub(config.Config{Model: "v4"}, "/tmp")
 	hub.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub.AgentFactory = &mockFactory{runner: &mockFailingRunner{}}
+	hub.NewAgent = func(model, workspace string) (agent.Runner, error) { return &mockFailingRunner{}, nil }
 	hub.SessionStore = session.NewMemoryStore()
 
 	conn := newConn(hub, nil)

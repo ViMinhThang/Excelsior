@@ -404,32 +404,19 @@ func (r *syntheticStreamRunner) RunWithHistory(ctx context.Context, opts agent.R
 	}, nil
 }
 
-type testInjectableFactory struct {
-	createFn func(model, workspace string) (agent.Runner, error)
-}
-
-func (f *testInjectableFactory) NewAgent(model, workspace string) (agent.Runner, error) {
-	if f.createFn != nil {
-		return f.createFn(model, workspace)
-	}
-	return nil, fmt.Errorf("no factory createFn configured")
-}
-
 // TestChallenge_Engine_AgentFailureInjection verifies that agent failures are properly translated
 // to TypeError WebSocket envelopes and the connection remains unblocked for future requests.
 func TestChallenge_Engine_AgentFailureInjection(t *testing.T) {
 	memStore := session.NewMemoryStore()
 	expectedErr := errors.New("simulated critical LLM network failure")
 
-	factory := &testInjectableFactory{
-		createFn: func(model, workspace string) (agent.Runner, error) {
-			return &failingRunner{failErr: expectedErr}, nil
-		},
+	createFn := func(model, workspace string) (agent.Runner, error) {
+		return &failingRunner{failErr: expectedErr}, nil
 	}
 
 	hub := engine.NewHub(config.Config{Model: "deepseek-v4-flash"}, "/test/ws")
 	hub.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub.AgentFactory = factory
+	hub.NewAgent = createFn
 	hub.SessionStore = memStore
 
 	srv := httptest.NewServer(hub.Handler())
@@ -475,7 +462,7 @@ func TestChallenge_Engine_AgentFailureInjection(t *testing.T) {
 
 	// 3. Verify connection is NOT stuck in "already streaming" — send another request
 	// Switch factory to successful runner
-	factory.createFn = func(model, workspace string) (agent.Runner, error) {
+	hub.NewAgent = func(model, workspace string) (agent.Runner, error) {
 		return &syntheticStreamRunner{deltaCount: 2, chunkSize: 1}, nil
 	}
 
@@ -511,10 +498,8 @@ func TestChallenge_Engine_AgentFailureInjection(t *testing.T) {
 func TestChallenge_Engine_FactoryCreationError(t *testing.T) {
 	hub := engine.NewHub(config.Config{Model: "deepseek-v4-flash"}, "/test/ws")
 	hub.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub.AgentFactory = &testInjectableFactory{
-		createFn: func(model, workspace string) (agent.Runner, error) {
-			return nil, fmt.Errorf("model %q is not authorized for workspace %q", model, workspace)
-		},
+	hub.NewAgent = func(model, workspace string) (agent.Runner, error) {
+		return nil, fmt.Errorf("model %q is not authorized for workspace %q", model, workspace)
 	}
 	hub.SessionStore = session.NewMemoryStore()
 
@@ -556,15 +541,13 @@ func TestChallenge_Engine_FactoryCreationError(t *testing.T) {
 func TestChallenge_Engine_ContextCancellationAndDisconnection(t *testing.T) {
 	memStore := session.NewMemoryStore()
 
-	factory := &testInjectableFactory{
-		createFn: func(model, workspace string) (agent.Runner, error) {
-			return &cancelingRunner{cancelAfter: 50 * time.Millisecond}, nil
-		},
+	createFn := func(model, workspace string) (agent.Runner, error) {
+		return &cancelingRunner{cancelAfter: 50 * time.Millisecond}, nil
 	}
 
 	hub := engine.NewHub(config.Config{Model: "deepseek-v4-flash"}, "/test/ws")
 	hub.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub.AgentFactory = factory
+	hub.NewAgent = createFn
 	hub.SessionStore = memStore
 
 	srv := httptest.NewServer(hub.Handler())
@@ -596,7 +579,7 @@ func TestChallenge_Engine_ContextCancellationAndDisconnection(t *testing.T) {
 	}
 
 	// Now test immediate client disconnect while runner is active
-	factory.createFn = func(model, workspace string) (agent.Runner, error) {
+	hub.NewAgent = func(model, workspace string) (agent.Runner, error) {
 		return &syntheticStreamRunner{deltaCount: 50, chunkSize: 10}, nil
 	}
 
@@ -626,15 +609,11 @@ func TestChallenge_Engine_SyntheticDeltaStreamHighThroughput(t *testing.T) {
 	memStore := session.NewMemoryStore()
 	numDeltas := 20
 
-	factory := &testInjectableFactory{
-		createFn: func(model, workspace string) (agent.Runner, error) {
-			return &syntheticStreamRunner{deltaCount: numDeltas, chunkSize: 5}, nil
-		},
-	}
-
 	hub := engine.NewHub(config.Config{Model: "deepseek-v4-flash"}, "/test/ws")
 	hub.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	hub.AgentFactory = factory
+	hub.NewAgent = func(model, workspace string) (agent.Runner, error) {
+		return &syntheticStreamRunner{deltaCount: numDeltas, chunkSize: 5}, nil
+	}
 	hub.SessionStore = memStore
 
 	srv := httptest.NewServer(hub.Handler())

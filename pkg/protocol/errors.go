@@ -3,7 +3,6 @@ package protocol
 import (
 	"errors"
 	"fmt"
-	"strings"
 )
 
 var (
@@ -36,31 +35,28 @@ type ProtocolError struct {
 }
 
 func (e *ProtocolError) Error() string {
-	var b strings.Builder
-	b.WriteString("protocol")
+	meta := ""
 	if e.Op != "" {
-		b.WriteString(" [")
-		b.WriteString(e.Op)
+		meta = " [" + e.Op
 		if e.MsgType != "" {
-			fmt.Fprintf(&b, " type=%s", e.MsgType)
+			meta += fmt.Sprintf(" type=%s", e.MsgType)
 		}
 		if e.Ver != "" {
-			fmt.Fprintf(&b, " ver=%s", e.Ver)
+			meta += fmt.Sprintf(" ver=%s", e.Ver)
 		}
-		b.WriteString("]")
+		meta += "]"
+	}
+	base := "protocol" + meta
+	if e.Msg != "" && e.Err != nil {
+		return fmt.Sprintf("%s: %s: %v", base, e.Msg, e.Err)
 	}
 	if e.Msg != "" {
-		b.WriteString(": ")
-		b.WriteString(e.Msg)
-		if e.Err != nil {
-			b.WriteString(": ")
-			b.WriteString(e.Err.Error())
-		}
-	} else if e.Err != nil {
-		b.WriteString(": ")
-		b.WriteString(e.Err.Error())
+		return fmt.Sprintf("%s: %s", base, e.Msg)
 	}
-	return b.String()
+	if e.Err != nil {
+		return fmt.Sprintf("%s: %v", base, e.Err)
+	}
+	return base
 }
 
 func (e *ProtocolError) Unwrap() error {

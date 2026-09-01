@@ -3,7 +3,6 @@ package agent
 import (
 	"errors"
 	"fmt"
-	"strings"
 )
 
 var (
@@ -42,31 +41,28 @@ type AgentError struct {
 }
 
 func (e *AgentError) Error() string {
-	var b strings.Builder
-	b.WriteString("agent")
+	meta := ""
 	if e.Phase != "" {
-		b.WriteString(" [")
-		b.WriteString(e.Phase)
+		meta = " [" + e.Phase
 		if e.Iteration > 0 {
-			fmt.Fprintf(&b, " iter %d", e.Iteration)
+			meta += fmt.Sprintf(" iter %d", e.Iteration)
 		}
 		if e.ToolName != "" {
-			fmt.Fprintf(&b, " tool %q", e.ToolName)
+			meta += fmt.Sprintf(" tool %q", e.ToolName)
 		}
-		b.WriteString("]")
+		meta += "]"
+	}
+	base := "agent" + meta
+	if e.Msg != "" && e.Err != nil {
+		return fmt.Sprintf("%s: %s: %v", base, e.Msg, e.Err)
 	}
 	if e.Msg != "" {
-		b.WriteString(": ")
-		b.WriteString(e.Msg)
-		if e.Err != nil {
-			b.WriteString(": ")
-			b.WriteString(e.Err.Error())
-		}
-	} else if e.Err != nil {
-		b.WriteString(": ")
-		b.WriteString(e.Err.Error())
+		return fmt.Sprintf("%s: %s", base, e.Msg)
 	}
-	return b.String()
+	if e.Err != nil {
+		return fmt.Sprintf("%s: %v", base, e.Err)
+	}
+	return base
 }
 
 func (e *AgentError) Unwrap() error {

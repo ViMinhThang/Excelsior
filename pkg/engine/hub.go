@@ -7,29 +7,27 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
 
+	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
 )
-
-// workspace holds the hub's workspace root using lock-free atomic pointer for type-safe concurrent reads.
 
 // Hub is the WS daemon. One Hub serves many clients; each turn is per-conn.
 type Hub struct {
 	Addr         string // e.g. :17812
 	Config       config.Config
 	Logger       *slog.Logger
-	AgentFactory AgentFactory   // Injectable factory (defaults to DefaultAgentFactory)
-	SessionStore session.Store  // Injectable session store (defaults to DirStore)
+	NewAgent     func(model, workspace string) (agent.Runner, error) // injectable (defaults to built-in)
+	SessionStore session.Store                                        // Injectable session store (defaults to DirStore)
 
-	mu      sync.RWMutex
-	clients map[*Conn]struct{}
-	ws      atomic.Pointer[string]
+	mu        sync.RWMutex
+	clients   map[*Conn]struct{}
+	workspace string
 }
 
 // NewHub initializes a Hub with configuration and workspace.
@@ -37,14 +35,13 @@ func NewHub(cfg config.Config, workspace string) *Hub {
 	if workspace == "" {
 		workspace = cfg.Workspace
 	}
-	h := &Hub{
-		Config:  cfg,
-		Addr:    ":17812",
-		Logger:  slog.Default(),
-		clients: make(map[*Conn]struct{}),
+	return &Hub{
+		Config:    cfg,
+		Addr:      ":17812",
+		Logger:    slog.Default(),
+		clients:   make(map[*Conn]struct{}),
+		workspace: workspace,
 	}
-	h.ws.Store(&workspace)
-	return h
 }
 
 func (h *Hub) logger() *slog.Logger {
@@ -54,16 +51,19 @@ func (h *Hub) logger() *slog.Logger {
 	return slog.Default()
 }
 
-// Workspace returns the current workspace root directory (lock-free).
+// Workspace returns the current workspace root directory.
 func (h *Hub) Workspace() string {
-	if v := h.ws.Load(); v != nil {
-		return *v
-	}
-	return ""
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.workspace
 }
 
-// SetWorkspace updates the workspace root directory (lock-free).
-func (h *Hub) SetWorkspace(ws string) { h.ws.Store(&ws) }
+// SetWorkspace updates the workspace root directory.
+func (h *Hub) SetWorkspace(ws string) {
+	h.mu.Lock()
+	h.workspace = ws
+	h.mu.Unlock()
+}
 
 // Register registers a connection with the hub.
 func (h *Hub) Register(c *Conn) {

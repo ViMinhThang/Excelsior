@@ -3,7 +3,6 @@ package session
 import (
 	"errors"
 	"fmt"
-	"strings"
 )
 
 var (
@@ -39,31 +38,29 @@ type SessionError struct {
 }
 
 func (e *SessionError) Error() string {
-	var b strings.Builder
-	b.WriteString("session")
+	meta := ""
 	if e.Op != "" {
-		b.WriteString(" [")
-		b.WriteString(e.Op)
+		meta = " [" + e.Op
 		if e.SessionID != "" {
-			fmt.Fprintf(&b, " id=%s", e.SessionID)
+			meta += fmt.Sprintf(" id=%s", e.SessionID)
 		}
-		b.WriteString("]")
+		meta += "]"
 	}
+	path := ""
 	if e.Path != "" {
-		fmt.Fprintf(&b, " (%s)", e.Path)
+		path = fmt.Sprintf(" (%s)", e.Path)
+	}
+	base := "session" + meta + path
+	if e.Msg != "" && e.Err != nil {
+		return fmt.Sprintf("%s: %s: %v", base, e.Msg, e.Err)
 	}
 	if e.Msg != "" {
-		b.WriteString(": ")
-		b.WriteString(e.Msg)
-		if e.Err != nil {
-			b.WriteString(": ")
-			b.WriteString(e.Err.Error())
-		}
-	} else if e.Err != nil {
-		b.WriteString(": ")
-		b.WriteString(e.Err.Error())
+		return fmt.Sprintf("%s: %s", base, e.Msg)
 	}
-	return b.String()
+	if e.Err != nil {
+		return fmt.Sprintf("%s: %v", base, e.Err)
+	}
+	return base
 }
 
 func (e *SessionError) Unwrap() error {

@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
-	"unicode/utf8"
 
 	"excelsior/pkg/llm"
 	"excelsior/pkg/tools"
+	"excelsior/pkg/util"
 )
 
 // LLM is the provider interface the agent depends on for streaming chat completions.
@@ -236,12 +237,13 @@ func (a *Agent) executeTurn(ctx context.Context, iter int, model string, message
 	return msg, nil
 }
 
-func truncateRunes(s string, maxRunes int) string {
-	if utf8.RuneCountInString(s) <= maxRunes {
+func truncateRunes(s string, n int) string {
+	// ponytail: delegate rune counting to util.Truncate, keep "[truncated]" marker for test contract
+	t := util.Truncate(s, n)
+	if t == s {
 		return s
 	}
-	runes := []rune(s)
-	return string(runes[:maxRunes]) + "\n[truncated]"
+	return strings.TrimSuffix(t, "…") + "\n[truncated]"
 }
 
 func (a *Agent) execTools(ctx context.Context, reg ToolRegistry, calls []llm.ToolCall, messages *[]llm.Message, emit func(StreamEvent)) error {

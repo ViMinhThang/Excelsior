@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"sync"
 	"time"
@@ -11,8 +12,11 @@ import (
 	"github.com/gorilla/websocket"
 
 	"excelsior/pkg/agent"
+	"excelsior/pkg/config"
+	"excelsior/pkg/llm"
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
+	"excelsior/pkg/tools"
 )
 
 // interactionRouter manages pending human-in-the-loop responses for an active connection turn.
@@ -151,14 +155,34 @@ func (c *Conn) sessionStore() session.Store {
 }
 
 func (c *Conn) getAgent(model string) (agent.Runner, error) {
-	factory := c.hub.AgentFactory
-	if factory == nil {
-		factory = &DefaultAgentFactory{
-			Config: c.hub.Config,
-			Logger: c.hub.logger(),
-		}
+	if c.hub.NewAgent != nil {
+		return c.hub.NewAgent(model, c.currentWorkspace())
 	}
-	return factory.NewAgent(model, c.currentWorkspace())
+	// default: mirror old DefaultAgentFactory.NewAgent
+	if model == "" {
+		model = c.hub.Config.Model
+	}
+	if model == "" {
+		model = config.DefaultModel
+	}
+	var logger *slog.Logger
+	if c.hub.Logger != nil {
+		logger = c.hub.Logger
+	} else {
+		logger = slog.Default()
+	}
+	client := &llm.Client{
+		APIKey:  c.hub.Config.APIKey,
+		BaseURL: c.hub.Config.BaseURL,
+		Model:   model,
+		Logger:  logger,
+	}
+	return &agent.Agent{
+		LLM:    client,
+		Tools:  tools.DefaultRegistry(c.currentWorkspace()),
+		System: agent.DefaultSystemPrompt,
+		Logger: logger,
+	}, nil
 }
 
 func (c *Conn) sendEnvelope(env protocol.Envelope) {

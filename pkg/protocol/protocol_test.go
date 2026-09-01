@@ -187,11 +187,12 @@ func TestAllProtocolMessageTypesSerialization(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			raw, _ := MarshalPayload(tc.payload)
 			env := Envelope{
 				Ver:     Ver,
 				ID:      "test-id",
 				Type:    tc.msgType,
-				Payload: MustMarshalPayload(tc.payload),
+				Payload: raw,
 			}
 
 			data, err := json.Marshal(env)
@@ -243,15 +244,6 @@ func TestChatReqRoundTrip(t *testing.T) {
 	}
 }
 
-func TestMustMarshalPayload_NonPanicking(t *testing.T) {
-	// Pass an un-marshalable type (channel) to MustMarshalPayload
-	ch := make(chan int)
-	result := MustMarshalPayload(ch)
-	if result != nil {
-		t.Errorf("expected nil result for un-marshalable type, got %v", result)
-	}
-}
-
 func TestMarshalPayload_Errors(t *testing.T) {
 	ch := make(chan int)
 	raw, err := MarshalPayload(ch)
@@ -293,22 +285,6 @@ func TestEnvelopeDecode_Errors(t *testing.T) {
 	}
 	if protoErr.Op != "decode" || protoErr.MsgType != TypeChatReq {
 		t.Errorf("unexpected ProtocolError fields: %+v", protoErr)
-	}
-}
-
-func TestBuildEnvelope(t *testing.T) {
-	env, err := BuildEnvelope("id-1", TypePing, nil)
-	if err != nil {
-		t.Fatalf("BuildEnvelope failed: %v", err)
-	}
-	if env.Ver != Ver || env.ID != "id-1" || env.Type != TypePing {
-		t.Errorf("unexpected envelope: %+v", env)
-	}
-
-	ch := make(chan int)
-	_, err = BuildEnvelope("id-2", TypePing, ch)
-	if err == nil || !errors.Is(err, ErrInvalidPayload) {
-		t.Fatalf("expected ErrInvalidPayload for channel payload, got %v", err)
 	}
 }
 

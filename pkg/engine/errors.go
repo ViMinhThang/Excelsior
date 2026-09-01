@@ -3,7 +3,6 @@ package engine
 import (
 	"errors"
 	"fmt"
-	"strings"
 )
 
 var (
@@ -39,31 +38,28 @@ type EngineError struct {
 }
 
 func (e *EngineError) Error() string {
-	var b strings.Builder
-	b.WriteString("engine")
+	meta := ""
 	if e.Op != "" {
-		b.WriteString(" [")
-		b.WriteString(e.Op)
+		meta = " [" + e.Op
 		if e.ClientID != "" {
-			fmt.Fprintf(&b, " client=%s", e.ClientID)
+			meta += fmt.Sprintf(" client=%s", e.ClientID)
 		}
 		if e.MsgType != "" {
-			fmt.Fprintf(&b, " type=%s", e.MsgType)
+			meta += fmt.Sprintf(" type=%s", e.MsgType)
 		}
-		b.WriteString("]")
+		meta += "]"
+	}
+	base := "engine" + meta
+	if e.Msg != "" && e.Err != nil {
+		return fmt.Sprintf("%s: %s: %v", base, e.Msg, e.Err)
 	}
 	if e.Msg != "" {
-		b.WriteString(": ")
-		b.WriteString(e.Msg)
-		if e.Err != nil {
-			b.WriteString(": ")
-			b.WriteString(e.Err.Error())
-		}
-	} else if e.Err != nil {
-		b.WriteString(": ")
-		b.WriteString(e.Err.Error())
+		return fmt.Sprintf("%s: %s", base, e.Msg)
 	}
-	return b.String()
+	if e.Err != nil {
+		return fmt.Sprintf("%s: %v", base, e.Err)
+	}
+	return base
 }
 
 func (e *EngineError) Unwrap() error {

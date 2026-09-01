@@ -50,32 +50,28 @@ func MarshalPayload(v any) (json.RawMessage, error) {
 	return b, nil
 }
 
-// MustMarshalPayload marshals v to json.RawMessage. Returns nil on error instead of panicking.
-func MustMarshalPayload(v any) json.RawMessage {
-	b, err := MarshalPayload(v)
-	if err != nil {
-		return nil
-	}
-	return b
-}
-
-// BuildEnvelope creates a versioned envelope, returning a ProtocolError if payload serialization fails.
-func BuildEnvelope(id, typ string, payload any) (Envelope, error) {
-	raw, err := MarshalPayload(payload)
-	if err != nil {
-		return Envelope{}, err
-	}
-	return Envelope{Ver: Ver, ID: id, Type: typ, Payload: raw}, nil
-}
-
 // NewEnvelope creates a versioned envelope with JSON payload.
 func NewEnvelope(typ string, payload any) Envelope {
-	return Envelope{Ver: Ver, Type: typ, Payload: MustMarshalPayload(payload)}
+	if payload == nil {
+		return Envelope{Ver: Ver, Type: typ}
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return Envelope{Ver: Ver, Type: typ}
+	}
+	return Envelope{Ver: Ver, Type: typ, Payload: b}
 }
 
 // NewEnvelopeWithID creates a versioned envelope with ID and payload.
 func NewEnvelopeWithID(id, typ string, payload any) Envelope {
-	return Envelope{Ver: Ver, ID: id, Type: typ, Payload: MustMarshalPayload(payload)}
+	if payload == nil {
+		return Envelope{Ver: Ver, ID: id, Type: typ}
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return Envelope{Ver: Ver, ID: id, Type: typ}
+	}
+	return Envelope{Ver: Ver, ID: id, Type: typ, Payload: b}
 }
 
 // Message types for [Envelope.Type].
