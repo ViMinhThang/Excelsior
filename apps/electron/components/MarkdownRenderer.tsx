@@ -1,6 +1,8 @@
 import React, { useCallback, useMemo, useState } from "react";
 import CodeBlock from "./CodeBlock";
 import { CheckIcon, CopyIcon } from "./Icons";
+import { parseChunks } from "../lib/markdown";
+import { inferLangFromContent } from "../lib/lang";
 
 type Role = "user" | "assistant" | "system" | "tool" | "reason" | "error";
 
@@ -120,41 +122,8 @@ function parseTable(lines: string[], startIndex: number): { headers: string[]; r
   return { headers, rows, next: current };
 }
 
-type ContentChunk = { type: "code"; content: string; lang?: string } | { type: "text"; content: string };
-
-function useMarkdownChunks(text: string): ContentChunk[] {
-  return useMemo(() => {
-    const chunks: ContentChunk[] = [];
-    let remaining = text;
-    while (remaining.length > 0) {
-      const start = remaining.indexOf("```");
-      if (start === -1) {
-        chunks.push({ type: "text", content: remaining });
-        break;
-      }
-      if (start > 0) chunks.push({ type: "text", content: remaining.slice(0, start) });
-      const after = remaining.slice(start + 3);
-      const end = after.indexOf("```");
-      if (end === -1) {
-        const newline = after.indexOf("\n");
-        chunks.push({
-          type: "code",
-          content: newline > -1 ? after.slice(newline + 1) : after,
-          lang: newline > -1 ? after.slice(0, newline).trim() : "",
-        });
-        break;
-      }
-      const block = after.slice(0, end);
-      const newline = block.indexOf("\n");
-      chunks.push({
-        type: "code",
-        content: newline > -1 ? block.slice(newline + 1) : block,
-        lang: newline > -1 ? block.slice(0, newline).trim() : "",
-      });
-      remaining = after.slice(end + 3);
-    }
-    return chunks;
-  }, [text]);
+function useMarkdownChunks(text: string) {
+  return useMemo(() => parseChunks(text), [text]);
 }
 
 function UserBubble({ text }: { text: string }) {
@@ -168,35 +137,7 @@ function UserBubble({ text }: { text: string }) {
 }
 
 function inferToolLanguage(content: string, meta?: string): string {
-  const lowerMeta = (meta || "").toLowerCase();
-  // Try to extract file extension from content summary like "Wrote ... to path/file.tsx" or from first lines
-  const extMatch = content.match(/\.([a-z0-9]{1,5})\b/m);
-  if (extMatch) {
-    const ext = extMatch[1].toLowerCase();
-    const map: Record<string, string> = {
-      tsx: "tsx",
-      ts: "typescript",
-      js: "javascript",
-      jsx: "jsx",
-      py: "python",
-      go: "go",
-      rs: "rust",
-      json: "json",
-      md: "markdown",
-      css: "css",
-      html: "html",
-      yaml: "yaml",
-      yml: "yaml",
-      sh: "bash",
-      bash: "bash",
-      sql: "sql",
-    };
-    if (map[ext]) return map[ext];
-    return ext;
-  }
-  if (lowerMeta.includes("bash") || lowerMeta.includes("shell")) return "bash";
-  // fallback: let CodeBlock auto-detect
-  return "";
+  return inferLangFromContent(content, meta);
 }
 
 function ToolBlock({ content, meta }: { content: string; meta?: string }) {
@@ -204,39 +145,9 @@ function ToolBlock({ content, meta }: { content: string; meta?: string }) {
   const hasFence = content.includes("```");
   const fallbackLang = useMemo(() => inferToolLanguage(content, meta), [content, meta]);
 
-  // Parse fenced blocks for rich rendering (reuse same logic as useMarkdownChunks)
   const toolChunks = useMemo(() => {
     if (!hasFence) return null;
-    const chunks: { type: "code" | "text"; content: string; lang?: string }[] = [];
-    let remaining = content;
-    while (remaining.length > 0) {
-      const start = remaining.indexOf("```");
-      if (start === -1) {
-        chunks.push({ type: "text", content: remaining });
-        break;
-      }
-      if (start > 0) chunks.push({ type: "text", content: remaining.slice(0, start) });
-      const after = remaining.slice(start + 3);
-      const end = after.indexOf("```");
-      if (end === -1) {
-        const nl = after.indexOf("\n");
-        chunks.push({
-          type: "code",
-          content: nl > -1 ? after.slice(nl + 1) : after,
-          lang: nl > -1 ? after.slice(0, nl).trim() : fallbackLang,
-        });
-        break;
-      }
-      const block = after.slice(0, end);
-      const nl = block.indexOf("\n");
-      chunks.push({
-        type: "code",
-        content: nl > -1 ? block.slice(nl + 1) : block,
-        lang: nl > -1 ? block.slice(0, nl).trim() || fallbackLang : fallbackLang,
-      });
-      remaining = after.slice(end + 3);
-    }
-    return chunks;
+    return parseChunks(content).map((ch) => ch.type === "code" && !ch.lang ? { ...ch, lang: fallbackLang } : ch);
   }, [content, hasFence, fallbackLang]);
 
   return (

@@ -45,18 +45,18 @@ func (c *Conn) handleSessionList(ctx context.Context, env protocol.Envelope) {
 		c.sendError(env.ID, fmt.Sprintf("list sessions: %v", err))
 		return
 	}
-	var sessions []protocol.SessionInfo
+	sessions := make([]protocol.SessionInfo, 0, len(metas))
 	for _, meta := range metas {
 		title := strings.TrimSpace(meta.Title)
 		if title == "" || title == "(empty)" {
 			if rec, err := c.sessionStore().Load(meta.ID); err == nil {
-				info := sessionInfo(rec.Messages, rec.Title)
-				title = info.Title
+				title = sessionInfo(rec.Messages, rec.Title).Title
 			} else {
 				title = "New Chat"
 			}
+		} else {
+			title = util.Truncate(title, 40)
 		}
-		title = util.Truncate(title, 40)
 		sessions = append(sessions, protocol.SessionInfo{
 			ID:    meta.ID,
 			Title: title,
@@ -148,8 +148,7 @@ func (c *Conn) handleWorkspaceSet(ctx context.Context, env protocol.Envelope) {
 	c.handleSessionList(ctx, env)
 }
 
-func (c *Conn) handleSettingsGet(ctx context.Context, env protocol.Envelope) {
-	s := config.LoadSettings(c.currentWorkspace())
+func (c *Conn) resolveEffectiveSettings(s config.Settings) (string, bool) {
 	perm := string(c.hub.Config.Permission)
 	if perm == "" {
 		perm = string(s.EffectivePermission(config.PermissionAsk))
@@ -161,6 +160,12 @@ func (c *Conn) handleSettingsGet(ctx context.Context, env protocol.Envelope) {
 	if s.AllowAll != nil {
 		allowAll = *s.AllowAll
 	}
+	return perm, allowAll
+}
+
+func (c *Conn) handleSettingsGet(ctx context.Context, env protocol.Envelope) {
+	s := config.LoadSettings(c.currentWorkspace())
+	perm, allowAll := c.resolveEffectiveSettings(s)
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSettingsGet, protocol.SettingsGetResp{Permission: perm, AllowAll: allowAll}))
 }
 

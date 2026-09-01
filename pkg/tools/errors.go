@@ -101,39 +101,5 @@ func (e *ToolError) Is(target error) bool {
 	if target == nil {
 		return false
 	}
-	if errors.Is(e.Err, target) {
-		return true
-	}
-	switch target {
-	case ErrOldTextNotFound, ErrTextNotFound:
-		return errors.Is(e.Err, ErrTextNotFound) || errors.Is(e.Err, ErrOldTextNotFound)
-	case ErrOldTextAmbiguous, ErrAmbiguousMatch:
-		return errors.Is(e.Err, ErrAmbiguousMatch) || errors.Is(e.Err, ErrOldTextAmbiguous)
-	case ErrPathOutsideWorkspace:
-		return errors.Is(e.Err, ErrPathOutsideWorkspace)
-	case ErrAbsolutePath:
-		return errors.Is(e.Err, ErrAbsolutePath)
-	case ErrEmptyPath:
-		return errors.Is(e.Err, ErrEmptyPath)
-	case ErrInvalidArguments:
-		return errors.Is(e.Err, ErrInvalidArguments)
-	case ErrFileTooLarge:
-		return errors.Is(e.Err, ErrFileTooLarge)
-	case ErrCommandTooLong:
-		return errors.Is(e.Err, ErrCommandTooLong)
-	case ErrCommandTimeout:
-		return errors.Is(e.Err, ErrCommandTimeout)
-	case ErrNotADirectory:
-		return errors.Is(e.Err, ErrNotADirectory)
-	case ErrIsADirectory:
-		return errors.Is(e.Err, ErrIsADirectory)
-	case ErrOffsetOutOfRange:
-		return errors.Is(e.Err, ErrOffsetOutOfRange)
-	case ErrToolNotFound:
-		return errors.Is(e.Err, ErrToolNotFound)
-	case ErrPermissionDenied:
-		return errors.Is(e.Err, ErrPermissionDenied)
-	default:
-		return false
-	}
+	return errors.Is(e.Err, target) // ponytail ultra: one rung — stdlib before switch
 }

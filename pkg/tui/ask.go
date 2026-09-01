@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"sync/atomic"
 
@@ -12,11 +11,6 @@ import (
 
 	"excelsior/pkg/tools"
 )
-
-// UISink defines the interface for delivering messages to an interactive UI event loop.
-type UISink interface {
-	Send(msg tea.Msg)
-}
 
 // AskDispatcher coordinates between background agent tool execution and the interactive UI.
 type AskDispatcher struct {
@@ -39,22 +33,9 @@ func (d *AskDispatcher) SetSink(sink UISink) {
 
 // Handler returns a QuestionHandler that bridges tool requests to the UI sink.
 func (d *AskDispatcher) Handler(parentCtx context.Context) tools.QuestionHandler {
-	return func(hctx context.Context, req tools.AskRequest) (tools.AskResponse, error) {
-		sinkPtr := d.sink.Load()
-		if sinkPtr == nil || *sinkPtr == nil {
-			return tools.AskResponse{}, fmt.Errorf("no active TUI sink")
-		}
-		respCh := make(chan tools.AskResponse, 1)
-		(*sinkPtr).Send(askRequestMsg{Req: req, RespChan: respCh})
-		select {
-		case resp := <-respCh:
-			return resp, nil
-		case <-hctx.Done():
-			return tools.AskResponse{}, hctx.Err()
-		case <-parentCtx.Done():
-			return tools.AskResponse{}, parentCtx.Err()
-		}
-	}
+	return dispatchViaSink(&d.sink, parentCtx, func(req tools.AskRequest, ch chan tools.AskResponse) tea.Msg {
+		return askRequestMsg{Req: req, RespChan: ch}
+	}) // ponytail: reuse generic dispatcher before rewrite
 }
 
 // askRequestMsg is sent from the agent goroutine (via QuestionHandler) to the Bubble Tea program.

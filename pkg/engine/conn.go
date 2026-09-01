@@ -15,20 +15,84 @@ import (
 	"excelsior/pkg/session"
 )
 
+// interactionRouter manages pending human-in-the-loop responses for an active connection turn.
+type interactionRouter struct {
+	mu     sync.RWMutex
+	askCh  chan protocol.AskResp
+	permCh chan protocol.PermissionResp
+}
+
+func (r *interactionRouter) setAsk(ch chan protocol.AskResp) {
+	r.mu.Lock()
+	r.askCh = ch
+	r.mu.Unlock()
+}
+
+func (r *interactionRouter) clearAsk() {
+	r.mu.Lock()
+	r.askCh = nil
+	r.mu.Unlock()
+}
+
+func (r *interactionRouter) routeAsk(resp protocol.AskResp) bool {
+	r.mu.RLock()
+	ch := r.askCh
+	r.mu.RUnlock()
+	if ch != nil {
+		select {
+		case ch <- resp:
+			return true
+		default:
+		}
+	}
+	return false
+}
+
+func (r *interactionRouter) setPerm(ch chan protocol.PermissionResp) {
+	r.mu.Lock()
+	r.permCh = ch
+	r.mu.Unlock()
+}
+
+func (r *interactionRouter) clearPerm() {
+	r.mu.Lock()
+	r.permCh = nil
+	r.mu.Unlock()
+}
+
+func (r *interactionRouter) routePerm(resp protocol.PermissionResp) bool {
+	r.mu.RLock()
+	ch := r.permCh
+	r.mu.RUnlock()
+	if ch != nil {
+		select {
+		case ch <- resp:
+			return true
+		default:
+		}
+	}
+	return false
+}
+
+func (r *interactionRouter) reset() {
+	r.mu.Lock()
+	r.askCh = nil
+	r.permCh = nil
+	r.mu.Unlock()
+}
+
 // Conn represents an active WebSocket client connection.
 type Conn struct {
-	hub       *Hub
-	ws        *websocket.Conn
-	send      chan []byte
-	workspace string
-	mu        sync.RWMutex
-	askCh     chan protocol.AskResp
-	permCh    chan protocol.PermissionResp
-	done      chan struct{}
-	closeOnce sync.Once
-	closed    bool
-	chatMu    sync.Mutex
-	chatting  bool
+	hub          *Hub
+	ws           *websocket.Conn
+	send         chan []byte
+	workspace    string
+	mu           sync.RWMutex
+	interactions interactionRouter
+	done         chan struct{}
+	closeOnce    sync.Once
+	chatMu       sync.Mutex
+	chatting     bool
 }
 
 func newConn(hub *Hub, ws *websocket.Conn) *Conn {
@@ -49,20 +113,20 @@ func (c *Conn) isClosed() bool {
 	}
 }
 
-func (c *Conn) setAskChannel(ch chan protocol.AskResp) { c.mu.Lock(); c.askCh = ch; c.mu.Unlock() }
-func (c *Conn) clearAskChannel()                       { c.mu.Lock(); c.askCh = nil; c.mu.Unlock() }
+func (c *Conn) setAskChannel(ch chan protocol.AskResp) { c.interactions.setAsk(ch) }
+func (c *Conn) clearAskChannel()                       { c.interactions.clearAsk() }
 func (c *Conn) getAskChannel() (chan protocol.AskResp, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.askCh, c.askCh != nil
+	c.interactions.mu.RLock()
+	defer c.interactions.mu.RUnlock()
+	return c.interactions.askCh, c.interactions.askCh != nil
 }
 
-func (c *Conn) setPermChannel(ch chan protocol.PermissionResp) { c.mu.Lock(); c.permCh = ch; c.mu.Unlock() }
-func (c *Conn) clearPermChannel()                             { c.mu.Lock(); c.permCh = nil; c.mu.Unlock() }
+func (c *Conn) setPermChannel(ch chan protocol.PermissionResp) { c.interactions.setPerm(ch) }
+func (c *Conn) clearPermChannel()                             { c.interactions.clearPerm() }
 func (c *Conn) getPermChannel() (chan protocol.PermissionResp, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return c.permCh, c.permCh != nil
+	c.interactions.mu.RLock()
+	defer c.interactions.mu.RUnlock()
+	return c.interactions.permCh, c.interactions.permCh != nil
 }
 
 func (c *Conn) currentWorkspace() string {
@@ -133,11 +197,7 @@ func (c *Conn) sendError(id, msg string) {
 
 func (c *Conn) close() {
 	c.closeOnce.Do(func() {
-		c.mu.Lock()
-		c.closed = true
-		c.askCh = nil
-		c.permCh = nil
-		c.mu.Unlock()
+		c.interactions.reset()
 		close(c.done)
 		if c.ws != nil {
 			_ = c.ws.Close()
@@ -208,46 +268,59 @@ func (c *Conn) readPump(ctx context.Context) {
 			continue
 		}
 
-		switch env.Type {
-		case protocol.TypeChatReq:
-			c.chatMu.Lock()
-			if c.chatting {
-				c.chatMu.Unlock()
-				c.sendError(env.ID, "already streaming, wait for done")
-				continue
-			}
-			c.chatting = true
-			c.chatMu.Unlock()
-			go func(e protocol.Envelope) {
-				defer func() { c.chatMu.Lock(); c.chatting = false; c.chatMu.Unlock() }()
-				c.handleChat(ctx, e)
-			}(env)
-		case protocol.TypeAskResp:
-			c.handleAskResp(env)
-		case protocol.TypePermissionResp:
-			c.handlePermissionResp(env)
-		case protocol.TypeSessionList:
-			go c.handleSessionList(ctx, env)
-		case protocol.TypeSessionData:
-			go c.handleSessionData(ctx, env)
-		case protocol.TypeSessionCreate:
-			go c.handleSessionCreate(ctx, env)
-		case protocol.TypeSessionDelete:
-			go c.handleSessionDelete(ctx, env)
-		case protocol.TypeSessionRename:
-			go c.handleSessionRename(ctx, env)
-		case protocol.TypeWorkspaceSet:
-			go c.handleWorkspaceSet(ctx, env)
-		case protocol.TypeSettingsGet:
-			go c.handleSettingsGet(ctx, env)
-		case protocol.TypeSettingsSet:
-			go c.handleSettingsSet(ctx, env)
-		case protocol.TypePing:
-			c.sendEnvelope(protocol.NewEnvelope(protocol.TypePong, nil))
-		default:
-			c.sendError(env.ID, fmt.Sprintf("unknown type %q", env.Type))
-		}
+		c.dispatchEnvelope(ctx, env)
 	}
+}
+
+func (c *Conn) dispatchEnvelope(ctx context.Context, env protocol.Envelope) {
+	switch env.Type {
+	case protocol.TypeChatReq:
+		c.dispatchChat(ctx, env)
+	case protocol.TypeAskResp:
+		c.handleAskResp(env)
+	case protocol.TypePermissionResp:
+		c.handlePermissionResp(env)
+	case protocol.TypeSessionList:
+		go c.handleSessionList(ctx, env)
+	case protocol.TypeSessionData:
+		go c.handleSessionData(ctx, env)
+	case protocol.TypeSessionCreate:
+		go c.handleSessionCreate(ctx, env)
+	case protocol.TypeSessionDelete:
+		go c.handleSessionDelete(ctx, env)
+	case protocol.TypeSessionRename:
+		go c.handleSessionRename(ctx, env)
+	case protocol.TypeWorkspaceSet:
+		go c.handleWorkspaceSet(ctx, env)
+	case protocol.TypeSettingsGet:
+		go c.handleSettingsGet(ctx, env)
+	case protocol.TypeSettingsSet:
+		go c.handleSettingsSet(ctx, env)
+	case protocol.TypePing:
+		c.sendEnvelope(protocol.NewEnvelope(protocol.TypePong, nil))
+	default:
+		c.sendError(env.ID, fmt.Sprintf("unknown type %q", env.Type))
+	}
+}
+
+func (c *Conn) dispatchChat(ctx context.Context, env protocol.Envelope) {
+	c.chatMu.Lock()
+	if c.chatting {
+		c.chatMu.Unlock()
+		c.sendError(env.ID, "already streaming, wait for done")
+		return
+	}
+	c.chatting = true
+	c.chatMu.Unlock()
+
+	go func(e protocol.Envelope) {
+		defer func() {
+			c.chatMu.Lock()
+			c.chatting = false
+			c.chatMu.Unlock()
+		}()
+		c.handleChat(ctx, e)
+	}(env)
 }
 
 func (c *Conn) handleAskResp(env protocol.Envelope) {
@@ -257,13 +330,7 @@ func (c *Conn) handleAskResp(env protocol.Envelope) {
 		return
 	}
 	c.hub.logger().Info("received client ask response", "selected", resp.Selected, "answer", resp.Answer)
-
-	if ch, ok := c.getAskChannel(); ok {
-		select {
-		case ch <- resp:
-		default:
-		}
-	}
+	c.interactions.routeAsk(resp)
 }
 
 func (c *Conn) handlePermissionResp(env protocol.Envelope) {
@@ -273,11 +340,5 @@ func (c *Conn) handlePermissionResp(env protocol.Envelope) {
 		return
 	}
 	c.hub.logger().Info("received client permission response", "approved", resp.Approved)
-
-	if ch, ok := c.getPermChannel(); ok {
-		select {
-		case ch <- resp:
-		default:
-		}
-	}
+	c.interactions.routePerm(resp)
 }

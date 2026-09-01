@@ -71,19 +71,5 @@ func (e *ProtocolError) Is(target error) bool {
 	if target == nil {
 		return false
 	}
-	if errors.Is(e.Err, target) {
-		return true
-	}
-	switch target {
-	case ErrUnsupportedVersion:
-		return errors.Is(e.Err, ErrUnsupportedVersion)
-	case ErrInvalidPayload, ErrMarshalFailed, ErrUnmarshalFailed:
-		return errors.Is(e.Err, ErrInvalidPayload) || errors.Is(e.Err, ErrMarshalFailed) || errors.Is(e.Err, ErrUnmarshalFailed)
-	case ErrCorruptEnvelope:
-		return errors.Is(e.Err, ErrCorruptEnvelope)
-	case ErrUnknownType:
-		return errors.Is(e.Err, ErrUnknownType)
-	default:
-		return false
-	}
+	return errors.Is(e.Err, target) // ponytail ultra: exact match, no cross-sentinel grouping
 }

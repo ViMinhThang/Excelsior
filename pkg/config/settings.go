@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"excelsior/pkg/util"
 )
 
 // Settings persists user preferences like permission mode.
@@ -101,47 +103,7 @@ func SaveSettings(workspace string, s Settings) error {
 		return err
 	}
 	// use 0600
-	return writeAtomic(path, b, 0o600)
-}
-
-func writeAtomic(path string, data []byte, perm os.FileMode) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(dir, ".tmp-*")
-	if err != nil {
-		return err
-	}
-	name := tmp.Name()
-	success := false
-	defer func() {
-		tmp.Close()
-		if !success {
-			_ = os.Remove(name)
-		}
-	}()
-	if _, err := tmp.Write(data); err != nil {
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(name, perm); err != nil {
-		return err
-	}
-	if err := os.Rename(name, path); err != nil {
-		return err
-	}
-	success = true
-	if d, err := os.Open(dir); err == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
-	return nil
+	return util.WriteAtomic(path, b, 0o600)
 }
 
 // EffectivePermission resolves final PermissionMode from settings and explicit allowAll.

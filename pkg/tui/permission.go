@@ -6,10 +6,11 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"excelsior/pkg/tools"
+	"excelsior/pkg/util"
 )
 
 // PermissionDispatcher coordinates permission prompts between agent and UI.
@@ -31,22 +32,9 @@ func (d *PermissionDispatcher) SetSink(sink UISink) {
 
 // Handler returns a PermissionHandler bridging to UI sink.
 func (d *PermissionDispatcher) Handler(parentCtx context.Context) tools.PermissionHandler {
-	return func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
-		sinkPtr := d.sink.Load()
-		if sinkPtr == nil || *sinkPtr == nil {
-			return tools.PermissionResponse{}, fmt.Errorf("no active TUI sink")
-		}
-		respCh := make(chan tools.PermissionResponse, 1)
-		(*sinkPtr).Send(permissionRequestMsg{Req: req, RespChan: respCh})
-		select {
-		case resp := <-respCh:
-			return resp, nil
-		case <-hctx.Done():
-			return tools.PermissionResponse{}, hctx.Err()
-		case <-parentCtx.Done():
-			return tools.PermissionResponse{}, parentCtx.Err()
-		}
-	}
+	return dispatchViaSink(&d.sink, parentCtx, func(req tools.PermissionRequest, ch chan tools.PermissionResponse) tea.Msg {
+		return permissionRequestMsg{Req: req, RespChan: ch}
+	}) // ponytail: reuse generic dispatcher
 }
 
 type permissionRequestMsg struct {
@@ -108,12 +96,4 @@ func (p *permissionOverlay) View(width int) string {
 	return lipgloss.Place(width, 18, lipgloss.Center, lipgloss.Center, box)
 }
 
-func truncatePreview(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "\n… truncated"
-}
-
-// ensure textinput import is used
-var _ = textinput.New
+func truncatePreview(s string, n int) string { return util.Truncate(s, n) }

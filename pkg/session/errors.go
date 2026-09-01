@@ -74,23 +74,5 @@ func (e *SessionError) Is(target error) bool {
 	if target == nil {
 		return false
 	}
-	if errors.Is(e.Err, target) {
-		return true
-	}
-	switch target {
-	case ErrSessionNotFound:
-		return errors.Is(e.Err, ErrSessionNotFound)
-	case ErrInvalidSessionID:
-		return errors.Is(e.Err, ErrInvalidSessionID) || errors.Is(e.Err, ErrEmptySessionID)
-	case ErrEmptySessionID:
-		return errors.Is(e.Err, ErrEmptySessionID)
-	case ErrCorruptedSession:
-		return errors.Is(e.Err, ErrCorruptedSession)
-	case ErrEmptySession:
-		return errors.Is(e.Err, ErrEmptySession)
-	case ErrStoreDirEmpty:
-		return errors.Is(e.Err, ErrStoreDirEmpty)
-	default:
-		return false
-	}
+	return errors.Is(e.Err, target) // ponytail ultra: delete grouping, exact sentinel only
 }

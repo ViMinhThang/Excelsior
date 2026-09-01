@@ -215,9 +215,7 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
             });
             setAsk({ ...q, _resolve: resolve });
             void promise.then((resp) => {
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({ ver: "v1", type: "ask.resp", payload: resp }));
-              }
+              send("ask.resp", resp);
               setAsk(null);
             });
             return;
@@ -226,9 +224,7 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
           if (type === "permission.req") {
             // Setting: auto-allow all commands without asking (client-side fast-path)
             if (allowAllRef.current) {
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({ ver: "v1", type: "permission.resp", payload: { approved: true } }));
-              }
+              send("permission.resp", { approved: true });
               setBlocks((p) => [...p, { role: "tool", content: `Auto-allowed ${ (payload as PermissionReq).tool } (Allow-all setting)`, meta: "permission →" }]);
               return;
             }
@@ -239,9 +235,7 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
             });
             setPermission({ ...pr, _resolve: resolveP });
             void promiseP.then((resp) => {
-              if (wsRef.current?.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({ ver: "v1", type: "permission.resp", payload: resp }));
-              }
+              send("permission.resp", resp);
               setPermission(null);
             });
             return;

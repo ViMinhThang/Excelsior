@@ -69,21 +69,5 @@ func (e *ConfigError) Is(target error) bool {
 	if target == nil {
 		return false
 	}
-	if errors.Is(e.Err, target) {
-		return true
-	}
-	switch target {
-	case ErrMissingAPIKey:
-		return e.Field == "APIKey" || errors.Is(e.Err, ErrMissingAPIKey)
-	case ErrMissingModel:
-		return e.Field == "Model" || errors.Is(e.Err, ErrMissingModel)
-	case ErrInvalidBaseURL:
-		return e.Field == "BaseURL" || errors.Is(e.Err, ErrInvalidBaseURL)
-	case ErrInvalidTemperature:
-		return e.Field == "Temperature" || errors.Is(e.Err, ErrInvalidTemperature)
-	case ErrInvalidWorkspace, ErrWorkspaceNotFound, ErrWorkspaceNotDir:
-		return e.Field == "Workspace" && errors.Is(e.Err, target)
-	default:
-		return false
-	}
+	return errors.Is(e.Err, target) // ponytail ultra: delete Field-guessing, Err must wrap sentinel
 }

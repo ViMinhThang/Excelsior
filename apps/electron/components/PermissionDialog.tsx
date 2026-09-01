@@ -2,6 +2,7 @@
 
 import React, { useCallback } from "react";
 import type { PermissionReq } from "../lib/protocol";
+import DialogShell from "./DialogShell";
 
 type PermissionDialogProps = {
   permission: PermissionReq & { _resolve: (r: { approved: boolean }) => void };
@@ -14,13 +15,8 @@ function PermissionDialog({ permission, onDecision }: PermissionDialogProps) {
     permission.tool === "bash" ? "Allow bash command?" : `Allow ${permission.tool}?`;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-      <div
-        className="bg-[var(--bg-card)] rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-fade-in"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="font-semibold text-[14px] mb-3">{title}</h3>
+    <DialogShell>
+      <h3 className="font-semibold text-[14px] mb-3">{title}</h3>
 
         {permission.filePath ? (
           <p className="text-xs font-mono mb-2">
@@ -57,8 +53,7 @@ function PermissionDialog({ permission, onDecision }: PermissionDialogProps) {
             Allow
           </button>
         </div>
-      </div>
-    </div>
+    </DialogShell>
   );
 }
 

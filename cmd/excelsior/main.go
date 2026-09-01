@@ -16,6 +16,7 @@ import (
 
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
+	"excelsior/pkg/engine"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/session"
 	"excelsior/pkg/tools"
@@ -217,7 +218,7 @@ func runAgent(ctx context.Context, cfg config.Config, model, workspace, system, 
 	}
 	fmt.Fprintln(os.Stderr, "")
 	if sessionID != "" && res != nil {
-		toSave := res.Messages
+		toSave := engine.FilterSystemMessages(res.Messages)
 		store := session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
 		rec, err := store.Load(sessionID)
 		if err != nil {
@@ -250,7 +251,14 @@ func loadHistory(ctx context.Context, workspace, sessionID string) []llm.Message
 	rec, err := store.Load(sessionID)
 	if err == nil {
 		slog.Info("session loaded", "id", sessionID, "messages", len(rec.Messages))
-		return rec.Messages
+		var msgs []llm.Message
+		for _, m := range rec.Messages {
+			if m.Role == "system" && (m.Content == "New session" || m.Content == "(empty)") {
+				continue
+			}
+			msgs = append(msgs, m)
+		}
+		return msgs
 	}
 	if !errors.Is(err, session.ErrSessionNotFound) && !errors.Is(err, os.ErrNotExist) {
 		slog.Warn("session load failed, starting fresh", "id", sessionID, "err", err)

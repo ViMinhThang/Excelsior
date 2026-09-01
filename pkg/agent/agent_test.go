@@ -550,3 +550,36 @@ func TestAgentError_FormattingAndUnwrap(t *testing.T) {
 	}
 }
 
+func TestStreamEvent_Constructors(t *testing.T) {
+	e1 := NewTextEvent("hello")
+	if e1.Type != EventTypeText || e1.Text != "hello" {
+		t.Errorf("unexpected text event: %+v", e1)
+	}
+
+	e2 := NewReasoningEvent("thinking")
+	if e2.Type != EventTypeReasoning || e2.Reasoning != "thinking" {
+		t.Errorf("unexpected reasoning event: %+v", e2)
+	}
+
+	e3 := NewToolStartEvent("bash", "call_1", `{"cmd":"ls"}`)
+	if e3.Type != EventTypeToolStart || e3.ToolName != "bash" || e3.ToolCallID != "call_1" || e3.ToolArgs != `{"cmd":"ls"}` {
+		t.Errorf("unexpected tool start event: %+v", e3)
+	}
+
+	e4 := NewToolResultEvent("bash", "call_1", "file.go")
+	if e4.Type != EventTypeToolResult || e4.ToolName != "bash" || e4.ToolCallID != "call_1" || e4.ToolResult != "file.go" {
+		t.Errorf("unexpected tool result event: %+v", e4)
+	}
+
+	e5 := NewDoneEvent("finished", "stop")
+	if e5.Type != EventTypeDone || e5.Text != "finished" || e5.FinishReason != "stop" {
+		t.Errorf("unexpected done event: %+v", e5)
+	}
+
+	e6 := NewErrorEvent("something broke")
+	if e6.Type != EventTypeError || e6.Text != "something broke" {
+		t.Errorf("unexpected error event: %+v", e6)
+	}
+}
+
+

@@ -74,25 +74,5 @@ func (e *EngineError) Is(target error) bool {
 	if target == nil {
 		return false
 	}
-	if errors.Is(e.Err, target) {
-		return true
-	}
-	switch target {
-	case ErrAlreadyStreaming:
-		return errors.Is(e.Err, ErrAlreadyStreaming)
-	case ErrConnectionClosed:
-		return errors.Is(e.Err, ErrConnectionClosed)
-	case ErrClientDisconnected:
-		return errors.Is(e.Err, ErrClientDisconnected)
-	case ErrSendBufferFull:
-		return errors.Is(e.Err, ErrSendBufferFull)
-	case ErrRemoteEngine:
-		return errors.Is(e.Err, ErrRemoteEngine)
-	case ErrInvalidURL:
-		return errors.Is(e.Err, ErrInvalidURL)
-	case ErrConnectionFailed:
-		return errors.Is(e.Err, ErrConnectionFailed)
-	default:
-		return false
-	}
+	return errors.Is(e.Err, target) // ponytail ultra: stdlib already does traversal
 }

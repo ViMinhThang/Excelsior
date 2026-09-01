@@ -29,6 +29,21 @@ func (c *WSClient) logger() *slog.Logger {
 	return slog.Default()
 }
 
+// defaultAskHandler selects the first available option, or returns no-op for empty option sets.
+// It is used by WSClient.StreamRemote when no askHandler is supplied by the caller.
+func defaultAskHandler(_ context.Context, rq tools.AskRequest) (tools.AskResponse, error) {
+	if len(rq.Options) == 0 {
+		return tools.AskResponse{Selected: -1}, nil
+	}
+	return tools.AskResponse{Selected: 0, Answer: rq.Options[0], Label: rq.Options[0]}, nil
+}
+
+// defaultPermHandler denies all permission requests.
+// It is used by WSClient.StreamRemote when no permHandler is supplied by the caller.
+func defaultPermHandler(_ context.Context, _ tools.PermissionRequest) (tools.PermissionResponse, error) {
+	return tools.PermissionResponse{Approved: false}, nil
+}
+
 // StreamRemote sends a chat.req and streams deltas via onDelta.
 // askHandler is called when engine sends ask.req; it should show UI and return choice.
 // permHandler is called when engine sends permission.req for write/edit/bash.
@@ -52,13 +67,23 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 	defer ws.Close()
 	ws.SetReadLimit(1 << 20)
 
-	env := protocol.NewEnvelope(protocol.TypeChatReq, req)
-	b, err := json.Marshal(env)
-	if err != nil {
-		return &EngineError{Op: "write", MsgType: protocol.TypeChatReq, Err: fmt.Errorf("ws marshal: %w", err)}
+	sendEnvelope := func(env protocol.Envelope) error {
+		b, err := json.Marshal(env)
+		if err != nil {
+			return err
+		}
+		return ws.WriteMessage(websocket.TextMessage, b)
 	}
-	if err := ws.WriteMessage(websocket.TextMessage, b); err != nil {
+
+	if err := sendEnvelope(protocol.NewEnvelope(protocol.TypeChatReq, req)); err != nil {
 		return &EngineError{Op: "write", MsgType: protocol.TypeChatReq, Err: fmt.Errorf("%w: %v", ErrConnectionClosed, err)}
+	}
+
+	if askHandler == nil {
+		askHandler = defaultAskHandler
+	}
+	if permHandler == nil {
+		permHandler = defaultPermHandler
 	}
 
 	for {
@@ -104,47 +129,24 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 				c.logger().Warn("bad ask.req", "err", err)
 				continue
 			}
-			if askHandler == nil {
-				askHandler = func(ctx context.Context, rq tools.AskRequest) (tools.AskResponse, error) {
-					// fallback auto-select with empty options guard
-					if len(rq.Options) == 0 {
-						return tools.AskResponse{Selected: -1, Answer: "", Label: ""}, nil
-					}
-					return tools.AskResponse{Selected: 0, Answer: rq.Options[0], Label: rq.Options[0]}, nil
-				}
-			}
 			resp, err := askHandler(ctx, tools.AskRequest{Question: ar.Question, Options: ar.Options, AllowManual: true})
 			if err != nil {
 				c.logger().Warn("ask handler error", "err", err)
 				resp = tools.AskResponse{Selected: -1, Answer: ""}
 			}
-			out := protocol.NewEnvelope(protocol.TypeAskResp, protocol.AskResp{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label})
-			b2, err := json.Marshal(out)
-			if err == nil {
-				_ = ws.WriteMessage(websocket.TextMessage, b2)
-			}
+			_ = sendEnvelope(protocol.NewEnvelope(protocol.TypeAskResp, protocol.AskResp{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}))
 		case protocol.TypePermissionReq:
 			var pr protocol.PermissionReq
 			if err := in.Decode(&pr); err != nil {
 				c.logger().Warn("bad permission.req", "err", err)
 				continue
 			}
-			if permHandler == nil {
-				// default deny when no handler (safe default for once-per-call)
-				permHandler = func(ctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
-					return tools.PermissionResponse{Approved: false}, nil
-				}
-			}
 			presp, err := permHandler(ctx, tools.PermissionRequest{Tool: pr.Tool, FilePath: pr.FilePath, Preview: pr.Preview, Command: pr.Command})
 			if err != nil {
 				c.logger().Warn("permission handler error", "err", err)
 				presp = tools.PermissionResponse{Approved: false}
 			}
-			out := protocol.NewEnvelope(protocol.TypePermissionResp, protocol.PermissionResp{Approved: presp.Approved})
-			b2, err := json.Marshal(out)
-			if err == nil {
-				_ = ws.WriteMessage(websocket.TextMessage, b2)
-			}
+			_ = sendEnvelope(protocol.NewEnvelope(protocol.TypePermissionResp, protocol.PermissionResp{Approved: presp.Approved}))
 		case protocol.TypePong, protocol.TypePing:
 		default:
 			c.logger().Warn("ws unknown type", "type", in.Type)

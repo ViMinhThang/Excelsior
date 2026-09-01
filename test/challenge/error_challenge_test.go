@@ -481,35 +481,40 @@ func TestCrossSubsystemNestedWrapping(t *testing.T) {
 // -----------------------------------------------------------------------------
 
 func TestConfigError_CustomIsLogic(t *testing.T) {
-	// Test Field-based matching without inner Err
+	// ponytail ultra: Field alone no longer matches — Err must wrap sentinel (one rung, stdlib before guess)
 	t.Run("FieldMatching_APIKey", func(t *testing.T) {
-		err := &config.ConfigError{Field: "APIKey", Message: "key missing"}
+		err := &config.ConfigError{Field: "APIKey", Message: "key missing", Err: config.ErrMissingAPIKey}
 		if !errors.Is(err, config.ErrMissingAPIKey) {
-			t.Fatalf("expected ConfigError{Field: 'APIKey'} to match ErrMissingAPIKey")
+			t.Fatalf("expected ConfigError{Field: 'APIKey', Err: ErrMissingAPIKey} to match ErrMissingAPIKey")
 		}
 		if errors.Is(err, config.ErrMissingModel) {
 			t.Fatalf("false positive: APIKey field matched ErrMissingModel")
 		}
+		// without Err, Field alone must NOT match in ultra
+		errNoWrap := &config.ConfigError{Field: "APIKey", Message: "key missing"}
+		if errors.Is(errNoWrap, config.ErrMissingAPIKey) {
+			t.Fatalf("ultra: Field without Err must not match sentinel")
+		}
 	})
 
 	t.Run("FieldMatching_Model", func(t *testing.T) {
-		err := &config.ConfigError{Field: "Model", Message: "model missing"}
+		err := &config.ConfigError{Field: "Model", Message: "model missing", Err: config.ErrMissingModel}
 		if !errors.Is(err, config.ErrMissingModel) {
-			t.Fatalf("expected ConfigError{Field: 'Model'} to match ErrMissingModel")
+			t.Fatalf("expected ConfigError{Field: 'Model', Err: ErrMissingModel} to match ErrMissingModel")
 		}
 	})
 
 	t.Run("FieldMatching_BaseURL", func(t *testing.T) {
-		err := &config.ConfigError{Field: "BaseURL", Message: "base url invalid"}
+		err := &config.ConfigError{Field: "BaseURL", Message: "base url invalid", Err: config.ErrInvalidBaseURL}
 		if !errors.Is(err, config.ErrInvalidBaseURL) {
-			t.Fatalf("expected ConfigError{Field: 'BaseURL'} to match ErrInvalidBaseURL")
+			t.Fatalf("expected ConfigError{Field: 'BaseURL', Err: ErrInvalidBaseURL} to match ErrInvalidBaseURL")
 		}
 	})
 
 	t.Run("FieldMatching_Temperature", func(t *testing.T) {
-		err := &config.ConfigError{Field: "Temperature", Message: "temp out of range"}
+		err := &config.ConfigError{Field: "Temperature", Message: "temp out of range", Err: config.ErrInvalidTemperature}
 		if !errors.Is(err, config.ErrInvalidTemperature) {
-			t.Fatalf("expected ConfigError{Field: 'Temperature'} to match ErrInvalidTemperature")
+			t.Fatalf("expected ConfigError{Field: 'Temperature', Err: ErrInvalidTemperature} to match ErrInvalidTemperature")
 		}
 	})
 
@@ -660,8 +665,9 @@ func TestToolsError_Aliases(t *testing.T) {
 func TestSessionError_CustomIsLogic(t *testing.T) {
 	t.Run("InvalidSessionID_MatchesEmptySessionID", func(t *testing.T) {
 		err := &session.SessionError{Err: session.ErrEmptySessionID}
-		if !errors.Is(err, session.ErrInvalidSessionID) {
-			t.Fatalf("expected SessionError with ErrEmptySessionID to match ErrInvalidSessionID")
+		// ponytail ultra: exact sentinel only, no cross-grouping
+		if errors.Is(err, session.ErrInvalidSessionID) {
+			t.Fatalf("ultra: ErrEmptySessionID must not match ErrInvalidSessionID")
 		}
 		if !errors.Is(err, session.ErrEmptySessionID) {
 			t.Fatalf("expected SessionError with ErrEmptySessionID to match ErrEmptySessionID")
@@ -672,16 +678,17 @@ func TestSessionError_CustomIsLogic(t *testing.T) {
 func TestProtocolError_CustomIsLogic(t *testing.T) {
 	t.Run("InvalidPayload_MatchesMarshalAndUnmarshalFailed", func(t *testing.T) {
 		errMarshal := &protocol.ProtocolError{Err: protocol.ErrMarshalFailed}
-		if !errors.Is(errMarshal, protocol.ErrInvalidPayload) {
-			t.Fatalf("expected ProtocolError with ErrMarshalFailed to match ErrInvalidPayload")
+		// ponytail ultra: exact match only, ErrMarshalFailed != ErrInvalidPayload
+		if errors.Is(errMarshal, protocol.ErrInvalidPayload) {
+			t.Fatalf("ultra: ErrMarshalFailed must not match ErrInvalidPayload")
 		}
 		if !errors.Is(errMarshal, protocol.ErrMarshalFailed) {
 			t.Fatalf("expected ProtocolError with ErrMarshalFailed to match ErrMarshalFailed")
 		}
 
 		errUnmarshal := &protocol.ProtocolError{Err: protocol.ErrUnmarshalFailed}
-		if !errors.Is(errUnmarshal, protocol.ErrInvalidPayload) {
-			t.Fatalf("expected ProtocolError with ErrUnmarshalFailed to match ErrInvalidPayload")
+		if errors.Is(errUnmarshal, protocol.ErrInvalidPayload) {
+			t.Fatalf("ultra: ErrUnmarshalFailed must not match ErrInvalidPayload")
 		}
 		if !errors.Is(errUnmarshal, protocol.ErrUnmarshalFailed) {
 			t.Fatalf("expected ProtocolError with ErrUnmarshalFailed to match ErrUnmarshalFailed")

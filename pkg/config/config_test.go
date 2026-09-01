@@ -184,12 +184,12 @@ func TestConfigError_FormattingAndUnwrap(t *testing.T) {
 		t.Errorf("expected Is(ErrMissingModel)")
 	}
 
-	err3 := &ConfigError{Field: "BaseURL"}
+	err3 := &ConfigError{Field: "BaseURL", Err: ErrInvalidBaseURL}
 	if !errors.Is(err3, ErrInvalidBaseURL) {
 		t.Errorf("expected Is(ErrInvalidBaseURL)")
 	}
 
-	err4 := &ConfigError{Field: "Temperature"}
+	err4 := &ConfigError{Field: "Temperature", Err: ErrInvalidTemperature}
 	if !errors.Is(err4, ErrInvalidTemperature) {
 		t.Errorf("expected Is(ErrInvalidTemperature)")
 	}

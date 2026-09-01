@@ -2,6 +2,7 @@
 
 import React, { useCallback, useState } from "react";
 import type { AskReq } from "../lib/protocol";
+import DialogShell from "./DialogShell";
 
 type AskDialogProps = {
   ask: AskReq & { _resolve: (r: { selected: number; answer: string; label: string }) => void };
@@ -21,13 +22,8 @@ function AskDialog({ ask, onAnswer }: AskDialogProps) {
   }, [handleSelect, input]);
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-      <div
-        className="bg-[var(--bg-card)] rounded-2xl p-5 w-full max-w-lg shadow-2xl animate-fade-in"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="font-semibold text-[14px] mb-3">{ask.question}</h3>
+    <DialogShell>
+      <h3 className="font-semibold text-[14px] mb-3">{ask.question}</h3>
 
         <div className="space-y-2 mb-3">
           {(ask.options ?? []).slice(0, 3).map((option, index) => (
@@ -65,8 +61,7 @@ function AskDialog({ ask, onAnswer }: AskDialogProps) {
             Send
           </button>
         </div>
-      </div>
-    </div>
+    </DialogShell>
   );
 }
 

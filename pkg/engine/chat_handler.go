@@ -18,31 +18,7 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 		return
 	}
 
-	askCh := make(chan protocol.AskResp, 1)
-	askHandler := c.askHandler(ctx, askCh)
-	permCh := make(chan protocol.PermissionResp, 1)
-	permHandler := c.permissionHandler(ctx, permCh)
-
-	// Headless / flag-driven fallback when permission mode is allow/deny and client won't prompt.
-	// The handler itself respects mode; we wrap context to ensure mutating tools are gated.
-	switch c.hub.Config.Permission {
-	case "allow":
-		if permHandler == nil {
-			permHandler = func(hctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
-				return tools.PermissionResponse{Approved: true}, nil
-			}
-		}
-	case "deny":
-		if permHandler == nil {
-			permHandler = func(hctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
-				return tools.PermissionResponse{Approved: false}, nil
-			}
-		}
-	}
-	// Build context with both handlers (permission first, then question on top).
-	ctxWithTools := tools.WithPermissionHandler(ctx, permHandler)
-	ctxWithTools = tools.WithQuestionHandler(ctxWithTools, askHandler)
-
+	ctxWithTools := c.setupToolHandlers(ctx)
 	ag, err := c.getAgent(req.Model)
 	if err != nil {
 		c.sendError(env.ID, fmt.Sprintf("create agent: %v", err))
@@ -65,20 +41,34 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 	}
 
 	if res != nil && len(res.Messages) > 0 {
-		toSave := filterSystemMessages(res.Messages)
-		rec, loadErr := c.sessionStore().Load(sessionID)
-		if loadErr != nil {
-			rec = session.Record{ID: sessionID, CreatedAt: time.Now().UTC()}
-		}
-		rec.Messages = toSave
-		if err := c.sessionStore().Save(rec); err != nil {
-			c.hub.logger().Warn("failed to save session history", "id", sessionID, "err", err)
-		} else {
-			c.hub.logger().Info("saved session history", "id", sessionID, "messages", len(toSave))
-		}
+		c.saveHistory(sessionID, res.Messages)
 	}
 
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeDone, map[string]string{"sessionId": sessionID}))
+}
+
+func (c *Conn) setupToolHandlers(ctx context.Context) context.Context {
+	askCh := make(chan protocol.AskResp, 1)
+	askHandler := c.askHandler(ctx, askCh)
+	permCh := make(chan protocol.PermissionResp, 1)
+	permHandler := c.permissionHandler(ctx, permCh)
+
+	ctxWithTools := tools.WithPermissionHandler(ctx, permHandler)
+	return tools.WithQuestionHandler(ctxWithTools, askHandler)
+}
+
+func (c *Conn) saveHistory(sessionID string, messages []llm.Message) {
+	toSave := FilterSystemMessages(messages)
+	rec, loadErr := c.sessionStore().Load(sessionID)
+	if loadErr != nil {
+		rec = session.Record{ID: sessionID, CreatedAt: time.Now().UTC()}
+	}
+	rec.Messages = toSave
+	if err := c.sessionStore().Save(rec); err != nil {
+		c.hub.logger().Warn("failed to save session history", "id", sessionID, "err", err)
+	} else {
+		c.hub.logger().Info("saved session history", "id", sessionID, "messages", len(toSave))
+	}
 }
 
 func (c *Conn) loadHistory(ctx context.Context, sessionID string, incoming []llm.Message) []llm.Message {
@@ -94,7 +84,8 @@ func (c *Conn) loadHistory(ctx context.Context, sessionID string, incoming []llm
 	return append(history, incoming...)
 }
 
-func filterSystemMessages(msgs []llm.Message) []llm.Message {
+// FilterSystemMessages returns a copy of msgs excluding any system messages.
+func FilterSystemMessages(msgs []llm.Message) []llm.Message {
 	out := make([]llm.Message, 0, len(msgs))
 	for _, m := range msgs {
 		if m.Role != "system" {

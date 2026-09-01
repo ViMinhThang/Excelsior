@@ -77,25 +77,5 @@ func (e *AgentError) Is(target error) bool {
 	if target == nil {
 		return false
 	}
-	if errors.Is(e.Err, target) {
-		return true
-	}
-	switch target {
-	case ErrMaxIterationsReached:
-		return errors.Is(e.Err, ErrMaxIterationsReached)
-	case ErrContextTooLarge:
-		return errors.Is(e.Err, ErrContextTooLarge)
-	case ErrEmptyMessages:
-		return errors.Is(e.Err, ErrEmptyMessages)
-	case ErrLLMNotConfigured:
-		return errors.Is(e.Err, ErrLLMNotConfigured)
-	case ErrInvalidConfig, ErrInvalidMaxIterations:
-		return errors.Is(e.Err, ErrInvalidConfig) || errors.Is(e.Err, ErrInvalidMaxIterations)
-	case ErrNilLLMMessage:
-		return errors.Is(e.Err, ErrNilLLMMessage)
-	case ErrUnknownTool:
-		return errors.Is(e.Err, ErrUnknownTool)
-	default:
-		return false
-	}
+	return errors.Is(e.Err, target) // ponytail ultra: one-liner beats 15-line switch
 }

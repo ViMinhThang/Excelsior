@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import hljs from "highlight.js/lib/common";
 import { CheckIcon, CopyIcon } from "./Icons";
+import { normalizeLang } from "../lib/lang";
 
 type CodeBlockProps = {
   language?: string;
@@ -26,20 +27,7 @@ function CodeBlock({ language = "text", code }: CodeBlockProps) {
 
   const { highlighted, detectedLang } = useMemo(() => {
     const raw = code.trim() || " ";
-    const lang = (language || "").trim().toLowerCase();
-    // normalize common aliases
-    const aliasMap: Record<string, string> = {
-      js: "javascript",
-      ts: "typescript",
-      sh: "bash",
-      shell: "bash",
-      yml: "yaml",
-      md: "markdown",
-      py: "python",
-      rb: "ruby",
-      golang: "go",
-    };
-    const normalized = aliasMap[lang] || lang;
+    const normalized = normalizeLang(language);
 
     if (normalized && normalized !== "text" && hljs.getLanguage(normalized)) {
       try {
@@ -68,9 +56,9 @@ function CodeBlock({ language = "text", code }: CodeBlockProps) {
       if (auto.language && auto.relevance > 5) {
         return { highlighted: auto.value, detectedLang: auto.language };
       }
-      return { highlighted: auto.value, detectedLang: auto.language || lang };
+      return { highlighted: auto.value, detectedLang: auto.language || normalized };
     } catch {
-      return { highlighted: escapeHtml(raw), detectedLang: lang || "text" };
+      return { highlighted: escapeHtml(raw), detectedLang: normalized || "text" };
     }
   }, [code, language]);
 
