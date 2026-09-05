@@ -12,3 +12,4 @@ node_modules
 .agents/
 coverage
 renderer/
+*.tsbuildinfo

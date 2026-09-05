@@ -132,7 +132,7 @@ func (s *Store) ValidateToken(ctx context.Context, token string) (int64, string,
 			return 0, "", &AuthError{Op: "validate", Err: err}
 		}
 	}
-	if time.Now().After(exp) {
+	if time.Now().UTC().After(exp) {
 		_, _ = s.db.ExecContext(ctx, `DELETE FROM tokens WHERE token=?`, token)
 		return 0, "", &AuthError{Op: "validate", Err: ErrTokenExpired}
 	}

@@ -24,87 +24,128 @@ func (t *GlobTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if err := ctx.Err(); err != nil {
 		return "", &ToolError{Tool: "glob", Op: "glob", Err: err}
 	}
+	pattern, err := parseGlobPattern(args)
+	if err != nil {
+		return "", err
+	}
+	if err := checkGlobContext(ctx); err != nil {
+		return "", err
+	}
+	matches, err := globWithFallback(ctx, t.Root, pattern)
+	if err != nil {
+		return "", err
+	}
+	if len(matches) == 0 {
+		return "No files matched.", nil
+	}
+	rel := relativizeMatches(t.Root, matches)
+	slog.Debug("glob", "pattern", pattern, "matches", len(rel))
+	return strings.Join(rel, "\n"), nil
+}
+
+func parseGlobPattern(args json.RawMessage) (string, error) {
 	var a struct {
 		Pattern string `json:"pattern"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
 		return "", &ToolError{Tool: "glob", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
 	}
-	a.Pattern = strings.TrimSpace(a.Pattern)
-	if a.Pattern == "" {
+	pattern := strings.TrimSpace(a.Pattern)
+	if pattern == "" {
 		return "", &ToolError{Tool: "glob", Op: "validate", Err: fmt.Errorf("%w: pattern is required", ErrInvalidArguments)}
 	}
-	if filepath.IsAbs(a.Pattern) || strings.Contains(a.Pattern, "..") {
+	if filepath.IsAbs(pattern) || strings.Contains(pattern, "..") {
 		return "", &ToolError{Tool: "glob", Op: "security", Err: fmt.Errorf("%w: pattern outside workspace", ErrPathOutsideWorkspace)}
 	}
+	return pattern, nil
+}
+
+func checkGlobContext(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
-		return "", &ToolError{Tool: "glob", Op: "glob", Err: ctx.Err()}
+		return &ToolError{Tool: "glob", Op: "glob", Err: ctx.Err()}
 	default:
+		return nil
 	}
-	matches, err := filepath.Glob(filepath.Join(t.Root, a.Pattern))
+}
+
+func globWithFallback(ctx context.Context, root, pattern string) ([]string, error) {
+	matches, err := filepath.Glob(filepath.Join(root, pattern))
 	if err != nil {
-		return "", &ToolError{Tool: "glob", Op: "glob", Err: err}
+		return nil, &ToolError{Tool: "glob", Op: "glob", Err: err}
 	}
-	if len(matches) == 0 && strings.Contains(a.Pattern, "**") {
-		var walkErr error
-		matches, walkErr = walkGlob(ctx, t.Root, a.Pattern)
-		if walkErr != nil {
-			return "", &ToolError{Tool: "glob", Op: "glob", Err: walkErr}
-		}
-		if ctx.Err() != nil {
-			return "", &ToolError{Tool: "glob", Op: "glob", Err: ctx.Err()}
-		}
+	if len(matches) != 0 || !strings.Contains(pattern, "**") {
+		return matches, nil
 	}
-	if len(matches) == 0 {
-		return "No files matched.", nil
+	matches, walkErr := walkGlob(ctx, root, pattern)
+	if walkErr != nil {
+		return nil, &ToolError{Tool: "glob", Op: "glob", Err: walkErr}
 	}
+	if ctx.Err() != nil {
+		return nil, &ToolError{Tool: "glob", Op: "glob", Err: ctx.Err()}
+	}
+	return matches, nil
+}
+
+func relativizeMatches(root string, matches []string) []string {
 	rel := make([]string, 0, len(matches))
 	for _, m := range matches {
-		r, err := filepath.Rel(t.Root, m)
+		r, err := filepath.Rel(root, m)
 		if err != nil {
 			continue
 		}
 		rel = append(rel, filepath.ToSlash(r))
 	}
-	slog.Debug("glob", "pattern", a.Pattern, "matches", len(rel))
-	return strings.Join(rel, "\n"), nil
+	return rel
 }
 
 func walkGlob(ctx context.Context, root, pattern string) ([]string, error) {
 	var out []string
 	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if isSkippedDir(d.Name()) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		rel, err := filepath.Rel(root, p)
-		if err != nil {
-			return nil
-		}
-		rel = filepath.ToSlash(rel)
-		ok, _ := filepath.Match(pattern, rel)
-		if !ok && strings.HasPrefix(pattern, "**/") {
-			suffix := strings.TrimPrefix(pattern, "**/")
-			if matched, _ := filepath.Match(suffix, filepath.Base(rel)); matched {
-				ok = true
-			}
-		}
-		if ok {
-			out = append(out, p)
-		}
-		return nil
+		return handleWalkGlobEntry(ctx, root, pattern, p, d, err, &out)
 	})
 	if err != nil && ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
 	return out, err
+}
+
+func handleWalkGlobEntry(ctx context.Context, root, pattern, p string, d os.DirEntry, walkErr error, out *[]string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if walkErr != nil {
+		return nil
+	}
+	if d.IsDir() {
+		return handleWalkGlobDir(d)
+	}
+	rel, err := filepath.Rel(root, p)
+	if err != nil {
+		return nil
+	}
+	rel = filepath.ToSlash(rel)
+	if globMatches(pattern, rel) {
+		*out = append(*out, p)
+	}
+	return nil
+}
+
+func handleWalkGlobDir(d os.DirEntry) error {
+	if isSkippedDir(d.Name()) {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+func globMatches(pattern, rel string) bool {
+	if ok, _ := filepath.Match(pattern, rel); ok {
+		return true
+	}
+	if !strings.HasPrefix(pattern, "**/") {
+		return false
+	}
+	suffix := strings.TrimPrefix(pattern, "**/")
+	matched, _ := filepath.Match(suffix, filepath.Base(rel))
+	return matched
 }

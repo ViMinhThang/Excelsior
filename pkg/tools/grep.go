@@ -61,56 +61,7 @@ func grepWalk(ctx context.Context, pattern, dir, root string) (string, error) {
 	var out []string
 	count := 0
 	err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if err != nil || d == nil {
-			return nil
-		}
-		if d.IsDir() {
-			if isSkippedDir(d.Name()) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		info, err := d.Info()
-		if err != nil || info == nil {
-			return nil
-		}
-		if info.Size() > MaxGrepFileSize {
-			return nil
-		}
-		ext := strings.ToLower(filepath.Ext(p))
-		if ext == ".exe" || ext == ".dll" || ext == ".so" || ext == ".bin" {
-			return nil
-		}
-		b, err := os.ReadFile(p)
-		if err != nil {
-			return nil
-		}
-		if len(b) > MaxGrepFileSize {
-			return nil
-		}
-		text := string(b)
-		lines := strings.Split(text, "\n")
-		rel, _ := filepath.Rel(root, p)
-		rel = filepath.ToSlash(rel)
-		for i, line := range lines {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			if strings.Contains(line, pattern) {
-				if len(line) > 500 {
-					line = line[:500] + "…"
-				}
-				out = append(out, fmt.Sprintf("%s:%d:%s", rel, i+1, line))
-				count++
-				if count >= MaxGrepResults {
-					return filepath.SkipAll
-				}
-			}
-		}
-		return nil
+		return handleGrepEntry(ctx, p, d, err, pattern, root, &out, &count)
 	})
 	if err != nil && !errors.Is(err, filepath.SkipAll) && !errors.Is(err, context.Canceled) {
 		slog.Warn("grep walk error", "err", err)
@@ -123,4 +74,78 @@ func grepWalk(ctx context.Context, pattern, dir, root string) (string, error) {
 	}
 	slog.Debug("grep", "pattern", pattern, "matches", len(out))
 	return strings.Join(out, "\n"), nil
+}
+
+func handleGrepEntry(ctx context.Context, p string, d os.DirEntry, walkErr error, pattern, root string, out *[]string, count *int) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if walkErr != nil || d == nil {
+		return nil
+	}
+	if d.IsDir() {
+		return handleGrepDir(d)
+	}
+	if shouldSkipGrepFile(p, d) {
+		return nil
+	}
+	return grepFile(ctx, p, pattern, root, out, count)
+}
+
+func handleGrepDir(d os.DirEntry) error {
+	if isSkippedDir(d.Name()) {
+		return filepath.SkipDir
+	}
+	return nil
+}
+
+func shouldSkipGrepFile(p string, d os.DirEntry) bool {
+	info, err := d.Info()
+	if err != nil || info == nil || info.Size() > MaxGrepFileSize {
+		return true
+	}
+	if isBinaryExt(p) {
+		return true
+	}
+	return false
+}
+
+func isBinaryExt(p string) bool {
+	switch strings.ToLower(filepath.Ext(p)) {
+	case ".exe", ".dll", ".so", ".bin":
+		return true
+	default:
+		return false
+	}
+}
+
+func grepFile(ctx context.Context, p, pattern, root string, out *[]string, count *int) error {
+	b, err := os.ReadFile(p)
+	if err != nil || len(b) > MaxGrepFileSize {
+		return nil
+	}
+	rel, _ := filepath.Rel(root, p)
+	rel = filepath.ToSlash(rel)
+	lines := strings.Split(string(b), "\n")
+	return scanGrepLines(ctx, lines, pattern, rel, out, count)
+}
+
+func scanGrepLines(ctx context.Context, lines []string, pattern, rel string, out *[]string, count *int) error {
+	for i, line := range lines {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if !strings.Contains(line, pattern) {
+			continue
+		}
+		if len(line) > 500 {
+			line = line[:500] + "…"
+		}
+		*out = append(*out, fmt.Sprintf("%s:%d:%s", rel, i+1, line))
+		*count++
+		if *count >= MaxGrepResults {
+			return filepath.SkipAll
+		}
+	}
+	return nil
 }

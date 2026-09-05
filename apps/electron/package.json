@@ -13,7 +13,7 @@
     "build:win": "next build && electron-builder --win",
     "pack": "next build && electron-builder --dir",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "tsc --noEmit",
     "start:engine": "go run ../../cmd/excelsior engine --addr :17812"
   },
   "dependencies": {

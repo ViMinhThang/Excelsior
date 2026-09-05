@@ -48,49 +48,29 @@ func HighlightCode(code, lang string) string {
 	return sb.String()
 }
 
+var extToLang = map[string]string{
+	".tsx": "tsx", ".ts": "typescript", ".jsx": "jsx", ".js": "javascript",
+	".py": "python", ".go": "go", ".json": "json", ".md": "markdown",
+	".css": "css", ".html": "html", ".yaml": "yaml", ".yml": "yaml",
+	".sh": "bash", ".bash": "bash", ".sql": "sql", ".rs": "rust",
+}
+
+var extPriority = []string{".tsx", ".ts", ".jsx", ".js", ".py", ".go", ".json", ".md", ".css", ".html", ".yaml", ".yml", ".sh", ".bash", ".sql", ".rs"}
+
 func inferToolLang(content, meta string) string {
-	// Try file extension from content (e.g. "Wrote ... to foo.tsx" or "path/to/file.go")
 	lower := strings.ToLower(content + " " + meta)
-	// common extensions
-	for _, ext := range []string{".tsx", ".ts", ".jsx", ".js", ".py", ".go", ".json", ".md", ".css", ".html", ".yaml", ".yml", ".sh", ".bash", ".sql", ".rs"} {
+	for _, ext := range extPriority {
 		if strings.Contains(lower, ext) {
-			switch ext {
-			case ".tsx":
-				return "tsx"
-			case ".ts":
-				return "typescript"
-			case ".jsx":
-				return "jsx"
-			case ".js":
-				return "javascript"
-			case ".py":
-				return "python"
-			case ".go":
-				return "go"
-			case ".json":
-				return "json"
-			case ".md":
-				return "markdown"
-			case ".css":
-				return "css"
-			case ".html":
-				return "html"
-			case ".yaml", ".yml":
-				return "yaml"
-			case ".sh", ".bash":
-				return "bash"
-			case ".sql":
-				return "sql"
-			case ".rs":
-				return "rust"
-			}
+			return extToLang[ext]
 		}
 	}
-	if strings.Contains(lower, "bash") || strings.Contains(lower, "shell") {
+	if isBashLike(lower) {
 		return "bash"
 	}
 	return ""
 }
+
+func isBashLike(s string) bool { return strings.Contains(s, "bash") || strings.Contains(s, "shell") }
 
 func isCodeLike(content string) bool {
 	if !strings.Contains(content, "\n") || len(strings.TrimSpace(content)) < 40 {

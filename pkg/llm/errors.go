@@ -104,51 +104,129 @@ func (e *LLMError) Is(target error) bool {
 	if errors.Is(e.Err, target) {
 		return true
 	}
+	return e.matchesSentinel(target)
+}
+
+func (e *LLMError) matchesSentinel(target error) bool {
 	switch target {
 	case ErrMissingAPIKey:
-		return e.Kind == ErrorKindAuth && errors.Is(e.Err, ErrMissingAPIKey)
+		return e.isMissingAPIKey()
 	case ErrInvalidBaseURL:
 		return errors.Is(e.Err, ErrInvalidBaseURL)
 	case ErrLineTooLarge:
 		return errors.Is(e.Err, ErrLineTooLarge)
 	case ErrStreamInterrupted:
-		return e.Kind == ErrorKindStream || errors.Is(e.Err, ErrStreamInterrupted)
+		return e.isStreamInterrupted()
 	case ErrRateLimit:
-		return e.StatusCode == http.StatusTooManyRequests || e.Kind == ErrorKindRateLimit || errors.Is(e.Err, ErrRateLimit)
+		return e.isRateLimit()
 	case ErrAuthFailed:
-		return e.StatusCode == http.StatusUnauthorized || e.StatusCode == http.StatusForbidden || e.Kind == ErrorKindAuth || errors.Is(e.Err, ErrAuthFailed)
+		return e.isAuthFailed()
 	case ErrServerUnavailable:
-		return (e.StatusCode >= 500 && e.StatusCode <= 599) || e.Kind == ErrorKindServer || errors.Is(e.Err, ErrServerUnavailable)
+		return e.isServerUnavailable()
 	case ErrInvalidRequest:
-		return e.StatusCode == http.StatusBadRequest || e.Kind == ErrorKindValidation || errors.Is(e.Err, ErrInvalidRequest)
+		return e.isInvalidRequest()
 	default:
 		return false
 	}
 }
 
+func (e *LLMError) isMissingAPIKey() bool { return e.Kind == ErrorKindAuth && errors.Is(e.Err, ErrMissingAPIKey) }
+
+func (e *LLMError) isStreamInterrupted() bool {
+	return e.Kind == ErrorKindStream || errors.Is(e.Err, ErrStreamInterrupted)
+}
+
+func (e *LLMError) isRateLimit() bool {
+	return e.StatusCode == http.StatusTooManyRequests || e.Kind == ErrorKindRateLimit || errors.Is(e.Err, ErrRateLimit)
+}
+
+func (e *LLMError) isAuthFailed() bool {
+	return isAuthStatusCode(e.StatusCode) || e.Kind == ErrorKindAuth || errors.Is(e.Err, ErrAuthFailed)
+}
+
+func isAuthStatusCode(code int) bool { return code == http.StatusUnauthorized || code == http.StatusForbidden }
+
+func (e *LLMError) isServerUnavailable() bool {
+	return isServerStatusCode(e.StatusCode) || e.Kind == ErrorKindServer || errors.Is(e.Err, ErrServerUnavailable)
+}
+
+func isServerStatusCode(code int) bool { return code >= 500 && code <= 599 }
+
+func (e *LLMError) isInvalidRequest() bool {
+	return e.StatusCode == http.StatusBadRequest || e.Kind == ErrorKindValidation || errors.Is(e.Err, ErrInvalidRequest)
+}
+
 // IsRetryable reports whether the failure is transient and eligible for retry.
 func (e *LLMError) IsRetryable() bool {
-	if errors.Is(e.Err, context.Canceled) {
+	if e.isContextCanceled() {
 		return false
 	}
-	if errors.Is(e.Err, ErrMissingAPIKey) || errors.Is(e.Err, ErrLineTooLarge) || errors.Is(e.Err, ErrInvalidRequest) || errors.Is(e.Err, ErrAuthFailed) || errors.Is(e.Err, ErrInvalidBaseURL) {
+	if e.isNonRetryableSentinel() {
 		return false
 	}
-	if errors.Is(e.Err, context.DeadlineExceeded) || errors.Is(e.Err, ErrRateLimit) || errors.Is(e.Err, ErrServerUnavailable) || errors.Is(e.Err, ErrStreamInterrupted) {
+	if e.isRetryableSentinel() {
 		return true
 	}
-	switch e.StatusCode {
+	if retryable, done := e.retryableByStatusCode(); done {
+		return retryable
+	}
+	if retryable, done := e.retryableByKind(); done {
+		return retryable
+	}
+	return e.Err != nil
+}
+
+func (e *LLMError) isContextCanceled() bool { return errors.Is(e.Err, context.Canceled) }
+
+func (e *LLMError) isNonRetryableSentinel() bool {
+	return errors.Is(e.Err, ErrMissingAPIKey) ||
+		errors.Is(e.Err, ErrLineTooLarge) ||
+		errors.Is(e.Err, ErrInvalidRequest) ||
+		errors.Is(e.Err, ErrAuthFailed) ||
+		errors.Is(e.Err, ErrInvalidBaseURL)
+}
+
+func (e *LLMError) isRetryableSentinel() bool {
+	return errors.Is(e.Err, context.DeadlineExceeded) ||
+		errors.Is(e.Err, ErrRateLimit) ||
+		errors.Is(e.Err, ErrServerUnavailable) ||
+		errors.Is(e.Err, ErrStreamInterrupted)
+}
+
+func (e *LLMError) retryableByStatusCode() (bool, bool) {
+	if isRetryableStatusCode(e.StatusCode) {
+		return true, true
+	}
+	if isNonRetryableStatusCode(e.StatusCode) {
+		return false, true
+	}
+	return false, false
+}
+
+func isRetryableStatusCode(code int) bool {
+	switch code {
 	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout, http.StatusInternalServerError:
 		return true
-	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
+	default:
 		return false
 	}
-	if e.Kind == ErrorKindRateLimit || e.Kind == ErrorKindServer || e.Kind == ErrorKindNetwork {
+}
+
+func isNonRetryableStatusCode(code int) bool {
+	switch code {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
 		return true
+	default:
+		return false
+	}
+}
+
+func (e *LLMError) retryableByKind() (bool, bool) {
+	if e.Kind == ErrorKindRateLimit || e.Kind == ErrorKindServer || e.Kind == ErrorKindNetwork {
+		return true, true
 	}
 	if e.Kind == ErrorKindAuth || e.Kind == ErrorKindValidation {
-		return false
+		return false, true
 	}
-	// Generic network/transport errors are retryable
-	return e.Err != nil
+	return false, false
 }

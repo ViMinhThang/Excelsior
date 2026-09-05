@@ -85,60 +85,79 @@ func (m model) View() string {
 func (m model) renderTranscript() string {
 	var sb strings.Builder
 	for _, b := range m.blocks {
-		switch b.Role {
-		case "system":
-			sb.WriteString(helpStyle.Render("· "+b.Content) + "\n\n")
-		case "user":
-			sb.WriteString(userPrefix.Render("You: ") + b.Content + "\n\n")
-		case "assistant":
-			if strings.TrimSpace(b.Content) == "" {
-				if m.streaming {
-					sb.WriteString(assistantStyle.Render("▌") + "\n\n")
-				}
-				continue
-			}
-			// Syntax-highlight fenced code blocks (```lang) via chroma
-			if strings.Contains(b.Content, "```") {
-				w := m.width - 8
-				if w < 40 {
-					w = 40
-				}
-				rendered := renderMarkdownWithHighlight(b.Content, w)
-				sb.WriteString(rendered + "\n\n")
-			} else {
-				sb.WriteString(assistantStyle.Render(b.Content) + "\n\n")
-			}
-		case "reasoning":
-			sb.WriteString(reasonStyle.Render("… "+b.Content) + "\n\n")
-		case "tool":
-			meta := toolStyle.Render("◆ " + b.Meta)
-			body := util.Truncate(b.Content, 4000)
-			w := m.width - 8
-			if w < 20 {
-				w = 20
-			}
-			// Highlight tool output: if it contains fenced code, render with markdown highlight;
-			// if it looks like code (e.g. view/write output), highlight via chroma.
-			var rendered string
-			if strings.Contains(body, "```") {
-				rendered = renderMarkdownWithHighlight(body, w)
-			} else if isCodeLike(body) {
-				lang := inferToolLang(body, b.Meta)
-				highlighted := HighlightCode(body, lang)
-				header := ""
-				if lang != "" {
-					header = codeHeaderStyle.Render(lang) + "\n"
-				}
-				rendered = header + codeBlockStyle.Width(w).Render(highlighted)
-			} else {
-				rendered = toolResStyle.Width(w).Render(toolArgStyle.Render(body))
-			}
-			sb.WriteString(meta + "\n" + rendered + "\n\n")
-		case "error":
-			sb.WriteString(errorStyle.Render("✖ "+b.Content) + "\n\n")
+		if out := m.renderBlock(b); out != "" {
+			sb.WriteString(out + "\n\n")
 		}
 	}
 	return sb.String()
+}
+
+func (m model) renderBlock(b block) string {
+	switch b.Role {
+	case "system":
+		return helpStyle.Render("· " + b.Content)
+	case "user":
+		return userPrefix.Render("You: ") + b.Content
+	case "assistant":
+		return m.renderAssistantBlock(b)
+	case "reasoning":
+		return reasonStyle.Render("… " + b.Content)
+	case "tool":
+		return m.renderToolBlock(b)
+	case "error":
+		return errorStyle.Render("✖ " + b.Content)
+	default:
+		return ""
+	}
+}
+
+func (m model) renderAssistantBlock(b block) string {
+	if strings.TrimSpace(b.Content) == "" {
+		if m.streaming {
+			return assistantStyle.Render("▌")
+		}
+		return ""
+	}
+	if strings.Contains(b.Content, "```") {
+		w := m.transcriptWidth(40)
+		return renderMarkdownWithHighlight(b.Content, w)
+	}
+	return assistantStyle.Render(b.Content)
+}
+
+func (m model) renderToolBlock(b block) string {
+	meta := toolStyle.Render("◆ " + b.Meta)
+	body := util.Truncate(b.Content, 4000)
+	w := m.transcriptWidth(20)
+	return meta + "\n" + m.renderToolBody(body, b.Meta, w)
+}
+
+func (m model) transcriptWidth(min int) int {
+	w := m.width - 8
+	if w < min {
+		w = min
+	}
+	return w
+}
+
+func (m model) renderToolBody(body, meta string, w int) string {
+	if strings.Contains(body, "```") {
+		return renderMarkdownWithHighlight(body, w)
+	}
+	if isCodeLike(body) {
+		return m.renderHighlightedToolBody(body, meta, w)
+	}
+	return toolResStyle.Width(w).Render(toolArgStyle.Render(body))
+}
+
+func (m model) renderHighlightedToolBody(body, meta string, w int) string {
+	lang := inferToolLang(body, meta)
+	highlighted := HighlightCode(body, lang)
+	header := ""
+	if lang != "" {
+		header = codeHeaderStyle.Render(lang) + "\n"
+	}
+	return header + codeBlockStyle.Width(w).Render(highlighted)
 }
 
 func (m *model) syncViewport() {
@@ -154,41 +173,63 @@ func (m model) scrollbarView() string {
 	bar := scrollbarStyle.Render("│")
 	thumb := scrollbarThumbStyle.Render("█")
 	if m.viewport.TotalLineCount() <= h {
-		var sb strings.Builder
-		sb.Grow(h * 4)
-		for i := 0; i < h; i++ {
-			sb.WriteString(bar)
-			if i < h-1 {
-				sb.WriteString("\n")
-			}
-		}
-		return sb.String()
+		return m.renderScrollbarFull(bar, h)
 	}
-	percent := m.viewport.ScrollPercent()
-	if percent < 0 {
-		percent = 0
-	}
-	if percent > 1 {
-		percent = 1
-	}
+	percent := clampPercent(m.viewport.ScrollPercent())
 	total := m.viewport.TotalLineCount()
 	if total == 0 {
 		total = 1
 	}
-	thumbSize := h * h / total
-	if thumbSize < 1 {
-		thumbSize = 1
+	thumbSize := calcThumbSize(h, total)
+	thumbPos := calcThumbPos(percent, h, thumbSize)
+	return m.renderScrollbarThumb(bar, thumb, h, thumbPos, thumbSize)
+}
+
+func (m model) renderScrollbarFull(bar string, h int) string {
+	var sb strings.Builder
+	sb.Grow(h * 4)
+	for i := 0; i < h; i++ {
+		sb.WriteString(bar)
+		if i < h-1 {
+			sb.WriteString("\n")
+		}
 	}
-	if thumbSize > h {
-		thumbSize = h
+	return sb.String()
+}
+
+func clampPercent(p float64) float64 {
+	if p < 0 {
+		return 0
 	}
-	thumbPos := int(percent * float64(h-thumbSize))
-	if thumbPos < 0 {
-		thumbPos = 0
+	if p > 1 {
+		return 1
 	}
-	if thumbPos > h-thumbSize {
-		thumbPos = h - thumbSize
+	return p
+}
+
+func calcThumbSize(h, total int) int {
+	size := h * h / total
+	if size < 1 {
+		size = 1
 	}
+	if size > h {
+		size = h
+	}
+	return size
+}
+
+func calcThumbPos(percent float64, h, thumbSize int) int {
+	pos := int(percent * float64(h-thumbSize))
+	if pos < 0 {
+		pos = 0
+	}
+	if pos > h-thumbSize {
+		pos = h - thumbSize
+	}
+	return pos
+}
+
+func (m model) renderScrollbarThumb(bar, thumb string, h, thumbPos, thumbSize int) string {
 	var sb strings.Builder
 	sb.Grow(h * 4)
 	for i := 0; i < h; i++ {

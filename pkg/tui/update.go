@@ -16,159 +16,216 @@ import (
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		vH := m.height - 7
-		if vH < 5 {
-			vH = 5
-		}
-		m.viewport.Width = m.width - 4
-		m.viewport.Height = vH
-		m.input.Width = m.width - 6
-		m.syncViewport()
-
+		return m.updateWindowSize(msg)
 	case askRequestMsg:
-		m.askState = newAskOverlay(msg.Req, msg.RespChan)
-		return m, textinput.Blink
-
+		return m.updateAskRequest(msg)
 	case permissionRequestMsg:
-		m.permState = newPermissionOverlay(msg.Req, msg.RespChan)
-		return m, textinput.Blink
-
+		return m.updatePermissionRequest(msg)
 	case tea.KeyMsg:
-		if m.permState != nil {
-			if cmd, done := m.handlePermissionKey(msg); done {
-				return m, cmd
-			}
-			return m, nil
-		}
-		if m.askState != nil {
-			if cmd, done := m.handleAskKey(msg); done {
-				return m, cmd
-			}
-			if m.askState.cursor == 3 {
-				var cmd tea.Cmd
-				m.askState.input, cmd = m.askState.input.Update(msg)
-				return m, cmd
-			}
-			return m, nil
-		}
-		if m.streaming {
-			switch msg.String() {
-			case "ctrl+c", "esc":
-				if m.cancel != nil {
-					m.cancel()
-				}
-				m.streaming = false
-				m.blocks = append(m.blocks, block{Role: "system", Content: "[cancelled]"})
-				m.syncViewport()
-				return m, nil
-			default:
-				return m, nil
-			}
-		}
-		switch msg.String() {
-		case "ctrl+c":
-			return m, tea.Quit
-		case "ctrl+l":
-			m.blocks = m.blocks[:2]
-			m.syncViewport()
-			return m, nil
-		case "enter":
-			val := strings.TrimSpace(m.input.Value())
-			if val == "" {
-				return m, nil
-			}
-			if strings.HasPrefix(val, "/") {
-				m.handleCommand(val)
-				m.input.Reset()
-				m.syncViewport()
-				return m, nil
-			}
-			m.blocks = append(m.blocks, block{Role: "user", Content: val})
-			m.input.Reset()
-			m.syncViewport()
-			return m.startAgent(val)
-		case "pgup", "pgdown", "home", "end", "up", "down":
-			var cmd tea.Cmd
-			m.viewport, cmd = m.viewport.Update(msg)
-			return m, cmd
-		}
-
+		return m.updateKeyMsg(msg)
 	case tea.MouseMsg:
-		var cmd tea.Cmd
-		m.viewport, cmd = m.viewport.Update(msg)
-		return m, cmd
-
+		return m.updateMouseMsg(msg)
 	case streamChunkMsg:
-		ev := msg.ev
-		switch ev.Type {
-		case "text":
-			m.streamText.WriteString(ev.Text)
-			m.upsertAssistant()
-		case "reasoning":
-			m.streamThink.WriteString(ev.Reasoning)
-			m.upsertReasoning(ev.Reasoning)
-		case "tool_start":
-			if ev.ToolName != "" {
-				// Upsert: if last block is the same tool, append args; otherwise new block
-				if len(m.blocks) > 0 && m.blocks[len(m.blocks)-1].Role == "tool" && m.blocks[len(m.blocks)-1].Meta == ev.ToolName {
-					m.blocks[len(m.blocks)-1].Content += ev.ToolArgs
-				} else {
-					m.blocks = append(m.blocks, block{Role: "tool", Meta: ev.ToolName, Content: ev.ToolArgs})
-				}
-				m.syncViewport()
-			}
-		case "tool_result":
-			m.blocks = append(m.blocks, block{Role: "tool", Meta: ev.ToolName + " →", Content: ev.ToolResult})
-			m.syncViewport()
-		case "error":
-			m.blocks = append(m.blocks, block{Role: "error", Content: ev.Text})
-			m.syncViewport()
-		}
-		if m.streaming && m.streamCh != nil {
-			return m, waitForChunk(m.streamCh)
-		}
-		return m, nil
-
+		return m.updateStreamChunk(msg)
 	case streamDoneMsg:
-		if m.cancel != nil {
-			m.cancel()
-		}
-		m.streaming = false
-		m.cancel = nil
-		m.streamCh = nil
-		if msg.err != nil && msg.err != context.Canceled {
-			m.blocks = append(m.blocks, block{Role: "error", Content: msg.err.Error()})
-		} else {
-			finalText := strings.TrimSpace(m.streamText.String())
-			if finalText == "" {
-				for i := len(m.blocks) - 1; i >= 0; i-- {
-					if m.blocks[i].Role == "assistant" && strings.TrimSpace(m.blocks[i].Content) != "" {
-						finalText = m.blocks[i].Content
-						break
-					}
-				}
-			}
-			if m.pendingPrompt != "" {
-				m.cfg.History = append(m.cfg.History, llm.Message{Role: "user", Content: m.pendingPrompt})
-				m.cfg.History = append(m.cfg.History, llm.Message{Role: "assistant", Content: finalText})
-			}
-			m.pendingPrompt = ""
-			m.streamText.Reset()
-			m.streamThink.Reset()
-		}
-		m.input.Focus()
-		m.syncViewport()
-		return m, textinput.Blink
+		return m.updateStreamDone(msg)
 	}
-
 	if !m.streaming {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		return m, cmd
 	}
 	return m, nil
+}
+
+func (m model) updateWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	m.width = msg.Width
+	m.height = msg.Height
+	vH := m.height - 7
+	if vH < 5 {
+		vH = 5
+	}
+	m.viewport.Width = m.width - 4
+	m.viewport.Height = vH
+	m.input.Width = m.width - 6
+	m.syncViewport()
+	return m, nil
+}
+
+func (m model) updateAskRequest(msg askRequestMsg) (tea.Model, tea.Cmd) {
+	m.askState = newAskOverlay(msg.Req, msg.RespChan)
+	return m, textinput.Blink
+}
+
+func (m model) updatePermissionRequest(msg permissionRequestMsg) (tea.Model, tea.Cmd) {
+	m.permState = newPermissionOverlay(msg.Req, msg.RespChan)
+	return m, textinput.Blink
+}
+
+func (m model) updateMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.viewport, cmd = m.viewport.Update(msg)
+	return m, cmd
+}
+
+func (m model) updateKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.permState != nil {
+		return m.updateKeyMsgPermState(msg)
+	}
+	if m.askState != nil {
+		return m.updateKeyMsgAskState(msg)
+	}
+	if m.streaming {
+		return m.updateKeyMsgStreaming(msg)
+	}
+	return m.updateKeyMsgNormal(msg)
+}
+
+func (m model) updateKeyMsgPermState(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if cmd, done := m.handlePermissionKey(msg); done {
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m model) updateKeyMsgAskState(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if cmd, done := m.handleAskKey(msg); done {
+		return m, cmd
+	}
+	if m.askState != nil && m.askState.cursor == 3 {
+		var cmd tea.Cmd
+		m.askState.input, cmd = m.askState.input.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m model) updateKeyMsgStreaming(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c", "esc":
+		if m.cancel != nil {
+			m.cancel()
+		}
+		m.streaming = false
+		m.blocks = append(m.blocks, block{Role: "system", Content: "[cancelled]"})
+		m.syncViewport()
+	}
+	return m, nil
+}
+
+func (m model) updateKeyMsgNormal(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "ctrl+l":
+		m.blocks = m.blocks[:2]
+		m.syncViewport()
+		return m, nil
+	case "enter":
+		return m.handleEnterKey()
+	case "pgup", "pgdown", "home", "end", "up", "down":
+		var cmd tea.Cmd
+		m.viewport, cmd = m.viewport.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m model) handleEnterKey() (tea.Model, tea.Cmd) {
+	val := strings.TrimSpace(m.input.Value())
+	if val == "" {
+		return m, nil
+	}
+	if strings.HasPrefix(val, "/") {
+		m.handleCommand(val)
+		m.input.Reset()
+		m.syncViewport()
+		return m, nil
+	}
+	m.blocks = append(m.blocks, block{Role: "user", Content: val})
+	m.input.Reset()
+	m.syncViewport()
+	return m.startAgent(val)
+}
+
+func (m model) updateStreamChunk(msg streamChunkMsg) (tea.Model, tea.Cmd) {
+	(&m).handleStreamEvent(msg.ev)
+	if m.streaming && m.streamCh != nil {
+		return m, waitForChunk(m.streamCh)
+	}
+	return m, nil
+}
+
+func (m *model) handleStreamEvent(ev agent.StreamEvent) {
+	switch ev.Type {
+	case "text":
+		m.streamText.WriteString(ev.Text)
+		m.upsertAssistant()
+	case "reasoning":
+		m.streamThink.WriteString(ev.Reasoning)
+		m.upsertReasoning(ev.Reasoning)
+	case "tool_start":
+		m.handleToolStart(ev)
+	case "tool_result":
+		m.blocks = append(m.blocks, block{Role: "tool", Meta: ev.ToolName + " →", Content: ev.ToolResult})
+		m.syncViewport()
+	case "error":
+		m.blocks = append(m.blocks, block{Role: "error", Content: ev.Text})
+		m.syncViewport()
+	}
+}
+
+func (m *model) handleToolStart(ev agent.StreamEvent) {
+	if ev.ToolName == "" {
+		return
+	}
+	if len(m.blocks) > 0 && m.blocks[len(m.blocks)-1].Role == "tool" && m.blocks[len(m.blocks)-1].Meta == ev.ToolName {
+		m.blocks[len(m.blocks)-1].Content += ev.ToolArgs
+	} else {
+		m.blocks = append(m.blocks, block{Role: "tool", Meta: ev.ToolName, Content: ev.ToolArgs})
+	}
+	m.syncViewport()
+}
+
+func (m model) updateStreamDone(msg streamDoneMsg) (tea.Model, tea.Cmd) {
+	if m.cancel != nil {
+		m.cancel()
+	}
+	m.streaming = false
+	m.cancel = nil
+	m.streamCh = nil
+	if msg.err != nil && msg.err != context.Canceled {
+		m.blocks = append(m.blocks, block{Role: "error", Content: msg.err.Error()})
+	} else {
+		m.finalizeStreamDone()
+	}
+	m.input.Focus()
+	m.syncViewport()
+	return m, textinput.Blink
+}
+
+func (m *model) finalizeStreamDone() {
+	finalText := m.resolveFinalText()
+	if m.pendingPrompt != "" {
+		m.cfg.History = append(m.cfg.History, llm.Message{Role: "user", Content: m.pendingPrompt})
+		m.cfg.History = append(m.cfg.History, llm.Message{Role: "assistant", Content: finalText})
+	}
+	m.pendingPrompt = ""
+	m.streamText.Reset()
+	m.streamThink.Reset()
+}
+
+func (m *model) resolveFinalText() string {
+	finalText := strings.TrimSpace(m.streamText.String())
+	if finalText != "" {
+		return finalText
+	}
+	for i := len(m.blocks) - 1; i >= 0; i-- {
+		if m.blocks[i].Role == "assistant" && strings.TrimSpace(m.blocks[i].Content) != "" {
+			return m.blocks[i].Content
+		}
+	}
+	return ""
 }
 
 func (m *model) handleAskKey(msg tea.KeyMsg) (tea.Cmd, bool) {
@@ -301,62 +358,99 @@ func (m *model) upsertReasoning(delta string) {
 
 func (m *model) handleCommand(cmd string) {
 	parts := strings.Fields(cmd)
+	if len(parts) == 0 {
+		return
+	}
 	switch parts[0] {
 	case "/clear":
-		m.blocks = m.blocks[:2]
+		m.handleClearCmd()
 	case "/help":
-		m.blocks = append(m.blocks, block{Role: "system", Content: "Commands: /clear, /help, /model [deepseek-v4-flash|deepseek-v4-pro], /permission [ask|allow|deny], /yolo, /quit"})
+		m.handleHelpCmd()
 	case "/model":
-		if len(parts) == 2 {
-			m.cfg.Model = parts[1]
-			if ag, ok := m.cfg.Agent.(*agent.Agent); ok && ag != nil {
-				ag.Model = parts[1]
-			}
-			m.blocks = append(m.blocks, block{Role: "system", Content: "Model → " + parts[1]})
-		} else {
-			m.blocks = append(m.blocks, block{Role: "system", Content: "Current model: " + m.cfg.Model})
-		}
+		m.handleModelCmd(parts)
 	case "/permission", "/perm":
-		if len(parts) == 2 {
-			switch parts[1] {
-			case "ask", "allow", "deny":
-				m.cfg.Permission = parts[1]
-				// persist to workspace settings for sticky setting
-				if err := savePermissionSetting(m.cfg.Workspace, parts[1]); err != nil {
-					m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save permission setting: " + err.Error()})
-				} else {
-					m.blocks = append(m.blocks, block{Role: "system", Content: "Permission → " + parts[1] + " (saved to .excelsior/settings.json)"})
-				}
-			default:
-				m.blocks = append(m.blocks, block{Role: "error", Content: "Usage: /permission [ask|allow|deny]"})
-			}
-		} else {
-			perm := m.cfg.Permission
-			if perm == "" {
-				perm = "ask"
-			}
-			m.blocks = append(m.blocks, block{Role: "system", Content: "Current permission: " + perm + " (use /permission allow to auto-allow all)"})
-		}
+		m.handlePermissionCmd(parts)
 	case "/yolo", "/allow-all", "/allow":
-		m.cfg.Permission = "allow"
-		if err := savePermissionSetting(m.cfg.Workspace, "allow"); err != nil {
-			m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save: " + err.Error()})
-		} else {
-			m.blocks = append(m.blocks, block{Role: "system", Content: "YOLO mode enabled → all commands auto-allowed (permission=allow, saved)"})
-		}
+		m.handleYoloCmd()
 	case "/deny", "/ask":
-		perm := strings.TrimPrefix(parts[0], "/")
-		m.cfg.Permission = perm
-		if err := savePermissionSetting(m.cfg.Workspace, perm); err != nil {
-			m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save: " + err.Error()})
-		} else {
-			m.blocks = append(m.blocks, block{Role: "system", Content: "Permission → " + perm + " (saved)"})
-		}
+		m.handleDenyAskCmd(parts[0])
 	case "/quit", "/exit", "/q":
-		m.blocks = append(m.blocks, block{Role: "system", Content: "Use Ctrl+C to quit"})
+		m.handleQuitCmd()
 	default:
-		m.blocks = append(m.blocks, block{Role: "system", Content: "Unknown command: " + parts[0] + "  (try /help)"})
+		m.handleUnknownCmd(parts[0])
 	}
+}
+
+func (m *model) handleClearCmd() { m.blocks = m.blocks[:2] }
+
+func (m *model) handleHelpCmd() {
+	m.blocks = append(m.blocks, block{Role: "system", Content: "Commands: /clear, /help, /model [deepseek-v4-flash|deepseek-v4-pro], /permission [ask|allow|deny], /yolo, /quit"})
+}
+
+func (m *model) handleModelCmd(parts []string) {
+	if len(parts) != 2 {
+		m.blocks = append(m.blocks, block{Role: "system", Content: "Current model: " + m.cfg.Model})
+		return
+	}
+	m.cfg.Model = parts[1]
+	if ag, ok := m.cfg.Agent.(*agent.Agent); ok && ag != nil {
+		ag.Model = parts[1]
+	}
+	m.blocks = append(m.blocks, block{Role: "system", Content: "Model → " + parts[1]})
+}
+
+func (m *model) handlePermissionCmd(parts []string) {
+	if len(parts) != 2 {
+		m.showCurrentPermission()
+		return
+	}
+	if !isValidPermission(parts[1]) {
+		m.blocks = append(m.blocks, block{Role: "error", Content: "Usage: /permission [ask|allow|deny]"})
+		return
+	}
+	m.cfg.Permission = parts[1]
+	if err := savePermissionSetting(m.cfg.Workspace, parts[1]); err != nil {
+		m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save permission setting: " + err.Error()})
+		return
+	}
+	m.blocks = append(m.blocks, block{Role: "system", Content: "Permission → " + parts[1] + " (saved to .excelsior/settings.json)"})
+}
+
+func isValidPermission(p string) bool { return p == "ask" || p == "allow" || p == "deny" }
+
+func (m *model) showCurrentPermission() {
+	perm := m.cfg.Permission
+	if perm == "" {
+		perm = "ask"
+	}
+	m.blocks = append(m.blocks, block{Role: "system", Content: "Current permission: " + perm + " (use /permission allow to auto-allow all)"})
+}
+
+func (m *model) handleYoloCmd() {
+	m.cfg.Permission = "allow"
+	if err := savePermissionSetting(m.cfg.Workspace, "allow"); err != nil {
+		m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save: " + err.Error()})
+		return
+	}
+	m.blocks = append(m.blocks, block{Role: "system", Content: "YOLO mode enabled → all commands auto-allowed (permission=allow, saved)"})
+}
+
+func (m *model) handleDenyAskCmd(raw string) {
+	perm := strings.TrimPrefix(raw, "/")
+	m.cfg.Permission = perm
+	if err := savePermissionSetting(m.cfg.Workspace, perm); err != nil {
+		m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save: " + err.Error()})
+		return
+	}
+	m.blocks = append(m.blocks, block{Role: "system", Content: "Permission → " + perm + " (saved)"})
+}
+
+func (m *model) handleQuitCmd() {
+	m.blocks = append(m.blocks, block{Role: "system", Content: "Use Ctrl+C to quit"})
+}
+
+func (m *model) handleUnknownCmd(cmd string) {
+	m.blocks = append(m.blocks, block{Role: "system", Content: "Unknown command: " + cmd + "  (try /help)"})
 }
 
 func savePermissionSetting(workspace, perm string) error {

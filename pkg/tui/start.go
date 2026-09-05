@@ -38,86 +38,105 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 	ch := make(chan agent.StreamEvent, 128)
 	m.streamCh = ch
 
-	var handler tools.QuestionHandler
-	if m.cfg.AskDispatcher != nil {
-		handler = m.cfg.AskDispatcher.Handler(ctx)
-	} else {
-		handler = func(hctx context.Context, req tools.AskRequest) (tools.AskResponse, error) {
-			return tools.AskResponse{}, fmt.Errorf("no ask dispatcher configured")
-		}
-	}
-	var permHandler tools.PermissionHandler
-	permMode := m.cfg.Permission
-	if permMode == "allow" {
-		permHandler = func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
-			return tools.PermissionResponse{Approved: true}, nil
-		}
-	} else if permMode == "deny" {
-		permHandler = func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
-			return tools.PermissionResponse{Approved: false}, nil
-		}
-	} else if m.cfg.PermissionDispatcher != nil {
-		permHandler = m.cfg.PermissionDispatcher.Handler(ctx)
-	} else {
-		permHandler = func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
-			return tools.PermissionResponse{Approved: false}, fmt.Errorf("no permission dispatcher configured")
-		}
-	}
+	handler := m.resolveAskHandler(ctx)
+	permHandler := m.resolvePermHandler(ctx)
 
 	if m.cfg.EngineURL != "" {
-		wsClient := &engine.WSClient{URL: m.cfg.EngineURL}
-		go func() {
-			chatReq := protocol.ChatReq{Model: m.cfg.Model, Messages: msgs}
-			err := wsClient.StreamRemote(ctx, chatReq, func(d protocol.Delta) error {
-				ev := agent.StreamEvent{
-					Type: d.Type, Text: d.Text, Reasoning: d.Reasoning,
-					ToolName: d.ToolName, ToolCallID: d.ToolCallID, ToolArgs: d.ToolArgs,
-					ToolResult: d.ToolResult, FinishReason: d.FinishReason,
-				}
-				select {
-				case ch <- ev:
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-				return nil
-			}, handler, permHandler)
-			if err != nil {
-				select {
-				case ch <- agent.StreamEvent{Type: "error", Text: err.Error()}:
-				case <-ctx.Done():
-				}
-			}
-			close(ch)
-		}()
+		m.launchRemote(ctx, msgs, ch, handler, permHandler)
 		return m, waitForChunk(ch)
 	}
-
 	if m.cfg.Agent == nil {
 		m.blocks = append(m.blocks, block{Role: "error", Content: "agent not configured (DEEPSEEK_API_KEY missing?)"})
 		m.syncViewport()
 		return m, nil
 	}
+	m.launchLocal(ctx, msgs, ch, handler, permHandler)
+	return m, waitForChunk(ch)
+}
 
+func (m model) resolveAskHandler(ctx context.Context) tools.QuestionHandler {
+	if m.cfg.AskDispatcher != nil {
+		return m.cfg.AskDispatcher.Handler(ctx)
+	}
+	return func(hctx context.Context, req tools.AskRequest) (tools.AskResponse, error) {
+		return tools.AskResponse{}, fmt.Errorf("no ask dispatcher configured")
+	}
+}
+
+func (m model) resolvePermHandler(ctx context.Context) tools.PermissionHandler {
+	switch m.cfg.Permission {
+	case "allow":
+		return func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
+			return tools.PermissionResponse{Approved: true}, nil
+		}
+	case "deny":
+		return func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
+			return tools.PermissionResponse{Approved: false}, nil
+		}
+	}
+	if m.cfg.PermissionDispatcher != nil {
+		return m.cfg.PermissionDispatcher.Handler(ctx)
+	}
+	return func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
+		return tools.PermissionResponse{Approved: false}, fmt.Errorf("no permission dispatcher configured")
+	}
+}
+
+func (m model) launchRemote(ctx context.Context, msgs []llm.Message, ch chan agent.StreamEvent, handler tools.QuestionHandler, permHandler tools.PermissionHandler) {
+	wsClient := &engine.WSClient{URL: m.cfg.EngineURL}
+	go func() {
+		chatReq := protocol.ChatReq{Model: m.cfg.Model, Messages: msgs}
+		err := wsClient.StreamRemote(ctx, chatReq, deltaToEventForwarder(ctx, ch), handler, permHandler)
+		if err != nil {
+			sendErrorEvent(ctx, ch, err)
+		}
+		close(ch)
+	}()
+}
+
+func (m model) launchLocal(ctx context.Context, msgs []llm.Message, ch chan agent.StreamEvent, handler tools.QuestionHandler, permHandler tools.PermissionHandler) {
 	ctxWithPerm := tools.WithPermissionHandler(ctx, permHandler)
 	ctxWithHandler := tools.WithQuestionHandler(ctxWithPerm, handler)
 	go func() {
 		_, err := m.cfg.Agent.RunWithHistory(ctxWithHandler, agent.RunOptions{
 			Messages: msgs,
-			OnEvent: func(ev agent.StreamEvent) {
-				select {
-				case ch <- ev:
-				case <-ctx.Done():
-				}
-			},
+			OnEvent:  eventForwarder(ctx, ch),
 		})
 		if err != nil {
-			select {
-			case ch <- agent.StreamEvent{Type: "error", Text: err.Error()}:
-			case <-ctx.Done():
-			}
+			sendErrorEvent(ctx, ch, err)
 		}
 		close(ch)
 	}()
+}
 
-	return m, waitForChunk(ch)
+func deltaToEventForwarder(ctx context.Context, ch chan agent.StreamEvent) func(protocol.Delta) error {
+	return func(d protocol.Delta) error {
+		ev := agent.StreamEvent{
+			Type: d.Type, Text: d.Text, Reasoning: d.Reasoning,
+			ToolName: d.ToolName, ToolCallID: d.ToolCallID, ToolArgs: d.ToolArgs,
+			ToolResult: d.ToolResult, FinishReason: d.FinishReason,
+		}
+		select {
+		case ch <- ev:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		return nil
+	}
+}
+
+func eventForwarder(ctx context.Context, ch chan agent.StreamEvent) func(agent.StreamEvent) {
+	return func(ev agent.StreamEvent) {
+		select {
+		case ch <- ev:
+		case <-ctx.Done():
+		}
+	}
+}
+
+func sendErrorEvent(ctx context.Context, ch chan agent.StreamEvent, err error) {
+	select {
+	case ch <- agent.StreamEvent{Type: "error", Text: err.Error()}:
+	case <-ctx.Done():
+	}
 }

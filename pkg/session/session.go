@@ -159,6 +159,24 @@ func (s *DirStore) List() ([]SessionMeta, error) {
 	if strings.TrimSpace(s.Dir) == "" {
 		return nil, &SessionError{Op: "list", Err: ErrStoreDirEmpty}
 	}
+	entries, err := s.readSessionEntries()
+	if err != nil {
+		return nil, err
+	}
+	var metas []SessionMeta
+	for _, e := range entries {
+		if meta := s.metaForEntry(e); meta != nil {
+			metas = append(metas, *meta)
+		}
+	}
+
+	sort.Slice(metas, func(i, j int) bool {
+		return metas[i].UpdatedAt.After(metas[j].UpdatedAt)
+	})
+	return metas, nil
+}
+
+func (s *DirStore) readSessionEntries() ([]os.DirEntry, error) {
 	entries, err := os.ReadDir(s.Dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -166,62 +184,63 @@ func (s *DirStore) List() ([]SessionMeta, error) {
 		}
 		return nil, &SessionError{Op: "list", Err: fmt.Errorf("session list: %w", err)}
 	}
+	return entries, nil
+}
 
-	var metas []SessionMeta
-	for _, e := range entries {
-		if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
-			continue
-		}
-		id := strings.TrimSuffix(e.Name(), ".jsonl")
-		if _, err := sanitizeID(id); err != nil {
-			continue
-		}
-		// Load record to get accurate metadata
-		p := filepath.Join(s.Dir, e.Name())
-		b, err := os.ReadFile(p)
-		if err != nil {
-			continue
-		}
-		b = bytes.TrimSpace(b)
-		if len(b) == 0 {
-			continue
-		}
-		lines := bytes.Split(b, []byte{'\n'})
-		var rec Record
-		found := false
-		for i := len(lines) - 1; i >= 0; i-- {
-			line := bytes.TrimSpace(lines[i])
-			if len(line) == 0 {
-				continue
-			}
-			if err := json.Unmarshal(line, &rec); err == nil {
-				found = true
-				break
-			}
-		}
-		if !found {
-			continue
-		}
-		if rec.ID == "" {
-			rec.ID = id
-		}
-		updatedAt := rec.UpdatedAt
-		if updatedAt.IsZero() {
-			updatedAt = rec.CreatedAt
-		}
-		metas = append(metas, SessionMeta{
-			ID:        rec.ID,
-			Title:     rec.Title,
-			CreatedAt: rec.CreatedAt,
-			UpdatedAt: updatedAt,
-			MsgCount:  len(rec.Messages),
-		})
+func (s *DirStore) metaForEntry(e os.DirEntry) *SessionMeta {
+	if e.IsDir() || filepath.Ext(e.Name()) != ".jsonl" {
+		return nil
 	}
+	id := strings.TrimSuffix(e.Name(), ".jsonl")
+	if _, err := sanitizeID(id); err != nil {
+		return nil
+	}
+	return s.metaFromFile(e.Name(), id)
+}
 
-	sort.Slice(metas, func(i, j int) bool {
-		return metas[i].UpdatedAt.After(metas[j].UpdatedAt)
-	})
-	return metas, nil
+func (s *DirStore) metaFromFile(name, id string) *SessionMeta {
+	p := filepath.Join(s.Dir, name)
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	b = bytes.TrimSpace(b)
+	if len(b) == 0 {
+		return nil
+	}
+	rec, found := parseLastRecord(b)
+	if !found {
+		return nil
+	}
+	if rec.ID == "" {
+		rec.ID = id
+	}
+	updatedAt := rec.UpdatedAt
+	if updatedAt.IsZero() {
+		updatedAt = rec.CreatedAt
+	}
+	return &SessionMeta{
+		ID:        rec.ID,
+		Title:     rec.Title,
+		CreatedAt: rec.CreatedAt,
+		UpdatedAt: updatedAt,
+		MsgCount:  len(rec.Messages),
+	}
+}
+
+func parseLastRecord(b []byte) (Record, bool) {
+	lines := bytes.Split(b, []byte{'\n'})
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := bytes.TrimSpace(lines[i])
+		if len(line) == 0 {
+			continue
+		}
+		var rec Record
+		if err := json.Unmarshal(line, &rec); err == nil {
+			return rec, true
+		}
+	}
+	return Record{}, false
 }
 
 // Delete removes the session file for id. Missing files return nil (idempotent).
