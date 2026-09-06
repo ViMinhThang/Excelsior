@@ -182,7 +182,7 @@ func (c *Conn) getAgent(model string) (agent.Runner, error) {
 	if c.hub.NewAgent != nil {
 		return c.hub.NewAgent(model, c.currentWorkspace())
 	}
-	// default: mirror old DefaultAgentFactory.NewAgent
+
 	if model == "" {
 		model = c.hub.Config.Model
 	}
