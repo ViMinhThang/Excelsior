@@ -176,9 +176,9 @@ func TestToolErrf_WrapsSentinels(t *testing.T) {
 	}
 
 	sentinels := []error{
-		ErrToolNotFound, ErrInvalidArguments, ErrEmptyPath, ErrAbsolutePath,
-		ErrPathOutsideWorkspace, ErrFileTooLarge, ErrCommandTooLong, ErrCommandTimeout,
-		ErrTextNotFound, ErrNotADirectory, ErrIsADirectory, ErrOffsetOutOfRange,
+		ErrInvalidArguments, ErrEmptyPath, ErrAbsolutePath,
+		ErrPathOutsideWorkspace, ErrFileTooLarge, ErrCommandTooLong,
+		ErrTextNotFound,
 	}
 	for _, s := range sentinels {
 		if err := errf("test", "op", "", s); !errors.Is(err, s) {

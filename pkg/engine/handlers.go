@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,14 +17,10 @@ import (
 	"excelsior/pkg/protocol"
 )
 
-func sessionInfo(messages []llm.Message, customTitle string) protocol.SessionInfo {
-	added, deleted := diffStats(messages)
-	return protocol.SessionInfo{Title: sessions.Title(messages, customTitle), Count: len(messages), Added: added, Deleted: deleted}
-}
-
-// diffStats tallies edit-tool line changes across the session.
-// ponytail: counts whole oldText/newText blocks, not a real per-line diff
-func diffStats(messages []llm.Message) (added, deleted int) {
+// editedFiles lists files touched by edit-tool calls in the session history.
+func editedFiles(messages []llm.Message) []string {
+	var out []string
+	seen := map[string]bool{}
 	for _, m := range messages {
 		if m.Role != "assistant" {
 			continue
@@ -32,24 +30,40 @@ func diffStats(messages []llm.Message) (added, deleted int) {
 				continue
 			}
 			var a struct {
-				OldText string `json:"oldText"`
-				NewText string `json:"newText"`
+				FilePath string `json:"filePath"`
 			}
-			if json.Unmarshal([]byte(tc.Function.Arguments), &a) != nil {
+			if json.Unmarshal([]byte(tc.Function.Arguments), &a) != nil || a.FilePath == "" || seen[a.FilePath] {
 				continue
 			}
-			added += countLines(a.NewText)
-			deleted += countLines(a.OldText)
+			seen[a.FilePath] = true
+			out = append(out, a.FilePath)
 		}
 	}
-	return added, deleted
+	return out
 }
 
-func countLines(s string) int {
-	if s == "" {
-		return 0
+// gitNumstat maps path -> (added, deleted) from the workspace's pending diff
+// (staged + unstaged). ponytail: session stats only cover changes not yet committed.
+func gitNumstat(dir string) map[string][2]int {
+	res := map[string][2]int{}
+	for _, args := range [][]string{{"diff", "--numstat"}, {"diff", "--cached", "--numstat"}} {
+		cmd := append([]string{"-C", dir}, args...)
+		out, err := exec.Command("git", cmd...).Output()
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(out), "\n") {
+			parts := strings.Split(strings.TrimSpace(line), "\t")
+			if len(parts) < 3 {
+				continue
+			}
+			a, _ := strconv.Atoi(parts[0]) // "-" for binaries parses to 0
+			d, _ := strconv.Atoi(parts[1])
+			cur := res[parts[2]]
+			res[parts[2]] = [2]int{cur[0] + a, cur[1] + d}
+		}
 	}
-	return strings.Count(s, "\n") + 1
+	return res
 }
 
 // decodePayload unmarshals envelope payload into v, reporting error via sendError on failure.
@@ -77,17 +91,32 @@ func (c *Conn) handleSessionList(ctx context.Context, env protocol.Envelope) {
 		c.sendError(env.ID, fmt.Sprintf("list sessions: %v", err))
 		return
 	}
-	branch := branchOf(c.currentWorkspace())
-	sessions := make([]protocol.SessionInfo, 0, len(metas))
+	root := c.currentWorkspace()
+	branch := branchOf(root)
+	numstat := gitNumstat(root)
+	svc := sessions.Service{Store: c.sessionStore()}
+	sessionsList := make([]protocol.SessionInfo, 0, len(metas))
 	for _, meta := range metas {
-		sessions = append(sessions, protocol.SessionInfo{
-			ID:     meta.ID,
-			Title:  meta.Title,
-			Count:  meta.MsgCount,
-			Branch: branch,
+		added, deleted := 0, 0
+		// ponytail: loads full history per session to find touched files; cache if list feels slow
+		if msgs, err := svc.Data(meta.ID); err == nil {
+			for _, f := range editedFiles(msgs) {
+				if st, ok := numstat[filepath.Base(f)]; ok {
+					added += st[0]
+					deleted += st[1]
+				}
+			}
+		}
+		sessionsList = append(sessionsList, protocol.SessionInfo{
+			ID:      meta.ID,
+			Title:   meta.Title,
+			Count:   meta.MsgCount,
+			Branch:  branch,
+			Added:   added,
+			Deleted: deleted,
 		})
 	}
-	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSessionList, protocol.SessionListResp{Sessions: sessions}))
+	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSessionList, protocol.SessionListResp{Sessions: sessionsList}))
 }
 
 func (c *Conn) handleSessionData(ctx context.Context, env protocol.Envelope) {

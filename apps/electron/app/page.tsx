@@ -68,6 +68,17 @@ export default function Page() {
     });
   }, []);
 
+  // Esc cancels the active session's pending permission or question prompt
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (ask) ask._resolve({ selected: -1, answer: "", label: "" });
+      else if (permission) permission._resolve({ approved: false });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [ask, permission]);
+
   // Sync allow-all setting to engine when connected
   useEffect(() => {
     if (wsState !== "connected") return;
@@ -151,20 +162,17 @@ export default function Page() {
         setProjectName(folder.name);
         if (folder.path) send("workspace.set", { workspace: folder.path });
       }
-      const prevId = activeIdRef.current;
-      if (prevId && prevId !== sessionId) send("session.unsubscribe", { id: prevId });
       setActiveId(sessionId);
       setEngineActiveId(sessionId);
       setBlocks([]);
       resetUsage();
       send("session.data", { id: sessionId });
     },
-    [knownFolders, projectName, send, setBlocks, setEngineActiveId, resetUsage, activeIdRef]
+    [knownFolders, projectName, send, setBlocks, setEngineActiveId, resetUsage]
   );
 
   const handleNewChat = useCallback(
     (folderId?: string) => {
-      if (activeIdRef.current) send("session.unsubscribe", { id: activeIdRef.current });
       if (folderId) {
         const folder = knownFolders.find((f) => f.id === folderId);
         if (folder && folder.name.toLowerCase() !== projectName.toLowerCase()) {

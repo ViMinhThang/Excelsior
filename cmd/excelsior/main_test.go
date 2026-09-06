@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -58,20 +57,6 @@ func TestCLI_NormalizeModel(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("normalizeModel(%q, %q) = %q; want %q", tc.flagModel, tc.cfgModel, got, tc.expected)
 		}
-	}
-}
-
-func TestCLI_ResolveWorkspaceOrCwd(t *testing.T) {
-	tmpDir := t.TempDir()
-	ws := resolveWorkspaceOrCwd(tmpDir, "")
-	if ws != tmpDir {
-		t.Fatalf("expected %s, got %s", tmpDir, ws)
-	}
-
-	cwd, _ := os.Getwd()
-	wsDefault := resolveWorkspaceOrCwd("", "")
-	if wsDefault != cwd && wsDefault != "." {
-		t.Fatalf("expected cwd or ., got %s", wsDefault)
 	}
 }
 
@@ -132,13 +117,6 @@ func TestCLI_RunAgent_Validation(t *testing.T) {
 func TestCLI_SubcommandsConstruction(t *testing.T) {
 	cfg := config.Config{APIKey: "sk-test", Model: "deepseek-v4-flash"}
 	ws := t.TempDir()
-	model := "deepseek-v4-flash"
-	system := "Be concise"
-
-	tuiCmd := newTUICommand(cfg, &model, &ws, &system)
-	if tuiCmd.Use != "tui" {
-		t.Errorf("expected use 'tui', got %s", tuiCmd.Use)
-	}
 
 	engineCmd := newEngineCommand(cfg, &ws)
 	if engineCmd.Use != "engine" {
@@ -168,16 +146,5 @@ func TestCLI_EngineCommand_Execution(t *testing.T) {
 	_ = cmd.ExecuteContext(ctx)
 }
 
-func TestCLI_IsTerminal(t *testing.T) {
-	f, err := os.CreateTemp(t.TempDir(), "not-a-tty")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-
-	if isTerminal(f) {
-		t.Errorf("regular temp file should not be a terminal")
-	}
-}
 
 

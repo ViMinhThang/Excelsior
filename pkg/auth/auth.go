@@ -148,10 +148,3 @@ func (s *Store) CleanupExpired(ctx context.Context) (int64, error) {
 	n, _ := res.RowsAffected()
 	return n, nil
 }
-
-// UserExists checks if username is taken (case-insensitive).
-func (s *Store) UserExists(ctx context.Context, username string) (bool, error) {
-	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE username=? COLLATE NOCASE`, strings.TrimSpace(username)).Scan(&n)
-	return n > 0, err
-}

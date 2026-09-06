@@ -57,17 +57,7 @@ func TestAuthRegisterAndLogin(t *testing.T) {
 		t.Fatalf("expected ErrUserExists for ALICE, got %v", err)
 	}
 
-	// 5. UserExists
-	exists, err := store.UserExists(ctx, "Alice")
-	if err != nil || !exists {
-		t.Fatalf("expected UserExists to return true for Alice, got %v, err=%v", exists, err)
-	}
-	notExists, err := store.UserExists(ctx, "bob")
-	if err != nil || notExists {
-		t.Fatalf("expected UserExists to return false for bob, got %v, err=%v", notExists, err)
-	}
-
-	// 6. Successful login (case-insensitive)
+	// 5. Successful login (case-insensitive)
 	tok2, err := store.Login(ctx, "Alice", "supersecret123")
 	if err != nil {
 		t.Fatalf("login failed: %v", err)

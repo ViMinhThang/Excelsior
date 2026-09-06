@@ -13,8 +13,10 @@ type PendingPermission = PermissionReq & { _resolve: (r: { approved: boolean }) 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 10000;
 
+const NO_USAGE: SessionUsage = { prompt: 0, completion: 0, total: 0 };
+
 // ponytail: single pending helper (ask + permission were copy-pasted promise boilerplate)
-function pending<T, P>(payload: P, set: (v: (P & { _resolve: (r: T) => void }) | null) => void, onDone: (r: T) => void) {
+function pending<T extends object, P>(payload: P, set: (v: (P & { _resolve: (r: T) => void }) | null) => void, onDone: (r: T) => void) {
   let resolve!: (r: T) => void;
   const promise = new Promise<T>((r) => { resolve = r; });
   set({ ...payload, _resolve: resolve });
@@ -27,25 +29,21 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
 
   const [wsState, setWsState] = useState<WsState>("disconnected");
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
-  const [blocks, setBlocks] = useState<Block[]>([]);
-  const [streaming, setStreamingState] = useState(false);
-  const [ask, setAsk] = useState<PendingAsk | null>(null);
-  const [permission, setPermission] = useState<PendingPermission | null>(null);
-  const [usage, setUsage] = useState<SessionUsage>({ prompt: 0, completion: 0, total: 0 });
+  // parallel sessions: one transcript buffer, streaming flag, usage and pending
+  // interactions per session; the UI renders only the active session's slices
+  const [blocksBySession, setBlocksBySession] = useState<Record<string, Block[]>>({});
+  const [streamingSessions, setStreamingSessions] = useState<Record<string, true>>({});
+  const [usageBySession, setUsageBySession] = useState<Record<string, SessionUsage>>({});
+  const [asksBySession, setAsksBySession] = useState<Record<string, PendingAsk>>({});
+  const [permsBySession, setPermsBySession] = useState<Record<string, PendingPermission>>({});
+  const [activeIdState, setActiveIdState] = useState<string | null>(null);
 
-  const streamingRef = useRef(false);
-  const askRef = useRef<PendingAsk | null>(null);
-  const permRef = useRef<PendingPermission | null>(null);
-
-  const setStreaming = useCallback((v: boolean | ((p: boolean) => boolean)) => {
-    setStreamingState((prev) => {
-      const next = typeof v === "function" ? v(prev) : v;
-      streamingRef.current = next;
-      return next;
-    });
-  }, []);
-
-  const resetUsage = useCallback(() => setUsage({ prompt: 0, completion: 0, total: 0 }), []);
+  const activeId = activeIdState;
+  const blocks = (activeId && blocksBySession[activeId]) || [];
+  const streaming = !!(activeId && streamingSessions[activeId]);
+  const usage = (activeId && usageBySession[activeId]) || NO_USAGE;
+  const ask = (activeId && asksBySession[activeId]) || null;
+  const permission = (activeId && permsBySession[activeId]) || null;
 
   const allowAllRef = useRef(!!opts?.allowAll);
   allowAllRef.current = !!opts?.allowAll;
@@ -55,31 +53,62 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
       wsRef.current.send(JSON.stringify({ ver: "v1", type, payload }));
   }, []);
 
-  // declining pending ask/permission and clearing stale streaming state on session switch
-  const dropPendingInteractions = useCallback(() => {
-    if (askRef.current) send("ask.resp", { selected: -1, answer: "", label: "" });
-    if (permRef.current) send("permission.resp", { approved: false });
-    askRef.current = null;
-    permRef.current = null;
-    setAsk(null);
-    setPermission(null);
-    setStreaming(false);
-  }, [send, setStreaming]);
+  const setActiveId = useCallback((id: string | null) => {
+    activeIdRef.current = id;
+    setActiveIdState(id);
+  }, []);
 
-  const setActiveId = useCallback((id: string | null) => { activeIdRef.current = id; }, []);
-
-  // ponytail: one append with optional meta (was append + appendMerge + 2 mirror refs)
-  const append = useCallback((role: BlockRole, text: string, meta?: string) => {
-    setBlocks((prev) => {
-      const last = prev[prev.length - 1];
-      if (last?.role === role && last.meta === meta) {
-        const next = [...prev];
-        next[next.length - 1] = { ...last, content: last.content + text };
-        return next;
-      }
-      return [...prev, { role, content: text, meta }];
+  const setBlocks = useCallback((updater: Block[] | ((prev: Block[]) => Block[])) => {
+    const sid = activeIdRef.current;
+    if (!sid) return;
+    setBlocksBySession((all) => {
+      const cur = all[sid] ?? [];
+      const next = typeof updater === "function" ? (updater as (p: Block[]) => Block[])(cur) : updater;
+      return { ...all, [sid]: next };
     });
   }, []);
+
+  const resetUsage = useCallback(() => {
+    const sid = activeIdRef.current;
+    if (!sid) return;
+    setUsageBySession((all) => {
+      if (!(sid in all)) return all;
+      const next = { ...all };
+      delete next[sid];
+      return next;
+    });
+  }, []);
+
+  // append with optional meta; merges into the last block of the given session (ponytail: was append + appendMerge)
+  const append = useCallback((sessionId: string, role: BlockRole, text: string, meta?: string) => {
+    if (!sessionId) return;
+    setBlocksBySession((all) => {
+      const cur = all[sessionId] ?? [];
+      const last = cur[cur.length - 1];
+      let next: Block[];
+      if (last?.role === role && last.meta === meta) {
+        next = [...cur];
+        next[next.length - 1] = { ...last, content: last.content + text };
+      } else {
+        next = [...cur, { role, content: text, meta }];
+      }
+      return { ...all, [sessionId]: next };
+    });
+  }, []);
+
+  const setStreamingFor = useCallback((sessionId: string | undefined, on: boolean) => {
+    const sid = sessionId ?? activeIdRef.current;
+    if (!sid) return;
+    setStreamingSessions((prev) => {
+      const next = { ...prev };
+      if (on) next[sid] = true;
+      else delete next[sid];
+      return next;
+    });
+  }, []);
+
+  // page-facing helper: toggle streaming for the active session (send guard)
+  const setStreaming = useCallback((on: boolean) => setStreamingFor(undefined, on), [setStreamingFor]);
 
   useEffect(() => {
     if (!engineUrl) return;
@@ -90,63 +119,84 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
 
     const handlers: Record<string, (p: any) => void> = {
       delta: (d: Delta) => {
-        if (d.type === "text") append("assistant", d.text ?? "");
-        else if (d.type === "reasoning") append("reason", d.reasoning ?? "");
+        const sid = d.sessionId ?? activeIdRef.current ?? "";
+        if (d.type === "text") append(sid, "assistant", d.text ?? "");
+        else if (d.type === "reasoning") append(sid, "reason", d.reasoning ?? "");
         else if (d.type === "tool_start") {
           // don't coalesce into a block that already has a result — start a new one
-          setBlocks((prev) => {
-            const last = prev[prev.length - 1];
+          setBlocksBySession((all) => {
+            const cur = all[sid] ?? [];
+            const last = cur[cur.length - 1];
+            let next: Block[];
             if (last?.role === "tool" && last.meta === d.toolName && last.args === undefined) {
-              const next = [...prev];
+              next = [...cur];
               next[next.length - 1] = { ...last, content: last.content + (d.toolArgs ?? "") };
-              return next;
+            } else {
+              next = [...cur, { role: "tool" as const, content: d.toolArgs ?? "", meta: d.toolName }];
             }
-            return [...prev, { role: "tool", content: d.toolArgs ?? "", meta: d.toolName }];
+            return { ...all, [sid]: next };
           });
         }
         else if (d.type === "tool_result") {
-          setBlocks((prev) => {
-            const last = prev[prev.length - 1];
+          setBlocksBySession((all) => {
+            const cur = all[sid] ?? [];
+            const last = cur[cur.length - 1];
             // merge into the matching pending call block -> one collapsible per tool
+            let next: Block[];
             if (last?.role === "tool" && d.toolName && last.meta === d.toolName && last.args === undefined) {
-              const next = [...prev];
+              next = [...cur];
               next[next.length - 1] = { ...last, args: last.content, content: d.toolResult ?? "", meta: d.toolName };
-              return next;
+            } else {
+              next = [...cur, { role: "tool" as const, content: d.toolResult ?? "", meta: d.toolName ? `${d.toolName} →` : undefined }];
             }
-            return [...prev, { role: "tool", content: d.toolResult ?? "", meta: d.toolName ? `${d.toolName} →` : undefined }];
+            return { ...all, [sid]: next };
           });
         }
-        else if (d.type === "error") setBlocks((p) => [...p, { role: "error", content: d.text ?? "" }]);
+        else if (d.type === "error") {
+          append(sid, "error", d.text ?? "");
+          setStreamingFor(d.sessionId, false);
+          return;
+        }
         else if (d.type === "done") {
           // ponytail: usage rides the done delta; accumulate per session (ceiling: resets on session switch, no persistence)
           if (d.totalTokens || d.promptTokens || d.completionTokens) {
-            setUsage((u) => ({
-              prompt: u.prompt + (d.promptTokens ?? 0),
-              completion: u.completion + (d.completionTokens ?? 0),
-              total: u.total + (d.totalTokens ?? (d.promptTokens ?? 0) + (d.completionTokens ?? 0)),
-            }));
+            setUsageBySession((all) => {
+              const u = all[sid] ?? NO_USAGE;
+              return {
+                ...all,
+                [sid]: {
+                  prompt: u.prompt + (d.promptTokens ?? 0),
+                  completion: u.completion + (d.completionTokens ?? 0),
+                  total: u.total + (d.totalTokens ?? (d.promptTokens ?? 0) + (d.completionTokens ?? 0)),
+                },
+              };
+            });
           }
-          setStreaming(false);
+          setStreamingFor(d.sessionId, false);
           return;
         }
-        setStreaming(true);
+        setStreamingFor(sid, true);
       },
       done: (p: { sessionId?: string }) => {
-        setStreaming(false);
-        if (p?.sessionId && !activeIdRef.current) activeIdRef.current = p.sessionId;
+        setStreamingFor(p?.sessionId, false);
+        if (p?.sessionId && !activeIdRef.current) {
+          activeIdRef.current = p.sessionId;
+          setActiveIdState(p.sessionId);
+        }
         send("session.list", {});
       },
       error: (p: { error?: string }) => {
-        // ignore stale errors from a cancelled turn of a previous session
-        if (!streamingRef.current) return;
-        setBlocks((prev) => [...prev, { role: "error", content: p?.error ?? "Error" }]);
-        setStreaming(false);
+        const sid = activeIdRef.current;
+        if (!sid) return;
+        append(sid, "error", p?.error ?? "Error");
+        setStreamingFor(sid, false);
       },
       "session.list": (p: { sessions?: SessionInfo[] }) => {
         const list = p?.sessions ?? [];
         setSessions(list);
         if (list.length > 0 && !activeIdRef.current) {
           activeIdRef.current = list[0].id;
+          setActiveIdState(list[0].id);
           send("session.data", { id: list[0].id });
         }
       },
@@ -160,11 +210,8 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
           tool_calls?: { id?: string; function?: { name?: string; arguments?: string } }[];
         }[];
       }) => {
-        const prev = activeIdRef.current;
-        if (prev && prev !== p.id) send("session.unsubscribe", { id: prev });
         activeIdRef.current = p.id;
-        dropPendingInteractions();
-        resetUsage();
+        setActiveIdState(p.id);
         const msgs = p.messages ?? [];
         // map tool_call_id -> arguments so restored tool blocks can show their args
         const argsById = new Map<string, string>();
@@ -173,44 +220,73 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
             if (tc.id) argsById.set(tc.id, tc.function?.arguments ?? "");
           }
         }
-        setBlocks(msgs
-          .filter((m) => m.role !== "system" && !(m.role === "assistant" && !m.content && m.tool_calls?.length))
-          .map((m) => ({
-            role: (m.role === "tool" ? "tool" : m.role === "user" ? "user" : "assistant") as BlockRole,
-            content: m.content,
-            meta: m.role === "tool" ? m.name : undefined,
-            args: m.role === "tool" ? argsById.get(m.tool_call_id ?? "") : undefined,
-          })));
+        setBlocksBySession((all) => ({
+          ...all,
+          [p.id]: msgs
+            .filter((m) => m.role !== "system" && !(m.role === "assistant" && !m.content && m.tool_calls?.length))
+            .map((m) => ({
+              role: (m.role === "tool" ? "tool" : m.role === "user" ? "user" : "assistant") as BlockRole,
+              content: m.content,
+              meta: m.role === "tool" ? m.name : undefined,
+              args: m.role === "tool" ? argsById.get(m.tool_call_id ?? "") : undefined,
+            })),
+        }));
         send("session.subscribe", { id: p.id });
       },
       "session.create": (p: { id?: string }) => {
         if (!p?.id) return;
-        const prev = activeIdRef.current;
-        if (prev && prev !== p.id) send("session.unsubscribe", { id: prev });
         activeIdRef.current = p.id;
-        dropPendingInteractions();
-        setBlocks([]);
-        resetUsage();
+        setActiveIdState(p.id);
+        setBlocksBySession((all) => ({ ...all, [p.id as string]: [] }));
+        setUsageBySession((all) => ({ ...all, [p.id as string]: NO_USAGE }));
         send("session.list", {});
       },
       "session.delete": (p: { deleted?: string }) => {
-        if (p?.deleted && p.deleted === activeIdRef.current) {
-          activeIdRef.current = null;
-          setBlocks([]);
-          resetUsage();
+        if (p?.deleted) {
+          const deleted = p.deleted;
+          setBlocksBySession((all) => {
+            const next = { ...all };
+            delete next[deleted];
+            return next;
+          });
+          if (deleted === activeIdRef.current) {
+            activeIdRef.current = null;
+            setActiveIdState(null);
+          }
         }
         send("session.list", {});
       },
       "session.rename": () => send("session.list", {}),
-      "ask.req": (q: AskReq) =>
-        pending(q, (v) => { askRef.current = v as PendingAsk | null; setAsk(v as PendingAsk | null); }, (r) => send("ask.resp", r)),
+      "ask.req": (q: AskReq) => {
+        const sid = q.sessionId ?? activeIdRef.current ?? "";
+        pending(
+          q,
+          (v) => setAsksBySession((all) => {
+            const next = { ...all };
+            if (v) next[sid] = v as PendingAsk;
+            else delete next[sid];
+            return next;
+          }),
+          (r) => send("ask.resp", { ...r, sessionId: sid })
+        );
+      },
       "permission.req": (pr: PermissionReq) => {
+        const sid = pr.sessionId ?? activeIdRef.current ?? "";
         if (allowAllRef.current) {
-          send("permission.resp", { approved: true });
-          append("tool", `Auto-allowed ${pr.tool} (Allow-all setting)`, "permission →");
+          send("permission.resp", { sessionId: sid, approved: true });
+          append(sid, "tool", `Auto-allowed ${pr.tool} (Allow-all setting)`, "permission →");
           return;
         }
-        pending(pr, (v) => { permRef.current = v as PendingPermission | null; setPermission(v as PendingPermission | null); }, (r) => send("permission.resp", r));
+        pending(
+          pr,
+          (v) => setPermsBySession((all) => {
+            const next = { ...all };
+            if (v) next[sid] = v as PendingPermission;
+            else delete next[sid];
+            return next;
+          }),
+          (r) => send("permission.resp", { ...r, sessionId: sid })
+        );
       },
     };
 
@@ -246,11 +322,12 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
       ws?.close();
       if (wsRef.current === ws) wsRef.current = null;
     };
-  }, [engineUrl, send, append, resetUsage]);
+  }, [engineUrl, send, append, setStreamingFor, setBlocksBySession]);
 
   return {
     wsRef, wsState, sessions, blocks, setBlocks, streaming, setStreaming,
-    ask, setAsk, permission, setPermission, send, activeIdRef, setActiveId,
+    ask, setAsk: setAsksBySession, permission, setPermission: setPermsBySession,
+    send, activeIdRef, setActiveId, activeId,
     usage, resetUsage,
   } as const;
 }

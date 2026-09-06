@@ -21,6 +21,7 @@ export type DeltaType =
   | string;
 
 export type Delta = {
+  sessionId?: string;
   type: DeltaType;
   text?: string;
   reasoning?: string;
@@ -37,17 +38,20 @@ export type Delta = {
 export type SessionUsage = { prompt: number; completion: number; total: number };
 
 export type AskReq = {
+  sessionId?: string;
   question: string;
   options: string[];
 };
 
 export type AskResp = {
+  sessionId?: string;
   selected: number;
   answer: string;
   label: string;
 };
 
 export type PermissionReq = {
+  sessionId?: string;
   tool: string;
   filePath?: string;
   preview?: string;
@@ -55,6 +59,7 @@ export type PermissionReq = {
 };
 
 export type PermissionResp = {
+  sessionId?: string;
   approved: boolean;
 };
 

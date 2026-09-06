@@ -152,23 +152,6 @@ func TestMemoryStore_SanitizeID(t *testing.T) {
 	}
 }
 
-func TestMemoryStore_Clear(t *testing.T) {
-	m := NewMemoryStore()
-	_ = m.Save(Record{ID: "sess-1"})
-	_ = m.Save(Record{ID: "sess-2"})
-
-	list, _ := m.List()
-	if len(list) != 2 {
-		t.Fatalf("expected 2, got %d", len(list))
-	}
-
-	m.Clear()
-	listAfter, _ := m.List()
-	if len(listAfter) != 0 {
-		t.Fatalf("expected 0 after clear, got %d", len(listAfter))
-	}
-}
-
 func TestMemoryStore_Concurrency(t *testing.T) {
 	m := NewMemoryStore()
 	var wg sync.WaitGroup

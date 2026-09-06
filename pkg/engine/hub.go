@@ -66,13 +66,6 @@ func (h *Hub) Workspace() string {
 	return h.workspace
 }
 
-// SetWorkspace updates the workspace root directory.
-func (h *Hub) SetWorkspace(ws string) {
-	h.mu.Lock()
-	h.workspace = ws
-	h.mu.Unlock()
-}
-
 // Register registers a connection with the hub.
 func (h *Hub) Register(c *Conn) {
 	h.mu.Lock()
@@ -85,30 +78,6 @@ func (h *Hub) Unregister(c *Conn) {
 	h.mu.Lock()
 	delete(h.clients, c)
 	h.mu.Unlock()
-}
-
-// Broadcast sends an envelope to all connected clients.
-func (h *Hub) Broadcast(env protocol.Envelope) {
-	b, err := json.Marshal(env)
-	if err != nil {
-		return
-	}
-	h.mu.RLock()
-	if len(h.clients) == 0 {
-		h.mu.RUnlock()
-		return
-	}
-	conns := make([]*Conn, 0, len(h.clients))
-	for c := range h.clients {
-		conns = append(conns, c)
-	}
-	h.mu.RUnlock()
-	for _, c := range conns {
-		select {
-		case c.send <- b:
-		default:
-		}
-	}
 }
 
 // BroadcastToSession sends an event to authenticated connections subscribed to a session.

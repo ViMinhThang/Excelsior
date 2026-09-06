@@ -118,10 +118,3 @@ func (m *MemoryStore) Delete(id string) error {
 func (m *MemoryStore) Latest() (Record, error) {
 	return Latest(m)
 }
-
-// Clear resets all stored sessions (useful in test cleanup).
-func (m *MemoryStore) Clear() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.sessions = make(map[string]Record)
-}

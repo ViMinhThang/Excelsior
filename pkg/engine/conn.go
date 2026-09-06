@@ -33,12 +33,6 @@ func (s *slot[T]) set(ch chan T) {
 	s.mu.Unlock()
 }
 
-func (s *slot[T]) clear() {
-	s.mu.Lock()
-	s.ch = nil
-	s.mu.Unlock()
-}
-
 func (s *slot[T]) route(resp T) bool {
 	s.mu.RLock()
 	ch := s.ch
@@ -54,21 +48,17 @@ func (s *slot[T]) route(resp T) bool {
 	}
 }
 
-func (s *slot[T]) get() (chan T, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.ch, s.ch != nil
-}
-
-// interactionRouter manages pending human-in-the-loop responses for an active connection turn.
+// interactionRouter manages pending human-in-the-loop responses for one session turn.
 type interactionRouter struct {
 	ask  slot[protocol.AskResp]
 	perm slot[protocol.PermissionResp]
 }
 
-func (r *interactionRouter) reset() {
-	r.ask.clear()
-	r.perm.clear()
+// turnState tracks one in-flight chat turn for a session.
+type turnState struct {
+	cancel       context.CancelFunc
+	done         chan struct{}
+	interactions *interactionRouter
 }
 
 // Conn represents an active WebSocket client connection.
@@ -83,11 +73,8 @@ type Conn struct {
 	interactions  interactionRouter
 	done          chan struct{}
 	closeOnce     sync.Once
-	chatMu        sync.Mutex
-	chatting      bool
-	chatSession   string
-	chatCancel    context.CancelFunc
-	chatDone      chan struct{}
+	turnsMu       sync.Mutex
+	turns         map[string]*turnState
 	subscriptions map[string]struct{}
 }
 
@@ -98,6 +85,7 @@ func newConn(hub *Hub, ws *websocket.Conn) *Conn {
 		send:          make(chan []byte, 128),
 		done:          make(chan struct{}),
 		workspace:     workspaces.New(hub.Workspace),
+		turns:         make(map[string]*turnState),
 		subscriptions: make(map[string]struct{}),
 	}
 }
@@ -111,16 +99,50 @@ func (c *Conn) isClosed() bool {
 	}
 }
 
-func (c *Conn) setAskChannel(ch chan protocol.AskResp) { c.interactions.ask.set(ch) }
-func (c *Conn) clearAskChannel()                       { c.interactions.ask.clear() }
-func (c *Conn) getAskChannel() (chan protocol.AskResp, bool) {
-	return c.interactions.ask.get()
+// beginTurn registers a new in-flight turn for sessionID, or returns false if one is already running.
+func (c *Conn) beginTurn(parent context.Context, sessionID string) (context.Context, *turnState, bool) {
+	c.turnsMu.Lock()
+	defer c.turnsMu.Unlock()
+	if _, exists := c.turns[sessionID]; exists {
+		return nil, nil, false
+	}
+	ctx, cancel := context.WithCancel(parent)
+	t := &turnState{cancel: cancel, done: make(chan struct{}), interactions: &interactionRouter{}}
+	c.turns[sessionID] = t
+	return ctx, t, true
 }
 
-func (c *Conn) setPermChannel(ch chan protocol.PermissionResp) { c.interactions.perm.set(ch) }
-func (c *Conn) clearPermChannel()                              { c.interactions.perm.clear() }
-func (c *Conn) getPermChannel() (chan protocol.PermissionResp, bool) {
-	return c.interactions.perm.get()
+// endTurn removes and cancels the turn; done closes after teardown.
+func (c *Conn) endTurn(sessionID string, t *turnState) {
+	c.turnsMu.Lock()
+	if c.turns[sessionID] == t {
+		delete(c.turns, sessionID)
+	}
+	c.turnsMu.Unlock()
+	t.cancel()
+	close(t.done)
+}
+
+// routeInteraction delivers a client response to the turn's interaction router.
+// Empty sessionID falls back to the single active turn, if there is exactly one.
+func (c *Conn) routeInteraction(sessionID string, route func(*interactionRouter) bool) {
+	c.turnsMu.Lock()
+	var ir *interactionRouter
+	if t := c.turns[sessionID]; t != nil {
+		ir = t.interactions
+	} else if sessionID == "" && len(c.turns) == 1 {
+		for _, only := range c.turns {
+			ir = only.interactions
+		}
+	}
+	c.turnsMu.Unlock()
+	if ir == nil {
+		c.hub.logger().Warn("interaction response with no pending turn", "session", sessionID)
+		return
+	}
+	if !route(ir) {
+		c.hub.logger().Warn("interaction response dropped", "session", sessionID)
+	}
 }
 
 func (c *Conn) subscribe(sessionID string) {
@@ -215,7 +237,12 @@ func (c *Conn) sendError(id, msg string) {
 
 func (c *Conn) close() {
 	c.closeOnce.Do(func() {
-		c.interactions.reset()
+		c.turnsMu.Lock()
+		for _, t := range c.turns {
+			t.cancel()
+		}
+		c.turns = make(map[string]*turnState)
+		c.turnsMu.Unlock()
 		close(c.done)
 		if c.ws != nil {
 			_ = c.ws.Close()
@@ -330,45 +357,17 @@ func (c *Conn) dispatchChat(ctx context.Context, env protocol.Envelope) {
 	if !c.decodePayload(env, &req, "chat.req") {
 		return
 	}
-
-	c.chatMu.Lock()
-	if c.chatting {
-		if req.SessionID == c.chatSession {
-			c.chatMu.Unlock()
-			c.sendError(env.ID, "already streaming, wait for done")
-			return
-		}
-		// switching sessions: cancel the in-flight turn and wait for it to wind down
-		if c.chatCancel != nil {
-			c.chatCancel()
-		}
-		done := c.chatDone
-		c.chatMu.Unlock()
-		if done != nil {
-			<-done
-		}
-		c.chatMu.Lock()
+	if req.SessionID == "" {
+		req.SessionID = fmt.Sprintf("%d", time.Now().UnixMilli())
 	}
-	c.chatting = true
-	c.chatSession = req.SessionID
-	turnCtx, cancel := context.WithCancel(ctx)
-	c.chatCancel = cancel
-	c.chatDone = make(chan struct{})
-	done := c.chatDone
-	c.chatMu.Unlock()
-
+	turnCtx, t, ok := c.beginTurn(ctx, req.SessionID)
+	if !ok {
+		c.sendError(env.ID, "already streaming, wait for done")
+		return
+	}
 	go func(e protocol.Envelope, turnCtx context.Context) {
-		defer func() {
-			cancel()
-			c.chatMu.Lock()
-			c.chatting = false
-			c.chatSession = ""
-			c.chatCancel = nil
-			c.chatDone = nil
-			close(done)
-			c.chatMu.Unlock()
-		}()
-		c.handleChat(turnCtx, e)
+		defer c.endTurn(req.SessionID, t)
+		c.handleChat(turnCtx, e, req.SessionID, t)
 	}(env, turnCtx)
 }
 
@@ -377,8 +376,8 @@ func (c *Conn) handleAskResp(env protocol.Envelope) {
 	if !c.decodePayload(env, &resp, "ask.resp") {
 		return
 	}
-	c.hub.logger().Info("received client ask response", "selected", resp.Selected, "answer", resp.Answer)
-	c.interactions.ask.route(resp)
+	c.hub.logger().Info("received client ask response", "session", resp.SessionID, "selected", resp.Selected, "answer", resp.Answer)
+	c.routeInteraction(resp.SessionID, func(r *interactionRouter) bool { return r.ask.route(resp) })
 }
 
 func (c *Conn) handlePermissionResp(env protocol.Envelope) {
@@ -386,6 +385,6 @@ func (c *Conn) handlePermissionResp(env protocol.Envelope) {
 	if !c.decodePayload(env, &resp, "permission.resp") {
 		return
 	}
-	c.hub.logger().Info("received client permission response", "approved", resp.Approved)
-	c.interactions.perm.route(resp)
+	c.hub.logger().Info("received client permission response", "session", resp.SessionID, "approved", resp.Approved)
+	c.routeInteraction(resp.SessionID, func(r *interactionRouter) bool { return r.perm.route(resp) })
 }

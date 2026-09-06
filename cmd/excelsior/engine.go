@@ -19,11 +19,10 @@ func newEngineCommand(cfg config.Config, workspaceFlag *string) *cobra.Command {
 	var authEnabled bool
 	cmd := &cobra.Command{
 		Use:   "engine",
-		Short: "Start WebSocket engine hub (for TUI/desktop/mobile sync)",
-		Long: `Start the engine daemon. TUI and other clients connect via WebSocket:
+		Short: "Start WebSocket engine hub (for desktop/mobile clients)",
+		Long: `Start the engine daemon. Clients connect via WebSocket:
 
-  excelsior engine --addr :17812 --workspace .
-  excelsior tui --engine ws://localhost:17812/v1/ws`,
+  excelsior engine --addr :17812 --workspace .`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Runtime-only flag override (--yolo / --permission); persisted
 			// permission is resolved per-request from LoadSettings.

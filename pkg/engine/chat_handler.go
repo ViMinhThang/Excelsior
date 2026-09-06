@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"excelsior/internal/chat"
 	"excelsior/internal/permissions"
@@ -12,22 +11,17 @@ import (
 	"excelsior/pkg/tools"
 )
 
-func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
+func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope, sessionID string, turn *turnState) {
 	var req protocol.ChatReq
 	if !c.decodePayload(env, &req, "chat.req") {
 		return
 	}
 
-	ctxWithTools := c.setupToolHandlers(ctx)
+	ctxWithTools := c.setupToolHandlers(ctx, sessionID, turn)
 	ag, err := c.getAgent(req.Model)
 	if err != nil {
 		c.sendError(env.ID, fmt.Sprintf("create agent: %v", err))
 		return
-	}
-
-	sessionID := req.SessionID
-	if sessionID == "" {
-		sessionID = fmt.Sprintf("%d", time.Now().UnixMilli())
 	}
 
 	c.subscribe(sessionID)
@@ -44,19 +38,20 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 	c.hub.BroadcastToSession(c.userID, sessionID, protocol.NewEnvelopeWithID(env.ID, protocol.TypeDone, map[string]string{"sessionId": sessionID}))
 }
 
-func (c *Conn) setupToolHandlers(ctx context.Context) context.Context {
+func (c *Conn) setupToolHandlers(ctx context.Context, sessionID string, turn *turnState) context.Context {
 	askCh := make(chan protocol.AskResp, 1)
-	askHandler := c.askHandler(ctx, askCh)
 	permCh := make(chan protocol.PermissionResp, 1)
-	permHandler := c.permissionHandler(ctx, permCh)
+	turn.interactions.ask.set(askCh)
+	turn.interactions.perm.set(permCh)
 
-	ctxWithTools := tools.WithPermissionHandler(ctx, permHandler)
-	return tools.WithQuestionHandler(ctxWithTools, askHandler)
+	ctxWithTools := tools.WithPermissionHandler(ctx, c.permissionHandler(ctx, sessionID, permCh))
+	return tools.WithQuestionHandler(ctxWithTools, c.askHandler(ctx, sessionID, askCh))
 }
 
 func (c *Conn) deltaForwarder(sessionID string) func(chat.Event) {
 	return func(ev chat.Event) {
 		d := protocol.Delta{
+			SessionID: sessionID,
 			Type: ev.Type, Text: ev.Text, Reasoning: ev.Reasoning,
 			ToolName: ev.ToolName, ToolCallID: ev.ToolCallID,
 			ToolArgs: ev.ToolArgs, ToolResult: ev.ToolResult,
@@ -69,12 +64,10 @@ func (c *Conn) deltaForwarder(sessionID string) func(chat.Event) {
 	}
 }
 
-func (c *Conn) askHandler(parentCtx context.Context, askCh chan protocol.AskResp) tools.QuestionHandler {
+func (c *Conn) askHandler(parentCtx context.Context, sessionID string, askCh chan protocol.AskResp) tools.QuestionHandler {
 	return func(hctx context.Context, rq tools.AskRequest) (tools.AskResponse, error) {
-		c.setAskChannel(askCh)
-		defer c.clearAskChannel()
-		c.sendEnvelope(protocol.NewEnvelope(protocol.TypeAskReq, protocol.AskReq{Question: rq.Question, Options: rq.Options}))
-		c.hub.logger().Info("engine ask sent, awaiting client", "question", rq.Question)
+		c.sendEnvelope(protocol.NewEnvelope(protocol.TypeAskReq, protocol.AskReq{SessionID: sessionID, Question: rq.Question, Options: rq.Options}))
+		c.hub.logger().Info("engine ask sent, awaiting client", "session", sessionID, "question", rq.Question)
 		select {
 		case resp := <-askCh:
 			return tools.AskResponse{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}, nil
@@ -86,7 +79,7 @@ func (c *Conn) askHandler(parentCtx context.Context, askCh chan protocol.AskResp
 	}
 }
 
-func (c *Conn) permissionHandler(parentCtx context.Context, permCh chan protocol.PermissionResp) tools.PermissionHandler {
+func (c *Conn) permissionHandler(parentCtx context.Context, sessionID string, permCh chan protocol.PermissionResp) tools.PermissionHandler {
 	return func(hctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
 		// Resolve settings for this connection without mutating shared hub config.
 		perm, _ := permissions.Resolve(c.hub.PermissionOverride, config.LoadSettings(c.currentWorkspace()))
@@ -96,12 +89,10 @@ func (c *Conn) permissionHandler(parentCtx context.Context, permCh chan protocol
 		case "deny":
 			return tools.PermissionResponse{Approved: false}, nil
 		}
-		c.setPermChannel(permCh)
-		defer c.clearPermChannel()
 		c.sendEnvelope(protocol.NewEnvelope(protocol.TypePermissionReq, protocol.PermissionReq{
-			Tool: rq.Tool, FilePath: rq.FilePath, Preview: rq.Preview, Command: rq.Command,
+			SessionID: sessionID, Tool: rq.Tool, FilePath: rq.FilePath, Preview: rq.Preview, Command: rq.Command,
 		}))
-		c.hub.logger().Info("engine permission sent, awaiting client", "tool", rq.Tool, "file", rq.FilePath, "command", rq.Command)
+		c.hub.logger().Info("engine permission sent, awaiting client", "session", sessionID, "tool", rq.Tool, "file", rq.FilePath, "command", rq.Command)
 		select {
 		case resp := <-permCh:
 			return tools.PermissionResponse{Approved: resp.Approved}, nil

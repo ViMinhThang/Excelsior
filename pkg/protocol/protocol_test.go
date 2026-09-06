@@ -3,7 +3,6 @@ package protocol
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -189,7 +188,10 @@ func TestAllProtocolMessageTypesSerialization(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			raw, _ := MarshalPayload(tc.payload)
+			raw, err := json.Marshal(tc.payload)
+			if err != nil {
+				t.Fatalf("marshal payload for %s: %v", tc.name, err)
+			}
 			env := Envelope{
 				Ver:     Ver,
 				ID:      "test-id",
@@ -246,23 +248,6 @@ func TestChatReqRoundTrip(t *testing.T) {
 	}
 }
 
-func TestMarshalPayload_Errors(t *testing.T) {
-	ch := make(chan int)
-	raw, err := MarshalPayload(ch)
-	if err == nil {
-		t.Fatal("expected error from MarshalPayload on un-marshalable channel")
-	}
-	if raw != nil {
-		t.Errorf("expected nil raw on error, got %v", raw)
-	}
-	if !errors.Is(err, ErrInvalidPayload) {
-		t.Errorf("expected errors.Is(err, ErrInvalidPayload), got %v", err)
-	}
-	if s := err.Error(); s == "" || !strings.Contains(s, "marshal") {
-		t.Errorf("expected op in message, got %q", s)
-	}
-}
-
 func TestEnvelopeDecode_Errors(t *testing.T) {
 	env := Envelope{
 		Ver:     Ver,
@@ -300,14 +285,4 @@ func TestNewEnvelopeHelpers(t *testing.T) {
 		t.Errorf("Decode on empty payload should succeed, got %v", err)
 	}
 }
-
-func TestProtocolSentinels_WrapWithFmt(t *testing.T) {
-	for _, s := range []error{ErrUnsupportedVersion, ErrInvalidPayload, ErrCorruptEnvelope, ErrUnknownType} {
-		err := fmt.Errorf("protocol test: %w", s)
-		if !errors.Is(err, s) {
-			t.Errorf("expected Is(%v)", s)
-		}
-	}
-}
-
 

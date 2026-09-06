@@ -29,19 +29,6 @@ func (e Envelope) Decode(v any) error {
 	return nil
 }
 
-// MarshalPayload marshals v to json.RawMessage safely without panicking.
-// Returns nil, nil if v is nil.
-func MarshalPayload(v any) (json.RawMessage, error) {
-	if v == nil {
-		return nil, nil
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil, fmt.Errorf("protocol marshal: %w: %v", ErrInvalidPayload, err)
-	}
-	return b, nil
-}
-
 // NewEnvelope creates a versioned envelope with JSON payload.
 func NewEnvelope(typ string, payload any) Envelope {
 	if payload == nil {
@@ -104,6 +91,7 @@ type ChatReq struct {
 
 // Delta is engine → client streaming fragment (maps to agent.StreamEvent).
 type Delta struct {
+	SessionID    string `json:"sessionId,omitempty"`
 	Type         string `json:"type"` // text|reasoning|tool_start|tool_result|done|error
 	Text         string `json:"text,omitempty"`
 	Reasoning    string `json:"reasoning,omitempty"`
@@ -119,28 +107,32 @@ type Delta struct {
 
 // AskReq is engine → client when agent calls askQuestion.
 type AskReq struct {
-	Question string   `json:"question"`
-	Options  []string `json:"options"` // 3
+	SessionID string   `json:"sessionId,omitempty"`
+	Question  string   `json:"question"`
+	Options   []string `json:"options"` // 3
 }
 
 // AskResp is client → engine with user choice.
 type AskResp struct {
-	Selected int    `json:"selected"` // 0..2 or -1 for manual
-	Answer   string `json:"answer"`
-	Label    string `json:"label"`
+	SessionID string `json:"sessionId,omitempty"`
+	Selected  int    `json:"selected"` // 0..2 or -1 for manual
+	Answer    string `json:"answer"`
+	Label     string `json:"label"`
 }
 
 // PermissionReq is engine → client when agent requests mutating operation approval.
 type PermissionReq struct {
-	Tool     string `json:"tool"` // "write" | "edit" | "bash"
-	FilePath string `json:"filePath,omitempty"`
-	Preview  string `json:"preview,omitempty"`
-	Command  string `json:"command,omitempty"`
+	SessionID string `json:"sessionId,omitempty"`
+	Tool      string `json:"tool"` // "write" | "edit" | "bash"
+	FilePath  string `json:"filePath,omitempty"`
+	Preview   string `json:"preview,omitempty"`
+	Command   string `json:"command,omitempty"`
 }
 
 // PermissionResp is client → engine with user decision.
 type PermissionResp struct {
-	Approved bool `json:"approved"`
+	SessionID string `json:"sessionId,omitempty"`
+	Approved  bool   `json:"approved"`
 }
 
 // Session management (unified for TUI/web/desktop).
@@ -201,8 +193,6 @@ type SessionSubscriptionReq struct {
 	ID string `json:"id"`
 }
 
-// SettingsGetReq requests current settings (e.g. permission mode).
-type SettingsGetReq struct{}
 
 // SettingsGetResp returns current settings.
 type SettingsGetResp struct {

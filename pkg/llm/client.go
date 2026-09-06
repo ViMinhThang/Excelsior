@@ -24,11 +24,6 @@ type Client struct {
 	Logger     *slog.Logger
 }
 
-// NewClient returns a new Client with the given API key and model.
-func NewClient(apiKey, model string) *Client {
-	return &Client{APIKey: apiKey, Model: model}
-}
-
 // ModelName returns the configured model name.
 func (c *Client) ModelName() string { return c.Model }
 
@@ -290,10 +285,6 @@ func fromGoAIToolCalls(calls []provider.ToolCall) []ToolCall {
 		out = append(out, ToolCall{ID: call.ID, Type: "function", Function: FuncCall{Name: call.Name, Arguments: string(call.Input)}})
 	}
 	return out
-}
-
-func usageFromGoAI(usage provider.Usage) *Usage {
-	return &Usage{PromptTokens: usage.InputTokens, CompletionTokens: usage.OutputTokens, TotalTokens: usage.TotalTokens}
 }
 
 func newGoAIError(model string, err error) error {

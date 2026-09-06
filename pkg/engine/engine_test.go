@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -26,33 +24,6 @@ import (
 )
 
 func mustMarshal(v any) json.RawMessage { b, _ := json.Marshal(v); return b }
-
-func TestHub_WorkspaceConcurrency(t *testing.T) {
-	cfg := config.Config{Model: "deepseek-v4-flash"}
-	hub := NewHub(cfg, "/initial/workspace")
-
-	if hub.Workspace() != "/initial/workspace" {
-		t.Fatalf("expected /initial/workspace, got %s", hub.Workspace())
-	}
-
-	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(2)
-		go func(idx int) {
-			defer wg.Done()
-			hub.SetWorkspace(fmt.Sprintf("/workspace/%d", idx))
-		}(i)
-		go func() {
-			defer wg.Done()
-			_ = hub.Workspace()
-		}()
-	}
-	wg.Wait()
-
-	if hub.Workspace() == "" {
-		t.Fatal("workspace should not be empty after concurrent updates")
-	}
-}
 
 func TestHub_HealthEndpoint(t *testing.T) {
 	hub := NewHub(config.Config{}, "/tmp")
@@ -225,23 +196,22 @@ func TestConn_AskCorrelation(t *testing.T) {
 	c := newConn(hub, nil)
 
 	askCh := make(chan protocol.AskResp, 1)
-	c.setAskChannel(askCh)
-
-	ch, ok := c.getAskChannel()
-	if !ok || ch == nil {
-		t.Fatal("expected ask channel to be registered")
+	_, turn, ok := c.beginTurn(context.Background(), "sess-1")
+	if !ok {
+		t.Fatal("expected turn to start")
 	}
+	turn.interactions.ask.set(askCh)
 
 	// Dispatch Ask response
 	env := protocol.Envelope{
 		Ver:     protocol.Ver,
 		Type:    protocol.TypeAskResp,
-		Payload: mustMarshal(protocol.AskResp{Selected: 2, Answer: "Option C", Label: "Label C"}),
+		Payload: mustMarshal(protocol.AskResp{SessionID: "sess-1", Selected: 2, Answer: "Option C", Label: "Label C"}),
 	}
 	c.handleAskResp(env)
 
 	select {
-	case resp := <-ch:
+	case resp := <-askCh:
 		if resp.Selected != 2 || resp.Answer != "Option C" {
 			t.Fatalf("unexpected ask response: %+v", resp)
 		}
@@ -249,34 +219,52 @@ func TestConn_AskCorrelation(t *testing.T) {
 		t.Fatal("timeout waiting for correlated ask response")
 	}
 
-	c.clearAskChannel()
-	if _, ok := c.getAskChannel(); ok {
-		t.Fatal("expected ask channel to be cleared")
+	// After the turn ends, routing must fail (no pending turn)
+	c.endTurn("sess-1", turn)
+	env2 := protocol.Envelope{
+		Ver:     protocol.Ver,
+		Type:    protocol.TypeAskResp,
+		Payload: mustMarshal(protocol.AskResp{SessionID: "sess-1", Selected: 1}),
 	}
+	c.handleAskResp(env2) // must not panic; dropped with warning
 }
 
-func TestSessionInfo_Fallback(t *testing.T) {
-	// Custom title preferred
-	info := sessionInfo([]llm.Message{{Role: "user", Content: "First msg"}}, "My Custom Title")
-	if info.Title != "My Custom Title" {
-		t.Errorf("expected custom title, got %q", info.Title)
+func TestConn_ParallelTurns(t *testing.T) {
+	hub := NewHub(config.Config{}, "/tmp")
+	c := newConn(hub, nil)
+
+	// Two sessions can hold turns simultaneously
+	_, t1, ok := c.beginTurn(context.Background(), "a")
+	if !ok {
+		t.Fatal("expected first turn to start")
+	}
+	_, t2, ok := c.beginTurn(context.Background(), "b")
+	if !ok {
+		t.Fatal("expected second (parallel) turn to start")
+	}
+	// Same session is rejected
+	if _, _, ok := c.beginTurn(context.Background(), "a"); ok {
+		t.Fatal("expected duplicate turn for same session to be rejected")
 	}
 
-	// Fallback to first user message
-	info2 := sessionInfo([]llm.Message{
-		{Role: "system", Content: "System prompt"},
-		{Role: "user", Content: "Refactor engine packages"},
-		{Role: "assistant", Content: "Done"},
-	}, "")
-	if info2.Title != "Refactor engine packages" {
-		t.Errorf("expected first user message title, got %q", info2.Title)
+	// Responses route by session
+	ach := make(chan protocol.AskResp, 1)
+	bch := make(chan protocol.PermissionResp, 1)
+	t1.interactions.ask.set(ach)
+	t2.interactions.perm.set(bch)
+	c.handleAskResp(protocol.Envelope{Ver: protocol.Ver, Type: protocol.TypeAskResp, Payload: mustMarshal(protocol.AskResp{SessionID: "a", Selected: 0})})
+	c.handlePermissionResp(protocol.Envelope{Ver: protocol.Ver, Type: protocol.TypePermissionResp, Payload: mustMarshal(protocol.PermissionResp{SessionID: "b", Approved: true})})
+	if r := <-ach; r.SessionID != "a" {
+		t.Fatalf("ask routed to wrong turn: %+v", r)
+	}
+	if r := <-bch; !r.Approved {
+		t.Fatalf("permission routed to wrong turn: %+v", r)
 	}
 
-	// Truncated long user message
-	longMsg := strings.Repeat("A", 60)
-	info3 := sessionInfo([]llm.Message{{Role: "user", Content: longMsg}}, "")
-	if len(info3.Title) != 43 || !strings.HasSuffix(info3.Title, "…") { // 40 chars + "…" (3 bytes in UTF-8)
-		t.Errorf("expected truncated title with ellipsis, got %q (len %d)", info3.Title, len(info3.Title))
+	c.endTurn("a", t1)
+	c.endTurn("b", t2)
+	if _, _, ok := c.beginTurn(context.Background(), "a"); !ok {
+		t.Fatal("expected turn to restart after end")
 	}
 }
 
@@ -543,45 +531,6 @@ func TestHub_MemorySessionStore(t *testing.T) {
 	}
 }
 
-func TestEngineSentinels_WrapWithFmt(t *testing.T) {
-	sentinels := []error{
-		ErrAlreadyStreaming, ErrConnectionClosed, ErrClientDisconnected,
-		ErrSendBufferFull, ErrRemoteEngine, ErrInvalidURL, ErrConnectionFailed,
-	}
-	for _, s := range sentinels {
-		if err := fmt.Errorf("engine test: %w", s); !errors.Is(err, s) {
-			t.Errorf("expected Is(%v)", s)
-		}
-	}
-}
-
-func TestHub_BroadcastAndUnregister(t *testing.T) {
-	hub := NewHub(config.Config{Model: "v4"}, "/tmp")
-	c1 := newConn(hub, nil)
-	c2 := newConn(hub, nil)
-
-	hub.Register(c1)
-	hub.Register(c2)
-
-	// Broadcast
-	hub.Broadcast(protocol.NewEnvelope(protocol.TypePing, nil))
-
-	select {
-	case <-c1.send:
-	default:
-		t.Error("expected broadcast envelope on c1")
-	}
-
-	select {
-	case <-c2.send:
-	default:
-		t.Error("expected broadcast envelope on c2")
-	}
-
-	hub.Unregister(c1)
-	hub.Unregister(c2)
-}
-
 type mockFailingRunner struct{}
 
 func (f *mockFailingRunner) RunWithHistory(ctx context.Context, opts agent.RunOptions) (*agent.RunResult, error) {
@@ -596,11 +545,17 @@ func TestEngine_HandleChat_ErrorBranch(t *testing.T) {
 
 	conn := newConn(hub, nil)
 	env := protocol.NewEnvelopeWithID("err-chat-1", protocol.TypeChatReq, protocol.ChatReq{
-		Model:    "v4",
-		Messages: []llm.Message{{Role: "user", Content: "Fail please"}},
+		SessionID: "sess-err",
+		Model:     "v4",
+		Messages:  []llm.Message{{Role: "user", Content: "Fail please"}},
 	})
 
-	conn.handleChat(context.Background(), env)
+	turnCtx, turn, ok := conn.beginTurn(context.Background(), "sess-err")
+	if !ok {
+		t.Fatal("expected turn to start")
+	}
+	conn.handleChat(turnCtx, env, "sess-err", turn)
+	conn.endTurn("sess-err", turn)
 
 	select {
 	case msg := <-conn.send:
@@ -623,7 +578,7 @@ func TestEngine_AskHandler_Cancellation(t *testing.T) {
 	cancelParent()
 
 	askCh := make(chan protocol.AskResp, 1)
-	handler := conn.askHandler(parentCtx, askCh)
+	handler := conn.askHandler(parentCtx, "sess-x", askCh)
 
 	_, err := handler(context.Background(), tools.AskRequest{Question: "Choose?"})
 	if err == nil {

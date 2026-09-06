@@ -56,8 +56,7 @@ func newRootCommand(cfg config.Config, model, workspace, system, sessionID, engi
 		Long: `Excelsior is a DeepSeek-first coding agent library + CLI.
 
 Examples:
-  excelsior                          # launch TUI (interactive)
-  excelsior tui                      # launch TUI explicitly
+  excelsior engine                     # start the WebSocket engine (desktop/mobile clients)
   excelsior "add tests for pkg/tools"
   excelsior -m deepseek-v4-pro "explain this repo"
   echo "fix the bug in main.go" | excelsior
@@ -91,9 +90,6 @@ Examples:
 			}
 			prompt := resolvePrompt(args)
 			if prompt == "" {
-				if isTerminal(os.Stdin) && isTerminal(os.Stdout) {
-					return runTUI(cmd, cfg, *model, *workspace, *system)
-				}
 				return cmd.Help()
 			}
 			return runAgent(cmd.Context(), cfg, permissionOverride, *model, *workspace, *system, *sessionID, prompt)
@@ -110,7 +106,6 @@ Examples:
 	root.PersistentFlags().BoolVarP(verbose, "verbose", "v", false, "Verbose logging (debug)")
 
 	root.AddCommand(&cobra.Command{Use: "run [prompt]", Short: "Run a single turn (alias for root)", Args: cobra.ArbitraryArgs, RunE: root.RunE})
-	root.AddCommand(newTUICommand(cfg, model, workspace, system))
 	root.AddCommand(newEngineCommand(cfg, workspace))
 	root.AddCommand(newModelsCommand())
 	root.AddCommand(newVersionCommand())
@@ -135,7 +130,7 @@ func newVersionCommand() *cobra.Command {
 	return &cobra.Command{
 		Use: "version", Short: "Print version",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Fprintf(cmd.OutOrStdout(), "excelsior %s (go + deepseek-native + tui)\n", version)
+			fmt.Fprintf(cmd.OutOrStdout(), "excelsior %s (go + deepseek-native)\n", version)
 		},
 	}
 }

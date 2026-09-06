@@ -12,10 +12,7 @@ import (
 
 // Resource limits for tool execution.
 const (
-	MaxFileReadSize  = 5 << 20  // 5 MB per view
 	MaxWriteSize     = 10 << 20 // 10 MB per write
-	MaxGrepFileSize  = 2 << 20  // 2 MB per file scanned
-	MaxGrepResults   = 200      // maximum match lines returned by grep
 	MaxCommandLength = 8 << 10  // 8 KB command length cap for bash
 )
 
@@ -94,11 +91,3 @@ func jsonSchema(props map[string]any, required []string) map[string]any {
 	}
 }
 
-func isSkippedDir(name string) bool {
-	switch name {
-	case ".git", "node_modules", ".excelsior":
-		return true
-	default:
-		return false
-	}
-}
