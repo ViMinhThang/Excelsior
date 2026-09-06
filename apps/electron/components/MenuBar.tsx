@@ -10,7 +10,12 @@ type MenuBarProps = {
   onToggleSidebar: () => void;
   currentTheme: string;
   onSaveTheme: (theme: string) => void;
+  sessionTokens?: number;
 };
+
+export function formatTokens(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+}
 
 type MenuItemProps = {
   onClick: () => void;
@@ -34,7 +39,7 @@ const MenuItem = React.memo(function MenuItem({ onClick, children, kbd, danger }
   );
 });
 
-function MenuBar({ onNewChat, onOpenFolder, onOpenSettings, onToggleSidebar, currentTheme, onSaveTheme }: MenuBarProps) {
+function MenuBar({ onNewChat, onOpenFolder, onOpenSettings, onToggleSidebar, currentTheme, onSaveTheme, sessionTokens }: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<MenuId>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -129,7 +134,13 @@ function MenuBar({ onNewChat, onOpenFolder, onOpenSettings, onToggleSidebar, cur
         ))}
       </nav>
 
-      <div className="flex-1 h-full" aria-hidden />
+      <div className="flex-1 h-full flex items-center justify-center" aria-hidden={sessionTokens == null}>
+        {(sessionTokens ?? 0) > 0 && (
+          <span className="font-mono text-[11px] text-[var(--text-dim)]" title="Tokens spent in this session">
+            {formatTokens(sessionTokens ?? 0)} tokens
+          </span>
+        )}
+      </div>
 
       <div className="flex items-center h-full" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
         <button

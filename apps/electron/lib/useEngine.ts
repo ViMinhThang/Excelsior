@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { AskReq, Delta, SessionInfo, PermissionReq } from "./protocol";
+import type { AskReq, Delta, SessionInfo, PermissionReq, SessionUsage } from "./protocol";
 
 export type BlockRole = "system" | "user" | "assistant" | "reason" | "tool" | "error";
 export type Block = { role: BlockRole; content: string; meta?: string };
@@ -31,6 +31,9 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
   const [streaming, setStreaming] = useState(false);
   const [ask, setAsk] = useState<PendingAsk | null>(null);
   const [permission, setPermission] = useState<PendingPermission | null>(null);
+  const [usage, setUsage] = useState<SessionUsage>({ prompt: 0, completion: 0, total: 0 });
+
+  const resetUsage = useCallback(() => setUsage({ prompt: 0, completion: 0, total: 0 }), []);
 
   const allowAllRef = useRef(!!opts?.allowAll);
   allowAllRef.current = !!opts?.allowAll;
@@ -69,6 +72,18 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
         else if (d.type === "tool_start") append("tool", d.toolArgs ?? "", d.toolName);
         else if (d.type === "tool_result") append("tool", d.toolResult ?? "", d.toolName ? `${d.toolName} →` : undefined);
         else if (d.type === "error") setBlocks((p) => [...p, { role: "error", content: d.text ?? "" }]);
+        else if (d.type === "done") {
+          // ponytail: usage rides the done delta; accumulate per session (ceiling: resets on session switch, no persistence)
+          if (d.totalTokens || d.promptTokens || d.completionTokens) {
+            setUsage((u) => ({
+              prompt: u.prompt + (d.promptTokens ?? 0),
+              completion: u.completion + (d.completionTokens ?? 0),
+              total: u.total + (d.totalTokens ?? (d.promptTokens ?? 0) + (d.completionTokens ?? 0)),
+            }));
+          }
+          setStreaming(false);
+          return;
+        }
         setStreaming(true);
       },
       done: (p: { sessionId?: string }) => {
@@ -90,6 +105,7 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
       },
       "session.data": (p: { id: string; messages?: { role: string; content: string; name?: string }[] }) => {
         activeIdRef.current = p.id;
+        resetUsage();
         setBlocks((p.messages ?? [])
           .filter((m) => m.role !== "system")
           .map((m) => ({
@@ -103,12 +119,14 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
         if (!p?.id) return;
         activeIdRef.current = p.id;
         setBlocks([]);
+        resetUsage();
         send("session.list", {});
       },
       "session.delete": (p: { deleted?: string }) => {
         if (p?.deleted && p.deleted === activeIdRef.current) {
           activeIdRef.current = null;
           setBlocks([]);
+          resetUsage();
         }
         send("session.list", {});
       },
@@ -156,10 +174,11 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
       ws?.close();
       if (wsRef.current === ws) wsRef.current = null;
     };
-  }, [engineUrl, send, append]);
+  }, [engineUrl, send, append, resetUsage]);
 
   return {
     wsRef, wsState, sessions, blocks, setBlocks, streaming, setStreaming,
     ask, setAsk, permission, setPermission, send, activeIdRef, setActiveId,
+    usage, resetUsage,
   } as const;
 }

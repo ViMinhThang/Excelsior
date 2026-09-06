@@ -62,6 +62,9 @@ func (c *Conn) deltaForwarder(sessionID string) func(chat.Event) {
 			ToolArgs: ev.ToolArgs, ToolResult: ev.ToolResult,
 			FinishReason: ev.FinishReason,
 		}
+		if ev.Usage != nil {
+			d.PromptTokens, d.CompletionTokens, d.TotalTokens = ev.Usage.PromptTokens, ev.Usage.CompletionTokens, ev.Usage.TotalTokens
+		}
 		c.hub.BroadcastToSession(c.userID, sessionID, protocol.NewEnvelope(protocol.TypeDelta, d))
 	}
 }

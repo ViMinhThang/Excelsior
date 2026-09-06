@@ -52,6 +52,7 @@ type StreamEvent struct {
 	ToolArgs     string // JSON arguments for Type=="tool_start"
 	ToolResult   string // tool output for Type=="tool_result"
 	FinishReason string // "stop" etc. for Type=="done"
+	Usage        *llm.Usage // token counts for Type=="done" (nil when provider omits them)
 }
 
 // RunOptions controls a single [Agent.Run] invocation.
@@ -123,6 +124,7 @@ func totalChars(msgs []llm.Message) int {
 type RunResult struct {
 	FinalMessage *llm.Message  // last assistant message (with any reasoning_content)
 	Messages     []llm.Message // full history including system prompt, tool outputs, and final message
+	TotalUsage   *llm.Usage    // accumulated token counts (nil when provider omits them)
 }
 
 // Run executes the agentic loop and returns the final assistant message.
@@ -153,7 +155,8 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 	}
 	model := a.resolveModel()
 	a.logger().Info("agent run start", "model", model, "messages", len(messages), "maxIters", a.maxIters())
-	return a.runNativeToolLoop(ctx, a.LLM, model, messages, toolDefs, reg, emit)
+	var acc usageAcc
+	return a.runNativeToolLoop(ctx, a.LLM, model, messages, toolDefs, reg, emit, &acc)
 }
 
 func (a *Agent) validateRunOptions(opts RunOptions) error {
@@ -177,7 +180,7 @@ func (a *Agent) prepareMessages(incoming []llm.Message) []llm.Message {
 	return messages
 }
 
-func (a *Agent) runNativeToolLoop(ctx context.Context, native llm.ToolLoopProvider, model string, messages []llm.Message, toolDefs []llm.ToolDefinition, reg ToolRegistry, emit func(StreamEvent)) (*RunResult, error) {
+func (a *Agent) runNativeToolLoop(ctx context.Context, native llm.ToolLoopProvider, model string, messages []llm.Message, toolDefs []llm.ToolDefinition, reg ToolRegistry, emit func(StreamEvent), acc *usageAcc) (*RunResult, error) {
 	final, generated, err := native.StreamChatWithTools(
 		ctx,
 		llm.ChatRequest{Model: model, Messages: messages, Tools: toolDefs},
@@ -190,6 +193,9 @@ func (a *Agent) runNativeToolLoop(ctx context.Context, native llm.ToolLoopProvid
 			return tool.Execute(toolCtx, json.RawMessage(call.Function.Arguments))
 		},
 		func(delta llm.Delta) error {
+			if delta.Usage != nil {
+				acc.Add(*delta.Usage)
+			}
 			if delta.ReasoningContent != "" {
 				emit(NewReasoningEvent(delta.ReasoningContent))
 			}
@@ -221,8 +227,27 @@ func (a *Agent) runNativeToolLoop(ctx context.Context, native llm.ToolLoopProvid
 	if len(generated) == 0 || generated[len(generated)-1].Role != "assistant" {
 		fullHistory = append(fullHistory, *final)
 	}
-	emit(NewDoneEvent(final.Content, "stop"))
-	return &RunResult{FinalMessage: final, Messages: fullHistory}, nil
+	emit(NewDoneEvent(final.Content, "stop", acc.Sum()))
+	return &RunResult{FinalMessage: final, Messages: fullHistory, TotalUsage: acc.Sum()}, nil
+}
+
+// usageAcc sums per-step provider usage; Sum returns nil when nothing was reported.
+type usageAcc struct {
+	prompt, completion int
+	seen               bool
+}
+
+func (u *usageAcc) Add(x llm.Usage) {
+	u.prompt += x.PromptTokens
+	u.completion += x.CompletionTokens
+	u.seen = true
+}
+
+func (u *usageAcc) Sum() *llm.Usage {
+	if u == nil || !u.seen {
+		return nil
+	}
+	return &llm.Usage{PromptTokens: u.prompt, CompletionTokens: u.completion, TotalTokens: u.prompt + u.completion}
 }
 
 func truncateRunes(s string, n int) string {

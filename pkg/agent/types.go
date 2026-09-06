@@ -1,5 +1,7 @@
 package agent
 
+import "excelsior/pkg/llm"
+
 // Stream event types emitted during [Agent.Run] and [Agent.RunWithHistory].
 const (
 	EventTypeText       = "text"
@@ -41,11 +43,12 @@ func NewToolResultEvent(name, callID, result string) StreamEvent {
 }
 
 // NewDoneEvent creates a StreamEvent representing normal completion of an agent run.
-func NewDoneEvent(text, finishReason string) StreamEvent {
+func NewDoneEvent(text, finishReason string, usage *llm.Usage) StreamEvent {
 	return StreamEvent{
 		Type:         EventTypeDone,
 		Text:         text,
 		FinishReason: finishReason,
+		Usage:        usage,
 	}
 }
 
