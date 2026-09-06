@@ -70,34 +70,26 @@ func (m model) updateMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 func (m model) updateKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.permState != nil {
-		return m.updateKeyMsgPermState(msg)
+		if cmd, done := m.handlePermissionKey(msg); done {
+			return m, cmd
+		}
+		return m, nil
 	}
 	if m.askState != nil {
-		return m.updateKeyMsgAskState(msg)
+		if cmd, done := m.handleAskKey(msg); done {
+			return m, cmd
+		}
+		if m.askState != nil && m.askState.cursor == 3 {
+			var cmd tea.Cmd
+			m.askState.input, cmd = m.askState.input.Update(msg)
+			return m, cmd
+		}
+		return m, nil
 	}
 	if m.streaming {
 		return m.updateKeyMsgStreaming(msg)
 	}
 	return m.updateKeyMsgNormal(msg)
-}
-
-func (m model) updateKeyMsgPermState(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if cmd, done := m.handlePermissionKey(msg); done {
-		return m, cmd
-	}
-	return m, nil
-}
-
-func (m model) updateKeyMsgAskState(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if cmd, done := m.handleAskKey(msg); done {
-		return m, cmd
-	}
-	if m.askState != nil && m.askState.cursor == 3 {
-		var cmd tea.Cmd
-		m.askState.input, cmd = m.askState.input.Update(msg)
-		return m, cmd
-	}
-	return m, nil
 }
 
 func (m model) updateKeyMsgStreaming(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -228,17 +220,33 @@ func (m *model) resolveFinalText() string {
 	return ""
 }
 
+// ponytail: one dismiss-and-respond replaces 5 copies of grab-ch/nil-state/focus/send
+func (m *model) dismissAsk(resp tools.AskResponse) tea.Cmd {
+	ch := m.askState.respChan
+	m.askState = nil
+	m.input.Focus()
+	select {
+	case ch <- resp:
+	default:
+	}
+	return textinput.Blink
+}
+
+func (m *model) dismissPerm(approved bool) tea.Cmd {
+	ch := m.permState.respChan
+	m.permState = nil
+	m.input.Focus()
+	select {
+	case ch <- tools.PermissionResponse{Approved: approved}:
+	default:
+	}
+	return textinput.Blink
+}
+
 func (m *model) handleAskKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	switch msg.String() {
 	case "esc":
-		ch := m.askState.respChan
-		m.askState = nil
-		m.input.Focus()
-		select {
-		case ch <- tools.AskResponse{Selected: -1, Answer: ""}:
-		default:
-		}
-		return textinput.Blink, true
+		return m.dismissAsk(tools.AskResponse{Selected: -1}), true
 	case "up", "shift+tab":
 		if m.askState.cursor > 0 {
 			m.askState.cursor--
@@ -252,37 +260,20 @@ func (m *model) handleAskKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		m.syncAskFocus()
 		return nil, true
 	case "enter":
-		var resp tools.AskResponse
 		if m.askState.cursor == 3 {
 			val := strings.TrimSpace(m.askState.input.Value())
 			if val == "" {
 				return nil, true
 			}
-			resp = tools.AskResponse{Selected: -1, Answer: val, Label: val}
-		} else {
-			opt := m.askState.req.Options[m.askState.cursor]
-			resp = tools.AskResponse{Selected: m.askState.cursor, Answer: opt, Label: opt}
+			return m.dismissAsk(tools.AskResponse{Selected: -1, Answer: val, Label: val}), true
 		}
-		ch := m.askState.respChan
-		m.askState = nil
-		m.input.Focus()
-		select {
-		case ch <- resp:
-		default:
-		}
-		return textinput.Blink, true
+		opt := m.askState.req.Options[m.askState.cursor]
+		return m.dismissAsk(tools.AskResponse{Selected: m.askState.cursor, Answer: opt, Label: opt}), true
 	case "1", "2", "3":
 		idx := int(msg.String()[0] - '1')
 		if idx < len(m.askState.req.Options) {
 			opt := m.askState.req.Options[idx]
-			ch := m.askState.respChan
-			m.askState = nil
-			m.input.Focus()
-			select {
-			case ch <- tools.AskResponse{Selected: idx, Answer: opt, Label: opt}:
-			default:
-			}
-			return textinput.Blink, true
+			return m.dismissAsk(tools.AskResponse{Selected: idx, Answer: opt, Label: opt}), true
 		}
 		return nil, true
 	}
@@ -300,23 +291,9 @@ func (m *model) syncAskFocus() {
 func (m *model) handlePermissionKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 	switch msg.String() {
 	case "esc", "n", "N":
-		ch := m.permState.respChan
-		m.permState = nil
-		m.input.Focus()
-		select {
-		case ch <- tools.PermissionResponse{Approved: false}:
-		default:
-		}
-		return textinput.Blink, true
+		return m.dismissPerm(false), true
 	case "y", "Y":
-		ch := m.permState.respChan
-		m.permState = nil
-		m.input.Focus()
-		select {
-		case ch <- tools.PermissionResponse{Approved: true}:
-		default:
-		}
-		return textinput.Blink, true
+		return m.dismissPerm(true), true
 	case "left", "right", "tab", "shift+tab":
 		if m.permState.cursor == 0 {
 			m.permState.cursor = 1
@@ -325,15 +302,7 @@ func (m *model) handlePermissionKey(msg tea.KeyMsg) (tea.Cmd, bool) {
 		}
 		return nil, true
 	case "enter":
-		approved := m.permState.cursor == 0
-		ch := m.permState.respChan
-		m.permState = nil
-		m.input.Focus()
-		select {
-		case ch <- tools.PermissionResponse{Approved: approved}:
-		default:
-		}
-		return textinput.Blink, true
+		return m.dismissPerm(m.permState.cursor == 0), true
 	}
 	return nil, false
 }
@@ -408,12 +377,7 @@ func (m *model) handlePermissionCmd(parts []string) {
 		m.blocks = append(m.blocks, block{Role: "error", Content: "Usage: /permission [ask|allow|deny]"})
 		return
 	}
-	m.cfg.Permission = parts[1]
-	if err := savePermissionSetting(m.cfg.Workspace, parts[1]); err != nil {
-		m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save permission setting: " + err.Error()})
-		return
-	}
-	m.blocks = append(m.blocks, block{Role: "system", Content: "Permission → " + parts[1] + " (saved to .excelsior/settings.json)"})
+	m.setPermission(parts[1], "Permission → "+parts[1]+" (saved to .excelsior/settings.json)")
 }
 
 func isValidPermission(p string) bool { return p == "ask" || p == "allow" || p == "deny" }
@@ -427,22 +391,22 @@ func (m *model) showCurrentPermission() {
 }
 
 func (m *model) handleYoloCmd() {
-	m.cfg.Permission = "allow"
-	if err := savePermissionSetting(m.cfg.Workspace, "allow"); err != nil {
-		m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save: " + err.Error()})
-		return
-	}
-	m.blocks = append(m.blocks, block{Role: "system", Content: "YOLO mode enabled → all commands auto-allowed (permission=allow, saved)"})
+	m.setPermission("allow", "YOLO mode enabled → all commands auto-allowed (permission=allow, saved)")
 }
 
 func (m *model) handleDenyAskCmd(raw string) {
 	perm := strings.TrimPrefix(raw, "/")
+	m.setPermission(perm, "Permission → "+perm+" (saved)")
+}
+
+// ponytail: one save-and-announce (was 3 copies in permission/yolo/deny-ask handlers)
+func (m *model) setPermission(perm, announce string) {
 	m.cfg.Permission = perm
 	if err := savePermissionSetting(m.cfg.Workspace, perm); err != nil {
 		m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save: " + err.Error()})
 		return
 	}
-	m.blocks = append(m.blocks, block{Role: "system", Content: "Permission → " + perm + " (saved)"})
+	m.blocks = append(m.blocks, block{Role: "system", Content: announce})
 }
 
 func (m *model) handleQuitCmd() {
@@ -460,12 +424,7 @@ func savePermissionSetting(workspace, perm string) error {
 	}
 	s := config.LoadSettings(workspace)
 	s.Permission = pm
-	if pm == config.PermissionAllow {
-		t := true
-		s.AllowAll = &t
-	} else {
-		f := false
-		s.AllowAll = &f
-	}
+	allowAll := pm == config.PermissionAllow
+	s.AllowAll = &allowAll
 	return config.SaveSettings(workspace, s)
 }
