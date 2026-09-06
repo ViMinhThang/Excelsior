@@ -5,19 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"path/filepath"
+
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 
 	"excelsior/internal/app"
+	internalsessions "excelsior/internal/sessions"
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
 
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
-	sqlitestore "excelsior/pkg/session/sqlite"
 )
 
 // interactionRouter manages pending human-in-the-loop responses for an active connection turn.
@@ -173,18 +173,13 @@ func (c *Conn) currentWorkspace() string {
 	return c.hub.Workspace()
 }
 
-func (c *Conn) sessionDir() string {
-	return filepath.Join(c.currentWorkspace(), ".excelsior", "sessions")
-}
-
 func (c *Conn) sessionStore() session.Store {
-	if c.userID != 0 && c.hub.DB != nil {
-		return sqlitestore.New(c.hub.DB, c.userID)
-	}
-	if c.hub.SessionStore != nil {
-		return c.hub.SessionStore
-	}
-	return session.NewDirStore(c.sessionDir())
+	return internalsessions.Resolver{
+		DB:        c.hub.DB,
+		UserID:    c.userID,
+		Injected:  c.hub.SessionStore,
+		Workspace: c.currentWorkspace(),
+	}.Store()
 }
 
 func (c *Conn) getAgent(model string) (agent.Runner, error) {

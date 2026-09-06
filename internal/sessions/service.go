@@ -1,13 +1,34 @@
 package sessions
 
 import (
+	"database/sql"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"excelsior/pkg/llm"
 	"excelsior/pkg/session"
+	sqlitestore "excelsior/pkg/session/sqlite"
 	"excelsior/pkg/util"
 )
+
+// Resolver selects the runtime session store for one user and workspace.
+type Resolver struct {
+	DB        *sql.DB
+	UserID    int64
+	Injected  session.Store
+	Workspace string
+}
+
+func (r Resolver) Store() session.Store {
+	if r.UserID != 0 && r.DB != nil {
+		return sqlitestore.New(r.DB, r.UserID)
+	}
+	if r.Injected != nil {
+		return r.Injected
+	}
+	return session.NewDirStore(filepath.Join(r.Workspace, ".excelsior", "sessions"))
+}
 
 // Service contains session operations that are independent of a transport.
 type Service struct {
