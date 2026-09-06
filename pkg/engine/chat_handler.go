@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"excelsior/pkg/agent"
-	"excelsior/pkg/llm"
+	"excelsior/internal/chat"
+	"excelsior/pkg/config"
 	"excelsior/pkg/protocol"
-	"excelsior/pkg/session"
 	"excelsior/pkg/tools"
 )
 
@@ -30,21 +29,18 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope) {
 		sessionID = fmt.Sprintf("%d", time.Now().UnixMilli())
 	}
 
-	history := c.loadHistory(ctx, sessionID, req.Messages)
-	res, err := ag.RunWithHistory(ctxWithTools, agent.RunOptions{
-		Messages: history,
-		OnEvent:  c.deltaForwarder(),
+	c.subscribe(sessionID)
+	_, err = (chat.Service{Runner: ag, Store: c.sessionStore()}).Run(ctxWithTools, chat.Request{
+		SessionID: sessionID,
+		Messages:  req.Messages,
+		OnEvent:   c.deltaForwarder(sessionID),
 	})
 	if err != nil {
 		c.sendError(env.ID, err.Error())
 		return
 	}
 
-	if res != nil && len(res.Messages) > 0 {
-		c.saveHistory(sessionID, res.Messages)
-	}
-
-	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeDone, map[string]string{"sessionId": sessionID}))
+	c.hub.BroadcastToSession(c.userID, sessionID, protocol.NewEnvelopeWithID(env.ID, protocol.TypeDone, map[string]string{"sessionId": sessionID}))
 }
 
 func (c *Conn) setupToolHandlers(ctx context.Context) context.Context {
@@ -57,53 +53,15 @@ func (c *Conn) setupToolHandlers(ctx context.Context) context.Context {
 	return tools.WithQuestionHandler(ctxWithTools, askHandler)
 }
 
-func (c *Conn) saveHistory(sessionID string, messages []llm.Message) {
-	toSave := FilterSystemMessages(messages)
-	rec, loadErr := c.sessionStore().Load(sessionID)
-	if loadErr != nil {
-		rec = session.Record{ID: sessionID, CreatedAt: time.Now().UTC()}
-	}
-	rec.Messages = toSave
-	if err := c.sessionStore().Save(rec); err != nil {
-		c.hub.logger().Warn("failed to save session history", "id", sessionID, "err", err)
-	} else {
-		c.hub.logger().Info("saved session history", "id", sessionID, "messages", len(toSave))
-	}
-}
-
-func (c *Conn) loadHistory(ctx context.Context, sessionID string, incoming []llm.Message) []llm.Message {
-	var history []llm.Message
-	if rec, err := c.sessionStore().Load(sessionID); err == nil {
-		for _, m := range rec.Messages {
-			if m.Role == "system" && (m.Content == "New session" || m.Content == "(empty)") {
-				continue
-			}
-			history = append(history, m)
-		}
-	}
-	return append(history, incoming...)
-}
-
-// FilterSystemMessages returns a copy of msgs excluding any system messages.
-func FilterSystemMessages(msgs []llm.Message) []llm.Message {
-	out := make([]llm.Message, 0, len(msgs))
-	for _, m := range msgs {
-		if m.Role != "system" {
-			out = append(out, m)
-		}
-	}
-	return out
-}
-
-func (c *Conn) deltaForwarder() func(agent.StreamEvent) {
-	return func(ev agent.StreamEvent) {
+func (c *Conn) deltaForwarder(sessionID string) func(chat.Event) {
+	return func(ev chat.Event) {
 		d := protocol.Delta{
 			Type: ev.Type, Text: ev.Text, Reasoning: ev.Reasoning,
 			ToolName: ev.ToolName, ToolCallID: ev.ToolCallID,
 			ToolArgs: ev.ToolArgs, ToolResult: ev.ToolResult,
 			FinishReason: ev.FinishReason,
 		}
-		c.sendEnvelope(protocol.NewEnvelope(protocol.TypeDelta, d))
+		c.hub.BroadcastToSession(c.userID, sessionID, protocol.NewEnvelope(protocol.TypeDelta, d))
 	}
 }
 
@@ -126,8 +84,9 @@ func (c *Conn) askHandler(parentCtx context.Context, askCh chan protocol.AskResp
 
 func (c *Conn) permissionHandler(parentCtx context.Context, permCh chan protocol.PermissionResp) tools.PermissionHandler {
 	return func(hctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
-		// If hub is in allow/deny mode, answer immediately without client round-trip.
-		switch c.hub.Config.Permission {
+		// Resolve settings for this connection without mutating shared hub config.
+		perm, _ := c.resolveEffectiveSettings(config.LoadSettings(c.currentWorkspace()))
+		switch perm {
 		case "allow":
 			return tools.PermissionResponse{Approved: true}, nil
 		case "deny":

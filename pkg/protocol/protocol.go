@@ -76,24 +76,26 @@ func NewEnvelopeWithID(id, typ string, payload any) Envelope {
 
 // Message types for [Envelope.Type].
 const (
-	TypeChatReq       = "chat.req"
-	TypeDelta         = "delta"
-	TypeDone          = "done"
-	TypeError         = "error"
-	TypeAskReq        = "ask.req"
-	TypeAskResp       = "ask.resp"
-	TypePermissionReq  = "permission.req"
-	TypePermissionResp = "permission.resp"
-	TypePing          = "ping"
-	TypePong          = "pong"
-	TypeSessionList   = "session.list"
-	TypeSessionData   = "session.data"
-	TypeSessionCreate = "session.create"
-	TypeSessionDelete = "session.delete"
-	TypeSessionRename = "session.rename"
-	TypeWorkspaceSet  = "workspace.set"
-	TypeSettingsGet   = "settings.get"
-	TypeSettingsSet   = "settings.set"
+	TypeChatReq            = "chat.req"
+	TypeDelta              = "delta"
+	TypeDone               = "done"
+	TypeError              = "error"
+	TypeAskReq             = "ask.req"
+	TypeAskResp            = "ask.resp"
+	TypePermissionReq      = "permission.req"
+	TypePermissionResp     = "permission.resp"
+	TypePing               = "ping"
+	TypePong               = "pong"
+	TypeSessionList        = "session.list"
+	TypeSessionData        = "session.data"
+	TypeSessionCreate      = "session.create"
+	TypeSessionDelete      = "session.delete"
+	TypeSessionRename      = "session.rename"
+	TypeSessionSubscribe   = "session.subscribe"
+	TypeSessionUnsubscribe = "session.unsubscribe"
+	TypeWorkspaceSet       = "workspace.set"
+	TypeSettingsGet        = "settings.get"
+	TypeSettingsSet        = "settings.set"
 )
 
 // WorkspaceSetReq sets active workspace path in engine
@@ -135,7 +137,7 @@ type AskResp struct {
 
 // PermissionReq is engine → client when agent requests mutating operation approval.
 type PermissionReq struct {
-	Tool     string `json:"tool"`               // "write" | "edit" | "bash"
+	Tool     string `json:"tool"` // "write" | "edit" | "bash"
 	FilePath string `json:"filePath,omitempty"`
 	Preview  string `json:"preview,omitempty"`
 	Command  string `json:"command,omitempty"`
@@ -194,6 +196,11 @@ type SessionDataResp struct {
 type SessionRenameReq struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+}
+
+// SessionSubscriptionReq changes the sessions whose live events a connection receives.
+type SessionSubscriptionReq struct {
+	ID string `json:"id"`
 }
 
 // SettingsGetReq requests current settings (e.g. permission mode).

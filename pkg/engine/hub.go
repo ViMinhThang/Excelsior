@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"excelsior/pkg/agent"
+	"excelsior/pkg/auth"
 	"excelsior/pkg/config"
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
@@ -23,7 +25,9 @@ type Hub struct {
 	Config       config.Config
 	Logger       *slog.Logger
 	NewAgent     func(model, workspace string) (agent.Runner, error) // injectable (defaults to built-in)
-	SessionStore session.Store                                        // Injectable session store (defaults to DirStore)
+	SessionStore session.Store                                       // Injectable store for tests and embedded use.
+	DB           *sql.DB
+	Auth         *auth.Store
 
 	mu        sync.RWMutex
 	clients   map[*Conn]struct{}
@@ -103,10 +107,39 @@ func (h *Hub) Broadcast(env protocol.Envelope) {
 	}
 }
 
+// BroadcastToSession sends an event to authenticated connections subscribed to a session.
+// userID scopes the event stream; a zero userID is used for legacy anonymous hubs.
+func (h *Hub) BroadcastToSession(userID int64, sessionID string, env protocol.Envelope) {
+	b, err := json.Marshal(env)
+	if err != nil {
+		return
+	}
+	h.mu.RLock()
+	conns := make([]*Conn, 0, len(h.clients))
+	for c := range h.clients {
+		if c.userID != userID || !c.isSubscribed(sessionID) {
+			continue
+		}
+		conns = append(conns, c)
+	}
+	h.mu.RUnlock()
+	for _, c := range conns {
+		select {
+		case <-c.done:
+		case c.send <- b:
+		default:
+			h.logger().Warn("session event dropped", "session", sessionID, "type", env.Type)
+		}
+	}
+}
+
 // Handler returns the HTTP handler for the engine daemon.
 func (h *Hub) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/ws", h.serveWS)
+	mux.HandleFunc("/v1/auth/register", h.handleAuthRegister)
+	mux.HandleFunc("/v1/auth/login", h.handleAuthLogin)
+	mux.HandleFunc("/v1/auth/me", h.handleAuthMe)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok")) //nolint:errcheck
@@ -137,12 +170,18 @@ var upgrader = websocket.Upgrader{
 }
 
 func (h *Hub) serveWS(w http.ResponseWriter, r *http.Request) {
+	userID, username, ok := h.authenticateRequest(w, r)
+	if !ok {
+		return
+	}
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		h.logger().Warn("ws upgrade failed", "err", err)
 		return
 	}
 	c := newConn(h, ws)
+	c.userID = userID
+	c.username = username
 	h.Register(c)
 	h.logger().Info("ws client connected", "remote", r.RemoteAddr)
 

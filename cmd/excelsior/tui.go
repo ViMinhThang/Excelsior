@@ -10,10 +10,9 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"excelsior/internal/app"
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
-	"excelsior/pkg/llm"
-	"excelsior/pkg/tools"
 	"excelsior/pkg/tui"
 )
 
@@ -65,12 +64,7 @@ func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system stri
 	discardLog := slog.New(slog.NewTextHandler(io.Discard, nil))
 	var ag *agent.Agent
 	if engineURL == "" {
-		ag = &agent.Agent{
-			LLM:    &llm.Client{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: model, Logger: discardLog},
-			Tools:  tools.DefaultRegistry(workspace),
-			System: system,
-			Logger: discardLog,
-		}
+		ag = app.NewAgent(cfg, workspace, model, system, discardLog)
 	}
 	return tui.Run(tui.Config{Agent: ag, Workspace: workspace, Model: model, EngineURL: engineURL, Permission: string(cfg.Permission)})
 }

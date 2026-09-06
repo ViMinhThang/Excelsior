@@ -134,6 +134,19 @@ func (c *Conn) handleSessionRename(ctx context.Context, env protocol.Envelope) {
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSessionRename, protocol.SessionInfo{ID: req.ID, Title: req.Title}))
 }
 
+func (c *Conn) handleSessionSubscribe(env protocol.Envelope, subscribe bool) {
+	var req protocol.SessionSubscriptionReq
+	if !c.decodePayload(env, &req, "session subscription") {
+		return
+	}
+	if subscribe {
+		c.subscribe(req.ID)
+	} else {
+		c.unsubscribe(req.ID)
+	}
+	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, env.Type, map[string]string{"id": req.ID}))
+}
+
 func (c *Conn) handleWorkspaceSet(ctx context.Context, env protocol.Envelope) {
 	var req protocol.WorkspaceSetReq
 	if !c.decodePayload(env, &req, "workspace.set") {
@@ -149,12 +162,12 @@ func (c *Conn) handleWorkspaceSet(ctx context.Context, env protocol.Envelope) {
 }
 
 func (c *Conn) resolveEffectiveSettings(s config.Settings) (string, bool) {
-	perm := string(c.hub.Config.Permission)
+	perm := string(s.EffectivePermission(config.PermissionAsk))
+	if c.hub.Config.Permission == config.PermissionAllow || c.hub.Config.Permission == config.PermissionDeny {
+		perm = string(c.hub.Config.Permission)
+	}
 	if perm == "" {
-		perm = string(s.EffectivePermission(config.PermissionAsk))
-		if perm == "" {
-			perm = "ask"
-		}
+		perm = "ask"
 	}
 	allowAll := perm == "allow"
 	if s.AllowAll != nil {
@@ -199,18 +212,9 @@ func (c *Conn) handleSettingsSet(ctx context.Context, env protocol.Envelope) {
 			c.sendError(env.ID, fmt.Sprintf("save settings: %v", err))
 			return
 		}
-		if eff := s.EffectivePermission(""); eff != "" {
-			c.hub.Config.Permission = eff
-		}
+
 		c.hub.logger().Info("settings updated", "permission", s.Permission, "allowAll", s.AllowAll)
 	}
-	perm := string(s.Permission)
-	if perm == "" {
-		perm = "ask"
-	}
-	allowAll := perm == "allow"
-	if s.AllowAll != nil {
-		allowAll = *s.AllowAll
-	}
+	perm, allowAll := c.resolveEffectiveSettings(s)
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSettingsSet, protocol.SettingsSetResp{Permission: perm, AllowAll: allowAll}))
 }

@@ -14,9 +14,10 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"excelsior/internal/app"
+	"excelsior/internal/chat"
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
-	"excelsior/pkg/engine"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/session"
 	"excelsior/pkg/tools"
@@ -201,34 +202,23 @@ func runAgent(ctx context.Context, cfg config.Config, model, workspace, system, 
 	}
 	ctx = tools.WithPermissionHandler(ctx, permHandler)
 
-	ag := &agent.Agent{
-		LLM:    &llm.Client{APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: model, Logger: slog.Default()},
-		Tools:  tools.DefaultRegistry(workspace),
-		System: system,
-		Logger: slog.Default(),
-	}
+	ag := app.NewAgent(cfg, workspace, model, system, slog.Default())
 
-	history := loadHistory(ctx, workspace, sessionID)
-	messages := append(append([]llm.Message(nil), history...), llm.Message{Role: "user", Content: prompt})
+	messages := []llm.Message{{Role: "user", Content: prompt}}
 	slog.Info("agent run", "model", model, "workspace", workspace, "session", sessionID, "permission", cfg.Permission)
 
-	res, err := ag.RunWithHistory(ctx, agent.RunOptions{Messages: messages, OnEvent: agentEventPrinter})
-	if err != nil {
+	service := chat.Service{Runner: ag}
+	if sessionID != "" {
+		service.Store = session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
+	}
+	if _, err := service.Run(ctx, chat.Request{
+		SessionID: sessionID,
+		Messages:  messages,
+		OnEvent:   chatEventPrinter,
+	}); err != nil {
 		return fmt.Errorf("agent: %w", err)
 	}
 	fmt.Fprintln(os.Stderr, "")
-	if sessionID != "" && res != nil {
-		toSave := engine.FilterSystemMessages(res.Messages)
-		store := session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
-		rec, err := store.Load(sessionID)
-		if err != nil {
-			rec = session.Record{ID: sessionID}
-		}
-		rec.Messages = toSave
-		if err := store.Save(rec); err != nil {
-			slog.Warn("session save failed", "id", sessionID, "err", err)
-		}
-	}
 	return nil
 }
 
@@ -266,7 +256,7 @@ func loadHistory(ctx context.Context, workspace, sessionID string) []llm.Message
 	return nil
 }
 
-func agentEventPrinter(ev agent.StreamEvent) {
+func chatEventPrinter(ev chat.Event) {
 	switch ev.Type {
 	case "reasoning":
 		fmt.Fprint(os.Stderr, ev.Reasoning)
@@ -283,4 +273,14 @@ func agentEventPrinter(ev agent.StreamEvent) {
 	case "done":
 		fmt.Fprintln(os.Stderr, "")
 	}
+}
+
+// agentEventPrinter preserves the legacy helper contract during migration.
+func agentEventPrinter(ev agent.StreamEvent) {
+	chatEventPrinter(chat.Event{
+		Type: ev.Type, Text: ev.Text, Reasoning: ev.Reasoning,
+		ToolName: ev.ToolName, ToolCallID: ev.ToolCallID,
+		ToolArgs: ev.ToolArgs, ToolResult: ev.ToolResult,
+		FinishReason: ev.FinishReason,
+	})
 }

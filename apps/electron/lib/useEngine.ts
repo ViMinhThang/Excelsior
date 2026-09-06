@@ -179,6 +179,7 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
                 meta: m.role === "tool" ? m.name : undefined,
               }))
             );
+            send("session.subscribe", { id: data.id });
             return;
           }
 

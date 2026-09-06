@@ -130,7 +130,9 @@ func (e *LLMError) matchesSentinel(target error) bool {
 	}
 }
 
-func (e *LLMError) isMissingAPIKey() bool { return e.Kind == ErrorKindAuth && errors.Is(e.Err, ErrMissingAPIKey) }
+func (e *LLMError) isMissingAPIKey() bool {
+	return e.Kind == ErrorKindAuth && errors.Is(e.Err, ErrMissingAPIKey)
+}
 
 func (e *LLMError) isStreamInterrupted() bool {
 	return e.Kind == ErrorKindStream || errors.Is(e.Err, ErrStreamInterrupted)
@@ -144,7 +146,9 @@ func (e *LLMError) isAuthFailed() bool {
 	return isAuthStatusCode(e.StatusCode) || e.Kind == ErrorKindAuth || errors.Is(e.Err, ErrAuthFailed)
 }
 
-func isAuthStatusCode(code int) bool { return code == http.StatusUnauthorized || code == http.StatusForbidden }
+func isAuthStatusCode(code int) bool {
+	return code == http.StatusUnauthorized || code == http.StatusForbidden
+}
 
 func (e *LLMError) isServerUnavailable() bool {
 	return isServerStatusCode(e.StatusCode) || e.Kind == ErrorKindServer || errors.Is(e.Err, ErrServerUnavailable)

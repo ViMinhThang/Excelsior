@@ -1,6 +1,6 @@
-# Excelsior — DeepSeek-native coding agent (Go)
+# Excelsior — GoAI-powered coding agent (Go)
 
-Library + CLI coding agent with first-class [DeepSeek](https://api.deepseek.com) support. No OpenAI SDK abstraction — `reasoning_content`, tool-calling, and SSE streaming are handled natively.
+Library + CLI coding agent with first-class [DeepSeek](https://api.deepseek.com) support through [GoAI](https://goai.sh/). GoAI owns provider HTTP, SSE streaming, retry handling, and provider-specific message formats.
 
 ## Quick start
 
@@ -62,7 +62,7 @@ msg, err := ag.Run(ctx, agent.RunOptions{
 ```
 cmd/excelsior   — cobra CLI (streaming, tool loop, TUI/engine subcommands)
 pkg/agent       — library: agentic loop (importable) — see pkg/agent/doc.go
-pkg/llm         — DeepSeek-native SSE client (no OpenAI dep) — pkg/llm/doc.go
+pkg/llm         — GoAI-backed DeepSeek adapter — pkg/llm/doc.go
 pkg/tools       — tool registry + 8 core tools — pkg/tools/doc.go
 pkg/session     — atomic JSON session store (.excelsior/sessions) — pkg/session/doc.go
 pkg/config      — env + flag config — pkg/config/doc.go

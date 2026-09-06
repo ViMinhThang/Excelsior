@@ -67,6 +67,8 @@ export type SessionDataResp = {
   messages: { role: string; content: string; name?: string }[];
 };
 
+export type SessionSubscriptionReq = { id: string };
+
 export type EngineMessage =
   | { type: "delta"; payload: Delta }
   | { type: "done"; payload: { sessionId?: string } }
@@ -76,6 +78,8 @@ export type EngineMessage =
   | { type: "session.create"; payload: SessionCreateResp }
   | { type: "session.delete"; payload: { deleted?: string } }
   | { type: "session.rename"; payload: unknown }
+  | { type: "session.subscribe"; payload: SessionSubscriptionReq }
+  | { type: "session.unsubscribe"; payload: SessionSubscriptionReq }
   | { type: "ask.req"; payload: AskReq }
   | { type: "permission.req"; payload: PermissionReq }
   | { type: "settings.get"; payload: SettingsGetResp }

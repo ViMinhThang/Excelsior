@@ -74,9 +74,9 @@ pkg/session/sqlite/
                           every query adds WHERE user_id=?
   migrate.go              one-time: if .excelsior/sessions/*.jsonl exists, import into sqlite
 pkg/engine/
-  hub.go                  add DB *sql.DB; Auth *auth.Store
-  conn.go                 add userID int64; username string; subscribed map[string]bool + sessionSubs on Hub
-  handlers.go             no change (calls c.sessionStore() which now returns SQLiteStore)
+  hub.go                  DB *sql.DB + Auth *auth.Store; auth-enabled WS and HTTP auth routes
+  conn.go                 userID int64; username string; authenticated connections use SQLiteStore
+  handlers.go             session handlers use the authenticated per-user store
   auth_handlers.go        POST /v1/auth/register, POST /v1/auth/login, GET /v1/auth/me
 pkg/protocol/protocol.go  add TypeAuthRegister/Login, AuthReq/Resp, TypeSessionSubscribe + SessionSubscribeReq
 packages/protocol-ts/     extract from apps/electron/lib/protocol.ts + useEngine.ts (shared by Electron+Mobile)
@@ -107,7 +107,7 @@ Validation: username `^[a-zA-Z0-9._-]{3,32}$`, password `8..128`. Rate limit aut
 |-------|-------|--------|
 | P0 db+auth | `pkg/db`, `pkg/auth` (bcrypt, opaque tokens), handler routes | `go test ./pkg/auth -run TestRegisterLogin` + `curl POST /v1/auth/register` |
 | P1 sqlite sessions | `pkg/session/sqlite.Store` implements `session.Store` interface, `MigrateFromDirStore` | `go test -race ./pkg/session/...` parametrized DirStore vs SQLiteStore |
-| P2 hub wiring | `serveWS` auth, per-user store, `BroadcastToSession` fan-out | two `wscat` with same token+session see same delta; other user's conn sees nothing; `go test -race ./pkg/engine` |
+| P2 hub wiring | `serveWS` auth and per-user store are implemented; `BroadcastToSession` fan-out remains | authenticated WS and user-isolated session access; `go test -race ./pkg/engine` |
 | P3 mobile MVP | `apps/mobile` Expo, `packages/protocol-ts`, Login -> Chat, `ask.req`/`permission.req` sheets | phone on same wifi `ws://<laptop-ip>:17812` streams live, both devices update |
 
 ## 8. Explicitly NOT building (local-first)

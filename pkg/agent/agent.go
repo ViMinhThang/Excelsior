@@ -122,7 +122,7 @@ func totalChars(msgs []llm.Message) int {
 
 // RunResult is the outcome of [Agent.RunWithHistory].
 type RunResult struct {
-	FinalMessage *llm.Message // last assistant message (with any reasoning_content)
+	FinalMessage *llm.Message  // last assistant message (with any reasoning_content)
 	Messages     []llm.Message // full history including system prompt, tool outputs, and final message
 }
 
@@ -155,6 +155,10 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 	model := a.resolveModel()
 	start := time.Now()
 	a.logger().Info("agent run start", "model", model, "messages", len(messages), "maxIters", a.maxIters())
+
+	if native, ok := a.LLM.(llm.ToolLoopProvider); ok {
+		return a.runNativeToolLoop(ctx, native, model, messages, toolDefs, reg, emit)
+	}
 
 	for iter := 0; iter < a.maxIters(); iter++ {
 		if err := ctx.Err(); err != nil {
@@ -202,6 +206,54 @@ func (a *Agent) prepareMessages(incoming []llm.Message) []llm.Message {
 		messages = append([]llm.Message{{Role: "system", Content: a.System}}, messages...)
 	}
 	return messages
+}
+
+func (a *Agent) runNativeToolLoop(ctx context.Context, native llm.ToolLoopProvider, model string, messages []llm.Message, toolDefs []llm.ToolDefinition, reg ToolRegistry, emit func(StreamEvent)) (*RunResult, error) {
+	final, generated, err := native.StreamChatWithTools(
+		ctx,
+		llm.ChatRequest{Model: model, Messages: messages, Tools: toolDefs},
+		a.maxIters(),
+		func(toolCtx context.Context, call llm.ToolCall) (string, error) {
+			tool, ok := reg.Get(call.Function.Name)
+			if !ok {
+				return "", fmt.Errorf("unknown tool %q", call.Function.Name)
+			}
+			return tool.Execute(toolCtx, json.RawMessage(call.Function.Arguments))
+		},
+		func(delta llm.Delta) error {
+			if delta.ReasoningContent != "" {
+				emit(NewReasoningEvent(delta.ReasoningContent))
+			}
+			if delta.Content != "" {
+				emit(NewTextEvent(delta.Content))
+			}
+			return nil
+		},
+		func(call llm.ToolCall) {
+			emit(NewToolStartEvent(call.Function.Name, call.ID, call.Function.Arguments))
+		},
+		func(call llm.ToolCall, output string, err error) {
+			if err != nil {
+				output = fmt.Sprintf("error: %v", err)
+			}
+			emit(NewToolResultEvent(call.Function.Name, call.ID, truncateRunes(output, maxToolResult)))
+		},
+	)
+	if err != nil {
+		emit(NewErrorEvent(err.Error()))
+		return nil, &AgentError{Phase: "goai_tool_loop", Err: err}
+	}
+	if final == nil {
+		return nil, &AgentError{Phase: "goai_tool_loop", Err: ErrNilLLMMessage}
+	}
+
+	fullHistory := append([]llm.Message(nil), messages...)
+	fullHistory = append(fullHistory, generated...)
+	if len(generated) == 0 || generated[len(generated)-1].Role != "assistant" {
+		fullHistory = append(fullHistory, *final)
+	}
+	emit(NewDoneEvent(final.Content, "stop"))
+	return &RunResult{FinalMessage: final, Messages: fullHistory}, nil
 }
 
 func (a *Agent) executeTurn(ctx context.Context, iter int, model string, messages []llm.Message, toolDefs []llm.ToolDefinition, emit func(StreamEvent)) (*llm.Message, error) {

@@ -11,12 +11,13 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"excelsior/internal/app"
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
-	"excelsior/pkg/llm"
+
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
-	"excelsior/pkg/tools"
+	sqlitestore "excelsior/pkg/session/sqlite"
 )
 
 // interactionRouter manages pending human-in-the-loop responses for an active connection turn.
@@ -87,24 +88,28 @@ func (r *interactionRouter) reset() {
 
 // Conn represents an active WebSocket client connection.
 type Conn struct {
-	hub          *Hub
-	ws           *websocket.Conn
-	send         chan []byte
-	workspace    string
-	mu           sync.RWMutex
-	interactions interactionRouter
-	done         chan struct{}
-	closeOnce    sync.Once
-	chatMu       sync.Mutex
-	chatting     bool
+	hub           *Hub
+	ws            *websocket.Conn
+	userID        int64
+	username      string
+	send          chan []byte
+	workspace     string
+	mu            sync.RWMutex
+	interactions  interactionRouter
+	done          chan struct{}
+	closeOnce     sync.Once
+	chatMu        sync.Mutex
+	chatting      bool
+	subscriptions map[string]struct{}
 }
 
 func newConn(hub *Hub, ws *websocket.Conn) *Conn {
 	return &Conn{
-		hub:  hub,
-		ws:   ws,
-		send: make(chan []byte, 128),
-		done: make(chan struct{}),
+		hub:           hub,
+		ws:            ws,
+		send:          make(chan []byte, 128),
+		done:          make(chan struct{}),
+		subscriptions: make(map[string]struct{}),
 	}
 }
 
@@ -126,11 +131,36 @@ func (c *Conn) getAskChannel() (chan protocol.AskResp, bool) {
 }
 
 func (c *Conn) setPermChannel(ch chan protocol.PermissionResp) { c.interactions.setPerm(ch) }
-func (c *Conn) clearPermChannel()                             { c.interactions.clearPerm() }
+func (c *Conn) clearPermChannel()                              { c.interactions.clearPerm() }
 func (c *Conn) getPermChannel() (chan protocol.PermissionResp, bool) {
 	c.interactions.mu.RLock()
 	defer c.interactions.mu.RUnlock()
 	return c.interactions.permCh, c.interactions.permCh != nil
+}
+
+func (c *Conn) subscribe(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	c.mu.Lock()
+	if c.subscriptions == nil {
+		c.subscriptions = make(map[string]struct{})
+	}
+	c.subscriptions[sessionID] = struct{}{}
+	c.mu.Unlock()
+}
+
+func (c *Conn) unsubscribe(sessionID string) {
+	c.mu.Lock()
+	delete(c.subscriptions, sessionID)
+	c.mu.Unlock()
+}
+
+func (c *Conn) isSubscribed(sessionID string) bool {
+	c.mu.RLock()
+	_, ok := c.subscriptions[sessionID]
+	c.mu.RUnlock()
+	return ok
 }
 
 func (c *Conn) currentWorkspace() string {
@@ -148,6 +178,9 @@ func (c *Conn) sessionDir() string {
 }
 
 func (c *Conn) sessionStore() session.Store {
+	if c.userID != 0 && c.hub.DB != nil {
+		return sqlitestore.New(c.hub.DB, c.userID)
+	}
 	if c.hub.SessionStore != nil {
 		return c.hub.SessionStore
 	}
@@ -165,24 +198,11 @@ func (c *Conn) getAgent(model string) (agent.Runner, error) {
 	if model == "" {
 		model = config.DefaultModel
 	}
-	var logger *slog.Logger
-	if c.hub.Logger != nil {
-		logger = c.hub.Logger
-	} else {
+	logger := c.hub.Logger
+	if logger == nil {
 		logger = slog.Default()
 	}
-	client := &llm.Client{
-		APIKey:  c.hub.Config.APIKey,
-		BaseURL: c.hub.Config.BaseURL,
-		Model:   model,
-		Logger:  logger,
-	}
-	return &agent.Agent{
-		LLM:    client,
-		Tools:  tools.DefaultRegistry(c.currentWorkspace()),
-		System: agent.DefaultSystemPrompt,
-		Logger: logger,
-	}, nil
+	return app.NewAgent(c.hub.Config, c.currentWorkspace(), model, agent.DefaultSystemPrompt, logger), nil
 }
 
 func (c *Conn) sendEnvelope(env protocol.Envelope) {
@@ -314,6 +334,10 @@ func (c *Conn) dispatchEnvelope(ctx context.Context, env protocol.Envelope) {
 		go c.handleSessionDelete(ctx, env)
 	case protocol.TypeSessionRename:
 		go c.handleSessionRename(ctx, env)
+	case protocol.TypeSessionSubscribe:
+		c.handleSessionSubscribe(env, true)
+	case protocol.TypeSessionUnsubscribe:
+		c.handleSessionSubscribe(env, false)
 	case protocol.TypeWorkspaceSet:
 		go c.handleWorkspaceSet(ctx, env)
 	case protocol.TypeSettingsGet:

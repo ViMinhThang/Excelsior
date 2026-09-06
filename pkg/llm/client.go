@@ -1,197 +1,355 @@
 package llm
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
-	"net/url"
 	"strings"
-	"time"
 
-	"excelsior/pkg/util"
+	"github.com/zendev-sh/goai"
+	"github.com/zendev-sh/goai/provider"
+	"github.com/zendev-sh/goai/provider/deepseek"
 )
 
-// Client is a DeepSeek-native provider. DeepSeek is OpenAI-compatible but has
-// first-class fields like reasoning_content. We hit https://api.deepseek.com directly
-// without an OpenAI SDK abstraction so those fields are preserved.
+// Client adapts GoAI's DeepSeek provider to this package's Provider interface.
+// GoAI owns HTTP, SSE parsing, retries, and provider-specific message handling.
 type Client struct {
 	APIKey     string
-	BaseURL    string // default https://api.deepseek.com
-	Model      string // e.g. deepseek-v4-flash, deepseek-v4-pro
+	BaseURL    string // Defaults to https://api.deepseek.com when empty.
+	Model      string
 	HTTPClient *http.Client
 	Logger     *slog.Logger
 }
 
-// NewClient returns a new [Client] with the given API key and model.
-// BaseURL defaults to https://api.deepseek.com when empty.
+// NewClient returns a new Client with the given API key and model.
 func NewClient(apiKey, model string) *Client {
-	return &Client{
-		APIKey: apiKey,
-		Model:  model,
-	}
+	return &Client{APIKey: apiKey, Model: model}
 }
 
 // ModelName returns the configured model name.
 func (c *Client) ModelName() string { return c.Model }
 
-func (c *Client) baseURL() string {
-	if c.BaseURL != "" {
-		return strings.TrimRight(c.BaseURL, "/")
+func (c *Client) model(reqModel string) provider.LanguageModel {
+	model := ResolveModel(reqModel)
+	if model == "" {
+		model = ResolveModel(c.Model)
 	}
-	return "https://api.deepseek.com"
-}
+	if model == "" {
+		model = "deepseek-chat"
+	}
 
-func (c *Client) validate() error {
-	if strings.TrimSpace(c.APIKey) == "" {
-		return &LLMError{
-			Kind:  ErrorKindAuth,
-			Model: c.Model,
-			Err:   ErrMissingAPIKey,
-		}
+	opts := make([]deepseek.Option, 0, 3)
+	if key := strings.TrimSpace(c.APIKey); key != "" {
+		opts = append(opts, deepseek.WithAPIKey(key))
 	}
-	u, err := url.Parse(c.baseURL())
-	if err != nil {
-		return &LLMError{
-			Kind:  ErrorKindValidation,
-			Model: c.Model,
-			Err:   fmt.Errorf("%w: %v", ErrInvalidBaseURL, err),
-		}
+	if baseURL := strings.TrimSpace(c.BaseURL); baseURL != "" {
+		opts = append(opts, deepseek.WithBaseURL(baseURL))
 	}
-	if u.Scheme == "" || u.Host == "" {
-		return &LLMError{
-			Kind:  ErrorKindValidation,
-			Model: c.Model,
-			Err:   fmt.Errorf("%w: missing scheme or host in %q", ErrInvalidBaseURL, c.baseURL()),
-		}
-	}
-	return nil
-}
-
-func (c *Client) logger() *slog.Logger {
-	if c.Logger != nil {
-		return c.Logger
-	}
-	return slog.Default()
-}
-
-var defaultHTTPClient = &http.Client{}
-
-func (c *Client) httpClient() *http.Client {
 	if c.HTTPClient != nil {
-		return c.HTTPClient
+		opts = append(opts, deepseek.WithHTTPClient(c.HTTPClient))
 	}
-	return defaultHTTPClient
+	return deepseek.Chat(model, opts...)
 }
 
-// StreamChat calls POST /chat/completions with stream=true and invokes onDelta
-// for each SSE fragment. It retries transient 429/5xx errors with exponential
-// backoff. The returned *Message aggregates Content, ReasoningContent, and
-// ToolCalls from the stream.
+// StreamChat runs one provider generation step through GoAI. The Agent retains
+// ownership of the tool-call loop so its tool and permission events continue to
+// have the same behavior across CLI, TUI, and WebSocket clients.
 func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error) {
-	if err := c.validate(); err != nil {
+	messages, err := toProviderMessages(req.Messages)
+	if err != nil {
 		return nil, err
 	}
-	if req.Model == "" {
-		req.Model = c.Model
-	}
-	req.Model = ResolveModel(req.Model)
-	if req.Model == "" {
-		req.Model = "deepseek-v4-flash"
-	}
-	req.Stream = true
 
-	var lastErr error
-	for attempt := 0; attempt <= defaultRetry.MaxRetries; attempt++ {
-		msg, err := c.doStreamOnce(ctx, req, onDelta)
-		if err == nil {
-			return msg, nil
-		}
-		lastErr = err
-		var le *LLMError
-		status := 0
-		if errors.As(err, &le) {
-			status = le.StatusCode
-		}
-		should, backoff := defaultRetry.shouldRetry(status, err, attempt)
-		if !should {
-			break
-		}
-		if ctx.Err() != nil {
-			return nil, fmt.Errorf("deepseek stream canceled: %w", ctx.Err())
-		}
-		c.logger().Warn("deepseek retry", "attempt", attempt+1, "status", status, "backoff", backoff, "err", err)
-		select {
-		case <-time.After(backoff):
-		case <-ctx.Done():
-			return nil, fmt.Errorf("deepseek stream canceled during backoff: %w", ctx.Err())
-		}
+	opts := []goai.Option{
+		goai.WithMessages(messages...),
+		goai.WithTools(toGoAITools(req.Tools)...),
+		goai.WithMaxSteps(1),
 	}
-	return nil, lastErr
-}
+	if req.Temperature != nil {
+		opts = append(opts, goai.WithTemperature(*req.Temperature))
+	}
+	if req.MaxTokens != nil {
+		opts = append(opts, goai.WithMaxOutputTokens(*req.MaxTokens))
+	}
+	if req.TopP != nil {
+		opts = append(opts, goai.WithTopP(*req.TopP))
+	}
 
-func (c *Client) doStreamOnce(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error) {
-	body, err := json.Marshal(req)
+	stream, err := goai.StreamText(ctx, c.model(req.Model), opts...)
 	if err != nil {
-		return nil, &LLMError{Kind: ErrorKindValidation, Model: req.Model, Err: fmt.Errorf("marshal request: %w", err)}
+		return nil, newGoAIError(req.Model, err)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL()+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return nil, &LLMError{Kind: ErrorKindValidation, Model: req.Model, Err: fmt.Errorf("new request: %w", err)}
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
-	httpReq.Header.Set("Accept", "text/event-stream")
-
-	resp, err := c.httpClient().Do(httpReq)
-	if err != nil {
-		if errors.Is(err, context.Canceled) {
+	for chunk := range stream.Stream() {
+		if err := forwardChunk(chunk, onDelta); err != nil {
 			return nil, err
 		}
-		return nil, &LLMError{Kind: ErrorKindNetwork, Model: req.Model, Err: err}
 	}
-	defer resp.Body.Close()
+	if err := stream.Err(); err != nil {
+		return nil, newGoAIError(req.Model, err)
+	}
 
-	if resp.StatusCode != http.StatusOK {
-		b, readErr := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
-		var underlying error = readErr
-		var kind ErrorKind
-		switch resp.StatusCode {
-		case http.StatusUnauthorized, http.StatusForbidden:
-			kind = ErrorKindAuth
-			underlying = ErrAuthFailed
-		case http.StatusTooManyRequests:
-			kind = ErrorKindRateLimit
-			underlying = ErrRateLimit
-		case http.StatusBadRequest:
-			kind = ErrorKindValidation
-			underlying = ErrInvalidRequest
-		default:
-			if resp.StatusCode >= 500 && resp.StatusCode <= 599 {
-				kind = ErrorKindServer
-				underlying = ErrServerUnavailable
-			} else {
-				kind = ErrorKindUnknown
-			}
-		}
-		return nil, &LLMError{
-			StatusCode: resp.StatusCode,
-			Kind:       kind,
-			Model:      req.Model,
-			Body:       util.Truncate(string(b), 500),
-			Err:        underlying,
+	result := stream.Result()
+	message := &Message{
+		Role:             "assistant",
+		Content:          result.Text,
+		ReasoningContent: result.Reasoning,
+		ToolCalls:        fromGoAIToolCalls(result.ToolCalls),
+	}
+	if result.Reasoning != "" && strings.HasPrefix(message.Content, result.Reasoning) {
+		message.Content = strings.TrimPrefix(message.Content, result.Reasoning)
+	}
+	if onDelta != nil {
+		if err := onDelta(Delta{Done: true, FinishReason: string(result.FinishReason), Usage: usageFromGoAI(result.TotalUsage)}); err != nil {
+			return nil, err
 		}
 	}
-	return parseSSEStream(ctx, resp.Body, c.logger(), onDelta)
+	return message, nil
 }
 
-// Chat is a non-streaming helper that calls [Client.StreamChat] and discards
-// per-delta callbacks. Useful for tests or single-turn completions.
+// StreamChatWithTools delegates the complete tool loop to GoAI.
+func (c *Client) StreamChatWithTools(
+	ctx context.Context,
+	req ChatRequest,
+	maxSteps int,
+	execute func(context.Context, ToolCall) (string, error),
+	onDelta func(Delta) error,
+	onToolStart func(ToolCall),
+	onToolResult func(ToolCall, string, error),
+) (*Message, []Message, error) {
+	messages, err := toProviderMessages(req.Messages)
+	if err != nil {
+		return nil, nil, err
+	}
+	if maxSteps < 1 {
+		maxSteps = 1
+	}
+
+	goaiTools := make([]goai.Tool, 0, len(req.Tools))
+	for _, definition := range req.Tools {
+		schema, err := json.Marshal(definition.Function.Parameters)
+		if err != nil {
+			return nil, nil, fmt.Errorf("llm: marshal tool schema %q: %w", definition.Function.Name, err)
+		}
+		name := definition.Function.Name
+		goaiTools = append(goaiTools, goai.Tool{
+			Name:        name,
+			Description: definition.Function.Description,
+			InputSchema: schema,
+			Execute: func(toolCtx context.Context, input json.RawMessage) (string, error) {
+				return execute(toolCtx, ToolCall{ID: goai.ToolCallIDFromContext(toolCtx), Type: "function", Function: FuncCall{Name: name, Arguments: string(input)}})
+			},
+		})
+	}
+
+	options := []goai.Option{
+		goai.WithMessages(messages...),
+		goai.WithTools(goaiTools...),
+		goai.WithMaxSteps(maxSteps),
+		goai.WithSequentialToolExecution(),
+	}
+	if req.Temperature != nil {
+		options = append(options, goai.WithTemperature(*req.Temperature))
+	}
+	if req.MaxTokens != nil {
+		options = append(options, goai.WithMaxOutputTokens(*req.MaxTokens))
+	}
+	if req.TopP != nil {
+		options = append(options, goai.WithTopP(*req.TopP))
+	}
+	if onToolStart != nil {
+		options = append(options, goai.WithOnToolCallStart(func(info goai.ToolCallStartInfo) {
+			onToolStart(ToolCall{ID: info.ToolCallID, Type: "function", Function: FuncCall{Name: info.ToolName, Arguments: string(info.Input)}})
+		}))
+	}
+	if onToolResult != nil {
+		options = append(options, goai.WithOnToolCall(func(info goai.ToolCallInfo) {
+			onToolResult(ToolCall{ID: info.ToolCallID, Type: "function", Function: FuncCall{Name: info.ToolName, Arguments: string(info.Input)}}, info.Output, info.Error)
+		}))
+	}
+
+	stream, err := goai.StreamText(ctx, c.model(req.Model), options...)
+	if err != nil {
+		return nil, nil, newGoAIError(req.Model, err)
+	}
+	for chunk := range stream.Stream() {
+		if err := forwardChunk(chunk, onDelta); err != nil {
+			return nil, nil, err
+		}
+	}
+	if err := stream.Err(); err != nil {
+		return nil, nil, newGoAIError(req.Model, err)
+	}
+
+	result := stream.Result()
+	message := &Message{Role: "assistant", Content: result.Text, ReasoningContent: result.Reasoning, ToolCalls: fromGoAIToolCalls(result.ToolCalls)}
+	return message, fromProviderMessages(result.ResponseMessages), nil
+}
+
+// Chat is a non-streaming helper that consumes StreamChat without deltas.
 func (c *Client) Chat(ctx context.Context, req ChatRequest) (*Message, error) {
-	req.Stream = true
-	return c.StreamChat(ctx, req, func(Delta) error { return nil })
+	return c.StreamChat(ctx, req, nil)
+}
+
+func forwardChunk(chunk provider.StreamChunk, onDelta func(Delta) error) error {
+	if onDelta == nil {
+		return nil
+	}
+	var delta Delta
+	switch chunk.Type {
+	case provider.ChunkText:
+		delta.Content = chunk.Text
+	case provider.ChunkReasoning:
+		delta.ReasoningContent = chunk.Text
+	case provider.ChunkToolCall:
+		delta.ToolCalls = []ToolCallDelta{{
+			ID:   chunk.ToolCallID,
+			Type: "function",
+			Function: struct {
+				Name      string
+				Arguments string
+			}{Name: chunk.ToolName, Arguments: chunk.ToolInput},
+		}}
+	case provider.ChunkError:
+		if chunk.Error != nil {
+			return chunk.Error
+		}
+		return nil
+	default:
+		return nil
+	}
+	if delta.Content == "" && delta.ReasoningContent == "" && len(delta.ToolCalls) == 0 {
+		return nil
+	}
+	return onDelta(delta)
+}
+
+func toProviderMessages(messages []Message) ([]provider.Message, error) {
+	out := make([]provider.Message, 0, len(messages))
+	for _, message := range messages {
+		role, err := toProviderRole(message.Role)
+		if err != nil {
+			return nil, err
+		}
+		parts := make([]provider.Part, 0, 2+len(message.ToolCalls))
+		if message.Content != "" {
+			parts = append(parts, provider.Part{Type: provider.PartText, Text: message.Content})
+		}
+		if message.ReasoningContent != "" {
+			parts = append(parts, provider.Part{Type: provider.PartReasoning, Text: message.ReasoningContent})
+		}
+		for _, call := range message.ToolCalls {
+			parts = append(parts, provider.Part{Type: provider.PartToolCall, ToolCallID: call.ID, ToolName: call.Function.Name, ToolInput: json.RawMessage(call.Function.Arguments)})
+		}
+		if message.Role == "tool" {
+			parts = []provider.Part{{Type: provider.PartToolResult, ToolCallID: message.ToolCallID, ToolName: message.Name, ToolOutput: message.Content}}
+		}
+		out = append(out, provider.Message{Role: role, Content: parts})
+	}
+	return out, nil
+}
+
+func toProviderRole(role string) (provider.Role, error) {
+	switch role {
+	case "system":
+		return provider.RoleSystem, nil
+	case "user":
+		return provider.RoleUser, nil
+	case "assistant":
+		return provider.RoleAssistant, nil
+	case "tool":
+		return provider.RoleTool, nil
+	default:
+		return "", fmt.Errorf("llm: unsupported message role %q", role)
+	}
+}
+
+func toGoAITools(definitions []ToolDefinition) []goai.Tool {
+	tools := make([]goai.Tool, 0, len(definitions))
+	for _, definition := range definitions {
+		schema, err := json.Marshal(definition.Function.Parameters)
+		if err != nil {
+			continue
+		}
+		tools = append(tools, goai.Tool{Name: definition.Function.Name, Description: definition.Function.Description, InputSchema: schema})
+	}
+	return tools
+}
+
+func fromProviderMessages(messages []provider.Message) []Message {
+	out := make([]Message, 0, len(messages))
+	for _, message := range messages {
+		converted := Message{Role: string(message.Role)}
+		for _, part := range message.Content {
+			switch part.Type {
+			case provider.PartText:
+				converted.Content += part.Text
+			case provider.PartReasoning:
+				converted.ReasoningContent += part.Text
+			case provider.PartToolCall:
+				converted.ToolCalls = append(converted.ToolCalls, ToolCall{ID: part.ToolCallID, Type: "function", Function: FuncCall{Name: part.ToolName, Arguments: string(part.ToolInput)}})
+			case provider.PartToolResult:
+				converted.ToolCallID = part.ToolCallID
+				converted.Name = part.ToolName
+				converted.Content += part.ToolOutput
+			}
+		}
+		out = append(out, converted)
+	}
+	return out
+}
+
+func fromGoAIToolCalls(calls []provider.ToolCall) []ToolCall {
+	out := make([]ToolCall, 0, len(calls))
+	for _, call := range calls {
+		out = append(out, ToolCall{ID: call.ID, Type: "function", Function: FuncCall{Name: call.Name, Arguments: string(call.Input)}})
+	}
+	return out
+}
+
+func usageFromGoAI(usage provider.Usage) *Usage {
+	return &Usage{PromptTokens: usage.InputTokens, CompletionTokens: usage.OutputTokens, TotalTokens: usage.TotalTokens}
+}
+
+func newGoAIError(model string, err error) error {
+	var apiErr *goai.APIError
+	if errors.As(err, &apiErr) {
+		kind, sentinel := classifyStatus(apiErr.StatusCode)
+		return &LLMError{StatusCode: apiErr.StatusCode, Kind: kind, Model: model, Body: apiErr.ResponseBody, Err: fmt.Errorf("%w: %v", sentinel, err)}
+	}
+	var overflow *goai.ContextOverflowError
+	if errors.As(err, &overflow) {
+		return &LLMError{Kind: ErrorKindValidation, Model: model, Body: overflow.ResponseBody, Err: fmt.Errorf("%w: %v", ErrInvalidRequest, err)}
+	}
+	if errors.Is(err, context.Canceled) {
+		return err
+	}
+	return &LLMError{Kind: ErrorKindStream, Model: model, Err: fmt.Errorf("%w: %v", ErrStreamInterrupted, err)}
+}
+
+func classifyStatus(status int) (ErrorKind, error) {
+	switch {
+	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+		return ErrorKindAuth, ErrAuthFailed
+	case status == http.StatusTooManyRequests:
+		return ErrorKindRateLimit, ErrRateLimit
+	case status == http.StatusBadRequest:
+		return ErrorKindValidation, ErrInvalidRequest
+	case status >= http.StatusInternalServerError:
+		return ErrorKindServer, ErrServerUnavailable
+	default:
+		return ErrorKindUnknown, ErrStreamInterrupted
+	}
+}
+
+// IsRetryable reports whether GoAI classified an error as transient.
+func IsRetryable(err error) bool {
+	var apiErr *goai.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.IsRetryable
+	}
+	var llmErr *LLMError
+	return errors.As(err, &llmErr) && llmErr.IsRetryable()
 }
