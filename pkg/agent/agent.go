@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	"excelsior/pkg/llm"
 	"excelsior/pkg/tools"
@@ -14,7 +13,7 @@ import (
 )
 
 // LLM is the provider interface the agent depends on for streaming chat completions.
-type LLM = llm.Provider
+type LLM = llm.ToolLoopProvider
 
 // Runner defines the execution interface for an agentic turn.
 // It allows consumers (e.g. WebSocket engine, TUI) to execute turns against
@@ -153,38 +152,8 @@ func (a *Agent) RunWithHistory(ctx context.Context, opts RunOptions) (*RunResult
 		emit = func(StreamEvent) {}
 	}
 	model := a.resolveModel()
-	start := time.Now()
 	a.logger().Info("agent run start", "model", model, "messages", len(messages), "maxIters", a.maxIters())
-
-	if native, ok := a.LLM.(llm.ToolLoopProvider); ok {
-		return a.runNativeToolLoop(ctx, native, model, messages, toolDefs, reg, emit)
-	}
-
-	for iter := 0; iter < a.maxIters(); iter++ {
-		if err := ctx.Err(); err != nil {
-			return nil, &AgentError{Phase: "context", Iteration: iter, Err: fmt.Errorf("agent: context canceled before iter %d: %w", iter, err)}
-		}
-
-		msg, err := a.executeTurn(ctx, iter, model, messages, toolDefs, emit)
-		if err != nil {
-			return nil, err
-		}
-		messages = append(messages, *msg)
-
-		if len(msg.ToolCalls) == 0 {
-			if msg.Content == "" && msg.ReasoningContent == "" && iter < a.maxIters()-1 {
-				continue
-			}
-			emit(NewDoneEvent(msg.Content, "stop"))
-			a.logger().Info("agent run done", "iters", iter+1, "totalDuration", time.Since(start))
-			return &RunResult{FinalMessage: msg, Messages: messages}, nil
-		}
-
-		if err := a.execTools(ctx, reg, msg.ToolCalls, &messages, emit); err != nil {
-			return nil, err
-		}
-	}
-	return nil, &AgentError{Phase: "loop", Iteration: a.maxIters(), Err: fmt.Errorf("max iterations (%d) reached: %w", a.maxIters(), ErrMaxIterationsReached)}
+	return a.runNativeToolLoop(ctx, a.LLM, model, messages, toolDefs, reg, emit)
 }
 
 func (a *Agent) validateRunOptions(opts RunOptions) error {
@@ -256,39 +225,6 @@ func (a *Agent) runNativeToolLoop(ctx context.Context, native llm.ToolLoopProvid
 	return &RunResult{FinalMessage: final, Messages: fullHistory}, nil
 }
 
-func (a *Agent) executeTurn(ctx context.Context, iter int, model string, messages []llm.Message, toolDefs []llm.ToolDefinition, emit func(StreamEvent)) (*llm.Message, error) {
-	req := llm.ChatRequest{Model: model, Messages: messages, Tools: toolDefs}
-	if len(toolDefs) == 0 {
-		req.Tools = nil
-	}
-	a.logger().Debug("agent llm request", "iter", iter, "messages", len(messages))
-	llmStart := time.Now()
-	msg, err := a.LLM.StreamChat(ctx, req, func(d llm.Delta) error {
-		if ctx.Err() != nil {
-			return &AgentError{Phase: "delta_callback", Iteration: iter + 1, Err: fmt.Errorf("agent onDelta canceled: %w", ctx.Err())}
-		}
-		if d.ReasoningContent != "" {
-			emit(NewReasoningEvent(d.ReasoningContent))
-		}
-		if d.Content != "" {
-			emit(NewTextEvent(d.Content))
-		}
-		return nil
-	})
-	if err != nil {
-		a.logger().Error("agent llm error", "iter", iter, "duration", time.Since(llmStart), "err", err)
-		emit(NewErrorEvent(err.Error()))
-		return nil, &AgentError{Phase: "stream_chat", Iteration: iter + 1, Err: fmt.Errorf("agent: LLM StreamChat iter %d: %w", iter, err)}
-	}
-	if msg == nil {
-		a.logger().Error("agent llm returned nil message", "iter", iter)
-		emit(NewErrorEvent(ErrNilLLMMessage.Error()))
-		return nil, &AgentError{Phase: "stream_chat", Iteration: iter + 1, Err: ErrNilLLMMessage}
-	}
-	a.logger().Debug("agent llm response", "iter", iter, "duration", time.Since(llmStart), "toolCalls", len(msg.ToolCalls))
-	return msg, nil
-}
-
 func truncateRunes(s string, n int) string {
 	// ponytail: delegate rune counting to util.Truncate, keep "[truncated]" marker for test contract
 	t := util.Truncate(s, n)
@@ -296,36 +232,6 @@ func truncateRunes(s string, n int) string {
 		return s
 	}
 	return strings.TrimSuffix(t, "…") + "\n[truncated]"
-}
-
-func (a *Agent) execTools(ctx context.Context, reg ToolRegistry, calls []llm.ToolCall, messages *[]llm.Message, emit func(StreamEvent)) error {
-	for _, tc := range calls {
-		if err := ctx.Err(); err != nil {
-			return &AgentError{Phase: "tool_exec", ToolName: tc.Function.Name, Err: fmt.Errorf("agent: context canceled before tool %q: %w", tc.Function.Name, err)}
-		}
-		emit(NewToolStartEvent(tc.Function.Name, tc.ID, tc.Function.Arguments))
-		start := time.Now()
-		result := a.callTool(ctx, reg, tc)
-		result = truncateRunes(result, maxToolResult)
-		a.logger().Info("tool done", "name", tc.Function.Name, "duration", time.Since(start), "resultChars", len(result))
-		emit(NewToolResultEvent(tc.Function.Name, tc.ID, result))
-		*messages = append(*messages, llm.Message{Role: "tool", ToolCallID: tc.ID, Content: result})
-	}
-	return nil
-}
-
-func (a *Agent) callTool(ctx context.Context, reg ToolRegistry, tc llm.ToolCall) string {
-	tool, ok := reg.Get(tc.Function.Name)
-	if !ok {
-		a.logger().Warn("unknown tool", "name", tc.Function.Name)
-		return fmt.Sprintf("error: unknown tool %q", tc.Function.Name)
-	}
-	out, err := tool.Execute(ctx, json.RawMessage(tc.Function.Arguments))
-	if err != nil {
-		a.logger().Warn("tool error", "name", tc.Function.Name, "err", err)
-		return fmt.Sprintf("error: %v", err)
-	}
-	return out
 }
 
 func toLLMTools(ts []tools.Tool) []llm.ToolDefinition {

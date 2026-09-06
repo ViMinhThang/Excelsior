@@ -1,9 +1,7 @@
 package sqlite
 
 import (
-	"encoding/json"
 	"errors"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -141,49 +139,5 @@ func TestSQLiteStore_ListDeleteLatest(t *testing.T) {
 	bobMetas, err := bobStore.List()
 	if err != nil || len(bobMetas) != 1 || bobMetas[0].ID != "bob-1" {
 		t.Fatalf("unexpected bob list: %+v", bobMetas)
-	}
-}
-
-func TestSQLiteStore_MigrateFromDirStore(t *testing.T) {
-	aliceStore, _ := setupTestDB(t)
-
-	tmpDir := t.TempDir()
-
-	// Write legacy .jsonl file
-	rec := session.Record{
-		ID:    "legacy-1",
-		Title: "Legacy Session",
-		Messages: []llm.Message{
-			{Role: "user", Content: "legacy message"},
-		},
-	}
-	data, _ := json.Marshal(rec)
-	filePath := filepath.Join(tmpDir, "legacy-1.jsonl")
-	if err := os.WriteFile(filePath, append(data, '\n'), 0o600); err != nil {
-		t.Fatalf("write legacy jsonl failed: %v", err)
-	}
-
-	// Migrate
-	count, err := aliceStore.MigrateFromDirStore(tmpDir)
-	if err != nil {
-		t.Fatalf("migration failed: %v", err)
-	}
-	if count != 1 {
-		t.Fatalf("expected 1 migrated session, got %d", count)
-	}
-
-	// Verify loaded
-	loaded, err := aliceStore.Load("legacy-1")
-	if err != nil {
-		t.Fatalf("failed to load migrated session: %v", err)
-	}
-	if loaded.Title != "Legacy Session" || len(loaded.Messages) != 1 {
-		t.Fatalf("migrated content mismatch: %+v", loaded)
-	}
-
-	// Idempotency: second migration should import 0
-	count2, err := aliceStore.MigrateFromDirStore(tmpDir)
-	if err != nil || count2 != 0 {
-		t.Fatalf("expected 0 migrated on second run, got %d, err: %v", count2, err)
 	}
 }

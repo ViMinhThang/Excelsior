@@ -108,7 +108,7 @@ func (h *Hub) Broadcast(env protocol.Envelope) {
 }
 
 // BroadcastToSession sends an event to authenticated connections subscribed to a session.
-// userID scopes the event stream; a zero userID is used for legacy anonymous hubs.
+// userID scopes the event stream; a zero userID is used for anonymous mode.
 func (h *Hub) BroadcastToSession(userID int64, sessionID string, env protocol.Envelope) {
 	b, err := json.Marshal(env)
 	if err != nil {

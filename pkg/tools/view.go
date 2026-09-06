@@ -50,11 +50,9 @@ func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 }
 
 type viewArgs struct {
-	FilePath  string `json:"filePath"`
-	Offset    *int   `json:"offset"`
-	Limit     *int   `json:"limit"`
-	LineStart *int   `json:"lineStart"`
-	LineEnd   *int   `json:"lineEnd"`
+	FilePath string `json:"filePath"`
+	Offset   *int   `json:"offset"`
+	Limit    *int   `json:"limit"`
 }
 
 func parseViewArgs(args json.RawMessage) (*viewArgs, error) {
@@ -72,16 +70,9 @@ func resolveViewPagination(a *viewArgs) (int, int) {
 	offset, limit := 0, 50
 	if a.Offset != nil {
 		offset = *a.Offset
-	} else if a.LineStart != nil {
-		offset = *a.LineStart - 1
-		if offset < 0 {
-			offset = 0
-		}
 	}
 	if a.Limit != nil {
 		limit = *a.Limit
-	} else if a.LineStart != nil && a.LineEnd != nil {
-		limit = *a.LineEnd - *a.LineStart + 1
 	}
 	return offset, limit
 }

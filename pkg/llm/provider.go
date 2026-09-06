@@ -2,20 +2,11 @@ package llm
 
 import "context"
 
-// Provider defines the interface implemented by LLM backend clients.
-// It supports streaming chat completions with real-time delta delivery.
-type Provider interface {
-	// StreamChat executes a single streaming completion turn.
-	StreamChat(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error)
-
-	// ModelName returns the configured model identifier.
-	ModelName() string
-}
-
-// ToolLoopProvider is optionally implemented by providers that own the
-// multi-step tool loop. The standard Client delegates this to GoAI.
+// ToolLoopProvider is the application-facing LLM port. Providers own the
+// complete multi-step tool loop; the GoAI-backed Client is the standard implementation.
 type ToolLoopProvider interface {
-	Provider
+	StreamChat(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error)
+	ModelName() string
 	StreamChatWithTools(
 		ctx context.Context,
 		req ChatRequest,
@@ -27,5 +18,4 @@ type ToolLoopProvider interface {
 	) (*Message, []Message, error)
 }
 
-// Compile-time check verifying *Client implements Provider.
-var _ Provider = (*Client)(nil)
+var _ ToolLoopProvider = (*Client)(nil)

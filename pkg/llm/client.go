@@ -14,7 +14,7 @@ import (
 	"github.com/zendev-sh/goai/provider/deepseek"
 )
 
-// Client adapts GoAI's DeepSeek provider to this package's Provider interface.
+// Client adapts GoAI's DeepSeek provider to the application-facing tool-loop port.
 // GoAI owns HTTP, SSE parsing, retries, and provider-specific message handling.
 type Client struct {
 	APIKey     string

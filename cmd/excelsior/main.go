@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
-	"errors"
+	"path/filepath"
+
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
+
 	"strings"
 	"syscall"
 
@@ -233,29 +234,6 @@ func normalizeModel(flagModel, cfgModel string) string {
 	return config.DefaultModel
 }
 
-func loadHistory(ctx context.Context, workspace, sessionID string) []llm.Message {
-	if sessionID == "" {
-		return nil
-	}
-	store := session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
-	rec, err := store.Load(sessionID)
-	if err == nil {
-		slog.Info("session loaded", "id", sessionID, "messages", len(rec.Messages))
-		var msgs []llm.Message
-		for _, m := range rec.Messages {
-			if m.Role == "system" && (m.Content == "New session" || m.Content == "(empty)") {
-				continue
-			}
-			msgs = append(msgs, m)
-		}
-		return msgs
-	}
-	if !errors.Is(err, session.ErrSessionNotFound) && !errors.Is(err, os.ErrNotExist) {
-		slog.Warn("session load failed, starting fresh", "id", sessionID, "err", err)
-	}
-	return nil
-}
-
 func chatEventPrinter(ev chat.Event) {
 	switch ev.Type {
 	case "reasoning":
@@ -273,14 +251,4 @@ func chatEventPrinter(ev chat.Event) {
 	case "done":
 		fmt.Fprintln(os.Stderr, "")
 	}
-}
-
-// agentEventPrinter preserves the legacy helper contract during migration.
-func agentEventPrinter(ev agent.StreamEvent) {
-	chatEventPrinter(chat.Event{
-		Type: ev.Type, Text: ev.Text, Reasoning: ev.Reasoning,
-		ToolName: ev.ToolName, ToolCallID: ev.ToolCallID,
-		ToolArgs: ev.ToolArgs, ToolResult: ev.ToolResult,
-		FinishReason: ev.FinishReason,
-	})
 }

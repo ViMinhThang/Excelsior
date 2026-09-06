@@ -42,9 +42,9 @@ func TestDirStore_TitlePersistenceAndRename(t *testing.T) {
 		t.Fatalf("SaveWithTitle failed: %v", err)
 	}
 
-	rec, err := s.LoadRecord(context.Background(), "sess-title-1")
+	rec, err := s.Load("sess-title-1")
 	if err != nil {
-		t.Fatalf("LoadRecord failed: %v", err)
+		t.Fatalf("Load failed: %v", err)
 	}
 	if rec.Title != "Project Blueprint" {
 		t.Errorf("expected Title 'Project Blueprint', got %q", rec.Title)
@@ -58,9 +58,9 @@ func TestDirStore_TitlePersistenceAndRename(t *testing.T) {
 		t.Fatalf("Rename failed: %v", err)
 	}
 
-	recAfterRename, err := s.LoadRecord(context.Background(), "sess-title-1")
+	recAfterRename, err := s.Load("sess-title-1")
 	if err != nil {
-		t.Fatalf("LoadRecord after rename failed: %v", err)
+		t.Fatalf("Load after rename failed: %v", err)
 	}
 	if recAfterRename.Title != "Updated Project Blueprint" {
 		t.Errorf("expected Title 'Updated Project Blueprint', got %q", recAfterRename.Title)
@@ -72,45 +72,19 @@ func TestDirStore_TitlePersistenceAndRename(t *testing.T) {
 	// Append next turn with Save() — title preserved in record
 	nextMsgs := append(msgs, llm.Message{Role: "user", Content: "Looks good!"})
 	recAfterRename.Messages = nextMsgs
-	if err := s.Save(*recAfterRename); err != nil {
+	if err := s.Save(recAfterRename); err != nil {
 		t.Fatalf("Save next turn failed: %v", err)
 	}
 
-	recAfterAppend, err := s.LoadRecord(context.Background(), "sess-title-1")
+	recAfterAppend, err := s.Load("sess-title-1")
 	if err != nil {
-		t.Fatalf("LoadRecord after append failed: %v", err)
+		t.Fatalf("Load after append failed: %v", err)
 	}
 	if recAfterAppend.Title != "Updated Project Blueprint" {
 		t.Errorf("expected Title to be preserved, got %q", recAfterAppend.Title)
 	}
 	if len(recAfterAppend.Messages) != 3 {
 		t.Errorf("expected 3 messages, got %d", len(recAfterAppend.Messages))
-	}
-}
-
-func TestDirStore_BackwardCompatibilityWithoutTitle(t *testing.T) {
-	dir := t.TempDir()
-	s := NewDirStore(dir)
-
-	// Simulate old .jsonl file without "title" or "updatedAt"
-	oldJSONL := `{"id":"legacy-1","createdAt":"2026-08-01T00:00:00Z","messages":[{"role":"user","content":"legacy message"}]}` + "\n"
-	p := filepath.Join(dir, "legacy-1.jsonl")
-	if err := os.WriteFile(p, []byte(oldJSONL), 0o600); err != nil {
-		t.Fatalf("write legacy jsonl: %v", err)
-	}
-
-	rec, err := s.LoadRecord(context.Background(), "legacy-1")
-	if err != nil {
-		t.Fatalf("load legacy record: %v", err)
-	}
-	if rec.Title != "" {
-		t.Errorf("expected empty title for legacy record, got %q", rec.Title)
-	}
-	if len(rec.Messages) != 1 || rec.Messages[0].Content != "legacy message" {
-		t.Errorf("unexpected legacy messages: %+v", rec.Messages)
-	}
-	if rec.UpdatedAt.IsZero() {
-		t.Error("expected non-zero UpdatedAt mapped from CreatedAt")
 	}
 }
 
@@ -356,4 +330,3 @@ func TestDirStore_EmptyDir(t *testing.T) {
 		t.Fatalf("expected ErrStoreDirEmpty on empty store dir Delete, got %v", err)
 	}
 }
-

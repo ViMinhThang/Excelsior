@@ -9,8 +9,8 @@ import (
 	"excelsior/pkg/tools"
 )
 
-// NewAgent is the local CLI/TUI composition point. Transport packages should
-// construct their own application services instead of reaching into this helper.
+// NewAgent is the shared local agent composition point for CLI, TUI, and the
+// WebSocket transport fallback.
 func NewAgent(cfg config.Config, workspace, model, system string, logger *slog.Logger) *agent.Agent {
 	if logger == nil {
 		logger = slog.Default()

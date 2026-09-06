@@ -141,11 +141,7 @@ func TestViewTool(t *testing.T) {
 	} else if !errors.Is(err, ErrInvalidArguments) {
 		t.Fatalf("expected ErrInvalidArguments, got %v", err)
 	}
-	// legacy lineStart/lineEnd compat
-	argsLeg, _ := json.Marshal(map[string]any{"filePath": "hello.txt", "lineStart": 1, "lineEnd": 1})
-	if _, err := vt.Execute(context.Background(), argsLeg); err != nil {
-		t.Fatalf("legacy view err: %v", err)
-	}
+
 	// traversal should fail
 	args2, _ := json.Marshal(map[string]string{"filePath": "../escape"})
 	if _, err := vt.Execute(context.Background(), args2); err == nil {
@@ -364,4 +360,3 @@ func TestEditTool_AmbiguousMatch(t *testing.T) {
 		t.Fatalf("expected ErrAmbiguousMatch for repeated text, got %v", err)
 	}
 }
-

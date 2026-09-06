@@ -279,18 +279,6 @@ func (s *DirStore) SaveWithTitle(ctx context.Context, id, title string, messages
 	return s.Save(Record{ID: id, Title: title, Messages: messages})
 }
 
-// LoadRecord retrieves a pointer to Record for backward compatibility.
-func (s *DirStore) LoadRecord(ctx context.Context, id string) (*Record, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, &SessionError{Op: "load", SessionID: id, Err: err}
-	}
-	rec, err := s.Load(id)
-	if err != nil {
-		return nil, err
-	}
-	return &rec, nil
-}
-
 // Rename updates the title of an existing session record.
 func (s *DirStore) Rename(ctx context.Context, id, title string) error {
 	if err := ctx.Err(); err != nil {

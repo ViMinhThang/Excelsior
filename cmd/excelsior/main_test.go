@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
 )
 
@@ -107,21 +106,6 @@ func TestCLI_RootCommandFlags(t *testing.T) {
 	}
 }
 
-func TestCLI_AgentEventPrinter(t *testing.T) {
-	events := []agent.StreamEvent{
-		{Type: "reasoning", Reasoning: "thinking..."},
-		{Type: "text", Text: "Hello, CLI!"},
-		{Type: "tool_start", ToolName: "view", ToolArgs: `{"path":"main.go"}`},
-		{Type: "tool_result", ToolName: "view", ToolResult: "content"},
-		{Type: "error", Text: "something broke"},
-		{Type: "done"},
-	}
-
-	for _, ev := range events {
-		agentEventPrinter(ev)
-	}
-}
-
 func TestCLI_RunAgent_Validation(t *testing.T) {
 	// 1. Invalid config (missing API key)
 	cfgInvalid := config.Config{}
@@ -142,21 +126,6 @@ func TestCLI_RunAgent_Validation(t *testing.T) {
 	err = runAgent(context.Background(), cfgValid, "v4", t.TempDir(), "", "", hugePrompt)
 	if err == nil || !strings.Contains(err.Error(), "prompt too large") {
 		t.Fatalf("expected prompt too large error, got %v", err)
-	}
-}
-
-func TestCLI_LoadHistory(t *testing.T) {
-	dir := t.TempDir()
-	// Empty sessionID returns nil
-	h1 := loadHistory(context.Background(), dir, "")
-	if h1 != nil {
-		t.Errorf("expected nil history for empty sessionID")
-	}
-
-	// Nonexistent session returns nil
-	h2 := loadHistory(context.Background(), dir, "nonexistent-sess")
-	if h2 != nil {
-		t.Errorf("expected nil history for nonexistent session")
 	}
 }
 
@@ -210,5 +179,3 @@ func TestCLI_IsTerminal(t *testing.T) {
 		t.Errorf("regular temp file should not be a terminal")
 	}
 }
-
-
