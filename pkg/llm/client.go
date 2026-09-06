@@ -33,83 +33,29 @@ func NewClient(apiKey, model string) *Client {
 func (c *Client) ModelName() string { return c.Model }
 
 func (c *Client) model(reqModel string) provider.LanguageModel {
+	// Use the model from the request (trimmed of whitespace).
 	model := ResolveModel(reqModel)
-	if model == "" {
-		model = ResolveModel(c.Model)
-	}
-	if model == "" {
-		model = "deepseek-chat"
-	}
-
+	// Collect provider options; at most 3 follow.
 	opts := make([]deepseek.Option, 0, 3)
+	// Attach the API key when one is configured.
 	if key := strings.TrimSpace(c.APIKey); key != "" {
 		opts = append(opts, deepseek.WithAPIKey(key))
 	}
+	// Override the API endpoint when a custom base URL is configured.
 	if baseURL := strings.TrimSpace(c.BaseURL); baseURL != "" {
 		opts = append(opts, deepseek.WithBaseURL(baseURL))
 	}
+	// Use the injected HTTP client (tests, proxy/timeout); otherwise keep the provider default.
 	if c.HTTPClient != nil {
 		opts = append(opts, deepseek.WithHTTPClient(c.HTTPClient))
 	}
+	// Build the chat model with the resolved name and options.
 	return deepseek.Chat(model, opts...)
 }
 
-// StreamChat runs one provider generation step through GoAI. The Agent retains
-// ownership of the tool-call loop so its tool and permission events continue to
-// have the same behavior across CLI, TUI, and WebSocket clients.
-func (c *Client) StreamChat(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error) {
-	messages, err := toProviderMessages(req.Messages)
-	if err != nil {
-		return nil, err
-	}
-
-	opts := []goai.Option{
-		goai.WithMessages(messages...),
-		goai.WithTools(toGoAITools(req.Tools)...),
-		goai.WithMaxSteps(1),
-	}
-	if req.Temperature != nil {
-		opts = append(opts, goai.WithTemperature(*req.Temperature))
-	}
-	if req.MaxTokens != nil {
-		opts = append(opts, goai.WithMaxOutputTokens(*req.MaxTokens))
-	}
-	if req.TopP != nil {
-		opts = append(opts, goai.WithTopP(*req.TopP))
-	}
-
-	stream, err := goai.StreamText(ctx, c.model(req.Model), opts...)
-	if err != nil {
-		return nil, newGoAIError(req.Model, err)
-	}
-	for chunk := range stream.Stream() {
-		if err := forwardChunk(chunk, onDelta); err != nil {
-			return nil, err
-		}
-	}
-	if err := stream.Err(); err != nil {
-		return nil, newGoAIError(req.Model, err)
-	}
-
-	result := stream.Result()
-	message := &Message{
-		Role:             "assistant",
-		Content:          result.Text,
-		ReasoningContent: result.Reasoning,
-		ToolCalls:        fromGoAIToolCalls(result.ToolCalls),
-	}
-	if result.Reasoning != "" && strings.HasPrefix(message.Content, result.Reasoning) {
-		message.Content = strings.TrimPrefix(message.Content, result.Reasoning)
-	}
-	if onDelta != nil {
-		if err := onDelta(Delta{Done: true, FinishReason: string(result.FinishReason), Usage: usageFromGoAI(result.TotalUsage)}); err != nil {
-			return nil, err
-		}
-	}
-	return message, nil
-}
-
 // StreamChatWithTools delegates the complete tool loop to GoAI.
+// Use case: the agentic run (Agent.runNativeToolLoop). GoAI executes tools via
+// execute up to maxSteps, reporting per-tool onToolStart/onToolResult events.
 func (c *Client) StreamChatWithTools(
 	ctx context.Context,
 	req ChatRequest,
@@ -119,78 +65,96 @@ func (c *Client) StreamChatWithTools(
 	onToolStart func(ToolCall),
 	onToolResult func(ToolCall, string, error),
 ) (*Message, []Message, error) {
+	// Convert app messages to provider messages.
 	messages, err := toProviderMessages(req.Messages)
+	// Bail on unsupported roles.
 	if err != nil {
 		return nil, nil, err
 	}
+	// Guard against zero/negative step budgets.
 	if maxSteps < 1 {
 		maxSteps = 1
 	}
 
+	// Preallocate converted GoAI tools.
 	goaiTools := make([]goai.Tool, 0, len(req.Tools))
+	// Convert each app tool definition to a GoAI tool.
 	for _, definition := range req.Tools {
+		// Serialize the JSON schema for the model.
 		schema, err := json.Marshal(definition.Function.Parameters)
+		// Abort on an unmarshallable schema.
 		if err != nil {
 			return nil, nil, fmt.Errorf("llm: marshal tool schema %q: %w", definition.Function.Name, err)
 		}
+		// Copy the name for the closure below.
 		name := definition.Function.Name
+		// Register the tool, routing execution back through execute.
 		goaiTools = append(goaiTools, goai.Tool{
 			Name:        name,
 			Description: definition.Function.Description,
 			InputSchema: schema,
+			// Bridge GoAI invocations back to the caller's execute.
 			Execute: func(toolCtx context.Context, input json.RawMessage) (string, error) {
 				return execute(toolCtx, ToolCall{ID: goai.ToolCallIDFromContext(toolCtx), Type: "function", Function: FuncCall{Name: name, Arguments: string(input)}})
 			},
 		})
 	}
 
+	// Base GoAI options: history, tools, step budget, ordered execution.
 	options := []goai.Option{
 		goai.WithMessages(messages...),
 		goai.WithTools(goaiTools...),
 		goai.WithMaxSteps(maxSteps),
 		goai.WithSequentialToolExecution(),
 	}
+	// Override temperature only when set.
 	if req.Temperature != nil {
 		options = append(options, goai.WithTemperature(*req.Temperature))
 	}
+	// Override max output tokens only when set.
 	if req.MaxTokens != nil {
 		options = append(options, goai.WithMaxOutputTokens(*req.MaxTokens))
 	}
+	// Override top-p only when set.
 	if req.TopP != nil {
 		options = append(options, goai.WithTopP(*req.TopP))
 	}
+	// Forward tool-start events when observed.
 	if onToolStart != nil {
 		options = append(options, goai.WithOnToolCallStart(func(info goai.ToolCallStartInfo) {
 			onToolStart(ToolCall{ID: info.ToolCallID, Type: "function", Function: FuncCall{Name: info.ToolName, Arguments: string(info.Input)}})
 		}))
 	}
+	// Forward tool-result events when observed.
 	if onToolResult != nil {
 		options = append(options, goai.WithOnToolCall(func(info goai.ToolCallInfo) {
 			onToolResult(ToolCall{ID: info.ToolCallID, Type: "function", Function: FuncCall{Name: info.ToolName, Arguments: string(info.Input)}}, info.Output, info.Error)
 		}))
 	}
 
+	// Start the streaming run.
 	stream, err := goai.StreamText(ctx, c.model(req.Model), options...)
+	// Wrap startup failures.
 	if err != nil {
 		return nil, nil, newGoAIError(req.Model, err)
 	}
+	// Forward each chunk to the caller.
 	for chunk := range stream.Stream() {
 		if err := forwardChunk(chunk, onDelta); err != nil {
 			return nil, nil, err
 		}
 	}
+	// Surface mid-stream failures.
 	if err := stream.Err(); err != nil {
 		return nil, nil, newGoAIError(req.Model, err)
 	}
 
+	// Collect the final result.
 	result := stream.Result()
+	// Build the final assistant message.
 	message := &Message{Role: "assistant", Content: result.Text, ReasoningContent: result.Reasoning, ToolCalls: fromGoAIToolCalls(result.ToolCalls)}
+	// Return it plus the full message history.
 	return message, fromProviderMessages(result.ResponseMessages), nil
-}
-
-// Chat is a non-streaming helper that consumes StreamChat without deltas.
-func (c *Client) Chat(ctx context.Context, req ChatRequest) (*Message, error) {
-	return c.StreamChat(ctx, req, nil)
 }
 
 func forwardChunk(chunk provider.StreamChunk, onDelta func(Delta) error) error {
@@ -226,28 +190,59 @@ func forwardChunk(chunk provider.StreamChunk, onDelta func(Delta) error) error {
 	return onDelta(delta)
 }
 
+// toProviderMessages converts app messages to provider messages.
+// Example input:
+//
+//	[]Message{
+//		{Role: "user", Content: "hi"},
+//		{Role: "assistant", Content: "hello", ToolCalls: []ToolCall{{ID: "1", Type: "function", Function: FuncCall{Name: "get_time", Arguments: "{}"}}}},
+//		{Role: "tool", ToolCallID: "1", Name: "get_time", Content: "noon"},
+//	}
+//
+// Example output (same order, one provider.Message each):
+//
+//	[]provider.Message{
+//		{Role: provider.RoleUser, Content: []provider.Part{{Type: provider.PartText, Text: "hi"}}},
+//		{Role: provider.RoleAssistant, Content: []provider.Part{
+//			{Type: provider.PartText, Text: "hello"},
+//			{Type: provider.PartToolCall, ToolCallID: "1", ToolName: "get_time", ToolInput: json.RawMessage("{}")},
+//		}},
+//		{Role: provider.RoleTool, Content: []provider.Part{
+//			{Type: provider.PartToolResult, ToolCallID: "1", ToolName: "get_time", ToolOutput: "noon"},
+//		}},
+//	}
 func toProviderMessages(messages []Message) ([]provider.Message, error) {
+	// Preallocate the converted output.
 	out := make([]provider.Message, 0, len(messages))
 	for _, message := range messages {
+		// Map the role string to a provider role.
 		role, err := toProviderRole(message.Role)
+		// Bail on unsupported roles.
 		if err != nil {
 			return nil, err
 		}
+		// Preallocate content parts (text + reasoning + tool calls).
 		parts := make([]provider.Part, 0, 2+len(message.ToolCalls))
+		// Keep non-empty text as a text part.
 		if message.Content != "" {
 			parts = append(parts, provider.Part{Type: provider.PartText, Text: message.Content})
 		}
+		// Keep non-empty reasoning as a reasoning part.
 		if message.ReasoningContent != "" {
 			parts = append(parts, provider.Part{Type: provider.PartReasoning, Text: message.ReasoningContent})
 		}
+		// Append each requested tool call as a tool-call part.
 		for _, call := range message.ToolCalls {
 			parts = append(parts, provider.Part{Type: provider.PartToolCall, ToolCallID: call.ID, ToolName: call.Function.Name, ToolInput: json.RawMessage(call.Function.Arguments)})
 		}
+		// Tool messages carry only the tool result, replacing prior parts.
 		if message.Role == "tool" {
 			parts = []provider.Part{{Type: provider.PartToolResult, ToolCallID: message.ToolCallID, ToolName: message.Name, ToolOutput: message.Content}}
 		}
+		// Append the converted message.
 		out = append(out, provider.Message{Role: role, Content: parts})
 	}
+	// Return the full converted history.
 	return out, nil
 }
 
@@ -264,18 +259,6 @@ func toProviderRole(role string) (provider.Role, error) {
 	default:
 		return "", fmt.Errorf("llm: unsupported message role %q", role)
 	}
-}
-
-func toGoAITools(definitions []ToolDefinition) []goai.Tool {
-	tools := make([]goai.Tool, 0, len(definitions))
-	for _, definition := range definitions {
-		schema, err := json.Marshal(definition.Function.Parameters)
-		if err != nil {
-			continue
-		}
-		tools = append(tools, goai.Tool{Name: definition.Function.Name, Description: definition.Function.Description, InputSchema: schema})
-	}
-	return tools
 }
 
 func fromProviderMessages(messages []provider.Message) []Message {

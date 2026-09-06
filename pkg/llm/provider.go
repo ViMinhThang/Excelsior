@@ -5,7 +5,6 @@ import "context"
 // ToolLoopProvider is the application-facing LLM port. Providers own the
 // complete multi-step tool loop; the GoAI-backed Client is the standard implementation.
 type ToolLoopProvider interface {
-	StreamChat(ctx context.Context, req ChatRequest, onDelta func(Delta) error) (*Message, error)
 	ModelName() string
 	StreamChatWithTools(
 		ctx context.Context,
