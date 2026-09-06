@@ -33,16 +33,5 @@ export function useKnownFolders() {
     });
   }, []);
 
-  const upsertFolder = useCallback(
-    (name: string, path?: string) => {
-      const id = name.toLowerCase();
-      setKnownFolders((prev) => {
-        if (prev.some((f) => f.id === id)) return prev;
-        return [...prev, { id, name, path }];
-      });
-    },
-    [setKnownFolders]
-  );
-
-  return { knownFolders, setKnownFolders, upsertFolder } as const;
+  return { knownFolders, setKnownFolders } as const;
 }

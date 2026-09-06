@@ -1,7 +1,9 @@
 "use client";
 
 import React, { createContext, useContext, useCallback, useEffect, useState } from "react";
-import { DEFAULT_THEME, THEME_STORAGE_KEY } from "../hooks/useTheme";
+
+export const THEME_STORAGE_KEY = "excelsior-theme";
+export const DEFAULT_THEME = "default-dark";
 
 type ThemeContextValue = {
   theme: string;

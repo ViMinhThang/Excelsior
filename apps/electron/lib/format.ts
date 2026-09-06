@@ -25,7 +25,3 @@ export function cleanTitle(title?: string): string {
   if (!title || !title.trim() || title === "(empty)") return "New Chat";
   return title;
 }
-
-export function truncate(value: string, maxLength: number): string {
-  return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
-}
