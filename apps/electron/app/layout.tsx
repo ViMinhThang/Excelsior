@@ -1,6 +1,5 @@
 import "./globals.css";
-import { ThemeProvider } from "../contexts/ThemeContext";
-import { DEFAULT_THEME } from "../hooks/useTheme";
+import { ThemeProvider, DEFAULT_THEME } from "../contexts/ThemeContext";
 
 export const metadata = {
   title: "excelsior",
