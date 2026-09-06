@@ -6,28 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"excelsior/internal/sessions"
 	"excelsior/pkg/config"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/protocol"
-	"excelsior/pkg/session"
-	"excelsior/pkg/util"
 )
 
-func sessionInfo(msgs []llm.Message, customTitle string) protocol.SessionInfo {
-	title := strings.TrimSpace(customTitle)
-	if title == "" || title == "(empty)" {
-		for _, m := range msgs {
-			if m.Role == "user" && strings.TrimSpace(m.Content) != "" {
-				title = strings.TrimSpace(m.Content)
-				break
-			}
-		}
-	}
-	if title == "" || title == "(empty)" {
-		title = "New Chat"
-	}
-	title = util.Truncate(title, 40)
-	return protocol.SessionInfo{Title: title, Count: len(msgs)}
+func sessionInfo(messages []llm.Message, customTitle string) protocol.SessionInfo {
+	return protocol.SessionInfo{Title: sessions.Title(messages, customTitle), Count: len(messages)}
 }
 
 // decodePayload unmarshals envelope payload into v, reporting error via sendError on failure.
@@ -40,26 +26,16 @@ func (c *Conn) decodePayload(env protocol.Envelope, v any, label string) bool {
 }
 
 func (c *Conn) handleSessionList(ctx context.Context, env protocol.Envelope) {
-	metas, err := c.sessionStore().List()
+	metas, err := (sessions.Service{Store: c.sessionStore()}).List()
 	if err != nil {
 		c.sendError(env.ID, fmt.Sprintf("list sessions: %v", err))
 		return
 	}
 	sessions := make([]protocol.SessionInfo, 0, len(metas))
 	for _, meta := range metas {
-		title := strings.TrimSpace(meta.Title)
-		if title == "" || title == "(empty)" {
-			if rec, err := c.sessionStore().Load(meta.ID); err == nil {
-				title = sessionInfo(rec.Messages, rec.Title).Title
-			} else {
-				title = "New Chat"
-			}
-		} else {
-			title = util.Truncate(title, 40)
-		}
 		sessions = append(sessions, protocol.SessionInfo{
 			ID:    meta.ID,
-			Title: title,
+			Title: meta.Title,
 			Count: meta.MsgCount,
 		})
 	}
@@ -71,16 +47,10 @@ func (c *Conn) handleSessionData(ctx context.Context, env protocol.Envelope) {
 	if !c.decodePayload(env, &req, "session.data") {
 		return
 	}
-	rec, err := c.sessionStore().Load(req.ID)
+	nonSystem, err := (sessions.Service{Store: c.sessionStore()}).Data(req.ID)
 	if err != nil {
 		c.sendError(env.ID, fmt.Sprintf("load session: %v", err))
 		return
-	}
-	var nonSystem []llm.Message
-	for _, m := range rec.Messages {
-		if m.Role != "system" {
-			nonSystem = append(nonSystem, m)
-		}
 	}
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSessionData, protocol.SessionDataResp{ID: req.ID, Messages: nonSystem}))
 }
@@ -91,13 +61,7 @@ func (c *Conn) handleSessionCreate(ctx context.Context, env protocol.Envelope) {
 		return
 	}
 	id := fmt.Sprintf("%d", time.Now().UnixMilli())
-	rec := session.Record{
-		ID:        id,
-		Title:     req.Title,
-		CreatedAt: time.Now().UTC(),
-		Messages:  []llm.Message{},
-	}
-	if err := c.sessionStore().Save(rec); err != nil {
+	if err := (sessions.Service{Store: c.sessionStore()}).Create(id, req.Title); err != nil {
 		c.sendError(env.ID, fmt.Sprintf("create session: %v", err))
 		return
 	}
@@ -109,7 +73,7 @@ func (c *Conn) handleSessionDelete(ctx context.Context, env protocol.Envelope) {
 	if !c.decodePayload(env, &req, "session.delete") {
 		return
 	}
-	if err := c.sessionStore().Delete(req.ID); err != nil {
+	if err := (sessions.Service{Store: c.sessionStore()}).Delete(req.ID); err != nil {
 		c.sendError(env.ID, fmt.Sprintf("delete session: %v", err))
 		return
 	}
@@ -121,13 +85,7 @@ func (c *Conn) handleSessionRename(ctx context.Context, env protocol.Envelope) {
 	if !c.decodePayload(env, &req, "session.rename") {
 		return
 	}
-	rec, err := c.sessionStore().Load(req.ID)
-	if err != nil {
-		c.sendError(env.ID, fmt.Sprintf("rename session: %v", err))
-		return
-	}
-	rec.Title = req.Title
-	if err := c.sessionStore().Save(rec); err != nil {
+	if err := (sessions.Service{Store: c.sessionStore()}).Rename(req.ID, req.Title); err != nil {
 		c.sendError(env.ID, fmt.Sprintf("rename session: %v", err))
 		return
 	}
