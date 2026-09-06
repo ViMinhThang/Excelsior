@@ -13,6 +13,7 @@ import (
 
 	"excelsior/internal/app"
 	internalsessions "excelsior/internal/sessions"
+	"excelsior/internal/workspaces"
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
 
@@ -93,7 +94,7 @@ type Conn struct {
 	userID        int64
 	username      string
 	send          chan []byte
-	workspace     string
+	workspace     *workspaces.State
 	mu            sync.RWMutex
 	interactions  interactionRouter
 	done          chan struct{}
@@ -109,6 +110,7 @@ func newConn(hub *Hub, ws *websocket.Conn) *Conn {
 		ws:            ws,
 		send:          make(chan []byte, 128),
 		done:          make(chan struct{}),
+		workspace:     workspaces.New(hub.Workspace),
 		subscriptions: make(map[string]struct{}),
 	}
 }
@@ -164,13 +166,7 @@ func (c *Conn) isSubscribed(sessionID string) bool {
 }
 
 func (c *Conn) currentWorkspace() string {
-	c.mu.RLock()
-	ws := c.workspace
-	c.mu.RUnlock()
-	if ws != "" {
-		return ws
-	}
-	return c.hub.Workspace()
+	return c.workspace.Current()
 }
 
 func (c *Conn) sessionStore() session.Store {

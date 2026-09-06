@@ -112,9 +112,7 @@ func (c *Conn) handleWorkspaceSet(ctx context.Context, env protocol.Envelope) {
 		return
 	}
 	if target := strings.TrimSpace(req.Workspace); target != "" {
-		c.mu.Lock()
-		c.workspace = target
-		c.mu.Unlock()
+		c.workspace.Set(target)
 		c.hub.logger().Info("switched workspace (per-conn)", "workspace", target)
 	}
 	c.handleSessionList(ctx, env)
