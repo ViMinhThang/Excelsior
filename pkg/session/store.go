@@ -1,6 +1,7 @@
 package session
 
 import (
+	"fmt"
 	"time"
 
 	"excelsior/pkg/llm"
@@ -22,6 +23,19 @@ type SessionMeta struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt,omitempty"`
 	MsgCount  int       `json:"msgCount,omitempty"`
+}
+
+// Latest returns the most recently updated session via List+Load.
+// Stores with an efficient query (e.g. sqlite) implement their own.
+func Latest(s Store) (Record, error) {
+	metas, err := s.List()
+	if err != nil {
+		return Record{}, err
+	}
+	if len(metas) == 0 {
+		return Record{}, fmt.Errorf("session latest: %w", ErrSessionNotFound)
+	}
+	return s.Load(metas[0].ID)
 }
 
 // Store defines the storage port for persisting and retrieving chat sessions.

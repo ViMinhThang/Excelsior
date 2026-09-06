@@ -1,8 +1,8 @@
 package session
 
 import (
-	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -38,8 +38,8 @@ func TestDirStore_TitlePersistenceAndRename(t *testing.T) {
 		{Role: "user", Content: "Plan the project"},
 		{Role: "assistant", Content: "Here is the plan."},
 	}
-	if err := s.SaveWithTitle(context.Background(), "sess-title-1", "Project Blueprint", msgs); err != nil {
-		t.Fatalf("SaveWithTitle failed: %v", err)
+	if err := s.Save(Record{ID: "sess-title-1", Title: "Project Blueprint", Messages: msgs}); err != nil {
+		t.Fatalf("Save failed: %v", err)
 	}
 
 	rec, err := s.Load("sess-title-1")
@@ -54,7 +54,12 @@ func TestDirStore_TitlePersistenceAndRename(t *testing.T) {
 	}
 
 	// Rename session
-	if err := s.Rename(context.Background(), "sess-title-1", "Updated Project Blueprint"); err != nil {
+	recRename, err := s.Load("sess-title-1")
+	if err != nil {
+		t.Fatalf("Load for rename failed: %v", err)
+	}
+	recRename.Title = "Updated Project Blueprint"
+	if err := s.Save(recRename); err != nil {
 		t.Fatalf("Rename failed: %v", err)
 	}
 
@@ -214,33 +219,6 @@ func TestDirStore_ListAndDelete(t *testing.T) {
 	}
 }
 
-func TestDirStore_Prune(t *testing.T) {
-	dir := t.TempDir()
-	s := NewDirStore(dir)
-	_ = s.Save(Record{ID: "old-sess", Messages: []llm.Message{{Role: "user", Content: "old"}}})
-	_ = s.Save(Record{ID: "new-sess", Messages: []llm.Message{{Role: "user", Content: "new"}}})
-
-	oldFile := filepath.Join(dir, "old-sess.jsonl")
-	oldTime := time.Now().Add(-48 * time.Hour)
-	_ = os.Chtimes(oldFile, oldTime, oldTime)
-
-	deleted, err := s.Prune(context.Background(), 24*time.Hour)
-	if err != nil {
-		t.Fatalf("prune: %v", err)
-	}
-	if deleted != 1 {
-		t.Fatalf("expected 1 deleted, got %d", deleted)
-	}
-
-	list, err := s.List()
-	if err != nil {
-		t.Fatalf("list after prune: %v", err)
-	}
-	if len(list) != 1 || list[0].ID != "new-sess" {
-		t.Fatalf("expected [new-sess], got %+v", list)
-	}
-}
-
 func TestDirStore_ConcurrentAccess(t *testing.T) {
 	dir := t.TempDir()
 	s := NewDirStore(dir)
@@ -277,41 +255,15 @@ func TestDirStore_ConcurrentAccess(t *testing.T) {
 	}
 }
 
-func TestSessionError_FormattingAndUnwrap(t *testing.T) {
-	se1 := &SessionError{
-		Op:        "load",
-		SessionID: "sess-1",
-		Path:      "/tmp/sess-1.jsonl",
-		Msg:       "read failed",
-		Err:       ErrSessionNotFound,
-	}
-	if !errors.Is(se1, ErrSessionNotFound) {
-		t.Errorf("expected Is(ErrSessionNotFound)")
-	}
-	if se1.Unwrap() != ErrSessionNotFound {
-		t.Errorf("expected Unwrap() to return ErrSessionNotFound")
-	}
-	if se1.Error() == "" {
-		t.Errorf("expected non-empty Error string")
-	}
-
+func TestSessionSentinels_WrapWithFmt(t *testing.T) {
 	sentinels := []error{
 		ErrSessionNotFound, ErrInvalidSessionID, ErrEmptySessionID,
 		ErrCorruptedSession, ErrEmptySession, ErrStoreDirEmpty,
 	}
 	for _, s := range sentinels {
-		se := &SessionError{Err: s}
-		if !errors.Is(se, s) {
-			t.Errorf("expected Is(%v) on SessionError", s)
+		if err := fmt.Errorf("session test: %w", s); !errors.Is(err, s) {
+			t.Errorf("expected Is(%v)", s)
 		}
-	}
-
-	seEmpty := &SessionError{}
-	if seEmpty.Error() != "session" {
-		t.Errorf("expected 'session', got %q", seEmpty.Error())
-	}
-	if seEmpty.Is(nil) {
-		t.Error("Is(nil) should be false")
 	}
 }
 

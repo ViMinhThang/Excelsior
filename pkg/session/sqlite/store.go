@@ -20,14 +20,11 @@ type Store struct {
 // New returns a user-scoped store. userID comes from auth.ValidateToken.
 func New(db *sql.DB, userID int64) *Store { return &Store{db: db, userID: userID} }
 
-// NewStore alias for New.
-func NewStore(db *sql.DB, userID int64) *Store { return New(db, userID) }
-
 var _ session.Store = (*Store)(nil)
 
 func (s *Store) Save(rec session.Record) error {
 	if strings.TrimSpace(rec.ID) == "" {
-		return &session.SessionError{Op: "save", SessionID: rec.ID, Err: session.ErrEmptySessionID}
+		return fmt.Errorf("session save: %w", session.ErrEmptySessionID)
 	}
 	if rec.CreatedAt.IsZero() {
 		rec.CreatedAt = time.Now().UTC()
@@ -38,7 +35,7 @@ func (s *Store) Save(rec session.Record) error {
 	}
 	data, err := json.Marshal(rec.Messages)
 	if err != nil {
-		return &session.SessionError{Op: "save", SessionID: rec.ID, Err: fmt.Errorf("marshal: %w", err)}
+		return fmt.Errorf("session save %q marshal: %w", rec.ID, err)
 	}
 	title := strings.TrimSpace(rec.Title)
 	now := rec.UpdatedAt.Format(time.RFC3339Nano)
@@ -50,7 +47,7 @@ func (s *Store) Save(rec session.Record) error {
 		rec.ID, s.userID, title, string(data), created, now, s.userID,
 	)
 	if err != nil {
-		return &session.SessionError{Op: "save", SessionID: rec.ID, Err: err}
+		return fmt.Errorf("session save %q: %w", rec.ID, err)
 	}
 	// If conflict did not update (wrong owner), verify ownership by checking rows
 	// Fallback: ensure row exists and belongs to user
@@ -61,7 +58,7 @@ func (s *Store) Save(rec session.Record) error {
 		_, err = s.db.Exec(`INSERT OR REPLACE INTO sessions(id,user_id,title,data,created_at,updated_at) VALUES(?,?,?,?,?,?)`,
 			rec.ID, s.userID, title, string(data), created, now)
 		if err != nil {
-			return &session.SessionError{Op: "save", SessionID: rec.ID, Err: err}
+			return fmt.Errorf("session save %q: %w", rec.ID, err)
 		}
 	}
 	return nil
@@ -74,12 +71,12 @@ func (s *Store) Load(id string) (session.Record, error) {
 		Scan(&uid, &title, &data, &createdStr, &updatedStr)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return session.Record{}, &session.SessionError{Op: "load", SessionID: id, Err: fmt.Errorf("%w: %v", session.ErrSessionNotFound, err)}
+			return session.Record{}, fmt.Errorf("session load %q: %w", id, session.ErrSessionNotFound)
 		}
-		return session.Record{}, &session.SessionError{Op: "load", SessionID: id, Err: err}
+		return session.Record{}, fmt.Errorf("session load %q: %w", id, err)
 	}
 	if uid != s.userID {
-		return session.Record{}, &session.SessionError{Op: "load", SessionID: id, Err: fmt.Errorf("%w: not owner", session.ErrSessionNotFound)}
+		return session.Record{}, fmt.Errorf("session load %q: %w: not owner", id, session.ErrSessionNotFound)
 	}
 	var msgs []llm.Message
 	if strings.TrimSpace(data) != "" && data != "null" {
@@ -102,7 +99,7 @@ func (s *Store) Load(id string) (session.Record, error) {
 func (s *Store) List() ([]session.SessionMeta, error) {
 	rows, err := s.db.Query(`SELECT id,title,created_at,updated_at,data FROM sessions WHERE user_id=? ORDER BY updated_at DESC`, s.userID)
 	if err != nil {
-		return nil, &session.SessionError{Op: "list", Err: err}
+		return nil, fmt.Errorf("session list: %w", err)
 	}
 	defer rows.Close()
 	var out []session.SessionMeta
@@ -123,7 +120,7 @@ func (s *Store) List() ([]session.SessionMeta, error) {
 func (s *Store) Delete(id string) error {
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE id=? AND user_id=?`, id, s.userID)
 	if err != nil {
-		return &session.SessionError{Op: "delete", SessionID: id, Err: err}
+		return fmt.Errorf("session delete %q: %w", id, err)
 	}
 	return nil
 }
@@ -133,9 +130,9 @@ func (s *Store) Latest() (session.Record, error) {
 	err := s.db.QueryRow(`SELECT id FROM sessions WHERE user_id=? ORDER BY updated_at DESC LIMIT 1`, s.userID).Scan(&id)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return session.Record{}, &session.SessionError{Op: "latest", Err: session.ErrSessionNotFound}
+			return session.Record{}, fmt.Errorf("session latest: %w", session.ErrSessionNotFound)
 		}
-		return session.Record{}, &session.SessionError{Op: "latest", Err: err}
+		return session.Record{}, fmt.Errorf("session latest: %w", err)
 	}
 	return s.Load(id)
 }

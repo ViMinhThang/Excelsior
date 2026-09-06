@@ -64,7 +64,7 @@ func (m *MemoryStore) Load(id string) (Record, error) {
 
 	rec, ok := m.sessions[safeID]
 	if !ok {
-		return Record{}, &SessionError{Op: "load", SessionID: id, Err: fmt.Errorf("%w: %s", ErrSessionNotFound, id)}
+		return Record{}, fmt.Errorf("session load %q: %w", id, ErrSessionNotFound)
 	}
 
 	// Deep copy messages before returning
@@ -116,32 +116,7 @@ func (m *MemoryStore) Delete(id string) error {
 
 // Latest returns the most recently updated session. Returns ErrSessionNotFound if empty.
 func (m *MemoryStore) Latest() (Record, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	if len(m.sessions) == 0 {
-		return Record{}, &SessionError{Op: "latest", Err: ErrSessionNotFound}
-	}
-
-	var latest Record
-	var latestTime time.Time
-	for _, rec := range m.sessions {
-		t := rec.UpdatedAt
-		if t.IsZero() {
-			t = rec.CreatedAt
-		}
-		if t.After(latestTime) || latestTime.IsZero() {
-			latestTime = t
-			latest = rec
-		}
-	}
-
-	// Deep copy messages
-	msgsCopy := make([]llm.Message, len(latest.Messages))
-	copy(msgsCopy, latest.Messages)
-	latest.Messages = msgsCopy
-
-	return latest, nil
+	return Latest(m)
 }
 
 // Clear resets all stored sessions (useful in test cleanup).
