@@ -63,6 +63,9 @@ export type SessionInfo = {
   title: string;
   count: number;
   updatedAt?: string;
+  branch?: string;
+  added?: number;
+  deleted?: number;
 };
 
 export type SessionListResp = { sessions: SessionInfo[] };

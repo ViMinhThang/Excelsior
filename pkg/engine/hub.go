@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -28,6 +29,9 @@ type Hub struct {
 	SessionStore session.Store                                       // Injectable store for tests and embedded use.
 	DB           *sql.DB
 	Auth         *auth.Store
+	// PermissionOverride is a runtime-only CLI override (--yolo/--permission).
+	// Persisted permission lives in workspace settings (env-seeded).
+	PermissionOverride config.PermissionMode
 
 	mu        sync.RWMutex
 	clients   map[*Conn]struct{}
@@ -145,6 +149,22 @@ func (h *Hub) Handler() http.Handler {
 		_, _ = w.Write([]byte("ok")) //nolint:errcheck
 	})
 	return mux
+}
+
+// Serve runs the engine on an existing listener (e.g. 127.0.0.1:0 for embedded use).
+func (h *Hub) Serve(ctx context.Context, ln net.Listener) error {
+	srv := &http.Server{Handler: h.Handler()}
+	go func() {
+		<-ctx.Done()
+		shCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shCtx)
+	}()
+	h.logger().Info("engine serving", "addr", ln.Addr(), "workspace", h.Workspace(), "model", h.Config.Model)
+	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
 
 // ListenAndServe starts the HTTP and WebSocket server.

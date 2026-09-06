@@ -2,7 +2,9 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -14,7 +16,40 @@ import (
 )
 
 func sessionInfo(messages []llm.Message, customTitle string) protocol.SessionInfo {
-	return protocol.SessionInfo{Title: sessions.Title(messages, customTitle), Count: len(messages)}
+	added, deleted := diffStats(messages)
+	return protocol.SessionInfo{Title: sessions.Title(messages, customTitle), Count: len(messages), Added: added, Deleted: deleted}
+}
+
+// diffStats tallies edit-tool line changes across the session.
+// ponytail: counts whole oldText/newText blocks, not a real per-line diff
+func diffStats(messages []llm.Message) (added, deleted int) {
+	for _, m := range messages {
+		if m.Role != "assistant" {
+			continue
+		}
+		for _, tc := range m.ToolCalls {
+			if tc.Function.Name != "edit" {
+				continue
+			}
+			var a struct {
+				OldText string `json:"oldText"`
+				NewText string `json:"newText"`
+			}
+			if json.Unmarshal([]byte(tc.Function.Arguments), &a) != nil {
+				continue
+			}
+			added += countLines(a.NewText)
+			deleted += countLines(a.OldText)
+		}
+	}
+	return added, deleted
+}
+
+func countLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
 }
 
 // decodePayload unmarshals envelope payload into v, reporting error via sendError on failure.
@@ -26,18 +61,30 @@ func (c *Conn) decodePayload(env protocol.Envelope, v any, label string) bool {
 	return true
 }
 
+// branchOf returns the current git branch of dir, or "" if not a git repo.
+// ponytail: one branch per workspace (current HEAD), not the branch at session creation; persist per-session if that matters later.
+func branchOf(dir string) string {
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
 func (c *Conn) handleSessionList(ctx context.Context, env protocol.Envelope) {
 	metas, err := (sessions.Service{Store: c.sessionStore()}).List()
 	if err != nil {
 		c.sendError(env.ID, fmt.Sprintf("list sessions: %v", err))
 		return
 	}
+	branch := branchOf(c.currentWorkspace())
 	sessions := make([]protocol.SessionInfo, 0, len(metas))
 	for _, meta := range metas {
 		sessions = append(sessions, protocol.SessionInfo{
-			ID:    meta.ID,
-			Title: meta.Title,
-			Count: meta.MsgCount,
+			ID:     meta.ID,
+			Title:  meta.Title,
+			Count:  meta.MsgCount,
+			Branch: branch,
 		})
 	}
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSessionList, protocol.SessionListResp{Sessions: sessions}))
@@ -120,7 +167,7 @@ func (c *Conn) handleWorkspaceSet(ctx context.Context, env protocol.Envelope) {
 
 func (c *Conn) handleSettingsGet(ctx context.Context, env protocol.Envelope) {
 	s := config.LoadSettings(c.currentWorkspace())
-	perm, allowAll := permissions.Resolve(c.hub.Config.Permission, s)
+	perm, allowAll := permissions.Resolve(c.hub.PermissionOverride, s)
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSettingsGet, protocol.SettingsGetResp{Permission: string(perm), AllowAll: allowAll}))
 }
 
@@ -157,6 +204,6 @@ func (c *Conn) handleSettingsSet(ctx context.Context, env protocol.Envelope) {
 
 		c.hub.logger().Info("settings updated", "permission", s.Permission, "allowAll", s.AllowAll)
 	}
-	perm, allowAll := permissions.Resolve(c.hub.Config.Permission, s)
+	perm, allowAll := permissions.Resolve(c.hub.PermissionOverride, s)
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSettingsSet, protocol.SettingsSetResp{Permission: string(perm), AllowAll: allowAll}))
 }

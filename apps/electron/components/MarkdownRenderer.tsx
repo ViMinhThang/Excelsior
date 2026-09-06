@@ -1,8 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import CodeBlock from "./CodeBlock";
-import { CheckIcon, CopyIcon } from "./Icons";
 import { parseChunks } from "../lib/markdown";
-import { inferLangFromContent } from "../lib/lang";
 
 type Role = "user" | "assistant" | "system" | "tool" | "reason" | "error";
 
@@ -10,23 +9,9 @@ type MarkdownRendererProps = {
   content?: string;
   role: Role;
   meta?: string;
+  args?: string;
   isStreaming?: boolean;
 };
-
-function inlineParams(raw?: string): string {
-  if (!raw) return "";
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object") {
-      return Object.entries(parsed as Record<string, unknown>)
-        .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-        .join("  ");
-    }
-  } catch {
-    // fall through
-  }
-  return raw.replace(/\r?\n/g, " ").trim();
-}
 
 const Inline = React.memo(function Inline({ text }: { text: string }) {
   const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s)]+)/g);
@@ -36,7 +21,7 @@ const Inline = React.memo(function Inline({ text }: { text: string }) {
         if (!part) return null;
         if (part.startsWith("`") && part.endsWith("`")) {
           return (
-            <code key={index} className="px-1.5 py-0.5 rounded bg-[var(--bg-input)] text-[var(--accent)] font-mono text-[12px]">
+            <code key={index} className="px-1.5 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-main)] font-mono text-[12px]">
               {part.slice(1, -1)}
             </code>
           );
@@ -128,82 +113,145 @@ function useMarkdownChunks(text: string) {
 
 function UserBubble({ text }: { text: string }) {
   return (
-    <div className="flex justify-end my-4">
-      <div className="max-w-[85%] px-4 py-2.5 rounded-2xl bg-[var(--bubble-user)] text-[13.5px] leading-relaxed selectable-text whitespace-pre-wrap">
+    <div className="flex justify-end my-3">
+      <div className="max-w-[85%] px-4 py-2.5 rounded-2xl bg-[var(--bubble-user)] border-subtle shadow-[var(--card-shadow)] text-[13px] leading-relaxed selectable-text whitespace-pre-wrap text-[var(--text-main)]">
         {text}
       </div>
     </div>
   );
 }
 
-function inferToolLanguage(content: string, meta?: string): string {
-  return inferLangFromContent(content, meta);
-}
-
-function ToolBlock({ content, meta }: { content: string; meta?: string }) {
-  const isLong = content.includes("\n") && content.trim().length > 80;
+function ToolBlock({ content, meta, args: rawArgs }: { content: string; meta?: string; args?: string }) {
+  const [open, setOpen] = useState(false);
+  const isResult = !!meta?.includes("→");
+  const rawName = isResult ? meta!.replace(/\s*→$/, "").trim() : (meta || "tool").trim();
   const hasFence = content.includes("```");
-  const fallbackLang = useMemo(() => inferToolLanguage(content, meta), [content, meta]);
+  const isExecuting = !isResult && rawArgs === undefined && !content;
+  const isBash = /bash|shell/.test(rawName.toLowerCase());
+
+  const pickArg = useCallback((raw?: string | null): string | null => {
+    if (!raw?.trim()) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        const val = (parsed as Record<string, unknown>).command ?? (parsed as Record<string, unknown>).cmd ?? (parsed as Record<string, unknown>).filePath ?? (parsed as Record<string, unknown>).TargetFile ?? (parsed as Record<string, unknown>).AbsolutePath ?? (parsed as Record<string, unknown>).FilePath ?? (parsed as Record<string, unknown>).Query ?? (parsed as Record<string, unknown>).Pattern ?? (parsed as Record<string, unknown>).prompt ?? (parsed as Record<string, unknown>).query ?? Object.values(parsed)[0];
+        if (typeof val === "string" && val.trim()) return val;
+      }
+    } catch {}
+    return null;
+  }, []);
+
+  const bashCommand = useMemo(() => {
+    if (!isBash) return null;
+    return pickArg(rawArgs) ?? pickArg(content) ?? (rawArgs ?? content ?? "");
+  }, [isBash, rawArgs, content, pickArg]);
+
+  const preview = useMemo(() => {
+    const line = (pickArg(rawArgs) ?? pickArg(content) ?? (rawArgs ?? content ?? "")).split("\n")[0].trim();
+    return line.length > 80 ? `${line.slice(0, 80)}…` : line;
+  }, [rawArgs, content, pickArg]);
+
+  const rawArgsText = rawArgs !== undefined ? rawArgs : (!isResult && !hasFence ? content : null);
 
   const toolChunks = useMemo(() => {
     if (!hasFence) return null;
-    return parseChunks(content).map((ch) => ch.type === "code" && !ch.lang ? { ...ch, lang: fallbackLang } : ch);
-  }, [content, hasFence, fallbackLang]);
+    return parseChunks(content);
+  }, [content, hasFence]);
 
   return (
-    <div className="my-1.5 text-xs font-mono">
-      <div className="flex gap-2 whitespace-nowrap overflow-x-auto text-[12px]">
-        <span className="font-semibold text-[var(--accent)]">{meta || "tool"}</span>
-        <span className="text-[var(--text-dim)] truncate">{inlineParams(content)}</span>
+    <div className="my-2.5 rounded-xl overflow-hidden text-xs font-mono">
+      {/* Header */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((v) => !v); } }}
+        className="w-full px-3 py-2 flex items-center gap-2 cursor-pointer select-none"
+      >
+        {isBash ? (
+          <span className="font-semibold text-[var(--text-main)] tracking-tight select-none shrink-0">Shell</span>
+        ) : (
+          <span className="font-semibold text-[var(--text-main)] tracking-tight select-none shrink-0">{rawName}</span>
+        )}
+        {preview && (
+          <span className="text-[11.5px] text-[var(--text-muted)] truncate min-w-0 flex-1 selectable-text">
+            {preview}
+          </span>
+        )}
+        {isExecuting && (
+          <span className="flex items-center gap-1.5 text-[10.5px] text-amber-400 font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+            running
+          </span>
+        )}
+        <ChevronDown
+          className={`w-3.5 h-3.5 text-[var(--text-dim)] transition-transform duration-200 ${open ? "" : "-rotate-90"}`}
+          aria-hidden
+        />
       </div>
-      {isLong && (
-        <details className="mt-1.5">
-          <summary className="text-[var(--text-dim)] cursor-pointer text-[11px]">View output</summary>
-          <div className="mt-1.5 max-h-80 overflow-y-auto selectable-text">
-            {hasFence && toolChunks ? (
+
+      {/* Body */}
+      {open && (
+        <div className="px-3 py-2.5 space-y-3 animate-fade-in">
+          {content && content !== rawArgsText && (
+            hasFence && toolChunks ? (
               <div className="space-y-2">
                 {toolChunks.map((ch, i) =>
                   ch.type === "code" ? (
-                    <CodeBlock key={i} language={ch.lang || fallbackLang} code={ch.content} />
+                    <CodeBlock key={i} language={ch.lang} code={ch.content} />
                   ) : ch.content.trim() ? (
-                    <div key={i} className="bg-[var(--bg-input)] rounded-xl p-3 font-mono text-[11.5px] whitespace-pre-wrap text-[var(--text-main)]">
+                    <div key={i} className="border-subtle rounded-lg px-2.5 py-2 text-[var(--text-muted)] selectable-text whitespace-pre-wrap break-words">
                       {ch.content.trim()}
                     </div>
                   ) : null
                 )}
               </div>
             ) : (
-              <CodeBlock language={fallbackLang} code={content} />
-            )}
-          </div>
-        </details>
+              <pre className="border-subtle rounded-lg px-2.5 py-2 text-[var(--text-muted)] max-h-80 overflow-y-auto whitespace-pre-wrap break-words selectable-text">
+                {content}
+              </pre>
+            )
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function MarkdownRenderer({ content = "", role, meta, isStreaming }: MarkdownRendererProps) {
-  const [copied, setCopied] = useState(false);
+function ReasonBlock({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="my-2 rounded-xl border-subtle bg-[var(--bg-card)]/60 text-xs overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-3 py-1.5 flex items-center justify-between text-[11.5px] text-[var(--text-dim)] hover:text-[var(--text-muted)] cursor-pointer"
+      >
+        <div className="flex items-center gap-1.5">
+          <ChevronDown className={`w-3 h-3 transition-transform ${open ? "" : "-rotate-90"}`} />
+          <span>Thought process / reasoning</span>
+        </div>
+      </button>
+      {open && (
+        <div className="px-3.5 py-2 border-subtle-t bg-[var(--bg-input)]/40 text-[11.5px] text-[var(--text-muted)] font-mono leading-relaxed selectable-text whitespace-pre-wrap animate-fade-in">
+          {text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MarkdownRenderer({ content = "", role, meta, args, isStreaming }: MarkdownRendererProps) {
   const text = typeof content === "string" ? content : String(content ?? "");
   const chunks = useMarkdownChunks(text);
 
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // ignore clipboard errors (e.g., file://)
-    }
-  }, [text]);
-
   if (role === "user") return <UserBubble text={text} />;
-  if (role === "tool") return <ToolBlock content={text} meta={meta} />;
-  if (role === "reason") return <div className="my-1.5 text-[var(--text-dim)] text-xs font-mono italic selectable-text">{text}</div>;
-  if (role === "error") return <div className="my-2.5 px-3.5 py-2.5 rounded-xl bg-[#261215] text-[#f87171] text-xs font-mono">Error: {text}</div>;
+  if (role === "tool") return <ToolBlock content={text} meta={meta} args={args} />;
+  if (role === "reason") return <ReasonBlock text={text} />;
+  if (role === "error") return <div className="my-2.5 px-3.5 py-2.5 rounded-xl bg-rose-500/10 border-subtle text-rose-400 text-xs font-mono">Error: {text}</div>;
 
   return (
-    <div className="my-4 selectable-text group">
+    <div className="my-4 selectable-text">
       <div className="space-y-1">
         {chunks.map((chunk, index) => {
           if (chunk.type === "code") return <CodeBlock key={index} language={chunk.lang} code={chunk.content} />;
@@ -252,24 +300,6 @@ function MarkdownRenderer({ content = "", role, meta, isStreaming }: MarkdownRen
         })}
         {isStreaming && <span className="inline-block w-2 h-4 bg-[var(--accent)] animate-pulse ml-1 align-middle" aria-hidden />}
       </div>
-
-      {!isStreaming && (
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="mt-3 p-1 rounded text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card)] flex items-center gap-1 text-xs opacity-80 group-hover:opacity-100"
-        >
-          {copied ? (
-            <>
-              <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />Copied
-            </>
-          ) : (
-            <>
-              <CopyIcon className="w-3.5 h-3.5" />Copy
-            </>
-          )}
-        </button>
-      )}
     </div>
   );
 }

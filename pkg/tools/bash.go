@@ -18,7 +18,7 @@ type BashTool struct{ Root string }
 
 func (t *BashTool) Name() string { return "bash" }
 func (t *BashTool) Description() string {
-	return "Execute a shell command in the workspace. Returns stdout+stderr. Timeout 1s-120s."
+	return "Execute a shell command in the workspace (read/write/list/search/run files). Returns stdout+stderr. Timeout 1s-120s."
 }
 func (t *BashTool) Parameters() any {
 	return jsonSchema(map[string]any{

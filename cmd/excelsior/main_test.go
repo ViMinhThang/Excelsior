@@ -109,21 +109,21 @@ func TestCLI_RootCommandFlags(t *testing.T) {
 func TestCLI_RunAgent_Validation(t *testing.T) {
 	// 1. Invalid config (missing API key)
 	cfgInvalid := config.Config{}
-	err := runAgent(context.Background(), cfgInvalid, "v4", t.TempDir(), "", "", "hello")
+	err := runAgent(context.Background(), cfgInvalid, config.PermissionAsk, "v4", t.TempDir(), "", "", "hello")
 	if err == nil || !strings.Contains(err.Error(), "config:") {
 		t.Fatalf("expected config error, got %v", err)
 	}
 
 	// 2. Empty prompt
 	cfgValid := config.Config{APIKey: "sk-test", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}
-	err = runAgent(context.Background(), cfgValid, "v4", t.TempDir(), "", "", "   ")
+	err = runAgent(context.Background(), cfgValid, config.PermissionAsk, "v4", t.TempDir(), "", "", "   ")
 	if err == nil || !strings.Contains(err.Error(), "prompt is empty") {
 		t.Fatalf("expected prompt is empty error, got %v", err)
 	}
 
 	// 3. Prompt too large
 	hugePrompt := strings.Repeat("x", 200_001)
-	err = runAgent(context.Background(), cfgValid, "v4", t.TempDir(), "", "", hugePrompt)
+	err = runAgent(context.Background(), cfgValid, config.PermissionAsk, "v4", t.TempDir(), "", "", hugePrompt)
 	if err == nil || !strings.Contains(err.Error(), "prompt too large") {
 		t.Fatalf("expected prompt too large error, got %v", err)
 	}
@@ -179,3 +179,5 @@ func TestCLI_IsTerminal(t *testing.T) {
 		t.Errorf("regular temp file should not be a terminal")
 	}
 }
+
+

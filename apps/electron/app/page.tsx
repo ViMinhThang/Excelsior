@@ -6,7 +6,6 @@ import Composer from "../components/Composer";
 import SettingsModal from "../components/SettingsModal";
 import MenuBar from "../components/MenuBar";
 import AskDialog from "../components/AskDialog";
-import PermissionDialog from "../components/PermissionDialog";
 import Transcript from "../components/Transcript";
 import { useEngine } from "../lib/useEngine";
 import { cleanTitle, formatTimeAgo } from "../lib/format";
@@ -127,15 +126,22 @@ export default function Page() {
         path: kf.path,
         sessions:
           kf.name.toLowerCase() === projectName.toLowerCase()
-            ? sessions.map((s) => ({
-                id: s.id,
-                title: cleanTitle(s.title),
-                updatedTime: formatTimeAgo(s.updatedAt, s.id),
-                count: s.count,
-              }))
+              ? sessions.map((s) => ({
+                  id: s.id,
+                  title: cleanTitle(s.title),
+                  updatedTime: formatTimeAgo(s.updatedAt, s.id),
+                  count: s.count,
+                  branch: s.branch,
+                  added: s.added,
+                  deleted: s.deleted,
+                }))
             : [],
       })),
     [knownFolders, projectName, sessions]
+  );
+  const activeSession = useMemo(
+    () => sessions.find((s) => s.id === activeId) ?? null,
+    [sessions, activeId]
   );
 
   const handleSelectSession = useCallback(
@@ -145,17 +151,20 @@ export default function Page() {
         setProjectName(folder.name);
         if (folder.path) send("workspace.set", { workspace: folder.path });
       }
+      const prevId = activeIdRef.current;
+      if (prevId && prevId !== sessionId) send("session.unsubscribe", { id: prevId });
       setActiveId(sessionId);
       setEngineActiveId(sessionId);
       setBlocks([]);
       resetUsage();
       send("session.data", { id: sessionId });
     },
-    [knownFolders, projectName, send, setBlocks, setEngineActiveId, resetUsage]
+    [knownFolders, projectName, send, setBlocks, setEngineActiveId, resetUsage, activeIdRef]
   );
 
   const handleNewChat = useCallback(
     (folderId?: string) => {
+      if (activeIdRef.current) send("session.unsubscribe", { id: activeIdRef.current });
       if (folderId) {
         const folder = knownFolders.find((f) => f.id === folderId);
         if (folder && folder.name.toLowerCase() !== projectName.toLowerCase()) {
@@ -239,7 +248,6 @@ export default function Page() {
 
   const handleDeleteSession = useCallback(
     (id: string) => {
-      if (!window.confirm(`Delete session ${id}?`)) return;
       send("session.delete", { id });
       if (activeId === id) {
         setActiveId(null);
@@ -287,7 +295,7 @@ export default function Page() {
     }
   }, []);
 
-  const isLanding = !activeId && blocks.length === 0;
+  const isLanding = blocks.filter((b) => b.role !== "system").length === 0;
 
   return (
     <ErrorBoundary>
@@ -300,9 +308,12 @@ export default function Page() {
           currentTheme={theme}
           sessionTokens={usage.total}
           onSaveTheme={setTheme}
+          engineState={wsState}
+          projectName={projectName}
+          sessionTitle={activeSession?.title ?? null}
         />
         {isDesktop === false && (
-          <div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs text-center">
+          <div className="mx-4 mt-2 px-3 py-2 rounded-xl bg-amber-500/10 border-subtle text-amber-200 text-xs text-center">
             Desktop-only build — browser standalone is disabled. Run <code className="px-1 py-0.5 bg-black/20 rounded">npm run dev</code> (frontend) +{" "}
             <code className="px-1 py-0.5 bg-black/20 rounded">npm run dev:engine</code> and{" "}
             <code className="px-1 py-0.5 bg-black/20 rounded">npm run dev:desktop</code> in <code className="px-1 py-0.5 bg-black/20 rounded">apps/electron</code>.
@@ -315,49 +326,114 @@ export default function Page() {
             folders={folders}
             activeSessionId={activeId}
             onSelectSession={handleSelectSession}
-            onNewChat={handleNewChat}
-            onOpenFolder={() => void handleOpenFolder()}
-            onOpenSettings={() => setSettingsOpen(true)}
+            onNewSession={handleNewChat}
             onDeleteSession={handleDeleteSession}
             onRenameSession={handleRenameSession}
           />
 
-          <main className="flex-1 flex flex-col h-full min-w-0 bg-[var(--bg-canvas)] rounded-tl-2xl overflow-hidden shadow-md">
+          <main className="flex-1 flex flex-col h-full min-w-0 bg-[var(--bg-canvas)] border-subtle-t border-subtle-l rounded-tl-xl overflow-hidden">
             {isLanding ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-6 animate-fade-in">
-                <Composer
-                  mode="centered"
-                  selectedModel={model}
-                  onSelectModel={setModel}
-                  onSend={handleSendPrompt}
-                  isStreaming={streaming}
-                  disabled={wsState !== "connected"}
-                />
-                {wsState !== "connected" && (
-                  <div className="text-xs text-[var(--text-dim)] mt-3 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" aria-hidden />
-                    Connecting to engine at {engineUrl}…
+              <div className="flex-1 flex flex-col items-center justify-center p-6 max-w-2xl mx-auto w-full animate-fade-in space-y-6">
+                {/* Hero Header */}
+                <div className="text-center space-y-2">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--bg-card)] border-subtle text-xs text-[var(--text-muted)] mb-1 shadow-xs">
+                    <span className="w-2 h-2 rounded-full bg-[var(--text-dim)]" />
+                    <span className="font-mono text-[11.5px] font-semibold text-[var(--text-main)]">{projectName}</span>
                   </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex-1 flex flex-col h-full min-h-0">
-                <Transcript ref={transcriptRef} blocks={blocks} streaming={streaming} />
-                <div className="shrink-0 bg-gradient-to-t from-[var(--bg-canvas)] via-[var(--bg-canvas)] to-transparent pt-2">
+                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-main)]">
+                    What are we building today?
+                  </h1>
+                  <p className="text-xs sm:text-sm text-[var(--text-muted)] max-w-md mx-auto leading-relaxed">
+                    Excelsior is paired with your codebase to inspect files, edit code, and run tasks directly.
+                  </p>
+                </div>
+
+                {/* Centered Composer */}
+                <div className="w-full">
                   <Composer
-                    mode="docked"
+                    mode="centered"
                     selectedModel={model}
                     onSelectModel={setModel}
                     onSend={handleSendPrompt}
                     isStreaming={streaming}
                     disabled={wsState !== "connected"}
                   />
+                  {wsState !== "connected" && (
+                    <div className="text-xs text-[var(--text-dim)] mt-3 flex items-center justify-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" aria-hidden />
+                      Connecting to engine at {engineUrl}…
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Suggestion Prompt Chips */}
+                <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                  {[
+                    {
+                      label: "Architecture survey",
+                      desc: "Summarize workspace architecture and dependencies",
+                      prompt: "Inspect this project and explain the overall architecture, folder structure, and tech stack.",
+                    },
+                    {
+                      label: "Find bugs & audit",
+                      desc: "Scan recent files for potential errors and fixes",
+                      prompt: "Review the current codebase for potential bugs, unhandled errors, or logic issues.",
+                    },
+                    {
+                      label: "Write tests",
+                      desc: "Generate unit or integration tests for core modules",
+                      prompt: "Identify the critical paths in this project and generate unit tests for them.",
+                    },
+                    {
+                      label: "Run check & status",
+                      desc: "Check git status and run build verification",
+                      prompt: "Run git status and run the project test or build command to verify project health.",
+                    },
+                  ].map((chip) => (
+                    <button
+                      key={chip.label}
+                      type="button"
+                      onClick={() => handleSendPrompt(chip.prompt)}
+                      disabled={wsState !== "connected"}
+                      className="text-left p-3 rounded-2xl bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)] border-subtle shadow-[var(--card-shadow)] transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="text-xs font-semibold text-[var(--text-main)] group-hover:text-[var(--accent)] transition-colors flex items-center justify-between">
+                        <span>{chip.label}</span>
+                        <span className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                      </div>
+                      <div className="text-[11px] text-[var(--text-dim)] mt-0.5 leading-snug truncate">
+                        {chip.desc}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col h-full min-h-0">
+                <Transcript
+                  ref={transcriptRef}
+                  blocks={blocks}
+                  streaming={streaming}
+                  permission={permission}
+                  onPermissionDecision={handlePermissionDecision}
+                  onAllowAll={() => { handleSaveAllowAll(true); handlePermissionDecision(true); }}
+                />
+                <div className="shrink-0 bg-gradient-to-t from-[var(--bg-canvas)] via-[var(--bg-canvas)] to-transparent pt-2">
+                  {ask ? (
+                    <AskDialog ask={ask} onAnswer={handleAnswerAsk} />
+                  ) : (
+                    <Composer
+                      mode="docked"
+                      selectedModel={model}
+                      onSelectModel={setModel}
+                      onSend={handleSendPrompt}
+                      isStreaming={streaming}
+                      disabled={wsState !== "connected"}
+                    />
+                  )}
                 </div>
               </div>
             )}
-
-            {ask && <AskDialog ask={ask} onAnswer={handleAnswerAsk} />}
-            {permission && <PermissionDialog permission={permission} onDecision={handlePermissionDecision} />}
           </main>
         </div>
 

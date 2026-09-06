@@ -41,12 +41,8 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 	handler := m.resolveAskHandler(ctx)
 	permHandler := m.resolvePermHandler(ctx)
 
-	if m.cfg.EngineURL != "" {
-		m.launch(ctx, msgs, ch, handler, permHandler)
-		return m, waitForChunk(ch)
-	}
-	if m.cfg.Agent == nil {
-		m.blocks = append(m.blocks, block{Role: "error", Content: "agent not configured (DEEPSEEK_API_KEY missing?)"})
+	if m.cfg.EngineURL == "" {
+		m.blocks = append(m.blocks, block{Role: "error", Content: "engine not configured"})
 		m.syncViewport()
 		return m, nil
 	}
@@ -63,17 +59,9 @@ func (m model) resolveAskHandler(ctx context.Context) tools.QuestionHandler {
 	}
 }
 
+// resolvePermHandler always dispatches to the overlay: the engine has already
+// resolved the permission mode (flag override + settings) before asking.
 func (m model) resolvePermHandler(ctx context.Context) tools.PermissionHandler {
-	switch m.cfg.Permission {
-	case "allow":
-		return func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
-			return tools.PermissionResponse{Approved: true}, nil
-		}
-	case "deny":
-		return func(hctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
-			return tools.PermissionResponse{Approved: false}, nil
-		}
-	}
 	if m.cfg.PermissionDispatcher != nil {
 		return m.cfg.PermissionDispatcher.Handler(ctx)
 	}
@@ -82,20 +70,11 @@ func (m model) resolvePermHandler(ctx context.Context) tools.PermissionHandler {
 	}
 }
 
-// ponytail: one launcher (remote vs local differ only in the run call)
+// ponytail: remote-only; local runs go through embedded engine (see cmd/tui.go)
 func (m model) launch(ctx context.Context, msgs []llm.Message, ch chan agent.StreamEvent, handler tools.QuestionHandler, permHandler tools.PermissionHandler) {
 	go func() {
-		var err error
-		if m.cfg.EngineURL != "" {
-			chatReq := protocol.ChatReq{Model: m.cfg.Model, Messages: msgs}
-			err = (&engine.WSClient{URL: m.cfg.EngineURL}).StreamRemote(ctx, chatReq, deltaToEventForwarder(ctx, ch), handler, permHandler)
-		} else {
-			ctxWithHandler := tools.WithQuestionHandler(tools.WithPermissionHandler(ctx, permHandler), handler)
-			_, err = m.cfg.Agent.RunWithHistory(ctxWithHandler, agent.RunOptions{
-				Messages: msgs,
-				OnEvent:  eventForwarder(ctx, ch),
-			})
-		}
+		chatReq := protocol.ChatReq{Model: m.cfg.Model, Messages: msgs}
+		err := (&engine.WSClient{URL: m.cfg.EngineURL}).StreamRemote(ctx, chatReq, deltaToEventForwarder(ctx, ch), handler, permHandler)
 		if err != nil {
 			sendErrorEvent(ctx, ch, err)
 		}
@@ -116,15 +95,6 @@ func deltaToEventForwarder(ctx context.Context, ch chan agent.StreamEvent) func(
 			return ctx.Err()
 		}
 		return nil
-	}
-}
-
-func eventForwarder(ctx context.Context, ch chan agent.StreamEvent) func(agent.StreamEvent) {
-	return func(ev agent.StreamEvent) {
-		select {
-		case ch <- ev:
-		case <-ctx.Done():
-		}
 	}
 }
 

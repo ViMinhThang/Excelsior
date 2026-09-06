@@ -48,6 +48,8 @@ async function createWindow(){
   console.log('[desktop] loading',t);
   if(t.kind==='url') await win.loadURL(t.value); else await win.loadFile(t.value);
   win.once('ready-to-show',()=>win.show());
+  win.webContents.on('did-finish-load',()=>{if(!win.isVisible()) win.show();});
+  setTimeout(()=>{if(win&&!win.isDestroyed()&&!win.isVisible()) win.show();},3000);
   win.webContents.setWindowOpenHandler(({url})=>{ if(url.startsWith('http://localhost:')||url.startsWith('file://')) return {action:'allow'}; shell.openExternal(url); return {action:'deny'}; });
   win.webContents.on('before-input-event',(e,input)=>{ if(input.key==='F12'||(input.control&&input.shift&&input.key.toLowerCase()==='i')){win.webContents.toggleDevTools();e.preventDefault();} if((input.control||input.meta)&&input.key.toLowerCase()==='r') win.reload(); });
   Menu.setApplicationMenu(null);

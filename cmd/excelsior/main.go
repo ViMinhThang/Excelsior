@@ -17,6 +17,7 @@ import (
 
 	"excelsior/internal/app"
 	"excelsior/internal/chat"
+	"excelsior/internal/permissions"
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
 	"excelsior/pkg/llm"
@@ -46,6 +47,9 @@ func main() {
 }
 
 func newRootCommand(cfg config.Config, model, workspace, system, sessionID, engineURL, permission *string, yolo *bool, verbose *bool) *cobra.Command {
+	// permissionOverride is a runtime-only CLI override (never persisted);
+	// persisted permission lives in Settings (workspace settings.json).
+	var permissionOverride config.PermissionMode
 	root := &cobra.Command{
 		Use:   "excelsior",
 		Short: "Excelsior — DeepSeek-native coding agent (Go)",
@@ -63,15 +67,16 @@ Examples:
 			if *verbose {
 				slog.SetLogLoggerLevel(slog.LevelDebug)
 			}
-			// yolo / allow-all setting: if set, override to allow without asking
+			// Runtime-only override: --yolo / --permission. Resolved with
+			// LoadSettings (env-seeded) via permissions.Resolve at use sites.
 			if *yolo {
-				cfg.Permission = config.PermissionAllow
+				permissionOverride = config.PermissionAllow
 			} else if *permission != "" {
 				pm, err := config.ParsePermissionMode(*permission)
 				if err != nil {
 					return err
 				}
-				cfg.Permission = pm
+				permissionOverride = pm
 			}
 			// propagate resolved cfg for subcommands via context
 			cmd.SetContext(context.WithValue(cmd.Context(), configKey{}, cfg))
@@ -91,7 +96,7 @@ Examples:
 				}
 				return cmd.Help()
 			}
-			return runAgent(cmd.Context(), cfg, *model, *workspace, *system, *sessionID, prompt)
+			return runAgent(cmd.Context(), cfg, permissionOverride, *model, *workspace, *system, *sessionID, prompt)
 		},
 	}
 	root.PersistentFlags().StringVarP(model, "model", "m", "", "DeepSeek model (deepseek-v4-flash, deepseek-v4-pro)")
@@ -163,7 +168,7 @@ func setupLogger() {
 
 type configKey struct{}
 
-func runAgent(ctx context.Context, cfg config.Config, model, workspace, system, sessionID, prompt string) error {
+func runAgent(ctx context.Context, cfg config.Config, override config.PermissionMode, model, workspace, system, sessionID, prompt string) error {
 	if err := cfg.Validate(); err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
@@ -184,9 +189,11 @@ func runAgent(ctx context.Context, cfg config.Config, model, workspace, system, 
 		return fmt.Errorf("prompt too large (%d > 200000 chars)", len(prompt))
 	}
 
-	// Permission handler for headless CLI: argv-driven, once per call, sequential.
+	// Permission: flag override > workspace settings.json > user global > env > ask.
+	perm, _ := permissions.Resolve(override, config.LoadSettings(workspace))
+	// Permission handler for headless CLI: resolved mode, once per call, sequential.
 	var permHandler tools.PermissionHandler
-	switch cfg.Permission {
+	switch perm {
 	case config.PermissionAllow:
 		permHandler = func(ctx context.Context, req tools.PermissionRequest) (tools.PermissionResponse, error) {
 			return tools.PermissionResponse{Approved: true}, nil
@@ -206,7 +213,7 @@ func runAgent(ctx context.Context, cfg config.Config, model, workspace, system, 
 	ag := app.NewAgent(cfg, workspace, model, system, slog.Default())
 
 	messages := []llm.Message{{Role: "user", Content: prompt}}
-	slog.Info("agent run", "model", model, "workspace", workspace, "session", sessionID, "permission", cfg.Permission)
+	slog.Info("agent run", "model", model, "workspace", workspace, "session", sessionID, "permission", perm)
 
 	service := chat.Service{Runner: ag}
 	if sessionID != "" {

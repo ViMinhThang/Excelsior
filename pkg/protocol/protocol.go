@@ -159,6 +159,9 @@ type SessionInfo struct {
 	Title     string `json:"title"` // first user message truncated
 	UpdatedAt string `json:"updatedAt"`
 	Count     int    `json:"count"`
+	Branch    string `json:"branch,omitempty"`
+	Added     int    `json:"added,omitempty"`
+	Deleted   int    `json:"deleted,omitempty"`
 }
 
 // SessionCreateReq creates a new session.

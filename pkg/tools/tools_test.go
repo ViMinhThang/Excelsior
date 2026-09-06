@@ -61,11 +61,11 @@ func TestRegistry_AllAndGet(t *testing.T) {
 	}
 
 	all := reg.All()
-	if len(all) != 8 {
-		t.Errorf("expected 8 default tools, got %d", len(all))
+	if len(all) != 3 {
+		t.Errorf("expected 3 default tools, got %d", len(all))
 	}
 
-	expectedTools := []string{"view", "ls", "glob", "grep", "write", "edit", "bash", "askQuestion"}
+	expectedTools := []string{"edit", "bash", "askQuestion"}
 	for _, name := range expectedTools {
 		tool, ok := reg.Get(name)
 		if !ok || tool == nil {
@@ -81,105 +81,12 @@ func TestRegistry_AllAndGet(t *testing.T) {
 	}
 }
 
-func TestGlobTool(t *testing.T) {
-	root := tmpWorkspace(t)
-	gt := &GlobTool{Root: root}
-	args, _ := json.Marshal(map[string]string{"pattern": "*.txt"})
-	out, err := gt.Execute(context.Background(), args)
-	if err != nil {
-		t.Fatalf("glob err: %v", err)
-	}
-	if !contains(out, "hello.txt") {
-		t.Fatalf("expected hello.txt in glob output, got %q", out)
-	}
-
-	// Glob should reject traversal pattern
-	badArgs, _ := json.Marshal(map[string]string{"pattern": "../**/*.txt"})
-	if _, err := gt.Execute(context.Background(), badArgs); err == nil {
-		t.Fatal("expected error on traversal pattern")
-	} else if !errors.Is(err, ErrPathOutsideWorkspace) {
-		t.Fatalf("expected ErrPathOutsideWorkspace, got %v", err)
-	}
-}
-
-func TestViewTool(t *testing.T) {
-	root := tmpWorkspace(t)
-	vt := &ViewTool{Root: root}
-	args, _ := json.Marshal(map[string]string{"filePath": "hello.txt"})
-	out, err := vt.Execute(context.Background(), args)
-	if err != nil {
-		t.Fatalf("view err: %v", err)
-	}
-	if out == "" {
-		t.Fatal("empty view")
-	}
-	// pagination: offset 0 limit 2
-	argsPag, _ := json.Marshal(map[string]any{"filePath": "hello.txt", "offset": 0, "limit": 2})
-	out2, err := vt.Execute(context.Background(), argsPag)
-	if err != nil {
-		t.Fatalf("view pag err: %v", err)
-	}
-	if !contains(out2, "1:") || !contains(out2, "2:") {
-		t.Fatalf("pagination missing lines: %q", out2)
-	}
-	if contains(out2, "3:") {
-		t.Fatalf("pagination should not contain line 3: %q", out2)
-	}
-	// offset 1 limit 1 should give line2
-	argsPag2, _ := json.Marshal(map[string]any{"filePath": "hello.txt", "offset": 1, "limit": 1})
-	out3, err := vt.Execute(context.Background(), argsPag2)
-	if err != nil {
-		t.Fatalf("view pag2 err: %v", err)
-	}
-	if !contains(out3, "2:") {
-		t.Fatalf("expected line 2: %q", out3)
-	}
-	// limit >200 should fail
-	argsBad, _ := json.Marshal(map[string]any{"filePath": "hello.txt", "offset": 0, "limit": 999})
-	if _, err := vt.Execute(context.Background(), argsBad); err == nil {
-		t.Fatal("expected limit validation error")
-	} else if !errors.Is(err, ErrInvalidArguments) {
-		t.Fatalf("expected ErrInvalidArguments, got %v", err)
-	}
-
-	// traversal should fail
-	args2, _ := json.Marshal(map[string]string{"filePath": "../escape"})
-	if _, err := vt.Execute(context.Background(), args2); err == nil {
-		t.Fatal("expected traversal error")
-	} else if !errors.Is(err, ErrPathOutsideWorkspace) {
-		t.Fatalf("expected ErrPathOutsideWorkspace, got %v", err)
-	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (func() bool {
-		for i := 0; i <= len(s)-len(substr); i++ {
-			if s[i:i+len(substr)] == substr {
-				return true
-			}
-		}
-		return false
-	})()
-}
-
-func TestLsTool(t *testing.T) {
-	root := tmpWorkspace(t)
-	lt := &LsTool{Root: root}
-	out, err := lt.Execute(context.Background(), json.RawMessage(`{}`))
-	if err != nil {
-		t.Fatalf("ls err: %v", err)
-	}
-	if out == "" {
-		t.Fatal("empty ls")
-	}
-}
+func contains(s, substr string) bool { return strings.Contains(s, substr) }
 
 func TestWriteAndEditTool(t *testing.T) {
 	root := tmpWorkspace(t)
-	wt := &WriteTool{Root: root}
-	args, _ := json.Marshal(map[string]string{"filePath": "out.txt", "content": "hello"})
-	if _, err := wt.Execute(context.Background(), args); err != nil {
-		t.Fatalf("write err: %v", err)
+	if err := os.WriteFile(filepath.Join(root, "out.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 	et := &EditTool{Root: root}
 	eArgs, _ := json.Marshal(map[string]string{"filePath": "out.txt", "oldText": "hello", "newText": "world"})
@@ -215,35 +122,6 @@ func TestBashTool_Validation(t *testing.T) {
 		t.Fatal("expected timeout validation error")
 	} else if !errors.Is(err, ErrInvalidArguments) {
 		t.Fatalf("expected ErrInvalidArguments, got %v", err)
-	}
-}
-
-func TestGrepTool(t *testing.T) {
-	root := tmpWorkspace(t)
-	gt := &GrepTool{Root: root}
-	args, _ := json.Marshal(map[string]string{"pattern": "hello"})
-	out, err := gt.Execute(context.Background(), args)
-	if err != nil {
-		t.Fatalf("grep err: %v", err)
-	}
-	if out == "No matches." {
-		t.Fatal("expected matches")
-	}
-	// empty pattern should fail
-	args2, _ := json.Marshal(map[string]string{"pattern": ""})
-	if _, err := gt.Execute(context.Background(), args2); err == nil {
-		t.Fatal("expected empty pattern error")
-	} else if !errors.Is(err, ErrInvalidArguments) {
-		t.Fatalf("expected ErrInvalidArguments, got %v", err)
-	}
-
-	// Test nil Path does not panic on non-dir stat error
-	fileRoot := filepath.Join(root, "hello.txt")
-	gtFile := &GrepTool{Root: fileRoot}
-	args3, _ := json.Marshal(map[string]any{"pattern": "hello", "path": nil})
-	_, err = gtFile.Execute(context.Background(), args3)
-	if err == nil || !errors.Is(err, ErrNotADirectory) {
-		t.Fatalf("expected ErrNotADirectory for file root, got %v", err)
 	}
 }
 

@@ -8,8 +8,8 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-[#0d0d0d] text-[#efefef] antialiased select-none overflow-hidden h-screen w-screen">
+    <html lang="en">
+      <body className="bg-[var(--bg-sidebar)] text-[var(--text-main)] antialiased select-none overflow-hidden h-screen w-screen">
         <ThemeProvider defaultTheme={DEFAULT_THEME}>{children}</ThemeProvider>
       </body>
     </html>

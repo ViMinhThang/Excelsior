@@ -38,10 +38,15 @@ func UserSettingsPath() string {
 }
 
 // LoadSettings reads settings from workspace path and user global path, merged
-// with workspace taking precedence. Missing file returns empty settings.
+// with workspace taking precedence. EXCELSIOR_PERMISSION env seeds the base
+// layer (lowest precedence). Missing file returns env-only settings.
 func LoadSettings(workspace string) Settings {
 	var merged Settings
-	// user global first
+	// env as base layer
+	if pm, err := ParsePermissionMode(os.Getenv("EXCELSIOR_PERMISSION")); err == nil {
+		merged.Permission = pm
+	}
+	// user global
 	if p := UserSettingsPath(); p != "" {
 		if s, err := loadSettingsFile(p); err == nil {
 			merged = s

@@ -85,6 +85,9 @@ type Conn struct {
 	closeOnce     sync.Once
 	chatMu        sync.Mutex
 	chatting      bool
+	chatSession   string
+	chatCancel    context.CancelFunc
+	chatDone      chan struct{}
 	subscriptions map[string]struct{}
 }
 
@@ -323,23 +326,50 @@ func (c *Conn) dispatchEnvelope(ctx context.Context, env protocol.Envelope) {
 }
 
 func (c *Conn) dispatchChat(ctx context.Context, env protocol.Envelope) {
-	c.chatMu.Lock()
-	if c.chatting {
-		c.chatMu.Unlock()
-		c.sendError(env.ID, "already streaming, wait for done")
+	var req protocol.ChatReq
+	if !c.decodePayload(env, &req, "chat.req") {
 		return
 	}
+
+	c.chatMu.Lock()
+	if c.chatting {
+		if req.SessionID == c.chatSession {
+			c.chatMu.Unlock()
+			c.sendError(env.ID, "already streaming, wait for done")
+			return
+		}
+		// switching sessions: cancel the in-flight turn and wait for it to wind down
+		if c.chatCancel != nil {
+			c.chatCancel()
+		}
+		done := c.chatDone
+		c.chatMu.Unlock()
+		if done != nil {
+			<-done
+		}
+		c.chatMu.Lock()
+	}
 	c.chatting = true
+	c.chatSession = req.SessionID
+	turnCtx, cancel := context.WithCancel(ctx)
+	c.chatCancel = cancel
+	c.chatDone = make(chan struct{})
+	done := c.chatDone
 	c.chatMu.Unlock()
 
-	go func(e protocol.Envelope) {
+	go func(e protocol.Envelope, turnCtx context.Context) {
 		defer func() {
+			cancel()
 			c.chatMu.Lock()
 			c.chatting = false
+			c.chatSession = ""
+			c.chatCancel = nil
+			c.chatDone = nil
+			close(done)
 			c.chatMu.Unlock()
 		}()
-		c.handleChat(ctx, e)
-	}(env)
+		c.handleChat(turnCtx, e)
+	}(env, turnCtx)
 }
 
 func (c *Conn) handleAskResp(env protocol.Envelope) {

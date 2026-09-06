@@ -1,18 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"io"
 	"log/slog"
+	"net"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
-	"excelsior/internal/app"
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
+	"excelsior/pkg/engine"
 	"excelsior/pkg/tui"
 )
 
@@ -27,22 +28,6 @@ func newTUICommand(cfg config.Config, modelFlag *string, workspaceFlag *string, 
 }
 
 func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system string) error {
-	// cfg may have permission override from root PersistentPreRunE context (including yolo)
-	if v := cmd.Context().Value(configKey{}); v != nil {
-		if c, ok := v.(config.Config); ok {
-			cfg = c
-		}
-	} else {
-		if yolo, _ := cmd.Root().PersistentFlags().GetBool("yolo"); yolo {
-			cfg.Permission = config.PermissionAllow
-		} else if yolo, _ := cmd.Root().PersistentFlags().GetBool("allow-all"); yolo {
-			cfg.Permission = config.PermissionAllow
-		} else if v, _ := cmd.Root().PersistentFlags().GetString("permission"); v != "" {
-			if pm, err := config.ParsePermissionMode(v); err == nil {
-				cfg.Permission = pm
-			}
-		}
-	}
 	workspace = resolveWorkspaceOrCwd(workspace, cfg.Workspace)
 	model = normalizeModel(model, cfg.Model)
 	if system == "" {
@@ -61,12 +46,56 @@ func runTUI(cmd *cobra.Command, cfg config.Config, model, workspace, system stri
 		slog.Info("TUI start", "model", model, "workspace", workspace)
 	}
 
-	discardLog := slog.New(slog.NewTextHandler(io.Discard, nil))
-	var ag *agent.Agent
+	ctx := cmd.Context()
 	if engineURL == "" {
-		ag = app.NewAgent(cfg, workspace, model, system, discardLog)
+		// No remote engine: embed one on a loopback listener, TUI talks to it over WS.
+		// Runtime-only flag override (--yolo/--permission); persisted mode lives in settings.
+		var override config.PermissionMode
+		if yolo, _ := cmd.Root().PersistentFlags().GetBool("yolo"); yolo {
+			override = config.PermissionAllow
+		} else if v, _ := cmd.Root().PersistentFlags().GetString("permission"); v != "" {
+			if pm, err := config.ParsePermissionMode(v); err == nil {
+				override = pm
+			}
+		}
+		url, stop, err := startEmbeddedEngine(ctx, cfg, workspace, override)
+		if err != nil {
+			return err
+		}
+		defer stop()
+		engineURL = url
 	}
-	return tui.Run(tui.Config{Agent: ag, Workspace: workspace, Model: model, EngineURL: engineURL, Permission: string(cfg.Permission)})
+	return tui.Run(tui.Config{Workspace: workspace, Model: model, EngineURL: engineURL})
+}
+
+// startEmbeddedEngine runs an in-process engine hub on 127.0.0.1:<ephemeral>
+// and returns its WS URL. The hub is torn down when ctx is canceled.
+func startEmbeddedEngine(ctx context.Context, cfg config.Config, workspace string, override config.PermissionMode) (string, func(), error) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", nil, fmt.Errorf("embedded engine listen: %w", err)
+	}
+	engineCtx, cancel := context.WithCancel(ctx)
+	h := engine.NewHub(cfg, workspace)
+	h.Logger = slog.Default()
+	h.PermissionOverride = override
+	done := make(chan error, 1)
+	go func() { done <- h.Serve(engineCtx, ln) }()
+	go func() {
+		<-engineCtx.Done()
+		_ = ln.Close()
+	}()
+	stop := func() { cancel() }
+	// Fail fast if the hub errored on startup.
+	select {
+	case err := <-done:
+		cancel()
+		if err != nil {
+			return "", nil, fmt.Errorf("embedded engine: %w", err)
+		}
+	default:
+	}
+	return "ws://" + ln.Addr().String() + "/v1/ws", stop, nil
 }
 
 func resolveWorkspaceOrCwd(flagWS, cfgWS string) string {

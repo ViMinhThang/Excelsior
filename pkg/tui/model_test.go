@@ -1,14 +1,12 @@
 package tui
 
 import (
-	"context"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"excelsior/pkg/agent"
-	"excelsior/pkg/llm"
 	"excelsior/pkg/tools"
 )
 
@@ -183,48 +181,30 @@ func TestTUI_ShortWorkspaceAndScrollbar(t *testing.T) {
 		t.Error("expected non-empty scrollbarView")
 	}
 }
-
-type mockTUIRunner struct {
-	events []agent.StreamEvent
-}
-
-func (r *mockTUIRunner) RunWithHistory(ctx context.Context, opts agent.RunOptions) (*agent.RunResult, error) {
-	for _, ev := range r.events {
-		if opts.OnEvent != nil {
-			opts.OnEvent(ev)
-		}
-	}
-	return &agent.RunResult{
-		FinalMessage: &llm.Message{Role: "assistant", Content: "Done"},
-		Messages:     opts.Messages,
-	}, nil
-}
-
-func TestTUI_StartAgent_NilAndMock(t *testing.T) {
-	// 1. Nil agent
+func TestTUI_StartAgent_NoEngineAndMock(t *testing.T) {
+	// 1. No engine URL: error block
 	cfgNil := Config{Workspace: "/test", Model: "v4"}
 	rawModel := New(cfgNil)
 	m, _ := rawModel.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	mNil, _ := m.(model).startAgent("hello")
 	modNil := mNil.(model)
-	if len(modNil.blocks) < 3 || !strings.Contains(modNil.blocks[len(modNil.blocks)-1].Content, "agent not configured") {
-		t.Errorf("expected agent not configured error block: %+v", modNil.blocks)
+	if len(modNil.blocks) < 3 || !strings.Contains(modNil.blocks[len(modNil.blocks)-1].Content, "engine not configured") {
+		t.Errorf("expected engine not configured error block: %+v", modNil.blocks)
 	}
 
-	// 2. Mock agent
-	runner := &mockTUIRunner{
-		events: []agent.StreamEvent{
-			{Type: "text", Text: "Chunk 1"},
-		},
-	}
-	cfgMock := Config{Workspace: "/test", Model: "v4", Agent: runner, AskDispatcher: NewAskDispatcher()}
+	// 2. Engine URL set: launch proceeds (ws dial fails later in goroutine, fine here)
+	cfgMock := Config{Workspace: "/test", Model: "v4", EngineURL: "ws://127.0.0.1:1/v1/ws", AskDispatcher: NewAskDispatcher()}
 	rawMock := New(cfgMock)
 	mMock, _ := rawMock.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	mStarted, cmd := mMock.(model).startAgent("hello")
+	mMockStarted, cmd := mMock.(model).startAgent("hello")
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd from startAgent")
 	}
-	_ = mStarted
+	cancel := mMockStarted.(model).cancel
+	if cancel != nil {
+		cancel()
+	}
+	_ = mMockStarted
 }
 
 func TestTUI_WaitForChunk(t *testing.T) {
@@ -245,8 +225,7 @@ func TestTUI_WaitForChunk(t *testing.T) {
 }
 
 func TestTUI_InteractiveInputAndCancel(t *testing.T) {
-	runner := &mockTUIRunner{}
-	cfg := Config{Workspace: "/test", Model: "v4", Agent: runner}
+	cfg := Config{Workspace: "/test", Model: "v4", EngineURL: "ws://127.0.0.1:1/v1/ws"}
 	raw := New(cfg)
 	m, _ := raw.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
@@ -336,5 +315,6 @@ func TestTUI_AskOverlay_CustomInput(t *testing.T) {
 		t.Fatal("expected custom answer sent on respCh")
 	}
 }
+
 
 

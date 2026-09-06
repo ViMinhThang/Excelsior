@@ -44,14 +44,14 @@ var _ Runner = (*Agent)(nil)
 // StreamEvent is one fragment emitted during [Agent.Run].
 // Type is one of "text", "reasoning", "tool_start", "tool_result", "done", "error".
 type StreamEvent struct {
-	Type         string // "text" | "reasoning" | "tool_start" | "tool_result" | "done" | "error"
-	Text         string // delta text for Type=="text" or final text for "done"/"error"
-	Reasoning    string // delta reasoning for Type=="reasoning" (deepseek-reasoner)
-	ToolName     string // tool name for Type=="tool_start"/"tool_result"
-	ToolCallID   string // provider tool_call_id
-	ToolArgs     string // JSON arguments for Type=="tool_start"
-	ToolResult   string // tool output for Type=="tool_result"
-	FinishReason string // "stop" etc. for Type=="done"
+	Type         string     // "text" | "reasoning" | "tool_start" | "tool_result" | "done" | "error"
+	Text         string     // delta text for Type=="text" or final text for "done"/"error"
+	Reasoning    string     // delta reasoning for Type=="reasoning" (deepseek-reasoner)
+	ToolName     string     // tool name for Type=="tool_start"/"tool_result"
+	ToolCallID   string     // provider tool_call_id
+	ToolArgs     string     // JSON arguments for Type=="tool_start"
+	ToolResult   string     // tool output for Type=="tool_result"
+	FinishReason string     // "stop" etc. for Type=="done"
 	Usage        *llm.Usage // token counts for Type=="done" (nil when provider omits them)
 }
 
@@ -66,7 +66,7 @@ type RunOptions struct {
 }
 
 const (
-	defaultMaxIters = 20
+	defaultMaxIters = 100
 	maxToolResult   = 20_000
 	maxContextChars = 600_000
 )
@@ -177,7 +177,42 @@ func (a *Agent) prepareMessages(incoming []llm.Message) []llm.Message {
 	if a.System != "" && (len(messages) == 0 || messages[0].Role != "system") {
 		messages = append([]llm.Message{{Role: "system", Content: a.System}}, messages...)
 	}
-	return messages
+	return sanitizeToolCalls(messages)
+}
+
+// sanitizeToolCalls ensures every assistant message with tool_calls is answered
+// by tool result messages, inserting placeholders for dangling calls (e.g. a
+// run cut off by the step budget). Providers reject unanswered tool calls.
+func sanitizeToolCalls(msgs []llm.Message) []llm.Message {
+	out := make([]llm.Message, 0, len(msgs))
+	pending := map[string]bool{}
+	flush := func() {
+		if len(pending) == 0 {
+			return
+		}
+		for id := range pending {
+			out = append(out, llm.Message{Role: "tool", ToolCallID: id, Content: "(tool call cancelled)"})
+		}
+		pending = map[string]bool{}
+	}
+	for _, m := range msgs {
+		if m.Role != "tool" {
+			flush()
+		}
+		if m.Role == "assistant" {
+			for _, tc := range m.ToolCalls {
+				if tc.ID != "" {
+					pending[tc.ID] = true
+				}
+			}
+		}
+		if m.Role == "tool" && m.ToolCallID != "" {
+			delete(pending, m.ToolCallID)
+		}
+		out = append(out, m)
+	}
+	flush()
+	return out
 }
 
 func (a *Agent) runNativeToolLoop(ctx context.Context, native llm.ToolLoopProvider, model string, messages []llm.Message, toolDefs []llm.ToolDefinition, reg ToolRegistry, emit func(StreamEvent), acc *usageAcc) (*RunResult, error) {

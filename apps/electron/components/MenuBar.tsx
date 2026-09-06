@@ -12,6 +12,9 @@ type MenuBarProps = {
   currentTheme: string;
   onSaveTheme: (theme: string) => void;
   sessionTokens?: number;
+  engineState?: string;
+  projectName?: string;
+  sessionTitle?: string | null;
 };
 
 export function formatTokens(n: number): string {
@@ -32,15 +35,26 @@ const MenuItem = React.memo(function MenuItem({ onClick, children, kbd, danger }
     <button
       type="button"
       onClick={onClick}
-      className={`w-full text-left px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex justify-between items-center ${danger ? "text-rose-400" : ""}`}
+      className={`w-full text-left px-3 py-1.5 rounded-md hover:bg-[var(--bg-card-hover)] cursor-pointer flex justify-between items-center transition-colors ${danger ? "text-rose-400 hover:text-rose-300 hover:bg-rose-500/10" : "text-[var(--text-main)]"}`}
     >
-      <span>{children}</span>
-      {kbd && <span className="text-[10px] text-[var(--text-dim)] font-mono">{kbd}</span>}
+      <span className="text-[12px] font-medium">{children}</span>
+      {kbd && <span className="text-[10px] text-[var(--text-dim)] font-mono bg-[var(--bg-input)] px-1.5 py-0.5 rounded border-subtle">{kbd}</span>}
     </button>
   );
 });
 
-function MenuBar({ onNewChat, onOpenFolder, onOpenSettings, onToggleSidebar, currentTheme, onSaveTheme, sessionTokens }: MenuBarProps) {
+function MenuBar({
+  onNewChat,
+  onOpenFolder,
+  onOpenSettings,
+  onToggleSidebar,
+  currentTheme,
+  onSaveTheme,
+  sessionTokens,
+  engineState = "connected",
+  projectName,
+  sessionTitle,
+}: MenuBarProps) {
   const [openMenu, setOpenMenu] = useState<MenuId>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -63,113 +77,124 @@ function MenuBar({ onNewChat, onOpenFolder, onOpenSettings, onToggleSidebar, cur
   const closeMenu = useCallback(() => setOpenMenu(null), []);
 
   return (
-    <div
+    <header
       ref={rootRef}
-      className="h-9 px-2 flex items-center justify-between bg-[var(--bg-sidebar)] text-[var(--text-muted)] text-[13px] shrink-0 z-40"
+      className="h-10 flex items-center justify-between bg-[var(--bg-sidebar)] text-[var(--text-muted)] text-[12.5px] shrink-0 z-40 select-none"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
-      <nav className="flex items-center gap-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties} aria-label="Application menu">
-        {(["file", "view", "window"] as const).map((menu) => (
-          <div key={menu} className="relative">
-            <button
-              type="button"
-              onClick={() => toggleMenu(menu)}
-              aria-expanded={openMenu === menu}
-              aria-haspopup="menu"
-              className={`px-2.5 py-1 rounded-md hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-main)] capitalize ${openMenu === menu ? "bg-[var(--bg-card-hover)] text-[var(--text-main)] font-medium" : ""}`}
-            >
-              {menu}
-            </button>
-
-            {openMenu === menu && (
-              <div
-                role="menu"
-                className="absolute left-0 top-full mt-1.5 w-48 bg-[var(--bg-card)] rounded-xl shadow-2xl py-1.5 text-xs z-50 animate-fade-in"
-                onClick={closeMenu}
+      <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        <nav className="flex items-center gap-0.5" aria-label="Application menu">
+          {(["file", "view", "window"] as const).map((menu) => (
+            <div key={menu} className="relative">
+              <button
+                type="button"
+                onClick={() => toggleMenu(menu)}
+                aria-expanded={openMenu === menu}
+                aria-haspopup="menu"
+                className={`px-2.5 py-1 rounded-md hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-main)] capitalize transition-colors ${openMenu === menu ? "bg-[var(--bg-card-hover)] text-[var(--text-main)] font-semibold" : "text-[var(--text-muted)] font-medium"}`}
               >
-                {menu === "file" && (
-                  <>
-                    <MenuItem onClick={onNewChat} kbd="Ctrl+N">New Chat</MenuItem>
-                    <MenuItem onClick={onOpenFolder} kbd="Ctrl+O">Open Folder…</MenuItem>
-                    <div className="my-1.5 h-px bg-[var(--bg-input)]" />
-                    <MenuItem onClick={onOpenSettings} kbd="Ctrl+,">Settings…</MenuItem>
-                    <div className="my-1.5 h-px bg-[var(--bg-input)]" />
-                    <MenuItem onClick={() => handleWindowControl("close")} danger kbd="Alt+F4">Exit</MenuItem>
-                  </>
-                )}
+                {menu}
+              </button>
 
-                {menu === "view" && (
-                  <>
-                    <MenuItem onClick={onToggleSidebar} kbd="Ctrl+B">Toggle Sidebar</MenuItem>
-                    <div className="my-1.5 h-px bg-[var(--bg-input)]" />
-                    <div className="px-3 py-1 text-[10px] text-[var(--text-dim)] font-semibold uppercase">Theme</div>
-                    {THEMES.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={currentTheme === t}
-                        onClick={() => onSaveTheme(t)}
-                        className={`w-full text-left px-3 py-1.5 hover:bg-[var(--bg-card-hover)] cursor-pointer flex justify-between ${currentTheme === t ? "text-[var(--accent)] font-semibold" : ""}`}
-                      >
-                        <span>{t}</span>
-                        {currentTheme === t && <span aria-hidden>✓</span>}
-                      </button>
-                    ))}
-                    <div className="my-1.5 h-px bg-[var(--bg-input)]" />
-                    <MenuItem onClick={() => window.electronAPI?.toggleDevTools?.()} kbd="F12">Developer Tools</MenuItem>
-                  </>
-                )}
+              {openMenu === menu && (
+                <div
+                  role="menu"
+                  className="absolute left-0 top-full mt-1.5 w-52 bg-[var(--bg-card)] rounded-xl shadow-[var(--popover-shadow)] p-1.5 text-xs z-50 animate-slide-down border-subtle"
+                  onClick={closeMenu}
+                >
+                  {menu === "file" && (
+                    <>
+                      <MenuItem onClick={onNewChat} kbd="Ctrl+N">New Chat</MenuItem>
+                      <MenuItem onClick={onOpenFolder} kbd="Ctrl+O">Open Folder…</MenuItem>
+                      <div className="my-1.5 h-px bg-[var(--border-subtle)]" />
+                      <MenuItem onClick={onOpenSettings} kbd="Ctrl+,">Settings…</MenuItem>
+                      <div className="my-1.5 h-px bg-[var(--border-subtle)]" />
+                      <MenuItem onClick={() => handleWindowControl("close")} danger kbd="Alt+F4">Exit</MenuItem>
+                    </>
+                  )}
 
-                {menu === "window" && (
-                  <>
-                    <MenuItem onClick={() => handleWindowControl("minimize")}>Minimize</MenuItem>
-                    <MenuItem onClick={() => handleWindowControl("maximize")}>Maximize / Restore</MenuItem>
-                    <div className="my-1.5 h-px bg-[var(--bg-input)]" />
-                    <MenuItem onClick={() => handleWindowControl("close")} danger>Close</MenuItem>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-      </nav>
+                  {menu === "view" && (
+                    <>
+                      <MenuItem onClick={onToggleSidebar} kbd="Ctrl+B">Toggle Sidebar</MenuItem>
+                      <div className="my-1.5 h-px bg-[var(--border-subtle)]" />
+                      <div className="px-2.5 py-1 text-[10px] text-[var(--text-dim)] font-semibold uppercase tracking-wider">Themes</div>
+                      {AVAILABLE_THEMES.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          role="menuitemradio"
+                          aria-checked={currentTheme === t.id}
+                          onClick={() => onSaveTheme(t.id)}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-md hover:bg-[var(--bg-card-hover)] cursor-pointer flex justify-between items-center text-xs transition-colors ${currentTheme === t.id ? "text-[var(--text-main)] font-semibold bg-[var(--bg-card-hover)]" : "text-[var(--text-muted)]"}`}
+                        >
+                          <span>{t.name}</span>
+                          {currentTheme === t.id && <span className="text-[11px] font-bold">✓</span>}
+                        </button>
+                      ))}
+                      <div className="my-1.5 h-px bg-[var(--border-subtle)]" />
+                      <MenuItem onClick={() => window.electronAPI?.toggleDevTools?.()} kbd="F12">Developer Tools</MenuItem>
+                    </>
+                  )}
 
-      <div className="flex-1 h-full flex items-center justify-center" aria-hidden={sessionTokens == null}>
+                  {menu === "window" && (
+                    <>
+                      <MenuItem onClick={() => handleWindowControl("minimize")}>Minimize</MenuItem>
+                      <MenuItem onClick={() => handleWindowControl("maximize")}>Maximize / Restore</MenuItem>
+                      <div className="my-1.5 h-px bg-[var(--border-subtle)]" />
+                      <MenuItem onClick={() => handleWindowControl("close")} danger>Close</MenuItem>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </nav>
+      </div>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Right Controls: Tokens & Window Controls */}
+      <div className="flex items-center gap-3 h-full" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        {/* Token Counter */}
         {(sessionTokens ?? 0) > 0 && (
-          <span className="font-mono text-[11px] text-[var(--text-dim)]" title="Tokens spent in this session">
+          <span
+            className="font-mono text-[10.5px] px-2 py-0.5 rounded-full bg-[var(--bg-input)] border-subtle text-[var(--text-dim)]"
+            title="Tokens consumed in this session"
+          >
             {formatTokens(sessionTokens ?? 0)} tokens
           </span>
         )}
-      </div>
 
-      <div className="flex items-center h-full" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-        <button
-          type="button"
-          aria-label="Minimize window"
-          onClick={() => handleWindowControl("minimize")}
-          className="h-full px-3.5 text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)]"
-        >
-          <WindowMinimizeIcon className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          aria-label="Maximize window"
-          onClick={() => handleWindowControl("maximize")}
-          className="h-full px-3.5 text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)]"
-        >
-          <WindowMaximizeIcon className="w-3.5 h-3.5" />
-        </button>
-        <button
-          type="button"
-          aria-label="Close window"
-          onClick={() => handleWindowControl("close")}
-          className="h-full px-3.5 text-[var(--text-dim)] hover:text-white hover:bg-rose-600"
-        >
-          <WindowCloseIcon className="w-3.5 h-3.5" />
-        </button>
+        {/* Window controls */}
+        <div className="flex items-center h-full ml-1">
+          <button
+            type="button"
+            aria-label="Minimize window"
+            onClick={() => handleWindowControl("minimize")}
+            className="h-full px-3 text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] transition-colors"
+          >
+            <WindowMinimizeIcon className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            aria-label="Maximize window"
+            onClick={() => handleWindowControl("maximize")}
+            className="h-full px-3 text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] transition-colors"
+          >
+            <WindowMaximizeIcon className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            aria-label="Close window"
+            onClick={() => handleWindowControl("close")}
+            className="h-full px-3 text-[var(--text-dim)] hover:text-white hover:bg-rose-600 transition-colors"
+          >
+            <WindowCloseIcon className="w-3 h-3" />
+          </button>
+        </div>
       </div>
-    </div>
+    </header>
   );
 }
 

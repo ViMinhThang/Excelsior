@@ -72,15 +72,10 @@ func resolveRoot(workspace string) string {
 	return workspace
 }
 
-// DefaultRegistry returns the core 8 tools rooted at workspace.
+// DefaultRegistry returns the core tools rooted at workspace.
 func DefaultRegistry(workspace string) *Registry {
 	workspace = resolveRoot(workspace)
 	return NewRegistry(
-		&ViewTool{Root: workspace},
-		&LsTool{Root: workspace},
-		&GlobTool{Root: workspace},
-		&GrepTool{Root: workspace},
-		&WriteTool{Root: workspace},
 		&EditTool{Root: workspace},
 		&BashTool{Root: workspace},
 		&AskTool{},

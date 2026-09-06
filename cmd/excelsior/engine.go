@@ -25,14 +25,14 @@ func newEngineCommand(cfg config.Config, workspaceFlag *string) *cobra.Command {
   excelsior engine --addr :17812 --workspace .
   excelsior tui --engine ws://localhost:17812/v1/ws`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// permission may be overridden via root flag context
-			if v := cmd.Context().Value(configKey{}); v != nil {
-				if c, ok := v.(config.Config); ok {
-					cfg = c
-				}
+			// Runtime-only flag override (--yolo / --permission); persisted
+			// permission is resolved per-request from LoadSettings.
+			var override config.PermissionMode
+			if v, _ := cmd.Root().PersistentFlags().GetBool("yolo"); v {
+				override = config.PermissionAllow
 			} else if v, _ := cmd.Root().PersistentFlags().GetString("permission"); v != "" {
 				if pm, err := config.ParsePermissionMode(v); err == nil {
-					cfg.Permission = pm
+					override = pm
 				}
 			}
 			ws, err := config.ResolveWorkspace(*workspaceFlag, cfg.Workspace)
@@ -50,6 +50,7 @@ func newEngineCommand(cfg config.Config, workspaceFlag *string) *cobra.Command {
 			h := engine.NewHub(cfg, ws)
 			h.Addr = addr
 			h.Logger = slog.Default()
+			h.PermissionOverride = override
 			if authEnabled {
 				if dbPath == "" {
 					dbPath = db.DefaultPath(ws)

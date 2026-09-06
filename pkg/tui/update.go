@@ -362,9 +362,6 @@ func (m *model) handleModelCmd(parts []string) {
 		return
 	}
 	m.cfg.Model = parts[1]
-	if ag, ok := m.cfg.Agent.(*agent.Agent); ok && ag != nil {
-		ag.Model = parts[1]
-	}
 	m.blocks = append(m.blocks, block{Role: "system", Content: "Model → " + parts[1]})
 }
 
@@ -383,7 +380,8 @@ func (m *model) handlePermissionCmd(parts []string) {
 func isValidPermission(p string) bool { return p == "ask" || p == "allow" || p == "deny" }
 
 func (m *model) showCurrentPermission() {
-	perm := m.cfg.Permission
+	s := config.LoadSettings(m.cfg.Workspace)
+	perm := string(s.Permission)
 	if perm == "" {
 		perm = "ask"
 	}
@@ -401,7 +399,6 @@ func (m *model) handleDenyAskCmd(raw string) {
 
 // ponytail: one save-and-announce (was 3 copies in permission/yolo/deny-ask handlers)
 func (m *model) setPermission(perm, announce string) {
-	m.cfg.Permission = perm
 	if err := savePermissionSetting(m.cfg.Workspace, perm); err != nil {
 		m.blocks = append(m.blocks, block{Role: "error", Content: "Failed to save: " + err.Error()})
 		return

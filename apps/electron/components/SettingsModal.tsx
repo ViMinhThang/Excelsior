@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { SettingsIcon, WindowCloseIcon } from "./Icons";
+import { Check, Settings, ShieldAlert, Sparkles, X } from "lucide-react";
 import { AVAILABLE_MODELS } from "./Composer";
 import { AVAILABLE_THEMES } from "../contexts/ThemeContext";
 
@@ -52,113 +52,133 @@ function SettingsModal({
 
   if (!isOpen) return null;
 
-  const statusColor =
+  const statusBg =
     engineState === "connected"
-      ? "text-emerald-400"
+      ? "text-emerald-400 bg-emerald-500/10"
       : engineState === "error"
-        ? "text-rose-400"
-        : "text-amber-400";
+        ? "text-rose-400 bg-rose-500/10"
+        : "text-amber-400 bg-amber-500/10";
 
   return (
-    <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
-        className="w-full max-w-md bg-[var(--bg-card)] rounded-2xl p-5 shadow-2xl animate-fade-in"
+        className="w-full max-w-lg bg-[var(--bg-card)] rounded-2xl p-6 shadow-[var(--elevated-shadow)] border-subtle animate-slide-down text-[var(--text-main)]"
       >
-        <div className="flex items-center justify-between pb-3 mb-4">
+        <div className="flex items-center justify-between pb-3 border-subtle-b mb-4">
           <div className="flex items-center gap-2">
-            <SettingsIcon className="w-4 h-4 text-[var(--accent)]" />
-            <h2 id="settings-title" className="text-[14px] font-semibold">Preferences</h2>
+            <div className="w-7 h-7 rounded-xl bg-[var(--bg-input)] flex items-center justify-center text-[var(--text-dim)]">
+              <Settings className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 id="settings-title" className="text-[14.5px] font-bold">Preferences</h2>
+              <p className="text-[11px] text-[var(--text-dim)]">Configure models, connectivity & permissions</p>
+            </div>
           </div>
           <button
             type="button"
             aria-label="Close settings"
             onClick={onClose}
-            className="p-1 rounded-md text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)]"
+            className="p-1.5 rounded-lg text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] transition-colors cursor-pointer"
           >
-            <WindowCloseIcon className="w-3.5 h-3.5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="space-y-4 text-xs">
-          <label className="block">
-            <span className="text-[var(--text-muted)] font-medium">Theme</span>
-            <select
-              value={currentTheme}
-              onChange={(e) => onSaveTheme(e.target.value)}
-              className="mt-1.5 w-full bg-[var(--bg-input)] rounded-xl px-3 py-2 outline-none"
-            >
+          {/* Theme Selection */}
+          <div className="space-y-1.5">
+            <label className="text-[var(--text-muted)] font-medium">Appearance & Theme</label>
+            <div className="grid grid-cols-2 gap-2">
               {AVAILABLE_THEMES.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => onSaveTheme(t.id)}
+                  className={`px-3 py-2 rounded-xl text-left border-subtle transition-all cursor-pointer flex items-center justify-between ${currentTheme === t.id ? "bg-[var(--bg-card-hover)] font-semibold" : "bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] text-[var(--text-main)]"}`}
+                >
+                  <span className="truncate">{t.name}</span>
+                  {currentTheme === t.id && <Check className="w-3.5 h-3.5 shrink-0" />}
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+          </div>
 
-          <label className="block">
-            <span className="text-[var(--text-muted)] font-medium">Default Model</span>
+          {/* Model Selection */}
+          <div className="space-y-1.5">
+            <label className="text-[var(--text-muted)] font-medium">Default Coding Model</label>
             <select
               value={draftModel}
               onChange={(e) => setDraftModel(e.target.value)}
-              className="mt-1.5 w-full bg-[var(--bg-input)] rounded-xl px-3 py-2 outline-none"
+              className="w-full bg-[var(--bg-input)] border-subtle rounded-xl px-3.5 py-2 text-xs outline-none text-[var(--text-main)] transition-colors"
             >
               {AVAILABLE_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.name} ({m.badge})</option>
+                <option key={m.id} value={m.id} className="bg-[var(--bg-card)] text-[var(--text-main)]">
+                  {m.name} ({m.badge})
+                </option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label className="block">
-            <span className="text-[var(--text-muted)] font-medium">Engine WebSocket URL</span>
+          {/* Engine WebSocket URL */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[var(--text-muted)] font-medium">Engine WebSocket URL</label>
+              <span className={`px-2 py-0.5 rounded-full font-mono text-[10.5px] ${statusBg}`}>
+                ● {engineState}
+              </span>
+            </div>
             <input
               value={draftUrl}
               onChange={(e) => setDraftUrl(e.target.value)}
               placeholder="ws://localhost:17812/v1/ws"
-              className="mt-1.5 w-full bg-[var(--bg-input)] rounded-xl px-3 py-2 font-mono outline-none"
+              className="w-full bg-[var(--bg-input)] border-subtle rounded-xl px-3.5 py-2 font-mono text-xs outline-none transition-colors text-[var(--text-main)]"
             />
-            <div className="flex justify-between mt-1 text-[11px]">
-              <span className="text-[var(--text-dim)]">Default: ws://localhost:17812/v1/ws</span>
-              <span className={`font-medium ${statusColor}`}>● {engineState}</span>
-            </div>
-          </label>
+            <span className="text-[10.5px] text-[var(--text-dim)]">Default: ws://localhost:17812/v1/ws</span>
+          </div>
 
-          <label className="flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl cursor-pointer">
+          {/* Permission Mode */}
+          <label className="flex items-start gap-3 p-3 bg-amber-500/10 border-subtle rounded-2xl cursor-pointer hover:bg-amber-500/15 transition-colors">
             <input
               type="checkbox"
               checked={draftAllowAll}
               onChange={(e) => setDraftAllowAll(e.target.checked)}
-              className="mt-0.5 accent-amber-500 w-4 h-4"
+              className="mt-0.5 accent-amber-500 w-4 h-4 cursor-pointer"
             />
             <span className="flex-1">
-              <span className="block font-semibold text-[var(--text-main)] text-xs">Allow all commands without asking</span>
-              <span className="block text-[11px] text-[var(--text-muted)] mt-0.5">
-                When enabled, write / edit / bash run automatically without permission prompts. Use with care — equivalent to <code className="px-1 py-0.5 bg-black/20 rounded">--permission allow</code> / <code className="px-1 py-0.5 bg-black/20 rounded">--yolo</code>.
+              <span className="flex items-center gap-1.5 font-semibold text-amber-300 text-xs">
+                <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                Allow all actions automatically (YOLO mode)
+              </span>
+              <span className="block text-[11px] text-[var(--text-muted)] mt-1 leading-normal">
+                Files and bash commands will run directly without inline permission approvals. Use with trusted repositories.
               </span>
             </span>
           </label>
-
-          <div className="p-3 bg-[var(--bg-canvas)] rounded-xl text-[11.5px] text-[var(--text-muted)]">
-            <div className="font-semibold text-[var(--text-main)]">Excelsior</div>
-            Pair programming with agentic workflows.
-          </div>
         </div>
 
-        <div className="flex justify-end gap-2.5 mt-5 pt-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-3 py-1.5 rounded-lg text-xs text-[var(--text-dim)] hover:bg-[var(--bg-card-hover)]"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold bg-white text-black"
-          >
-            Save Changes
-          </button>
+        <div className="flex items-center justify-between pt-4 mt-5 border-subtle-t">
+          <div className="text-[11px] text-[var(--text-dim)]">
+            Excelsior Desktop v0.1.0
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3.5 py-1.5 rounded-xl text-xs text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold bg-[var(--accent)] text-white hover:opacity-90 transition-all cursor-pointer"
+            >
+              Save Preferences
+            </button>
+          </div>
         </div>
       </div>
     </div>
