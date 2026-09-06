@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"excelsior/internal/permissions"
 	"excelsior/internal/sessions"
 	"excelsior/pkg/config"
 	"excelsior/pkg/llm"
@@ -119,25 +120,10 @@ func (c *Conn) handleWorkspaceSet(ctx context.Context, env protocol.Envelope) {
 	c.handleSessionList(ctx, env)
 }
 
-func (c *Conn) resolveEffectiveSettings(s config.Settings) (string, bool) {
-	perm := string(s.EffectivePermission(config.PermissionAsk))
-	if c.hub.Config.Permission == config.PermissionAllow || c.hub.Config.Permission == config.PermissionDeny {
-		perm = string(c.hub.Config.Permission)
-	}
-	if perm == "" {
-		perm = "ask"
-	}
-	allowAll := perm == "allow"
-	if s.AllowAll != nil {
-		allowAll = *s.AllowAll
-	}
-	return perm, allowAll
-}
-
 func (c *Conn) handleSettingsGet(ctx context.Context, env protocol.Envelope) {
 	s := config.LoadSettings(c.currentWorkspace())
-	perm, allowAll := c.resolveEffectiveSettings(s)
-	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSettingsGet, protocol.SettingsGetResp{Permission: perm, AllowAll: allowAll}))
+	perm, allowAll := permissions.Resolve(c.hub.Config.Permission, s)
+	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSettingsGet, protocol.SettingsGetResp{Permission: string(perm), AllowAll: allowAll}))
 }
 
 func (c *Conn) handleSettingsSet(ctx context.Context, env protocol.Envelope) {
@@ -173,6 +159,6 @@ func (c *Conn) handleSettingsSet(ctx context.Context, env protocol.Envelope) {
 
 		c.hub.logger().Info("settings updated", "permission", s.Permission, "allowAll", s.AllowAll)
 	}
-	perm, allowAll := c.resolveEffectiveSettings(s)
-	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSettingsSet, protocol.SettingsSetResp{Permission: perm, AllowAll: allowAll}))
+	perm, allowAll := permissions.Resolve(c.hub.Config.Permission, s)
+	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSettingsSet, protocol.SettingsSetResp{Permission: string(perm), AllowAll: allowAll}))
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"excelsior/internal/chat"
+	"excelsior/internal/permissions"
 	"excelsior/pkg/config"
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/tools"
@@ -85,7 +86,7 @@ func (c *Conn) askHandler(parentCtx context.Context, askCh chan protocol.AskResp
 func (c *Conn) permissionHandler(parentCtx context.Context, permCh chan protocol.PermissionResp) tools.PermissionHandler {
 	return func(hctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
 		// Resolve settings for this connection without mutating shared hub config.
-		perm, _ := c.resolveEffectiveSettings(config.LoadSettings(c.currentWorkspace()))
+		perm, _ := permissions.Resolve(c.hub.Config.Permission, config.LoadSettings(c.currentWorkspace()))
 		switch perm {
 		case "allow":
 			return tools.PermissionResponse{Approved: true}, nil
