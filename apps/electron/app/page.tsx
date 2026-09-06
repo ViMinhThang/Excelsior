@@ -47,6 +47,8 @@ export default function Page() {
     send,
     activeIdRef,
     setActiveId: setEngineActiveId,
+    usage,
+    resetUsage,
   } = useEngine(engineUrl, { allowAll });
 
   const transcriptRef = React.useRef<HTMLDivElement>(null);
@@ -146,9 +148,10 @@ export default function Page() {
       setActiveId(sessionId);
       setEngineActiveId(sessionId);
       setBlocks([]);
+      resetUsage();
       send("session.data", { id: sessionId });
     },
-    [knownFolders, projectName, send, setBlocks, setEngineActiveId]
+    [knownFolders, projectName, send, setBlocks, setEngineActiveId, resetUsage]
   );
 
   const handleNewChat = useCallback(
@@ -163,9 +166,10 @@ export default function Page() {
       setActiveId(null);
       setEngineActiveId(null);
       setBlocks([]);
+      resetUsage();
       send("session.create", { title: "New session" });
     },
-    [knownFolders, projectName, send, setBlocks, setEngineActiveId]
+    [knownFolders, projectName, send, setBlocks, setEngineActiveId, resetUsage]
   );
 
   const handleOpenFolder = useCallback(async () => {
@@ -194,9 +198,10 @@ export default function Page() {
     setActiveId(null);
     setEngineActiveId(null);
     setBlocks([]);
+    resetUsage();
     send("workspace.set", { workspace: picked });
     send("session.create", { title: `${name} session` });
-  }, [projectName, send, setBlocks, setEngineActiveId, setKnownFolders]);
+  }, [projectName, send, setBlocks, setEngineActiveId, setKnownFolders, resetUsage]);
 
   const handleSendPrompt = useCallback(
     (raw: string) => {
@@ -240,9 +245,10 @@ export default function Page() {
         setActiveId(null);
         setEngineActiveId(null);
         setBlocks([]);
+        resetUsage();
       }
     },
-    [activeId, send, setBlocks, setEngineActiveId]
+    [activeId, send, setBlocks, setEngineActiveId, resetUsage]
   );
 
   const handleRenameSession = useCallback(
@@ -292,6 +298,7 @@ export default function Page() {
           onOpenSettings={() => setSettingsOpen(true)}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
           currentTheme={theme}
+          sessionTokens={usage.total}
           onSaveTheme={setTheme}
         />
         {isDesktop === false && (

@@ -1,5 +1,7 @@
 package chat
 
+import "excelsior/pkg/llm"
+
 // Event is the transport-neutral event emitted during a chat turn.
 type Event struct {
 	Type         string
@@ -10,4 +12,5 @@ type Event struct {
 	ToolArgs     string
 	ToolResult   string
 	FinishReason string
+	Usage        *llm.Usage
 }

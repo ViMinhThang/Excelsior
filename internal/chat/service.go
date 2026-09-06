@@ -31,16 +31,17 @@ func (s Service) Run(ctx context.Context, req Request) (*agent.RunResult, error)
 		Messages: messages,
 		OnEvent: func(event agent.StreamEvent) {
 			if req.OnEvent != nil {
-				req.OnEvent(Event{
-					Type:         event.Type,
-					Text:         event.Text,
-					Reasoning:    event.Reasoning,
-					ToolName:     event.ToolName,
-					ToolCallID:   event.ToolCallID,
-					ToolArgs:     event.ToolArgs,
-					ToolResult:   event.ToolResult,
-					FinishReason: event.FinishReason,
-				})
+			req.OnEvent(Event{
+				Type:         event.Type,
+				Text:         event.Text,
+				Reasoning:    event.Reasoning,
+				ToolName:     event.ToolName,
+				ToolCallID:   event.ToolCallID,
+				ToolArgs:     event.ToolArgs,
+				ToolResult:   event.ToolResult,
+				FinishReason: event.FinishReason,
+				Usage:        event.Usage,
+			})
 			}
 		},
 	})

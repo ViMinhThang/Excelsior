@@ -120,6 +120,9 @@ type Delta struct {
 	ToolArgs     string `json:"toolArgs,omitempty"`
 	ToolResult   string `json:"toolResult,omitempty"`
 	FinishReason string `json:"finishReason,omitempty"`
+	PromptTokens int    `json:"promptTokens,omitempty"`
+	CompletionTokens int `json:"completionTokens,omitempty"`
+	TotalTokens  int    `json:"totalTokens,omitempty"`
 }
 
 // AskReq is engine → client when agent calls askQuestion.

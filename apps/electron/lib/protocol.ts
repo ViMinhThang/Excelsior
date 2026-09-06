@@ -29,7 +29,12 @@ export type Delta = {
   toolArgs?: string;
   toolResult?: string;
   finishReason?: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
 };
+
+export type SessionUsage = { prompt: number; completion: number; total: number };
 
 export type AskReq = {
   question: string;
