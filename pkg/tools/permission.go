@@ -51,12 +51,12 @@ func checkPermission(ctx context.Context, tool string, req PermissionRequest) er
 	resp, err := h(ctx, req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return &ToolError{Tool: tool, Op: "permission", Err: fmt.Errorf("%w: %v", ErrPermissionDenied, err)}
+			return errf(tool, "permission", "", fmt.Errorf("%w: %v", ErrPermissionDenied, err))
 		}
-		return &ToolError{Tool: tool, Op: "permission", Err: err}
+		return errf(tool, "permission", "", err)
 	}
 	if !resp.Approved {
-		return &ToolError{Tool: tool, Op: "permission", Err: ErrPermissionDenied}
+		return errf(tool, "permission", "", ErrPermissionDenied)
 	}
 	return nil
 }

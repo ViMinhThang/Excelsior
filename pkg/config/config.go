@@ -40,12 +40,7 @@ func ParsePermissionMode(s string) (PermissionMode, error) {
 	case "deny":
 		return PermissionDeny, nil
 	default:
-		return "", &ConfigError{
-			Field:   "Permission",
-			Value:   s,
-			Message: fmt.Sprintf("invalid permission mode %q: must be ask|allow|deny", s),
-			Err:     ErrInvalidPermission,
-		}
+		return "", fmt.Errorf("config Permission: invalid permission mode %q: must be ask|allow|deny: %w", s, ErrInvalidPermission)
 	}
 }
 
@@ -102,52 +97,24 @@ func FromEnv() Config {
 // Validate returns error if config is invalid for production use.
 func (c Config) Validate() error {
 	if strings.TrimSpace(c.APIKey) == "" {
-		return &ConfigError{
-			Field:   "APIKey",
-			Message: "DEEPSEEK_API_KEY is required",
-			Err:     ErrMissingAPIKey,
-		}
+		return fmt.Errorf("config APIKey: DEEPSEEK_API_KEY is required: %w", ErrMissingAPIKey)
 	}
 	if strings.TrimSpace(c.Model) == "" {
-		return &ConfigError{
-			Field:   "Model",
-			Message: "model is required",
-			Err:     ErrMissingModel,
-		}
+		return fmt.Errorf("config Model: model is required: %w", ErrMissingModel)
 	}
 	base := strings.TrimSpace(c.BaseURL)
 	u, err := url.Parse(base)
 	if err != nil {
-		return &ConfigError{
-			Field:   "BaseURL",
-			Value:   c.BaseURL,
-			Message: fmt.Sprintf("invalid BaseURL %q", c.BaseURL),
-			Err:     fmt.Errorf("%w: %v", ErrInvalidBaseURL, err),
-		}
+		return fmt.Errorf("config BaseURL: invalid BaseURL %q: %w", c.BaseURL, ErrInvalidBaseURL)
 	}
 	if u.Scheme == "" || u.Host == "" {
-		return &ConfigError{
-			Field:   "BaseURL",
-			Value:   c.BaseURL,
-			Message: fmt.Sprintf("invalid BaseURL %q: scheme and host required", c.BaseURL),
-			Err:     ErrInvalidBaseURL,
-		}
+		return fmt.Errorf("config BaseURL: invalid BaseURL %q: scheme and host required: %w", c.BaseURL, ErrInvalidBaseURL)
 	}
 	if u.Scheme != "https" && u.Scheme != "http" {
-		return &ConfigError{
-			Field:   "BaseURL",
-			Value:   c.BaseURL,
-			Message: fmt.Sprintf("BaseURL scheme must be https or http, got %q", u.Scheme),
-			Err:     ErrInvalidBaseURL,
-		}
+		return fmt.Errorf("config BaseURL: scheme must be https or http, got %q: %w", u.Scheme, ErrInvalidBaseURL)
 	}
 	if c.Temperature < 0 || c.Temperature > 2 {
-		return &ConfigError{
-			Field:   "Temperature",
-			Value:   c.Temperature,
-			Message: fmt.Sprintf("temperature must be 0..2, got %v", c.Temperature),
-			Err:     ErrInvalidTemperature,
-		}
+		return fmt.Errorf("config Temperature: must be 0..2, got %v: %w", c.Temperature, ErrInvalidTemperature)
 	}
 	return nil
 }
@@ -162,47 +129,23 @@ func ResolveWorkspace(flagWS, cfgWS string) (string, error) {
 		var err error
 		ws, err = os.Getwd()
 		if err != nil {
-			return "", &ConfigError{
-				Field:   "Workspace",
-				Message: "failed to get current working directory",
-				Err:     fmt.Errorf("%w: %v", ErrInvalidWorkspace, err),
-			}
+			return "", fmt.Errorf("config Workspace: failed to get current working directory: %w", ErrInvalidWorkspace)
 		}
 	}
 	if !filepath.IsAbs(ws) {
 		abs, err := filepath.Abs(ws)
 		if err != nil {
-			return "", &ConfigError{
-				Field:   "Workspace",
-				Value:   ws,
-				Message: "failed to resolve absolute path",
-				Err:     fmt.Errorf("%w: %v", ErrInvalidWorkspace, err),
-			}
+			return "", fmt.Errorf("config Workspace: failed to resolve absolute path %q: %w", ws, ErrInvalidWorkspace)
 		}
 		ws = abs
 	}
 	if info, err := os.Stat(ws); err != nil {
 		if os.IsNotExist(err) {
-			return "", &ConfigError{
-				Field:   "Workspace",
-				Value:   ws,
-				Message: fmt.Sprintf("workspace %q: %v", ws, err),
-				Err:     fmt.Errorf("%w: %v", ErrWorkspaceNotFound, err),
-			}
+			return "", fmt.Errorf("config Workspace: workspace %q: %w", ws, ErrWorkspaceNotFound)
 		}
-		return "", &ConfigError{
-			Field:   "Workspace",
-			Value:   ws,
-			Message: fmt.Sprintf("workspace %q: %v", ws, err),
-			Err:     fmt.Errorf("%w: %v", ErrInvalidWorkspace, err),
-		}
+		return "", fmt.Errorf("config Workspace: workspace %q: %w", ws, ErrInvalidWorkspace)
 	} else if !info.IsDir() {
-		return "", &ConfigError{
-			Field:   "Workspace",
-			Value:   ws,
-			Message: fmt.Sprintf("workspace %q is not a directory", ws),
-			Err:     ErrWorkspaceNotDir,
-		}
+		return "", fmt.Errorf("config Workspace: workspace %q is not a directory: %w", ws, ErrWorkspaceNotDir)
 	}
 	return ws, nil
 }

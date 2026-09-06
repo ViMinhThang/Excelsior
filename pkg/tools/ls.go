@@ -20,14 +20,14 @@ func (t *LsTool) Parameters() any {
 }
 func (t *LsTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", &ToolError{Tool: "ls", Op: "list", Err: err}
+		return "", errf("ls", "list", "", err)
 	}
 	var a struct {
 		DirectoryPath *string `json:"directoryPath"`
 	}
 	if len(args) > 0 && string(args) != "null" && strings.TrimSpace(string(args)) != "" {
 		if err := json.Unmarshal(args, &a); err != nil {
-			return "", &ToolError{Tool: "ls", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
+			return "", errf("ls", "validate", "", fmt.Errorf("%w: %v", ErrInvalidArguments, err))
 		}
 	}
 	dir := "."
@@ -39,12 +39,12 @@ func (t *LsTool) Execute(ctx context.Context, args json.RawMessage) (string, err
 		if dir == "." {
 			p = t.Root
 		} else {
-			return "", &ToolError{Tool: "ls", Op: "security", Path: dir, Err: err}
+			return "", errf("ls", "security", dir, err)
 		}
 	}
 	entries, err := os.ReadDir(p)
 	if err != nil {
-		return "", &ToolError{Tool: "ls", Op: "list", Path: dir, Err: err}
+		return "", errf("ls", "list", dir, err)
 	}
 	if len(entries) == 0 {
 		return "Directory is empty.", nil

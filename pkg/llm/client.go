@@ -316,31 +316,31 @@ func usageFromGoAI(usage provider.Usage) *Usage {
 func newGoAIError(model string, err error) error {
 	var apiErr *goai.APIError
 	if errors.As(err, &apiErr) {
-		kind, sentinel := classifyStatus(apiErr.StatusCode)
-		return &LLMError{StatusCode: apiErr.StatusCode, Kind: kind, Model: model, Body: apiErr.ResponseBody, Err: fmt.Errorf("%w: %v", sentinel, err)}
+		return &LLMError{StatusCode: apiErr.StatusCode, Model: model, Body: apiErr.ResponseBody, Err: fmt.Errorf("%w: %v", classifyStatus(apiErr.StatusCode), err)}
 	}
 	var overflow *goai.ContextOverflowError
 	if errors.As(err, &overflow) {
-		return &LLMError{Kind: ErrorKindValidation, Model: model, Body: overflow.ResponseBody, Err: fmt.Errorf("%w: %v", ErrInvalidRequest, err)}
+		return &LLMError{Model: model, Body: overflow.ResponseBody, Err: fmt.Errorf("%w: %v", ErrInvalidRequest, err)}
 	}
 	if errors.Is(err, context.Canceled) {
 		return err
 	}
-	return &LLMError{Kind: ErrorKindStream, Model: model, Err: fmt.Errorf("%w: %v", ErrStreamInterrupted, err)}
+	return &LLMError{Model: model, Err: fmt.Errorf("%w: %v", ErrStreamInterrupted, err)}
 }
 
-func classifyStatus(status int) (ErrorKind, error) {
+// ponytail: status already implies the class; Kind field was a third copy of the same fact
+func classifyStatus(status int) error {
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
-		return ErrorKindAuth, ErrAuthFailed
+		return ErrAuthFailed
 	case status == http.StatusTooManyRequests:
-		return ErrorKindRateLimit, ErrRateLimit
+		return ErrRateLimit
 	case status == http.StatusBadRequest:
-		return ErrorKindValidation, ErrInvalidRequest
+		return ErrInvalidRequest
 	case status >= http.StatusInternalServerError:
-		return ErrorKindServer, ErrServerUnavailable
+		return ErrServerUnavailable
 	default:
-		return ErrorKindUnknown, ErrStreamInterrupted
+		return ErrStreamInterrupted
 	}
 }
 

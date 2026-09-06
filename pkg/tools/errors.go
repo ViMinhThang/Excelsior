@@ -33,14 +33,8 @@ var (
 	// ErrTextNotFound is returned when the target string in edit cannot be found.
 	ErrTextNotFound = errors.New("oldText not found")
 
-	// ErrOldTextNotFound is an alias sentinel for ErrTextNotFound.
-	ErrOldTextNotFound = ErrTextNotFound
-
 	// ErrAmbiguousMatch is returned when the target string in edit appears multiple times.
 	ErrAmbiguousMatch = errors.New("oldText matched multiple times")
-
-	// ErrOldTextAmbiguous is an alias sentinel for ErrAmbiguousMatch.
-	ErrOldTextAmbiguous = ErrAmbiguousMatch
 
 	// ErrNotADirectory is returned when a path expected to be a directory is not.
 	ErrNotADirectory = errors.New("target path is not a directory")
@@ -54,48 +48,10 @@ var (
 	// ErrPermissionDenied is defined in permission.go
 )
 
-// ToolError is a structured error carrying tool name, operation, path, and underlying cause.
-type ToolError struct {
-	Tool string // "view", "edit", "write", "bash", "grep", "ls", "glob", "askQuestion"
-	Op   string // "read", "write", "replace", "exec", "glob", "grep", "list", "prompt", "validate", "security", "stat"
-	Path string // File or directory path when applicable
-	Msg  string // Optional human-readable message
-	Err  error  // Sentinel error or underlying system error
-}
-
-func (e *ToolError) Error() string {
-	tool := e.Tool
-	if tool == "" {
-		tool = "tools"
+// errf builds a tool error. Replaces &ToolError{...} literals site-wide.
+func errf(tool, op, path string, err error) error {
+	if path == "" {
+		return fmt.Errorf("%s %s: %w", tool, op, err)
 	}
-	meta := ""
-	if e.Op != "" {
-		meta = fmt.Sprintf(": [%s]", e.Op)
-	}
-	path := ""
-	if e.Path != "" {
-		path = " " + e.Path
-	}
-	base := tool + meta + path
-	if e.Msg != "" && e.Err != nil {
-		return fmt.Sprintf("%s: %s: %v", base, e.Msg, e.Err)
-	}
-	if e.Msg != "" {
-		return fmt.Sprintf("%s: %s", base, e.Msg)
-	}
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", base, e.Err)
-	}
-	return base
-}
-
-func (e *ToolError) Unwrap() error {
-	return e.Err
-}
-
-func (e *ToolError) Is(target error) bool {
-	if target == nil {
-		return false
-	}
-	return errors.Is(e.Err, target) // ponytail ultra: one rung — stdlib before switch
+	return fmt.Errorf("%s %s %q: %w", tool, op, path, err)
 }

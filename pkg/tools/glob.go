@@ -22,7 +22,7 @@ func (t *GlobTool) Parameters() any {
 }
 func (t *GlobTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", &ToolError{Tool: "glob", Op: "glob", Err: err}
+		return "", errf("glob", "glob", "", err)
 	}
 	pattern, err := parseGlobPattern(args)
 	if err != nil {
@@ -48,14 +48,14 @@ func parseGlobPattern(args json.RawMessage) (string, error) {
 		Pattern string `json:"pattern"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", &ToolError{Tool: "glob", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
+		return "", errf("glob", "validate", "", fmt.Errorf("%w: %v", ErrInvalidArguments, err))
 	}
 	pattern := strings.TrimSpace(a.Pattern)
 	if pattern == "" {
-		return "", &ToolError{Tool: "glob", Op: "validate", Err: fmt.Errorf("%w: pattern is required", ErrInvalidArguments)}
+		return "", errf("glob", "validate", "", fmt.Errorf("%w: pattern is required", ErrInvalidArguments))
 	}
 	if filepath.IsAbs(pattern) || strings.Contains(pattern, "..") {
-		return "", &ToolError{Tool: "glob", Op: "security", Err: fmt.Errorf("%w: pattern outside workspace", ErrPathOutsideWorkspace)}
+		return "", errf("glob", "security", "", fmt.Errorf("%w: pattern outside workspace", ErrPathOutsideWorkspace))
 	}
 	return pattern, nil
 }
@@ -63,7 +63,7 @@ func parseGlobPattern(args json.RawMessage) (string, error) {
 func checkGlobContext(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
-		return &ToolError{Tool: "glob", Op: "glob", Err: ctx.Err()}
+		return errf("glob", "glob", "", ctx.Err())
 	default:
 		return nil
 	}
@@ -72,17 +72,17 @@ func checkGlobContext(ctx context.Context) error {
 func globWithFallback(ctx context.Context, root, pattern string) ([]string, error) {
 	matches, err := filepath.Glob(filepath.Join(root, pattern))
 	if err != nil {
-		return nil, &ToolError{Tool: "glob", Op: "glob", Err: err}
+		return nil, errf("glob", "glob", "", err)
 	}
 	if len(matches) != 0 || !strings.Contains(pattern, "**") {
 		return matches, nil
 	}
 	matches, walkErr := walkGlob(ctx, root, pattern)
 	if walkErr != nil {
-		return nil, &ToolError{Tool: "glob", Op: "glob", Err: walkErr}
+		return nil, errf("glob", "glob", "", walkErr)
 	}
 	if ctx.Err() != nil {
-		return nil, &ToolError{Tool: "glob", Op: "glob", Err: ctx.Err()}
+		return nil, errf("glob", "glob", "", ctx.Err())
 	}
 	return matches, nil
 }

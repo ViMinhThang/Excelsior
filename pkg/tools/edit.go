@@ -27,7 +27,7 @@ func (t *EditTool) Parameters() any {
 }
 func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", &ToolError{Tool: "edit", Op: "replace", Err: err}
+		return "", errf("edit", "replace", "", err)
 	}
 	a, err := parseEditArgs(args)
 	if err != nil {
@@ -38,7 +38,7 @@ func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	}
 	p, err := secureJoin(t.Root, a.FilePath)
 	if err != nil {
-		return "", &ToolError{Tool: "edit", Op: "security", Path: a.FilePath, Err: err}
+		return "", errf("edit", "security", a.FilePath, err)
 	}
 	content, err := readEditFile(p, a.FilePath)
 	if err != nil {
@@ -49,10 +49,10 @@ func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	}
 	content = strings.Replace(content, a.OldText, a.NewText, 1)
 	if len(content) > MaxWriteSize {
-		return "", &ToolError{Tool: "edit", Op: "replace", Path: a.FilePath, Err: fmt.Errorf("%w: resulting file too large (%d > %d)", ErrFileTooLarge, len(content), MaxWriteSize)}
+		return "", errf("edit", "replace", a.FilePath, fmt.Errorf("%w: resulting file too large (%d > %d)", ErrFileTooLarge, len(content), MaxWriteSize))
 	}
 	if err := util.WriteAtomic(p, []byte(content), 0o644); err != nil {
-		return "", &ToolError{Tool: "edit", Op: "write", Path: a.FilePath, Err: err}
+		return "", errf("edit", "write", a.FilePath, err)
 	}
 	slog.Info("edit", "path", a.FilePath)
 	return fmt.Sprintf("Edited %s", a.FilePath), nil
@@ -67,17 +67,17 @@ type editArgs struct {
 func parseEditArgs(args json.RawMessage) (*editArgs, error) {
 	var a editArgs
 	if err := json.Unmarshal(args, &a); err != nil {
-		return nil, &ToolError{Tool: "edit", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
+		return nil, errf("edit", "validate", "", fmt.Errorf("%w: %v", ErrInvalidArguments, err))
 	}
 	a.FilePath = strings.TrimSpace(a.FilePath)
 	if a.FilePath == "" {
-		return nil, &ToolError{Tool: "edit", Op: "validate", Err: fmt.Errorf("%w: filePath is required", ErrInvalidArguments)}
+		return nil, errf("edit", "validate", "", fmt.Errorf("%w: filePath is required", ErrInvalidArguments))
 	}
 	if a.OldText == "" {
-		return nil, &ToolError{Tool: "edit", Op: "validate", Path: a.FilePath, Err: fmt.Errorf("%w: oldText must be non-empty", ErrInvalidArguments)}
+		return nil, errf("edit", "validate", a.FilePath, fmt.Errorf("%w: oldText must be non-empty", ErrInvalidArguments))
 	}
 	if len(a.NewText) > MaxWriteSize {
-		return nil, &ToolError{Tool: "edit", Op: "validate", Path: a.FilePath, Err: fmt.Errorf("%w: newText too large (%d > %d)", ErrFileTooLarge, len(a.NewText), MaxWriteSize)}
+		return nil, errf("edit", "validate", a.FilePath, fmt.Errorf("%w: newText too large (%d > %d)", ErrFileTooLarge, len(a.NewText), MaxWriteSize))
 	}
 	return &a, nil
 }
@@ -93,10 +93,10 @@ func checkEditPermission(ctx context.Context, a *editArgs) error {
 func readEditFile(p, filePath string) (string, error) {
 	b, err := os.ReadFile(p)
 	if err != nil {
-		return "", &ToolError{Tool: "edit", Op: "read", Path: filePath, Err: err}
+		return "", errf("edit", "read", filePath, err)
 	}
 	if len(b) > MaxWriteSize {
-		return "", &ToolError{Tool: "edit", Op: "read", Path: filePath, Err: fmt.Errorf("%w: file too large (%d > %d)", ErrFileTooLarge, len(b), MaxWriteSize)}
+		return "", errf("edit", "read", filePath, fmt.Errorf("%w: file too large (%d > %d)", ErrFileTooLarge, len(b), MaxWriteSize))
 	}
 	return string(b), nil
 }
@@ -104,10 +104,10 @@ func readEditFile(p, filePath string) (string, error) {
 func validateEditUniqueness(content string, a *editArgs) error {
 	count := strings.Count(content, a.OldText)
 	if count == 0 {
-		return &ToolError{Tool: "edit", Op: "replace", Path: a.FilePath, Err: ErrTextNotFound}
+		return errf("edit", "replace", a.FilePath, ErrTextNotFound)
 	}
 	if count > 1 {
-		return &ToolError{Tool: "edit", Op: "replace", Path: a.FilePath, Err: fmt.Errorf("%w: oldText matched %d times, must be unique", ErrAmbiguousMatch, count)}
+		return errf("edit", "replace", a.FilePath, fmt.Errorf("%w: oldText matched %d times, must be unique", ErrAmbiguousMatch, count))
 	}
 	return nil
 }

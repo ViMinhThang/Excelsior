@@ -25,7 +25,7 @@ func (t *ViewTool) Parameters() any {
 }
 func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", &ToolError{Tool: "view", Op: "read", Err: err}
+		return "", errf("view", "read", "", err)
 	}
 	a, err := parseViewArgs(args)
 	if err != nil {
@@ -37,14 +37,14 @@ func (t *ViewTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	}
 	p, err := secureJoin(t.Root, a.FilePath)
 	if err != nil {
-		return "", &ToolError{Tool: "view", Op: "security", Path: a.FilePath, Err: err}
+		return "", errf("view", "security", a.FilePath, err)
 	}
 	if err := validateViewFile(p, a.FilePath); err != nil {
 		return "", err
 	}
 	b, err := os.ReadFile(p)
 	if err != nil {
-		return "", &ToolError{Tool: "view", Op: "read", Path: a.FilePath, Err: err}
+		return "", errf("view", "read", a.FilePath, err)
 	}
 	return renderViewContent(b, a.FilePath, offset, limit)
 }
@@ -58,10 +58,10 @@ type viewArgs struct {
 func parseViewArgs(args json.RawMessage) (*viewArgs, error) {
 	var a viewArgs
 	if err := json.Unmarshal(args, &a); err != nil {
-		return nil, &ToolError{Tool: "view", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
+		return nil, errf("view", "validate", "", fmt.Errorf("%w: %v", ErrInvalidArguments, err))
 	}
 	if strings.TrimSpace(a.FilePath) == "" {
-		return nil, &ToolError{Tool: "view", Op: "validate", Err: fmt.Errorf("%w: filePath is required", ErrInvalidArguments)}
+		return nil, errf("view", "validate", "", fmt.Errorf("%w: filePath is required", ErrInvalidArguments))
 	}
 	return &a, nil
 }
@@ -79,10 +79,10 @@ func resolveViewPagination(a *viewArgs) (int, int) {
 
 func validateViewPagination(filePath string, offset, limit int) error {
 	if offset < 0 {
-		return &ToolError{Tool: "view", Op: "validate", Path: filePath, Err: fmt.Errorf("%w: offset must be >=0, got %d", ErrInvalidArguments, offset)}
+		return errf("view", "validate", filePath, fmt.Errorf("%w: offset must be >=0, got %d", ErrInvalidArguments, offset))
 	}
 	if limit < 1 || limit > 200 {
-		return &ToolError{Tool: "view", Op: "validate", Path: filePath, Err: fmt.Errorf("%w: limit must be 1..200, got %d", ErrInvalidArguments, limit)}
+		return errf("view", "validate", filePath, fmt.Errorf("%w: limit must be 1..200, got %d", ErrInvalidArguments, limit))
 	}
 	return nil
 }
@@ -90,13 +90,13 @@ func validateViewPagination(filePath string, offset, limit int) error {
 func validateViewFile(p, filePath string) error {
 	info, err := os.Stat(p)
 	if err != nil {
-		return &ToolError{Tool: "view", Op: "stat", Path: filePath, Err: err}
+		return errf("view", "stat", filePath, err)
 	}
 	if info.IsDir() {
-		return &ToolError{Tool: "view", Op: "read", Path: filePath, Err: fmt.Errorf("%w: %q is a directory, not a file", ErrIsADirectory, filePath)}
+		return errf("view", "read", filePath, fmt.Errorf("%w: %q is a directory, not a file", ErrIsADirectory, filePath))
 	}
 	if info.Size() > MaxFileReadSize {
-		return &ToolError{Tool: "view", Op: "read", Path: filePath, Err: fmt.Errorf("%w: size %d exceeds max %d bytes", ErrFileTooLarge, info.Size(), MaxFileReadSize)}
+		return errf("view", "read", filePath, fmt.Errorf("%w: size %d exceeds max %d bytes", ErrFileTooLarge, info.Size(), MaxFileReadSize))
 	}
 	return nil
 }
@@ -109,7 +109,7 @@ func renderViewContent(b []byte, filePath string, offset, limit int) (string, er
 		start = 1
 	}
 	if start > total {
-		return "", &ToolError{Tool: "view", Op: "read", Path: filePath, Err: fmt.Errorf("%w: file has %d lines, offset %d out of range", ErrOffsetOutOfRange, total, offset)}
+		return "", errf("view", "read", filePath, fmt.Errorf("%w: file has %d lines, offset %d out of range", ErrOffsetOutOfRange, total, offset))
 	}
 	end := offset + limit
 	if end > total {

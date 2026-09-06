@@ -26,14 +26,14 @@ func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 func validateUsername(u string) error {
 	u = strings.TrimSpace(u)
 	if !validUsername.MatchString(u) {
-		return &AuthError{Op: "validate", Username: u, Err: ErrInvalidUsername}
+		return errf("validate", u, ErrInvalidUsername)
 	}
 	return nil
 }
 
 func validatePassword(p string) error {
 	if len(p) < 8 || len(p) > 128 {
-		return &AuthError{Op: "validate", Err: ErrInvalidPassword}
+		return errf("validate", "", ErrInvalidPassword)
 	}
 	return nil
 }
@@ -59,18 +59,18 @@ func (s *Store) Register(ctx context.Context, username, password string) (string
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return "", &AuthError{Op: "register", Username: username, Err: err}
+		return "", errf("register", username, err)
 	}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO users(username,password_hash) VALUES(?,?)`, username, string(hash))
 	if err != nil {
 		if strings.Contains(strings.ToLower(err.Error()), "unique") {
-			return "", &AuthError{Op: "register", Username: username, Err: ErrUserExists}
+			return "", errf("register", username, ErrUserExists)
 		}
-		return "", &AuthError{Op: "register", Username: username, Err: err}
+		return "", errf("register", username, err)
 	}
 	var userID int64
 	if err := s.db.QueryRowContext(ctx, `SELECT id FROM users WHERE username=?`, username).Scan(&userID); err != nil {
-		return "", &AuthError{Op: "register", Username: username, Err: err}
+		return "", errf("register", username, err)
 	}
 	return s.issueToken(ctx, userID)
 }
@@ -83,12 +83,12 @@ func (s *Store) Login(ctx context.Context, username, password string) (string, e
 	err := s.db.QueryRowContext(ctx, `SELECT id,password_hash FROM users WHERE username=? COLLATE NOCASE`, username).Scan(&userID, &hash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", &AuthError{Op: "login", Username: username, Err: ErrInvalidCredentials}
+			return "", errf("login", username, ErrInvalidCredentials)
 		}
-		return "", &AuthError{Op: "login", Username: username, Err: err}
+		return "", errf("login", username, err)
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
-		return "", &AuthError{Op: "login", Username: username, Err: ErrInvalidCredentials}
+		return "", errf("login", username, ErrInvalidCredentials)
 	}
 	return s.issueToken(ctx, userID)
 }
@@ -101,7 +101,7 @@ func (s *Store) issueToken(ctx context.Context, userID int64) (string, error) {
 	exp := time.Now().Add(tokenTTL).UTC()
 	_, err = s.db.ExecContext(ctx, `INSERT INTO tokens(token,user_id,expires_at) VALUES(?,?,?)`, tok, userID, exp.Format(time.RFC3339Nano))
 	if err != nil {
-		return "", &AuthError{Op: "token", Err: err}
+		return "", errf("token", "", err)
 	}
 	return tok, nil
 }
@@ -110,7 +110,7 @@ func (s *Store) issueToken(ctx context.Context, userID int64) (string, error) {
 func (s *Store) ValidateToken(ctx context.Context, token string) (int64, string, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
-		return 0, "", &AuthError{Op: "validate", Err: ErrTokenNotFound}
+		return 0, "", errf("validate", "", ErrTokenNotFound)
 	}
 	var userID int64
 	var username, expStr string
@@ -119,9 +119,9 @@ func (s *Store) ValidateToken(ctx context.Context, token string) (int64, string,
 		Scan(&userID, &username, &expStr)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return 0, "", &AuthError{Op: "validate", Err: ErrTokenNotFound}
+			return 0, "", errf("validate", "", ErrTokenNotFound)
 		}
-		return 0, "", &AuthError{Op: "validate", Err: err}
+		return 0, "", errf("validate", "", err)
 	}
 	exp, err := time.Parse(time.RFC3339Nano, expStr)
 	if err != nil {
@@ -129,12 +129,12 @@ func (s *Store) ValidateToken(ctx context.Context, token string) (int64, string,
 		if e2, err2 := time.Parse(time.RFC3339, expStr); err2 == nil {
 			exp = e2
 		} else {
-			return 0, "", &AuthError{Op: "validate", Err: err}
+			return 0, "", errf("validate", "", err)
 		}
 	}
 	if time.Now().UTC().After(exp) {
 		_, _ = s.db.ExecContext(ctx, `DELETE FROM tokens WHERE token=?`, token)
-		return 0, "", &AuthError{Op: "validate", Err: ErrTokenExpired}
+		return 0, "", errf("validate", "", ErrTokenExpired)
 	}
 	return userID, username, nil
 }

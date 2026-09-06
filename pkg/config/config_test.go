@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,12 +117,8 @@ func TestValidate(t *testing.T) {
 				if !errors.Is(err, tc.targetErr) {
 					t.Errorf("expected errors.Is(err, %v) to be true, got %v", tc.targetErr, err)
 				}
-				var cfgErr *ConfigError
-				if !errors.As(err, &cfgErr) {
-					t.Fatalf("expected errors.As(err, &cfgErr) to be true, got %v", err)
-				}
-				if cfgErr.Field != tc.field {
-					t.Errorf("expected field %q, got %q", tc.field, cfgErr.Field)
+				if s := err.Error(); !strings.Contains(s, tc.field) {
+					t.Errorf("expected field %q in message, got %q", tc.field, s)
 				}
 			}
 		})
@@ -147,59 +144,22 @@ func TestResolveWorkspace_Sentinels(t *testing.T) {
 	if err == nil || !errors.Is(err, ErrWorkspaceNotDir) {
 		t.Fatalf("expected ErrWorkspaceNotDir for file path, got %v", err)
 	}
-	if !errors.Is(err, ErrNotADirectory) {
-		t.Fatalf("expected ErrNotADirectory alias to match, got %v", err)
-	}
 
 	// Non-existent dir
 	_, err = ResolveWorkspace(filepath.Join(dir, "nonexistent"), "")
 	if err == nil || !errors.Is(err, ErrWorkspaceNotFound) {
 		t.Fatalf("expected ErrWorkspaceNotFound for nonexistent path, got %v", err)
 	}
-
-	// Structured ConfigError check
-	var cfgErr *ConfigError
-	if !errors.As(err, &cfgErr) {
-		t.Fatalf("expected *ConfigError, got %T: %v", err, err)
-	}
-	if cfgErr.Field != "Workspace" {
-		t.Errorf("expected Field 'Workspace', got %q", cfgErr.Field)
+	if s := err.Error(); !strings.Contains(s, "Workspace") {
+		t.Errorf("expected field in message, got %q", s)
 	}
 }
 
-func TestConfigError_FormattingAndUnwrap(t *testing.T) {
-	err1 := &ConfigError{Message: "Custom msg", Err: ErrMissingAPIKey}
-	if !errors.Is(err1, ErrMissingAPIKey) {
-		t.Errorf("expected Is(ErrMissingAPIKey)")
-	}
-	if err1.Unwrap() != ErrMissingAPIKey {
-		t.Errorf("expected Unwrap() to return ErrMissingAPIKey")
-	}
-	if !strings.Contains(err1.Error(), "Custom msg") {
-		t.Errorf("expected custom msg in error string: %s", err1.Error())
-	}
-
-	err2 := &ConfigError{Field: "Model", Err: ErrMissingModel}
-	if !errors.Is(err2, ErrMissingModel) {
-		t.Errorf("expected Is(ErrMissingModel)")
-	}
-
-	err3 := &ConfigError{Field: "BaseURL", Err: ErrInvalidBaseURL}
-	if !errors.Is(err3, ErrInvalidBaseURL) {
-		t.Errorf("expected Is(ErrInvalidBaseURL)")
-	}
-
-	err4 := &ConfigError{Field: "Temperature", Err: ErrInvalidTemperature}
-	if !errors.Is(err4, ErrInvalidTemperature) {
-		t.Errorf("expected Is(ErrInvalidTemperature)")
-	}
-
-	errEmpty := &ConfigError{}
-	if errEmpty.Error() != "config error" {
-		t.Errorf("expected 'config error', got %q", errEmpty.Error())
-	}
-	if errEmpty.Is(nil) {
-		t.Errorf("Is(nil) should be false")
+func TestConfigSentinels_WrapWithFmt(t *testing.T) {
+	for _, s := range []error{ErrMissingAPIKey, ErrMissingModel, ErrInvalidBaseURL, ErrInvalidTemperature, ErrInvalidWorkspace, ErrWorkspaceNotFound, ErrWorkspaceNotDir, ErrInvalidPermission} {
+		if err := fmt.Errorf("config test: %w", s); !errors.Is(err, s) {
+			t.Errorf("expected Is(%v)", s)
+		}
 	}
 }
 

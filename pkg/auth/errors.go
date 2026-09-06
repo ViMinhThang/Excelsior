@@ -14,33 +14,10 @@ var (
 	ErrInvalidPassword    = errors.New("auth: invalid password")
 )
 
-// AuthError is a typed domain error for auth operations.
-type AuthError struct {
-	Op       string
-	Username string
-	Err      error
-}
-
-func (e *AuthError) Error() string {
-	meta := ""
-	if e.Op != "" {
-		meta = " [" + e.Op
-		if e.Username != "" {
-			meta += fmt.Sprintf(" user=%s", e.Username)
-		}
-		meta += "]"
+// errf builds an auth error. Replaces &AuthError{...} literals site-wide.
+func errf(op, username string, err error) error {
+	if username == "" {
+		return fmt.Errorf("auth %s: %w", op, err)
 	}
-	base := "auth" + meta
-	if e.Err != nil {
-		return fmt.Sprintf("%s: %v", base, e.Err)
-	}
-	return base
-}
-
-func (e *AuthError) Unwrap() error { return e.Err }
-func (e *AuthError) Is(target error) bool {
-	if target == nil {
-		return false
-	}
-	return errors.Is(e.Err, target)
+	return fmt.Errorf("auth %s %q: %w", op, username, err)
 }

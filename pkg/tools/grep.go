@@ -26,18 +26,18 @@ func (t *GrepTool) Parameters() any {
 }
 func (t *GrepTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", &ToolError{Tool: "grep", Op: "grep", Err: err}
+		return "", errf("grep", "grep", "", err)
 	}
 	var a struct {
 		Pattern string  `json:"pattern"`
 		Path    *string `json:"path"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", &ToolError{Tool: "grep", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
+		return "", errf("grep", "validate", "", fmt.Errorf("%w: %v", ErrInvalidArguments, err))
 	}
 	a.Pattern = strings.TrimSpace(a.Pattern)
 	if a.Pattern == "" {
-		return "", &ToolError{Tool: "grep", Op: "validate", Err: fmt.Errorf("%w: pattern is required", ErrInvalidArguments)}
+		return "", errf("grep", "validate", "", fmt.Errorf("%w: pattern is required", ErrInvalidArguments))
 	}
 	dir := t.Root
 	displayPath := "."
@@ -46,13 +46,13 @@ func (t *GrepTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 		var err error
 		dir, err = secureJoin(t.Root, *a.Path)
 		if err != nil {
-			return "", &ToolError{Tool: "grep", Op: "security", Path: displayPath, Err: err}
+			return "", errf("grep", "security", displayPath, err)
 		}
 	}
 	if info, err := os.Stat(dir); err != nil {
-		return "", &ToolError{Tool: "grep", Op: "stat", Path: displayPath, Err: err}
+		return "", errf("grep", "stat", displayPath, err)
 	} else if !info.IsDir() {
-		return "", &ToolError{Tool: "grep", Op: "stat", Path: displayPath, Err: fmt.Errorf("%w: %q is not a directory", ErrNotADirectory, displayPath)}
+		return "", errf("grep", "stat", displayPath, fmt.Errorf("%w: %q is not a directory", ErrNotADirectory, displayPath))
 	}
 	return grepWalk(ctx, a.Pattern, dir, t.Root)
 }
@@ -67,7 +67,7 @@ func grepWalk(ctx context.Context, pattern, dir, root string) (string, error) {
 		slog.Warn("grep walk error", "err", err)
 	}
 	if ctx.Err() != nil {
-		return "", &ToolError{Tool: "grep", Op: "grep", Err: ctx.Err()}
+		return "", errf("grep", "grep", "", ctx.Err())
 	}
 	if len(out) == 0 {
 		return "No matches.", nil

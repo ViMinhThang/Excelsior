@@ -28,25 +28,25 @@ func (t *BashTool) Parameters() any {
 }
 func (t *BashTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", &ToolError{Tool: "bash", Op: "exec", Err: err}
+		return "", errf("bash", "exec", "", err)
 	}
 	var a struct {
 		Command string `json:"command"`
 		Timeout *int   `json:"timeout"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", &ToolError{Tool: "bash", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
+		return "", errf("bash", "validate", "", fmt.Errorf("%w: %v", ErrInvalidArguments, err))
 	}
 	a.Command = strings.TrimSpace(a.Command)
 	if a.Command == "" {
-		return "", &ToolError{Tool: "bash", Op: "validate", Err: fmt.Errorf("%w: command is required", ErrInvalidArguments)}
+		return "", errf("bash", "validate", "", fmt.Errorf("%w: command is required", ErrInvalidArguments))
 	}
 	if len(a.Command) > MaxCommandLength {
-		return "", &ToolError{Tool: "bash", Op: "validate", Err: fmt.Errorf("%w: length %d exceeds max %d", ErrCommandTooLong, len(a.Command), MaxCommandLength)}
+		return "", errf("bash", "validate", "", fmt.Errorf("%w: length %d exceeds max %d", ErrCommandTooLong, len(a.Command), MaxCommandLength))
 	}
 	if a.Timeout != nil {
 		if *a.Timeout < 1000 || *a.Timeout > 120000 {
-			return "", &ToolError{Tool: "bash", Op: "validate", Err: fmt.Errorf("%w: timeout must be 1000..120000 ms, got %d", ErrInvalidArguments, *a.Timeout)}
+			return "", errf("bash", "validate", "", fmt.Errorf("%w: timeout must be 1000..120000 ms, got %d", ErrInvalidArguments, *a.Timeout))
 		}
 	}
 	if err := checkPermission(ctx, "bash", PermissionRequest{Tool: "bash", Command: a.Command}); err != nil {

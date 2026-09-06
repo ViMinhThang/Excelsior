@@ -21,70 +21,54 @@ import (
 	"excelsior/pkg/session"
 )
 
+// ponytail: one generic slot replaces ask/perm method pairs (was 8 near-identical methods)
+type slot[T any] struct {
+	mu sync.RWMutex
+	ch chan T
+}
+
+func (s *slot[T]) set(ch chan T) {
+	s.mu.Lock()
+	s.ch = ch
+	s.mu.Unlock()
+}
+
+func (s *slot[T]) clear() {
+	s.mu.Lock()
+	s.ch = nil
+	s.mu.Unlock()
+}
+
+func (s *slot[T]) route(resp T) bool {
+	s.mu.RLock()
+	ch := s.ch
+	s.mu.RUnlock()
+	if ch == nil {
+		return false
+	}
+	select {
+	case ch <- resp:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *slot[T]) get() (chan T, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.ch, s.ch != nil
+}
+
 // interactionRouter manages pending human-in-the-loop responses for an active connection turn.
 type interactionRouter struct {
-	mu     sync.RWMutex
-	askCh  chan protocol.AskResp
-	permCh chan protocol.PermissionResp
-}
-
-func (r *interactionRouter) setAsk(ch chan protocol.AskResp) {
-	r.mu.Lock()
-	r.askCh = ch
-	r.mu.Unlock()
-}
-
-func (r *interactionRouter) clearAsk() {
-	r.mu.Lock()
-	r.askCh = nil
-	r.mu.Unlock()
-}
-
-func (r *interactionRouter) routeAsk(resp protocol.AskResp) bool {
-	r.mu.RLock()
-	ch := r.askCh
-	r.mu.RUnlock()
-	if ch != nil {
-		select {
-		case ch <- resp:
-			return true
-		default:
-		}
-	}
-	return false
-}
-
-func (r *interactionRouter) setPerm(ch chan protocol.PermissionResp) {
-	r.mu.Lock()
-	r.permCh = ch
-	r.mu.Unlock()
-}
-
-func (r *interactionRouter) clearPerm() {
-	r.mu.Lock()
-	r.permCh = nil
-	r.mu.Unlock()
-}
-
-func (r *interactionRouter) routePerm(resp protocol.PermissionResp) bool {
-	r.mu.RLock()
-	ch := r.permCh
-	r.mu.RUnlock()
-	if ch != nil {
-		select {
-		case ch <- resp:
-			return true
-		default:
-		}
-	}
-	return false
+	ask  slot[protocol.AskResp]
+	perm slot[protocol.PermissionResp]
 }
 
 func (r *interactionRouter) reset() {
-	r.mu.Lock()
-	r.askCh = nil
-	r.permCh = nil
-	r.mu.Unlock()
+	r.ask.clear()
+	r.perm.clear()
 }
 
 // Conn represents an active WebSocket client connection.
@@ -124,20 +108,16 @@ func (c *Conn) isClosed() bool {
 	}
 }
 
-func (c *Conn) setAskChannel(ch chan protocol.AskResp) { c.interactions.setAsk(ch) }
-func (c *Conn) clearAskChannel()                       { c.interactions.clearAsk() }
+func (c *Conn) setAskChannel(ch chan protocol.AskResp) { c.interactions.ask.set(ch) }
+func (c *Conn) clearAskChannel()                       { c.interactions.ask.clear() }
 func (c *Conn) getAskChannel() (chan protocol.AskResp, bool) {
-	c.interactions.mu.RLock()
-	defer c.interactions.mu.RUnlock()
-	return c.interactions.askCh, c.interactions.askCh != nil
+	return c.interactions.ask.get()
 }
 
-func (c *Conn) setPermChannel(ch chan protocol.PermissionResp) { c.interactions.setPerm(ch) }
-func (c *Conn) clearPermChannel()                              { c.interactions.clearPerm() }
+func (c *Conn) setPermChannel(ch chan protocol.PermissionResp) { c.interactions.perm.set(ch) }
+func (c *Conn) clearPermChannel()                              { c.interactions.perm.clear() }
 func (c *Conn) getPermChannel() (chan protocol.PermissionResp, bool) {
-	c.interactions.mu.RLock()
-	defer c.interactions.mu.RUnlock()
-	return c.interactions.permCh, c.interactions.permCh != nil
+	return c.interactions.perm.get()
 }
 
 func (c *Conn) subscribe(sessionID string) {
@@ -364,20 +344,18 @@ func (c *Conn) dispatchChat(ctx context.Context, env protocol.Envelope) {
 
 func (c *Conn) handleAskResp(env protocol.Envelope) {
 	var resp protocol.AskResp
-	if err := env.Decode(&resp); err != nil {
-		c.sendError(env.ID, fmt.Sprintf("bad ask.resp: %v", err))
+	if !c.decodePayload(env, &resp, "ask.resp") {
 		return
 	}
 	c.hub.logger().Info("received client ask response", "selected", resp.Selected, "answer", resp.Answer)
-	c.interactions.routeAsk(resp)
+	c.interactions.ask.route(resp)
 }
 
 func (c *Conn) handlePermissionResp(env protocol.Envelope) {
 	var resp protocol.PermissionResp
-	if err := env.Decode(&resp); err != nil {
-		c.sendError(env.ID, fmt.Sprintf("bad permission.resp: %v", err))
+	if !c.decodePayload(env, &resp, "permission.resp") {
 		return
 	}
 	c.hub.logger().Info("received client permission response", "approved", resp.Approved)
-	c.interactions.routePerm(resp)
+	c.interactions.perm.route(resp)
 }

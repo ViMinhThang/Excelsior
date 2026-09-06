@@ -23,21 +23,21 @@ func (t *WriteTool) Parameters() any {
 }
 func (t *WriteTool) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return "", &ToolError{Tool: "write", Op: "write", Err: err}
+		return "", errf("write", "write", "", err)
 	}
 	var a struct {
 		FilePath string `json:"filePath"`
 		Content  string `json:"content"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
-		return "", &ToolError{Tool: "write", Op: "validate", Err: fmt.Errorf("%w: %v", ErrInvalidArguments, err)}
+		return "", errf("write", "validate", "", fmt.Errorf("%w: %v", ErrInvalidArguments, err))
 	}
 	a.FilePath = strings.TrimSpace(a.FilePath)
 	if a.FilePath == "" {
-		return "", &ToolError{Tool: "write", Op: "validate", Err: fmt.Errorf("%w: filePath is required", ErrInvalidArguments)}
+		return "", errf("write", "validate", "", fmt.Errorf("%w: filePath is required", ErrInvalidArguments))
 	}
 	if len(a.Content) > MaxWriteSize {
-		return "", &ToolError{Tool: "write", Op: "validate", Path: a.FilePath, Err: fmt.Errorf("%w: content too large (%d > %d bytes)", ErrFileTooLarge, len(a.Content), MaxWriteSize)}
+		return "", errf("write", "validate", a.FilePath, fmt.Errorf("%w: content too large (%d > %d bytes)", ErrFileTooLarge, len(a.Content), MaxWriteSize))
 	}
 	// Permission gate — once per call, sequentially (handled by caller loop).
 	permPreview := util.Truncate(a.Content, 8000)
@@ -46,10 +46,10 @@ func (t *WriteTool) Execute(ctx context.Context, args json.RawMessage) (string, 
 	}
 	p, err := secureJoin(t.Root, a.FilePath)
 	if err != nil {
-		return "", &ToolError{Tool: "write", Op: "security", Path: a.FilePath, Err: err}
+		return "", errf("write", "security", a.FilePath, err)
 	}
 	if err := util.WriteAtomic(p, []byte(a.Content), 0o644); err != nil {
-		return "", &ToolError{Tool: "write", Op: "write", Path: a.FilePath, Err: err}
+		return "", errf("write", "write", a.FilePath, err)
 	}
 	slog.Info("write", "path", a.FilePath, "bytes", len(a.Content))
 	// Include a preview of the written content as a fenced code block so the

@@ -290,25 +290,11 @@ func TestAskTool(t *testing.T) {
 	}
 }
 
-func TestToolError_FormattingAndUnwrap(t *testing.T) {
-	te1 := &ToolError{
-		Tool: "edit",
-		Op:   "replace",
-		Path: "file.go",
-		Msg:  "failed to edit",
-		Err:  ErrAmbiguousMatch,
-	}
-	if !errors.Is(te1, ErrAmbiguousMatch) {
-		t.Errorf("expected Is(ErrAmbiguousMatch)")
-	}
-	if !errors.Is(te1, ErrOldTextAmbiguous) {
-		t.Errorf("expected Is(ErrOldTextAmbiguous) alias")
-	}
-	if te1.Unwrap() != ErrAmbiguousMatch {
-		t.Errorf("expected Unwrap() to return ErrAmbiguousMatch")
-	}
-	if !strings.Contains(te1.Error(), "failed to edit") {
-		t.Errorf("expected error message in string: %s", te1.Error())
+func TestToolErrf_WrapsSentinels(t *testing.T) {
+	if err := errf("edit", "replace", "file.go", ErrAmbiguousMatch); !errors.Is(err, ErrAmbiguousMatch) {
+		t.Errorf("expected Is(ErrAmbiguousMatch), got %v", err)
+	} else if s := err.Error(); !strings.Contains(s, "edit") || !strings.Contains(s, "file.go") {
+		t.Errorf("expected tool+path in message, got %q", s)
 	}
 
 	sentinels := []error{
@@ -317,18 +303,9 @@ func TestToolError_FormattingAndUnwrap(t *testing.T) {
 		ErrTextNotFound, ErrNotADirectory, ErrIsADirectory, ErrOffsetOutOfRange,
 	}
 	for _, s := range sentinels {
-		te := &ToolError{Err: s}
-		if !errors.Is(te, s) {
-			t.Errorf("expected Is(%v) on ToolError", s)
+		if err := errf("test", "op", "", s); !errors.Is(err, s) {
+			t.Errorf("expected Is(%v)", s)
 		}
-	}
-
-	teEmpty := &ToolError{}
-	if teEmpty.Error() != "tools" {
-		t.Errorf("expected 'tools', got %q", teEmpty.Error())
-	}
-	if teEmpty.Is(nil) {
-		t.Error("Is(nil) should be false")
 	}
 }
 
