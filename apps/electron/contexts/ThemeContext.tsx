@@ -5,6 +5,14 @@ import React, { createContext, useContext, useCallback, useEffect, useState } fr
 export const THEME_STORAGE_KEY = "excelsior-theme";
 export const DEFAULT_THEME = "default-dark";
 
+// ponytail: single theme list (was 3 copies: MenuBar THEMES + SettingsModal AVAILABLE_THEMES + here)
+export const AVAILABLE_THEMES = [
+  { id: "default-dark", name: "Default Dark" },
+  { id: "default-light", name: "Default Light" },
+  { id: "rose-pine-dark", name: "Rosé Pine Dark" },
+  { id: "rose-pine-light", name: "Rosé Pine Light" },
+] as const;
+
 type ThemeContextValue = {
   theme: string;
   setTheme: (theme: string) => void;

@@ -1,13 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { CheckIcon, SettingsIcon, WindowCloseIcon } from "./Icons";
+import { SettingsIcon, WindowCloseIcon } from "./Icons";
 import { AVAILABLE_MODELS } from "./Composer";
-
-export const AVAILABLE_THEMES = [
-  { id: "default-dark", name: "Default Dark" },
-  { id: "default-light", name: "Default Light" },
-  { id: "rose-pine-dark", name: "Rosé Pine Dark" },
-  { id: "rose-pine-light", name: "Rosé Pine Light" },
-] as const;
+import { AVAILABLE_THEMES } from "../contexts/ThemeContext";
 
 type SettingsModalProps = {
   isOpen: boolean;
@@ -38,39 +32,23 @@ function SettingsModal({
 }: SettingsModalProps) {
   const [draftUrl, setDraftUrl] = useState(engineUrl);
   const [draftModel, setDraftModel] = useState(defaultModel);
-  const [draftTheme, setDraftTheme] = useState(currentTheme);
   const [draftAllowAll, setDraftAllowAll] = useState(allowAll);
-  const [saved, setSaved] = useState(false);
 
   // Keep drafts in sync when modal re-opens or props change
   useEffect(() => {
     if (isOpen) {
       setDraftUrl(engineUrl);
       setDraftModel(defaultModel);
-      setDraftTheme(currentTheme);
       setDraftAllowAll(allowAll);
     }
-  }, [isOpen, engineUrl, defaultModel, currentTheme, allowAll]);
+  }, [isOpen, engineUrl, defaultModel, allowAll]);
 
   const handleSave = useCallback(() => {
     onSaveEngineUrl(draftUrl.trim());
     onSaveDefaultModel(draftModel);
-    onSaveTheme(draftTheme);
     onSaveAllowAll(draftAllowAll);
-    setSaved(true);
-    window.setTimeout(() => {
-      setSaved(false);
-      onClose();
-    }, 600);
-  }, [draftUrl, draftModel, draftTheme, draftAllowAll, onClose, onSaveDefaultModel, onSaveEngineUrl, onSaveTheme, onSaveAllowAll]);
-
-  const handleThemeChange = useCallback(
-    (next: string) => {
-      setDraftTheme(next);
-      onSaveTheme(next);
-    },
-    [onSaveTheme]
-  );
+    onClose();
+  }, [draftUrl, draftModel, draftAllowAll, onClose, onSaveDefaultModel, onSaveEngineUrl, onSaveAllowAll]);
 
   if (!isOpen) return null;
 
@@ -108,8 +86,8 @@ function SettingsModal({
           <label className="block">
             <span className="text-[var(--text-muted)] font-medium">Theme</span>
             <select
-              value={draftTheme}
-              onChange={(e) => handleThemeChange(e.target.value)}
+              value={currentTheme}
+              onChange={(e) => onSaveTheme(e.target.value)}
               className="mt-1.5 w-full bg-[var(--bg-input)] rounded-xl px-3 py-2 outline-none"
             >
               {AVAILABLE_THEMES.map((t) => (
@@ -179,13 +157,7 @@ function SettingsModal({
             onClick={handleSave}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold bg-white text-black"
           >
-            {saved ? (
-              <>
-                <CheckIcon className="w-3 h-3 text-emerald-600" />Saved
-              </>
-            ) : (
-              "Save Changes"
-            )}
+            Save Changes
           </button>
         </div>
       </div>

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDownIcon, PlusIcon, SendArrowIcon } from "./Icons";
+import React, { useCallback, useRef, useState } from "react";
+import { PlusIcon, SendArrowIcon } from "./Icons";
 
 export const AVAILABLE_MODELS = [
   { id: "deepseek-v4-flash", name: "deepseek-v4-flash", badge: "Flash" },
@@ -19,9 +19,7 @@ type ComposerProps = {
 
 function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStreaming }: ComposerProps) {
   const [text, setText] = useState("");
-  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const activeModel = AVAILABLE_MODELS.find((m) => m.id === selectedModel) ?? AVAILABLE_MODELS[0];
   const canSend = text.trim().length > 0 && !disabled && !isStreaming;
@@ -51,18 +49,6 @@ function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStre
     [handleSend]
   );
 
-  // Close model menu on outside click
-  useEffect(() => {
-    if (!modelMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setModelMenuOpen(false);
-      }
-    };
-    window.addEventListener("mousedown", handler);
-    return () => window.removeEventListener("mousedown", handler);
-  }, [modelMenuOpen]);
-
   const card = (
     <div className="w-full bg-[var(--bg-card)] rounded-2xl p-3.5 shadow-[var(--card-shadow)] flex flex-col min-h-[108px]">
       <textarea
@@ -89,41 +75,19 @@ function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStre
             <PlusIcon className="w-3.5 h-3.5" />
           </button>
 
-          <div className="relative" ref={containerRef}>
-            <button
-              type="button"
-              onClick={() => setModelMenuOpen((v) => !v)}
-              aria-expanded={modelMenuOpen}
-              aria-haspopup="menu"
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[12px] bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] text-[var(--text-muted)] font-medium"
+  // ponytail: native select replaces hand-rolled menu + outside-click effect
+          <div className="relative">
+            <select
+              value={activeModel.id}
+              onChange={(e) => onSelectModel(e.target.value)}
+              aria-label="Select model"
+              className="appearance-none pl-2.5 pr-6 py-1 rounded-xl text-[12px] bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] text-[var(--text-muted)] font-medium outline-none cursor-pointer"
             >
-              <span>{activeModel.name}</span>
-              <ChevronDownIcon className="w-3 h-3 text-[var(--text-dim)]" />
-            </button>
-
-            {modelMenuOpen && (
-              <div
-                role="menu"
-                className="absolute left-0 bottom-full mb-2 w-56 bg-[var(--bg-card)] rounded-xl shadow-2xl py-1.5 z-50 text-xs"
-              >
-                <div className="px-3 py-1 text-[11px] text-[var(--text-dim)] font-semibold uppercase">Select Model</div>
-                {AVAILABLE_MODELS.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      onSelectModel(m.id);
-                      setModelMenuOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 hover:bg-[var(--bg-card-hover)] cursor-pointer flex justify-between ${m.id === activeModel.id ? "bg-[var(--bg-input)] font-medium" : ""}`}
-                  >
-                    <span>{m.name}</span>
-                    <span className="text-[10px] text-[var(--text-dim)] bg-[var(--bg-canvas)] px-1.5 py-0.5 rounded">{m.badge}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+              {AVAILABLE_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.name} ({m.badge})</option>
+              ))}
+            </select>
+            <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[var(--text-dim)] text-[10px]" aria-hidden>▾</span>
           </div>
         </div>
 

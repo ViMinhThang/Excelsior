@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { WindowCloseIcon, WindowMaximizeIcon, WindowMinimizeIcon } from "./Icons";
+import { AVAILABLE_THEMES } from "../contexts/ThemeContext";
 
 type MenuId = "file" | "view" | "window" | null;
 
@@ -24,7 +25,7 @@ type MenuItemProps = {
   danger?: boolean;
 };
 
-const THEMES = ["default-dark", "default-light", "rose-pine-dark", "rose-pine-light"] as const;
+const THEMES = AVAILABLE_THEMES.map((t) => t.id);
 
 const MenuItem = React.memo(function MenuItem({ onClick, children, kbd, danger }: MenuItemProps) {
   return (
