@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -10,28 +9,19 @@ import (
 	"excelsior/pkg/util"
 )
 
+// ponytail: keep tail + ellipsis (was 2-level dir-aware carving + second truncate at call site)
 func shortWorkspace(ws string, max int) string {
 	if max <= 0 || len(ws) <= max {
 		return ws
 	}
-	if i := strings.LastIndex(ws, string(filepath.Separator)); i > 0 {
-		if j := strings.LastIndex(ws[:i], string(filepath.Separator)); j >= 0 {
-			ws = "…" + ws[j:]
-		} else {
-			ws = "…" + ws[i:]
-		}
+	if max <= 1 {
+		return "…"
 	}
-	if len(ws) > max {
-		return "…" + ws[len(ws)-max+1:]
-	}
-	return ws
+	return "…" + ws[len(ws)-max+1:]
 }
 
 func (m model) headerView() string {
-	wsShort := shortWorkspace(m.cfg.Workspace, m.width-30)
-	if len(wsShort) > 40 {
-		wsShort = "…" + wsShort[len(wsShort)-40:]
-	}
+	wsShort := shortWorkspace(m.cfg.Workspace, min(m.width-30, 40))
 	if wsShort == "" {
 		wsShort = m.cfg.Workspace
 	}
@@ -165,6 +155,7 @@ func (m *model) syncViewport() {
 	m.viewport.GotoBottom()
 }
 
+// ponytail: one scrollbar loop (was full/thumb variants + 3 calc helpers)
 func (m model) scrollbarView() string {
 	h := m.viewport.Height
 	if h <= 0 {
@@ -172,68 +163,16 @@ func (m model) scrollbarView() string {
 	}
 	bar := scrollbarStyle.Render("│")
 	thumb := scrollbarThumbStyle.Render("█")
-	if m.viewport.TotalLineCount() <= h {
-		return m.renderScrollbarFull(bar, h)
+	pos, size := 0, 0
+	if total := m.viewport.TotalLineCount(); total > h {
+		p := min(max(m.viewport.ScrollPercent(), 0), 1)
+		size = min(max(h*h/max(total, 1), 1), h)
+		pos = min(max(int(p*float64(h-size)), 0), h-size)
 	}
-	percent := clampPercent(m.viewport.ScrollPercent())
-	total := m.viewport.TotalLineCount()
-	if total == 0 {
-		total = 1
-	}
-	thumbSize := calcThumbSize(h, total)
-	thumbPos := calcThumbPos(percent, h, thumbSize)
-	return m.renderScrollbarThumb(bar, thumb, h, thumbPos, thumbSize)
-}
-
-func (m model) renderScrollbarFull(bar string, h int) string {
 	var sb strings.Builder
 	sb.Grow(h * 4)
 	for i := 0; i < h; i++ {
-		sb.WriteString(bar)
-		if i < h-1 {
-			sb.WriteString("\n")
-		}
-	}
-	return sb.String()
-}
-
-func clampPercent(p float64) float64 {
-	if p < 0 {
-		return 0
-	}
-	if p > 1 {
-		return 1
-	}
-	return p
-}
-
-func calcThumbSize(h, total int) int {
-	size := h * h / total
-	if size < 1 {
-		size = 1
-	}
-	if size > h {
-		size = h
-	}
-	return size
-}
-
-func calcThumbPos(percent float64, h, thumbSize int) int {
-	pos := int(percent * float64(h-thumbSize))
-	if pos < 0 {
-		pos = 0
-	}
-	if pos > h-thumbSize {
-		pos = h - thumbSize
-	}
-	return pos
-}
-
-func (m model) renderScrollbarThumb(bar, thumb string, h, thumbPos, thumbSize int) string {
-	var sb strings.Builder
-	sb.Grow(h * 4)
-	for i := 0; i < h; i++ {
-		if i >= thumbPos && i < thumbPos+thumbSize {
+		if i >= pos && i < pos+size {
 			sb.WriteString(thumb)
 		} else {
 			sb.WriteString(bar)

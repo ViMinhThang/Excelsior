@@ -42,7 +42,7 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 	permHandler := m.resolvePermHandler(ctx)
 
 	if m.cfg.EngineURL != "" {
-		m.launchRemote(ctx, msgs, ch, handler, permHandler)
+		m.launch(ctx, msgs, ch, handler, permHandler)
 		return m, waitForChunk(ch)
 	}
 	if m.cfg.Agent == nil {
@@ -50,7 +50,7 @@ func (m model) startAgent(prompt string) (tea.Model, tea.Cmd) {
 		m.syncViewport()
 		return m, nil
 	}
-	m.launchLocal(ctx, msgs, ch, handler, permHandler)
+	m.launch(ctx, msgs, ch, handler, permHandler)
 	return m, waitForChunk(ch)
 }
 
@@ -82,26 +82,20 @@ func (m model) resolvePermHandler(ctx context.Context) tools.PermissionHandler {
 	}
 }
 
-func (m model) launchRemote(ctx context.Context, msgs []llm.Message, ch chan agent.StreamEvent, handler tools.QuestionHandler, permHandler tools.PermissionHandler) {
-	wsClient := &engine.WSClient{URL: m.cfg.EngineURL}
+// ponytail: one launcher (remote vs local differ only in the run call)
+func (m model) launch(ctx context.Context, msgs []llm.Message, ch chan agent.StreamEvent, handler tools.QuestionHandler, permHandler tools.PermissionHandler) {
 	go func() {
-		chatReq := protocol.ChatReq{Model: m.cfg.Model, Messages: msgs}
-		err := wsClient.StreamRemote(ctx, chatReq, deltaToEventForwarder(ctx, ch), handler, permHandler)
-		if err != nil {
-			sendErrorEvent(ctx, ch, err)
+		var err error
+		if m.cfg.EngineURL != "" {
+			chatReq := protocol.ChatReq{Model: m.cfg.Model, Messages: msgs}
+			err = (&engine.WSClient{URL: m.cfg.EngineURL}).StreamRemote(ctx, chatReq, deltaToEventForwarder(ctx, ch), handler, permHandler)
+		} else {
+			ctxWithHandler := tools.WithQuestionHandler(tools.WithPermissionHandler(ctx, permHandler), handler)
+			_, err = m.cfg.Agent.RunWithHistory(ctxWithHandler, agent.RunOptions{
+				Messages: msgs,
+				OnEvent:  eventForwarder(ctx, ch),
+			})
 		}
-		close(ch)
-	}()
-}
-
-func (m model) launchLocal(ctx context.Context, msgs []llm.Message, ch chan agent.StreamEvent, handler tools.QuestionHandler, permHandler tools.PermissionHandler) {
-	ctxWithPerm := tools.WithPermissionHandler(ctx, permHandler)
-	ctxWithHandler := tools.WithQuestionHandler(ctxWithPerm, handler)
-	go func() {
-		_, err := m.cfg.Agent.RunWithHistory(ctxWithHandler, agent.RunOptions{
-			Messages: msgs,
-			OnEvent:  eventForwarder(ctx, ch),
-		})
 		if err != nil {
 			sendErrorEvent(ctx, ch, err)
 		}
