@@ -24,12 +24,7 @@ func (e Envelope) Decode(v any) error {
 		return nil
 	}
 	if err := json.Unmarshal(e.Payload, v); err != nil {
-		return &ProtocolError{
-			Op:      "decode",
-			MsgType: e.Type,
-			Ver:     e.Ver,
-			Err:     fmt.Errorf("%w: %v", ErrInvalidPayload, err),
-		}
+		return fmt.Errorf("protocol decode %s: %w: %v", e.Type, ErrInvalidPayload, err)
 	}
 	return nil
 }
@@ -42,10 +37,7 @@ func MarshalPayload(v any) (json.RawMessage, error) {
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
-		return nil, &ProtocolError{
-			Op:  "marshal",
-			Err: fmt.Errorf("%w: %v", ErrInvalidPayload, err),
-		}
+		return nil, fmt.Errorf("protocol marshal: %w: %v", ErrInvalidPayload, err)
 	}
 	return b, nil
 }

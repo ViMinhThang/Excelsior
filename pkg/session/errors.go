@@ -23,9 +23,6 @@ var (
 
 	// ErrStoreDirEmpty is returned when Store.Dir is empty or unconfigured.
 	ErrStoreDirEmpty = errors.New("session store dir is empty")
-
-	// ErrEmptyStoreDir is an alias sentinel for ErrStoreDirEmpty.
-	ErrEmptyStoreDir = ErrStoreDirEmpty
 )
 
 // SessionError represents a structured session storage error.

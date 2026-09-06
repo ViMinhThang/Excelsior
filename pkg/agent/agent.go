@@ -87,10 +87,10 @@ func (a *Agent) maxIters() int {
 
 func (a *Agent) validate() error {
 	if a.LLM == nil {
-		return &AgentError{Phase: "validate", Err: ErrLLMNotConfigured}
+		return fmt.Errorf("agent validate: %w", ErrLLMNotConfigured)
 	}
 	if a.MaxIters < 0 {
-		return &AgentError{Phase: "validate", Err: fmt.Errorf("%w, got %d", ErrInvalidMaxIterations, a.MaxIters)}
+		return fmt.Errorf("agent validate: %w, got %d", ErrInvalidMaxIterations, a.MaxIters)
 	}
 	return nil
 }
@@ -164,10 +164,10 @@ func (a *Agent) validateRunOptions(opts RunOptions) error {
 		return err
 	}
 	if len(opts.Messages) == 0 {
-		return &AgentError{Phase: "validate", Err: ErrEmptyMessages}
+		return fmt.Errorf("agent validate: %w", ErrEmptyMessages)
 	}
 	if n := totalChars(opts.Messages); n > maxContextChars {
-		return &AgentError{Phase: "validate", Err: fmt.Errorf("%w (%d chars > %d)", ErrContextTooLarge, n, maxContextChars)}
+		return fmt.Errorf("agent validate: %w (%d chars > %d)", ErrContextTooLarge, n, maxContextChars)
 	}
 	return nil
 }
@@ -216,10 +216,10 @@ func (a *Agent) runNativeToolLoop(ctx context.Context, native llm.ToolLoopProvid
 	)
 	if err != nil {
 		emit(NewErrorEvent(err.Error()))
-		return nil, &AgentError{Phase: "goai_tool_loop", Err: err}
+		return nil, fmt.Errorf("agent tool loop: %w", err)
 	}
 	if final == nil {
-		return nil, &AgentError{Phase: "goai_tool_loop", Err: ErrNilLLMMessage}
+		return nil, fmt.Errorf("agent tool loop: %w", ErrNilLLMMessage)
 	}
 
 	fullHistory := append([]llm.Message(nil), messages...)

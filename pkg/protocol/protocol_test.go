@@ -3,6 +3,8 @@ package protocol
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 
 	"excelsior/pkg/llm"
@@ -256,12 +258,8 @@ func TestMarshalPayload_Errors(t *testing.T) {
 	if !errors.Is(err, ErrInvalidPayload) {
 		t.Errorf("expected errors.Is(err, ErrInvalidPayload), got %v", err)
 	}
-	var protoErr *ProtocolError
-	if !errors.As(err, &protoErr) {
-		t.Fatalf("expected errors.As(err, &protoErr), got %v", err)
-	}
-	if protoErr.Op != "marshal" {
-		t.Errorf("expected Op 'marshal', got %q", protoErr.Op)
+	if s := err.Error(); s == "" || !strings.Contains(s, "marshal") {
+		t.Errorf("expected op in message, got %q", s)
 	}
 }
 
@@ -279,12 +277,8 @@ func TestEnvelopeDecode_Errors(t *testing.T) {
 	if !errors.Is(err, ErrInvalidPayload) {
 		t.Errorf("expected errors.Is(err, ErrInvalidPayload), got %v", err)
 	}
-	var protoErr *ProtocolError
-	if !errors.As(err, &protoErr) {
-		t.Fatalf("expected *ProtocolError, got %v", err)
-	}
-	if protoErr.Op != "decode" || protoErr.MsgType != TypeChatReq {
-		t.Errorf("unexpected ProtocolError fields: %+v", protoErr)
+	if s := err.Error(); !strings.Contains(s, "decode") || !strings.Contains(s, TypeChatReq) {
+		t.Errorf("expected op+type in message, got %q", s)
 	}
 }
 
@@ -307,50 +301,12 @@ func TestNewEnvelopeHelpers(t *testing.T) {
 	}
 }
 
-func TestProtocolError_FormattingAndUnwrap(t *testing.T) {
-	pe1 := &ProtocolError{
-		Op:      "decode",
-		MsgType: TypeChatReq,
-		Ver:     "v1",
-		Msg:     "malformed json body",
-		Err:     ErrInvalidPayload,
-	}
-	if !errors.Is(pe1, ErrInvalidPayload) {
-		t.Errorf("expected Is(ErrInvalidPayload)")
-	}
-	if pe1.Unwrap() != ErrInvalidPayload {
-		t.Errorf("expected Unwrap() to return underlying error")
-	}
-	s := pe1.Error()
-	if s == "" {
-		t.Error("expected non-empty Error string")
-	}
-
-	pe2 := &ProtocolError{
-		Op:  "validate",
-		Err: ErrUnsupportedVersion,
-	}
-	if !errors.Is(pe2, ErrUnsupportedVersion) {
-		t.Errorf("expected Is(ErrUnsupportedVersion)")
-	}
-
-	pe3 := &ProtocolError{
-		Err: ErrCorruptEnvelope,
-	}
-	if !errors.Is(pe3, ErrCorruptEnvelope) {
-		t.Errorf("expected Is(ErrCorruptEnvelope)")
-	}
-
-	pe4 := &ProtocolError{
-		Err: ErrUnknownType,
-	}
-	if !errors.Is(pe4, ErrUnknownType) {
-		t.Errorf("expected Is(ErrUnknownType)")
-	}
-
-	peEmpty := &ProtocolError{}
-	if peEmpty.Is(nil) {
-		t.Error("Is(nil) should be false")
+func TestProtocolSentinels_WrapWithFmt(t *testing.T) {
+	for _, s := range []error{ErrUnsupportedVersion, ErrInvalidPayload, ErrCorruptEnvelope, ErrUnknownType} {
+		err := fmt.Errorf("protocol test: %w", s)
+		if !errors.Is(err, s) {
+			t.Errorf("expected Is(%v)", s)
+		}
 	}
 }
 

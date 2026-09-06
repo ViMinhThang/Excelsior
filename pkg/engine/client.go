@@ -60,7 +60,7 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 	ws.SetReadLimit(1 << 20)
 
 	if err := writeEnvelope(ws, protocol.NewEnvelope(protocol.TypeChatReq, req)); err != nil {
-		return &EngineError{Op: "write", MsgType: protocol.TypeChatReq, Err: fmt.Errorf("%w: %v", ErrConnectionClosed, err)}
+		return fmt.Errorf("engine write chat.req: %w: %v", ErrConnectionClosed, err)
 	}
 	if askHandler == nil {
 		askHandler = defaultAskHandler
@@ -74,7 +74,7 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 func parseWSURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return nil, &EngineError{Op: "dial", Err: fmt.Errorf("%w: %v", ErrInvalidURL, err)}
+		return nil, fmt.Errorf("engine dial: %w: %v", ErrInvalidURL, err)
 	}
 	switch u.Scheme {
 	case "http":
@@ -91,7 +91,7 @@ func parseWSURL(raw string) (*url.URL, error) {
 func dialWS(ctx context.Context, u *url.URL) (*websocket.Conn, error) {
 	ws, _, err := sharedDialer.DialContext(ctx, u.String(), nil)
 	if err != nil {
-		return nil, &EngineError{Op: "dial", Err: fmt.Errorf("%w: %v", ErrConnectionFailed, err)}
+		return nil, fmt.Errorf("engine dial: %w: %v", ErrConnectionFailed, err)
 	}
 	return ws, nil
 }
@@ -133,7 +133,7 @@ func (c *WSClient) checkStreamContext(ctx context.Context, ws *websocket.Conn) e
 	select {
 	case <-ctx.Done():
 		_ = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		return &EngineError{Op: "read", Err: fmt.Errorf("ws context canceled: %w", ctx.Err())}
+		return fmt.Errorf("engine read: ws context canceled: %w", ctx.Err())
 	default:
 		return nil
 	}
@@ -145,7 +145,7 @@ func (c *WSClient) readEnvelope(ws *websocket.Conn) (protocol.Envelope, error) {
 	ws.SetReadDeadline(time.Now().Add(60 * time.Second))
 	_, data, err := ws.ReadMessage()
 	if err != nil {
-		return protocol.Envelope{}, &EngineError{Op: "read", Err: fmt.Errorf("%w: %v", ErrConnectionClosed, err)}
+		return protocol.Envelope{}, fmt.Errorf("engine read: %w: %v", ErrConnectionClosed, err)
 	}
 	var in protocol.Envelope
 	if err := json.Unmarshal(data, &in); err != nil {
@@ -192,9 +192,9 @@ func (c *WSClient) handleRemoteError(in protocol.Envelope) error {
 	var m map[string]string
 	_ = in.Decode(&m)
 	if e, ok := m["error"]; ok {
-		return &EngineError{Op: "chat", Err: fmt.Errorf("%w: %s", ErrRemoteEngine, e)}
+		return fmt.Errorf("engine chat: %w: %s", ErrRemoteEngine, e)
 	}
-	return &EngineError{Op: "chat", Err: fmt.Errorf("%w: %v", ErrRemoteEngine, string(in.Payload))}
+	return fmt.Errorf("engine chat: %w: %v", ErrRemoteEngine, string(in.Payload))
 }
 
 func (c *WSClient) handleAskReq(ctx context.Context, ws *websocket.Conn, in protocol.Envelope, askHandler tools.QuestionHandler) error {

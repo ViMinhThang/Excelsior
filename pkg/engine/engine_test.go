@@ -352,12 +352,8 @@ func TestEngine_TypedEngineErrorInspection(t *testing.T) {
 	if !errors.Is(err, ErrRemoteEngine) {
 		t.Fatalf("expected errors.Is(err, ErrRemoteEngine), got %v", err)
 	}
-	var engineErr *EngineError
-	if !errors.As(err, &engineErr) {
-		t.Fatalf("expected *EngineError, got %v", err)
-	}
-	if engineErr.Op != "chat" {
-		t.Errorf("expected Op 'chat', got %q", engineErr.Op)
+	if s := err.Error(); !strings.Contains(s, "chat") {
+		t.Errorf("expected op in message, got %q", s)
 	}
 
 	// Invalid URL check
@@ -547,41 +543,15 @@ func TestHub_MemorySessionStore(t *testing.T) {
 	}
 }
 
-func TestEngineError_FormattingAndUnwrap(t *testing.T) {
-	ee1 := &EngineError{
-		Op:       "dial",
-		ClientID: "client-1",
-		MsgType:  protocol.TypeChatReq,
-		Msg:      "connection timed out",
-		Err:      ErrConnectionFailed,
-	}
-	if !errors.Is(ee1, ErrConnectionFailed) {
-		t.Errorf("expected Is(ErrConnectionFailed)")
-	}
-	if ee1.Unwrap() != ErrConnectionFailed {
-		t.Errorf("expected Unwrap() to return ErrConnectionFailed")
-	}
-	if !strings.Contains(ee1.Error(), "client=client-1") || !strings.Contains(ee1.Error(), "type=chat.req") {
-		t.Errorf("expected client and type in error string: %s", ee1.Error())
-	}
-
+func TestEngineSentinels_WrapWithFmt(t *testing.T) {
 	sentinels := []error{
 		ErrAlreadyStreaming, ErrConnectionClosed, ErrClientDisconnected,
 		ErrSendBufferFull, ErrRemoteEngine, ErrInvalidURL, ErrConnectionFailed,
 	}
 	for _, s := range sentinels {
-		ee := &EngineError{Err: s}
-		if !errors.Is(ee, s) {
-			t.Errorf("expected Is(%v) on EngineError", s)
+		if err := fmt.Errorf("engine test: %w", s); !errors.Is(err, s) {
+			t.Errorf("expected Is(%v)", s)
 		}
-	}
-
-	eeEmpty := &EngineError{}
-	if eeEmpty.Error() != "engine" {
-		t.Errorf("expected 'engine', got %q", eeEmpty.Error())
-	}
-	if eeEmpty.Is(nil) {
-		t.Error("Is(nil) should be false")
 	}
 }
 
