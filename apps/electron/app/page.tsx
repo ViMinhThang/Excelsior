@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Asterisk, ArrowUpRight, FolderOpen, PanelLeft, Settings2, Compass, Bug, FlaskConical, Terminal, ShieldCheck } from "lucide-react";
+import { PanelLeft } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Composer from "../components/Composer";
 import SettingsModal from "../components/SettingsModal";
@@ -18,23 +18,23 @@ import type { FolderWorkspace } from "../components/Sidebar";
 
 const SUGGESTIONS = [
   {
-    label: "Explore the codebase", icon: Compass,
-    desc: "Summarize workspace architecture and dependencies",
+    label: "Explore architecture",
+    desc: "Map project structure, dependencies, and flow",
     prompt: "Inspect this project and explain the overall architecture, folder structure, and tech stack.",
   },
   {
-    label: "Find the hidden bugs", icon: Bug,
-    desc: "Scan recent files for potential errors and fixes",
+    label: "Find potential issues",
+    desc: "Scan recent files for bugs or unhandled errors",
     prompt: "Review the current codebase for potential bugs, unhandled errors, or logic issues.",
   },
   {
-    label: "Build confidence", icon: FlaskConical,
-    desc: "Generate unit or integration tests for core modules",
+    label: "Generate unit tests",
+    desc: "Create tests for core modules and paths",
     prompt: "Identify the critical paths in this project and generate unit tests for them.",
   },
   {
-    label: "Check project health", icon: Terminal,
-    desc: "Check git status and run build verification",
+    label: "Check project health",
+    desc: "Run git status and build verification",
     prompt: "Run git status and run the project test or build command to verify project health.",
   },
 ] as const;
@@ -335,20 +335,53 @@ export default function Page() {
             onOpenSettings={() => setSettingsOpen(true)}
           />
 
-          <main className="studio-canvas flex-1 flex flex-col min-w-0 overflow-hidden">
-            <div className="workspace-toolbar">
-              <div className="flex items-center gap-3 min-w-0"><button className="studio-icon" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+B)" onClick={() => setSidebarOpen(v => !v)}><PanelLeft size={17} /></button><span className="toolbar-divider" /><FolderOpen size={15} className="text-[var(--text-dim)]" /><span className="truncate">{projectName}</span><span className="text-[var(--text-dim)]">/</span><span className="text-[var(--text-muted)] truncate">{activeSession ? cleanTitle(activeSession.title) : "New task"}</span></div>
-              <button onClick={() => setSettingsOpen(true)} className="engine-status" title="Engine settings"><span className={wsState === "connected" ? "status-dot online" : "status-dot"} />{wsState === "connected" ? "Engine connected" : "Engine offline"}<Settings2 size={13} /></button>
-            </div>
+          <main className="studio-canvas flex-1 flex flex-col min-w-0 overflow-hidden relative">
+            {!sidebarOpen && (
+              <button
+                className="studio-icon absolute top-2.5 left-3 z-30 bg-[var(--bg-card)] border-subtle shadow-xs"
+                aria-label="Toggle sidebar"
+                title="Toggle sidebar (Ctrl+B)"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <PanelLeft size={14} />
+              </button>
+            )}
             {isLanding ? (
-              <div className="studio-landing animate-fade-in">
-                <div className="landing-heading"><div className="eyebrow"><Asterisk className="mini-star" aria-hidden="true" /> YOUR IDEAS. IN MOTION.</div><h1>Great work starts<br />with <span>a little ambition.</span></h1><p>A fresh perspective. A tricky fix. Your next big thing.<br />Make it happen with your coding companion.</p></div>
-                <div className="w-full">{composer("centered")}<div className="composer-caption"><span><ShieldCheck size={13} /> {allowAll ? "Automatic approvals enabled" : "You stay in control of every change"}</span><span>Enter to send · Shift + Enter for a new line</span></div>{wsState !== "connected" && <button className="connection-notice" onClick={() => setSettingsOpen(true)}><span className="status-dot" /> Connect your engine to start a task <ArrowUpRight size={14} /></button>}</div>
-                <div className="starter-section"><div className="section-label">A PLACE TO START <span>Choose a direction</span></div><div className="starter-grid">{SUGGESTIONS.map(chip => (<button key={chip.label} type="button" onClick={() => handleSendPrompt(chip.prompt)} disabled={wsState !== "connected"} className="starter-card"><div className="starter-top"><chip.icon size={19} strokeWidth={1.5} /><ArrowUpRight size={15} /></div><strong>{chip.label}</strong><p>{chip.desc}</p></button>))}</div></div>
-                <div className="landing-footer"><Asterisk className="mini-star" aria-hidden="true" /> A little more possible, every day.</div>
+              <div className="studio-landing animate-appear">
+                <div className="landing-heading">
+                  <h1>What would you like to build?</h1>
+                  <p>Pair with Excelsior to inspect files, edit code, and run tasks directly.</p>
+                </div>
+                <div className="w-full">
+                  {composer("centered")}
+                  {wsState !== "connected" && (
+                    <div className="flex justify-center">
+                      <button className="connection-notice" onClick={() => setSettingsOpen(true)}>
+                        <span className="status-dot" /> Connect engine to run tasks
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="starter-section">
+                  <div className="starter-grid">
+                    {SUGGESTIONS.map((chip, i) => (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => handleSendPrompt(chip.prompt)}
+                        disabled={wsState !== "connected"}
+                        className="starter-card animate-appear"
+                        style={{ animationDelay: `${i * 35}ms` }}
+                      >
+                        <strong>{chip.label}</strong>
+                        <p>{chip.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col h-full min-h-0">
+              <div key={activeId ?? "session"} className="flex-1 flex flex-col h-full min-h-0 animate-appear">
                 <Transcript
                   ref={transcriptRef}
                   blocks={blocks}

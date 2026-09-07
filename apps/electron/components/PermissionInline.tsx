@@ -10,17 +10,17 @@ type PermissionInlineProps = {
 
 function PermissionInline({ permission, onDecision, onAllowAll }: PermissionInlineProps) {
   return (
-    <div className="bg-[var(--bg-card)] border-subtle shadow-[var(--popover-shadow)] rounded-2xl p-4 my-3 animate-slide-down">
-      <div className="flex items-center justify-between pb-2 border-subtle-b mb-3">
+    <div className="bg-[var(--bg-card)] border-subtle rounded-xl p-3.5 my-2.5 animate-appear">
+      <div className="flex items-center justify-between pb-2 border-subtle-b mb-2.5">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-amber-500/15 flex items-center justify-center text-amber-400">
-            <ShieldAlert className="w-3.5 h-3.5" />
+          <div className="w-5 h-5 rounded bg-amber-500/15 flex items-center justify-center text-amber-400">
+            <ShieldAlert className="w-3 h-3" />
           </div>
-          <span className="text-[13px] font-semibold text-[var(--text-main)]">
+          <span className="text-[12.5px] font-medium text-[var(--text-main)]">
             Permission Request
           </span>
         </div>
-        <span className="text-[11px] font-mono px-2 py-0.5 rounded-md bg-[var(--bg-input)] border-subtle text-[var(--text-main)]">
+        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-input)] border-subtle text-[var(--text-muted)]">
           {permission.tool}
         </span>
       </div>
@@ -37,45 +37,45 @@ function PermissionInline({ permission, onDecision, onAllowAll }: PermissionInli
       {permission.command && (
         <div className="mb-2 text-xs">
           <span className="text-[var(--text-dim)] font-mono">Command: </span>
-          <code className="text-emerald-400 font-mono bg-[var(--bg-input)] px-2 py-1 rounded-md border-subtle block mt-1 break-all">
+          <code className="text-emerald-400 font-mono bg-[var(--bg-input)] px-2 py-1 rounded border-subtle block mt-1 break-all">
             $ {permission.command}
           </code>
         </div>
       )}
 
       {permission.preview && permission.tool !== "bash" && (
-        <pre className="bg-[var(--bg-input)] border-subtle rounded-xl p-3 text-[11px] font-mono whitespace-pre-wrap break-words max-h-48 overflow-auto mb-3 selectable-text text-[var(--text-main)]">
+        <pre className="bg-[var(--bg-input)] border-subtle rounded-lg p-2.5 text-[11px] font-mono whitespace-pre-wrap break-words max-h-48 overflow-auto mb-2.5 selectable-text text-[var(--text-main)]">
           {permission.preview.slice(0, 1000)}
           {permission.preview.length > 1000 ? "\n… truncated" : ""}
         </pre>
       )}
 
-      <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+      <div className="flex flex-wrap items-center justify-end gap-1.5 pt-1">
         <button
           type="button"
           onClick={() => onDecision(false)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] border-subtle text-[var(--text-muted)] hover:text-rose-400 text-xs font-semibold transition-colors cursor-pointer"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] border-subtle text-[var(--text-muted)] hover:text-rose-400 text-xs font-medium transition-colors cursor-pointer"
         >
-          <X className="w-3.5 h-3.5" />
+          <X className="w-3 h-3" />
           <span>Deny</span>
         </button>
 
         <button
           type="button"
           onClick={() => onDecision(true)}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 transition-all cursor-pointer"
+          className="flex items-center gap-1 px-3 py-1 rounded-md bg-[var(--accent)] text-[var(--accent-ink)] text-xs font-medium hover:opacity-90 transition-all cursor-pointer"
         >
-          <Check className="w-3.5 h-3.5" />
-          <span>Allow Once</span>
+          <Check className="w-3 h-3" />
+          <span>Allow</span>
         </button>
 
         {onAllowAll && (
           <button
             type="button"
             onClick={onAllowAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--bg-input)] hover:bg-amber-500/20 border-subtle text-amber-300 text-xs font-semibold transition-colors cursor-pointer"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[var(--bg-input)] hover:bg-amber-500/15 border-subtle text-amber-300 text-xs font-medium transition-colors cursor-pointer"
           >
-            <span>Allow All (YOLO)</span>
+            <span>Allow All</span>
           </button>
         )}
       </div>

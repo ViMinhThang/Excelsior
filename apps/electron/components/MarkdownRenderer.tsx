@@ -1,5 +1,15 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  CheckSquare,
+  ChevronDown,
+  ExternalLink,
+  Info,
+  Lightbulb,
+  ShieldAlert,
+  Square,
+} from "lucide-react";
 import CodeBlock from "./CodeBlock";
 import { parseChunks } from "../lib/markdown";
 
@@ -13,37 +23,100 @@ type MarkdownRendererProps = {
   isStreaming?: boolean;
 };
 
+/* =========================================================================
+   Inline Markdown Renderer
+   ========================================================================= */
+
 const Inline = React.memo(function Inline({ text }: { text: string }) {
-  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s)]+)/g);
+  if (!text) return null;
+
+  const parts = text.split(
+    /(`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|\[[^\]]+\]\([^)]+\)|<kbd>[^<]+<\/kbd>|https?:\/\/[^\s<)]+)/g
+  );
+
   return (
     <>
       {parts.map((part, index) => {
         if (!part) return null;
-        if (part.startsWith("`") && part.endsWith("`")) {
+        if (part.startsWith("`") && part.endsWith("`") && part.length > 2) {
           return (
-            <code key={index} className="px-1.5 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-main)] font-mono text-[12px]">
+            <code
+              key={index}
+              className="px-1.5 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-main)] font-mono text-[12px] border border-[var(--border-subtle)]"
+            >
               {part.slice(1, -1)}
             </code>
           );
         }
-        if (part.startsWith("**") && part.endsWith("**")) {
+        if (part.startsWith("***") && part.endsWith("***") && part.length > 6) {
           return (
-            <strong key={index} className="font-semibold text-[var(--text-main)]">
-              {part.slice(2, -2)}
+            <strong key={index} className="font-semibold italic text-[var(--text-main)]">
+              <Inline text={part.slice(3, -3)} />
             </strong>
           );
         }
-        const match = part.match(/\[([^\]]+)\]\(([^)]+)\)/);
-        if (match) {
+        if (
+          ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("__") && part.endsWith("__"))) &&
+          part.length > 4
+        ) {
           return (
-            <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">
-              {match[1]}
+            <strong key={index} className="font-semibold text-[var(--text-main)]">
+              <Inline text={part.slice(2, -2)} />
+            </strong>
+          );
+        }
+        if (
+          ((part.startsWith("*") && part.endsWith("*")) || (part.startsWith("_") && part.endsWith("_"))) &&
+          part.length > 2
+        ) {
+          return (
+            <em key={index} className="italic text-[var(--text-main)]">
+              <Inline text={part.slice(1, -1)} />
+            </em>
+          );
+        }
+        if (part.startsWith("~~") && part.endsWith("~~") && part.length > 4) {
+          return (
+            <del key={index} className="line-through text-[var(--text-dim)]">
+              <Inline text={part.slice(2, -2)} />
+            </del>
+          );
+        }
+        if (part.startsWith("<kbd>") && part.endsWith("</kbd>")) {
+          return (
+            <kbd
+              key={index}
+              className="px-1.5 py-0.5 rounded bg-[var(--bg-input)] border border-[var(--border-subtle)] text-[11px] font-mono text-[var(--text-dim)] shadow-xs"
+            >
+              {part.slice(5, -6)}
+            </kbd>
+          );
+        }
+        const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+        if (linkMatch) {
+          const isHttp = linkMatch[2].startsWith("http");
+          return (
+            <a
+              key={index}
+              href={linkMatch[2]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--accent)] hover:underline inline-flex items-center gap-0.5 cursor-pointer font-medium"
+            >
+              <span><Inline text={linkMatch[1]} /></span>
+              {isHttp && <ExternalLink className="w-2.5 h-2.5 opacity-60 inline shrink-0" />}
             </a>
           );
         }
-        if (part.startsWith("http")) {
+        if (part.startsWith("http://") || part.startsWith("https://")) {
           return (
-            <a key={index} href={part} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">
+            <a
+              key={index}
+              href={part}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[var(--accent)] hover:underline break-all"
+            >
               {part}
             </a>
           );
@@ -54,44 +127,34 @@ const Inline = React.memo(function Inline({ text }: { text: string }) {
   );
 });
 
-const Table = React.memo(function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
-  return (
-    <div className="my-3 overflow-x-auto rounded-2xl bg-[var(--bg-input)]/40 p-1">
-      <table className="w-full text-left text-xs border-collapse">
-        <thead>
-          <tr className="bg-[var(--bg-input)] font-semibold">
-            {headers.map((header, i) => (
-              <th key={i} className="px-3.5 py-2.5 text-[12px] uppercase tracking-wider">{header}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-[var(--bg-canvas)]/30">
-          {rows.map((row, rowIndex) => (
-            <tr key={rowIndex} className="hover:bg-[var(--bg-card-hover)]/70">
-              {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className="px-3.5 py-2.5 text-[13px] text-[var(--text-main)]">
-                  <Inline text={cell} />
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-});
+/* =========================================================================
+   Table Parser & Renderer
+   ========================================================================= */
 
-function parseTable(lines: string[], startIndex: number): { headers: string[]; rows: string[][]; next: number } | null {
+type TableAlign = "left" | "center" | "right";
+
+function parseTable(
+  lines: string[],
+  startIndex: number
+): { headers: string[]; aligns: TableAlign[]; rows: string[][]; next: number } | null {
   if (startIndex + 1 >= lines.length) return null;
   const header = lines[startIndex].trim();
   const divider = lines[startIndex + 1].trim();
   if (!header.includes("|") || !divider.includes("|") || !divider.includes("-")) return null;
 
   const divParts = divider.split("|").map((s) => s.trim()).filter(Boolean);
-  if (!divParts.every((p) => /^:?-+:?$/.test(p))) return null;
+  if (divParts.length === 0 || !divParts.every((p) => /^:?-+:?$/.test(p))) return null;
+
+  const aligns: TableAlign[] = divParts.map((p) => {
+    const start = p.startsWith(":");
+    const end = p.endsWith(":");
+    if (start && end) return "center";
+    if (end) return "right";
+    return "left";
+  });
 
   const rawHeaders = header.split("|").map((s) => s.trim());
-  const hasPipes = header.trim().startsWith("|") && header.trim().endsWith("|");
+  const hasPipes = header.startsWith("|") && header.endsWith("|");
   const headers = hasPipes ? rawHeaders.filter(Boolean) : rawHeaders.map((s) => s.trim()).filter(Boolean);
   if (headers.length === 0) return null;
 
@@ -104,17 +167,382 @@ function parseTable(lines: string[], startIndex: number): { headers: string[]; r
     rows.push(cleaned);
     current += 1;
   }
-  return { headers, rows, next: current };
+  return { headers, aligns, rows, next: current };
 }
 
-function useMarkdownChunks(text: string) {
-  return useMemo(() => parseChunks(text), [text]);
+const Table = React.memo(function Table({
+  headers,
+  aligns,
+  rows,
+}: {
+  headers: string[];
+  aligns: TableAlign[];
+  rows: string[][];
+}) {
+  const getAlignClass = (align?: TableAlign) => {
+    if (align === "center") return "text-center";
+    if (align === "right") return "text-right";
+    return "text-left";
+  };
+
+  return (
+    <div className="my-3 overflow-x-auto rounded-xl border border-[var(--border-subtle)]">
+      <table className="w-full text-left text-xs border-collapse">
+        <thead>
+          <tr className="bg-[var(--bg-input)] border-b border-[var(--border-subtle)] font-semibold">
+            {headers.map((header, i) => (
+              <th
+                key={i}
+                className={`px-3.5 py-2 text-[12px] font-medium text-[var(--text-muted)] uppercase tracking-wider ${getAlignClass(
+                  aligns[i]
+                )}`}
+              >
+                <Inline text={header} />
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--border-subtle)]">
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex} className="hover:bg-[var(--bg-card-hover)] transition-colors">
+              {row.map((cell, cellIndex) => (
+                <td
+                  key={cellIndex}
+                  className={`px-3.5 py-2 text-[12.5px] text-[var(--text-main)] ${getAlignClass(
+                    aligns[cellIndex]
+                  )}`}
+                >
+                  <Inline text={cell} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+});
+
+/* =========================================================================
+   Block-level Parser & Tokens
+   ========================================================================= */
+
+type AlertType = "note" | "tip" | "important" | "warning" | "caution";
+
+type BlockToken =
+  | { type: "h"; level: number; text: string }
+  | { type: "hr" }
+  | { type: "alert"; alertType: AlertType; title: string; content: string }
+  | { type: "quote"; content: string }
+  | { type: "table"; headers: string[]; aligns: TableAlign[]; rows: string[][] }
+  | { type: "ul"; items: { text: string; checked?: boolean; level: number }[] }
+  | { type: "ol"; items: { num: number; text: string; level: number }[] }
+  | { type: "p"; text: string };
+
+function parseMarkdownBlocks(rawText: string): BlockToken[] {
+  const lines = rawText.split("\n");
+  const tokens: BlockToken[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      i++;
+      continue;
+    }
+
+    // Horizontal Rule
+    if (/^(?:---+|\*\*\*+|___+)\s*$/.test(trimmed)) {
+      tokens.push({ type: "hr" });
+      i++;
+      continue;
+    }
+
+    // Headings # to ######
+    const hMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (hMatch) {
+      tokens.push({ type: "h", level: hMatch[1].length, text: hMatch[2].trim() });
+      i++;
+      continue;
+    }
+
+    // Table
+    const table = parseTable(lines, i);
+    if (table) {
+      tokens.push({ type: "table", headers: table.headers, aligns: table.aligns, rows: table.rows });
+      i = table.next;
+      continue;
+    }
+
+    // Blockquote or GitHub Alert
+    if (trimmed.startsWith(">")) {
+      const alertMatch = trimmed.match(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\s*(.*))?$/i);
+      if (alertMatch) {
+        const alertType = alertMatch[1].toLowerCase() as AlertType;
+        const customTitle = alertMatch[2]?.trim() || alertMatch[1].toUpperCase();
+        const contentLines: string[] = [];
+        i++;
+        while (i < lines.length && lines[i].trim().startsWith(">")) {
+          contentLines.push(lines[i].trim().replace(/^>\s?/, ""));
+          i++;
+        }
+        tokens.push({
+          type: "alert",
+          alertType,
+          title: customTitle,
+          content: contentLines.join("\n"),
+        });
+        continue;
+      } else {
+        const quoteLines: string[] = [];
+        while (i < lines.length && lines[i].trim().startsWith(">")) {
+          quoteLines.push(lines[i].trim().replace(/^>\s?/, ""));
+          i++;
+        }
+        tokens.push({ type: "quote", content: quoteLines.join("\n") });
+        continue;
+      }
+    }
+
+    // Unordered List & Task List
+    const ulMatch = line.match(/^(\s*)([-*+])\s+(.*)$/);
+    if (ulMatch) {
+      const items: { text: string; checked?: boolean; level: number }[] = [];
+      while (i < lines.length) {
+        const m = lines[i].match(/^(\s*)([-*+])\s+(.*)$/);
+        if (!m) break;
+        const indent = m[1].length;
+        const level = Math.floor(indent / 2);
+        const rest = m[3];
+        const taskMatch = rest.match(/^\[([ xX])\]\s+(.*)$/);
+        if (taskMatch) {
+          items.push({ checked: taskMatch[1].toLowerCase() === "x", text: taskMatch[2], level });
+        } else {
+          items.push({ text: rest, level });
+        }
+        i++;
+      }
+      tokens.push({ type: "ul", items });
+      continue;
+    }
+
+    // Ordered List
+    const olMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+    if (olMatch) {
+      const items: { num: number; text: string; level: number }[] = [];
+      while (i < lines.length) {
+        const m = lines[i].match(/^(\s*)(\d+)\.\s+(.*)$/);
+        if (!m) break;
+        const indent = m[1].length;
+        const level = Math.floor(indent / 2);
+        items.push({ num: parseInt(m[2], 10), text: m[3], level });
+        i++;
+      }
+      tokens.push({ type: "ol", items });
+      continue;
+    }
+
+    // Paragraph (collect non-special lines)
+    const pLines: string[] = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() &&
+      !lines[i].trim().match(/^#{1,6}\s/) &&
+      !lines[i].trim().match(/^(?:---+|\*\*\*+|___+)\s*$/) &&
+      !lines[i].trim().startsWith(">") &&
+      !lines[i].match(/^(\s*)([-*+]|\d+\.)\s/) &&
+      !parseTable(lines, i)
+    ) {
+      pLines.push(lines[i].trim());
+      i++;
+    }
+    if (pLines.length > 0) {
+      tokens.push({ type: "p", text: pLines.join(" ") });
+    }
+  }
+
+  return tokens;
 }
+
+/* =========================================================================
+   Block Elements Components
+   ========================================================================= */
+
+const ALERT_CONFIG: Record<
+  AlertType,
+  { icon: React.ComponentType<{ className?: string }>; border: string; bg: string; text: string }
+> = {
+  note: { icon: Info, border: "border-blue-500/30", bg: "bg-blue-500/10", text: "text-blue-400" },
+  tip: { icon: Lightbulb, border: "border-emerald-500/30", bg: "bg-emerald-500/10", text: "text-emerald-400" },
+  important: { icon: AlertCircle, border: "border-purple-500/30", bg: "bg-purple-500/10", text: "text-purple-400" },
+  warning: { icon: AlertTriangle, border: "border-amber-500/30", bg: "bg-amber-500/10", text: "text-amber-400" },
+  caution: { icon: ShieldAlert, border: "border-rose-500/30", bg: "bg-rose-500/10", text: "text-rose-400" },
+};
+
+function AlertBlock({
+  alertType,
+  title,
+  content,
+}: {
+  alertType: AlertType;
+  title: string;
+  content: string;
+}) {
+  const config = ALERT_CONFIG[alertType] ?? ALERT_CONFIG.note;
+  const Icon = config.icon;
+
+  return (
+    <div className={`my-3 p-3.5 rounded-xl border ${config.border} ${config.bg} text-[13px]`}>
+      <div className={`flex items-center gap-2 font-semibold text-xs uppercase tracking-wider mb-1.5 ${config.text}`}>
+        <Icon className="w-4 h-4 shrink-0" />
+        <span>{title}</span>
+      </div>
+      <div className="text-[var(--text-main)] leading-relaxed pl-6 space-y-1">
+        {content.split("\n").map((line, idx) => (
+          <p key={idx}><Inline text={line} /></p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RenderBlocks({ blocks }: { blocks: BlockToken[] }) {
+  return (
+    <div className="space-y-2">
+      {blocks.map((token, index) => {
+        switch (token.type) {
+          case "h": {
+            if (token.level === 1) {
+              return (
+                <h1 key={index} className="text-[17px] font-bold mt-5 mb-2 pb-1 border-b border-[var(--border-subtle)] text-[var(--text-main)]">
+                  <Inline text={token.text} />
+                </h1>
+              );
+            }
+            if (token.level === 2) {
+              return (
+                <h2 key={index} className="text-[15px] font-semibold mt-4 mb-1.5 text-[var(--text-main)]">
+                  <Inline text={token.text} />
+                </h2>
+              );
+            }
+            if (token.level === 3) {
+              return (
+                <h3 key={index} className="text-[13.5px] font-semibold mt-3 mb-1 text-[var(--text-main)]">
+                  <Inline text={token.text} />
+                </h3>
+              );
+            }
+            if (token.level === 4) {
+              return (
+                <h4 key={index} className="text-[12.5px] font-semibold mt-2.5 mb-1 text-[var(--text-main)]">
+                  <Inline text={token.text} />
+                </h4>
+              );
+            }
+            return (
+              <h5 key={index} className="text-[12px] font-semibold text-[var(--text-muted)] mt-2 mb-1">
+                <Inline text={token.text} />
+              </h5>
+            );
+          }
+          case "hr":
+            return <hr key={index} className="my-4 border-t border-[var(--border-subtle)]" />;
+          case "alert":
+            return (
+              <AlertBlock
+                key={index}
+                alertType={token.alertType}
+                title={token.title}
+                content={token.content}
+              />
+            );
+          case "quote":
+            return (
+              <blockquote
+                key={index}
+                className="border-l-2 border-[var(--accent)] bg-[var(--bg-input)]/30 rounded-r-lg px-3.5 py-2 my-2.5 text-[13px] text-[var(--text-muted)] italic leading-relaxed"
+              >
+                <Inline text={token.content} />
+              </blockquote>
+            );
+          case "table":
+            return (
+              <Table
+                key={index}
+                headers={token.headers}
+                aligns={token.aligns}
+                rows={token.rows}
+              />
+            );
+          case "ul":
+            return (
+              <div key={index} className="space-y-1 my-2">
+                {token.items.map((item, itemIdx) => (
+                  <div
+                    key={itemIdx}
+                    style={{ paddingLeft: `${item.level * 16}px` }}
+                    className="flex items-start gap-2 text-[13px] text-[var(--text-main)] leading-relaxed"
+                  >
+                    {item.checked !== undefined ? (
+                      item.checked ? (
+                        <CheckSquare className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-1" />
+                      ) : (
+                        <Square className="w-3.5 h-3.5 text-[var(--text-dim)] shrink-0 mt-1" />
+                      )
+                    ) : (
+                      <span className="text-[var(--text-dim)] shrink-0 select-none mt-0.5">•</span>
+                    )}
+                    <span className={item.checked ? "line-through text-[var(--text-dim)]" : ""}>
+                      <Inline text={item.text} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          case "ol":
+            return (
+              <div key={index} className="space-y-1 my-2">
+                {token.items.map((item, itemIdx) => (
+                  <div
+                    key={itemIdx}
+                    style={{ paddingLeft: `${item.level * 16}px` }}
+                    className="flex items-start gap-2 text-[13px] text-[var(--text-main)] leading-relaxed"
+                  >
+                    <span className="font-mono text-[11.5px] text-[var(--text-dim)] shrink-0 w-4 text-right select-none mt-0.5">
+                      {item.num}.
+                    </span>
+                    <span>
+                      <Inline text={item.text} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          case "p":
+            return (
+              <p key={index} className="text-[13px] text-[var(--text-main)] leading-relaxed my-2">
+                <Inline text={token.text} />
+              </p>
+            );
+          default:
+            return null;
+        }
+      })}
+    </div>
+  );
+}
+
+/* =========================================================================
+   User, Tool, and Reason Blocks
+   ========================================================================= */
 
 function UserBubble({ text }: { text: string }) {
   return (
-    <div className="flex justify-end my-3">
-      <div className="max-w-[85%] px-4 py-2.5 rounded-2xl bg-[var(--bubble-user)] border-subtle shadow-[var(--card-shadow)] text-[13px] leading-relaxed selectable-text whitespace-pre-wrap text-[var(--text-main)]">
+    <div className="flex justify-end my-2.5 animate-appear">
+      <div className="max-w-[85%] px-3.5 py-2 rounded-xl bg-[var(--bubble-user)] border-subtle text-[13px] leading-relaxed selectable-text whitespace-pre-wrap text-[var(--text-main)]">
         {text}
       </div>
     </div>
@@ -134,17 +562,23 @@ function ToolBlock({ content, meta, args: rawArgs }: { content: string; meta?: s
     try {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
-        const val = (parsed as Record<string, unknown>).command ?? (parsed as Record<string, unknown>).cmd ?? (parsed as Record<string, unknown>).filePath ?? (parsed as Record<string, unknown>).TargetFile ?? (parsed as Record<string, unknown>).AbsolutePath ?? (parsed as Record<string, unknown>).FilePath ?? (parsed as Record<string, unknown>).Query ?? (parsed as Record<string, unknown>).Pattern ?? (parsed as Record<string, unknown>).prompt ?? (parsed as Record<string, unknown>).query ?? Object.values(parsed)[0];
+        const val =
+          (parsed as Record<string, unknown>).command ??
+          (parsed as Record<string, unknown>).cmd ??
+          (parsed as Record<string, unknown>).filePath ??
+          (parsed as Record<string, unknown>).TargetFile ??
+          (parsed as Record<string, unknown>).AbsolutePath ??
+          (parsed as Record<string, unknown>).FilePath ??
+          (parsed as Record<string, unknown>).Query ??
+          (parsed as Record<string, unknown>).Pattern ??
+          (parsed as Record<string, unknown>).prompt ??
+          (parsed as Record<string, unknown>).query ??
+          Object.values(parsed)[0];
         if (typeof val === "string" && val.trim()) return val;
       }
     } catch {}
     return null;
   }, []);
-
-  const bashCommand = useMemo(() => {
-    if (!isBash) return null;
-    return pickArg(rawArgs) ?? pickArg(content) ?? (rawArgs ?? content ?? "");
-  }, [isBash, rawArgs, content, pickArg]);
 
   const preview = useMemo(() => {
     const line = (pickArg(rawArgs) ?? pickArg(content) ?? (rawArgs ?? content ?? "")).split("\n")[0].trim();
@@ -159,55 +593,64 @@ function ToolBlock({ content, meta, args: rawArgs }: { content: string; meta?: s
   }, [content, hasFence]);
 
   return (
-    <div className="my-2.5 rounded-xl overflow-hidden text-xs font-mono">
-      {/* Header */}
+    <div className="my-1.5 text-xs font-mono animate-tool-reveal">
+      {/* Header (borderless & backgroundless) */}
       <div
         role="button"
         tabIndex={0}
         onClick={() => setOpen((v) => !v)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((v) => !v); } }}
-        className="w-full px-3 py-2 flex items-center gap-2 cursor-pointer select-none"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
+        className="w-full py-1 px-1.5 flex items-center gap-2 cursor-pointer select-none rounded hover:bg-[var(--bg-card-hover)] transition-colors"
       >
-        {isBash ? (
-          <span className="font-semibold text-[var(--text-main)] tracking-tight select-none shrink-0">Shell</span>
-        ) : (
-          <span className="font-semibold text-[var(--text-main)] tracking-tight select-none shrink-0">{rawName}</span>
-        )}
+        <span className="font-medium text-[var(--text-main)] text-[11px] shrink-0">
+          {isBash ? "shell" : rawName}
+        </span>
         {preview && (
-          <span className="text-[11.5px] text-[var(--text-muted)] truncate min-w-0 flex-1 selectable-text">
+          <span className="text-[11px] text-[var(--text-dim)] truncate min-w-0 flex-1 selectable-text font-mono animate-bit-by-bit">
             {preview}
           </span>
         )}
         {isExecuting && (
-          <span className="flex items-center gap-1.5 text-[10.5px] text-amber-400 font-medium">
+          <span className="flex items-center gap-1.5 text-[10px] text-amber-400 font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
             running
           </span>
         )}
         <ChevronDown
-          className={`w-3.5 h-3.5 text-[var(--text-dim)] transition-transform duration-200 ${open ? "" : "-rotate-90"}`}
+          className={`w-3 h-3 text-[var(--text-dim)] transition-transform duration-150 ${open ? "" : "-rotate-90"}`}
           aria-hidden
         />
       </div>
 
       {/* Body */}
       {open && (
-        <div className="px-3 py-2.5 space-y-3 animate-fade-in">
+        <div className="mt-1 rounded-lg border-subtle bg-[var(--bg-input)] px-2.5 py-2 space-y-2 animate-appear">
           {content && content !== rawArgsText && (
             hasFence && toolChunks ? (
               <div className="space-y-2">
                 {toolChunks.map((ch, i) =>
                   ch.type === "code" ? (
-                    <CodeBlock key={i} language={ch.lang} code={ch.content} />
+                    <div key={i} className="animate-bit-by-bit" style={{ animationDelay: `${Math.min(i * 50, 300)}ms` }}>
+                      <CodeBlock language={ch.lang} code={ch.content} />
+                    </div>
                   ) : ch.content.trim() ? (
-                    <div key={i} className="border-subtle rounded-lg px-2.5 py-2 text-[var(--text-muted)] selectable-text whitespace-pre-wrap break-words">
+                    <div
+                      key={i}
+                      className="rounded px-2 py-1.5 text-[var(--text-muted)] selectable-text whitespace-pre-wrap break-words animate-bit-by-bit"
+                      style={{ animationDelay: `${Math.min(i * 50, 300)}ms` }}
+                    >
                       {ch.content.trim()}
                     </div>
                   ) : null
                 )}
               </div>
             ) : (
-              <pre className="border-subtle rounded-lg px-2.5 py-2 text-[var(--text-muted)] max-h-80 overflow-y-auto whitespace-pre-wrap break-words selectable-text">
+              <pre className="rounded px-2 py-1.5 text-[var(--text-muted)] max-h-80 overflow-y-auto whitespace-pre-wrap break-words selectable-text animate-bit-by-bit">
                 {content}
               </pre>
             )
@@ -221,19 +664,17 @@ function ToolBlock({ content, meta, args: rawArgs }: { content: string; meta?: s
 function ReasonBlock({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="my-2 rounded-xl border-subtle bg-[var(--bg-card)]/60 text-xs overflow-hidden">
+    <div className="my-1 text-xs animate-appear">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="w-full px-3 py-1.5 flex items-center justify-between text-[11.5px] text-[var(--text-dim)] hover:text-[var(--text-muted)] cursor-pointer"
+        className="py-1 px-1.5 rounded flex items-center gap-1.5 text-[11px] text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] cursor-pointer transition-colors"
       >
-        <div className="flex items-center gap-1.5">
-          <ChevronDown className={`w-3 h-3 transition-transform ${open ? "" : "-rotate-90"}`} />
-          <span>Thought process / reasoning</span>
-        </div>
+        <ChevronDown className={`w-3 h-3 transition-transform duration-150 ${open ? "" : "-rotate-90"}`} />
+        <span>Thinking process</span>
       </button>
       {open && (
-        <div className="px-3.5 py-2 border-subtle-t bg-[var(--bg-input)]/40 text-[11.5px] text-[var(--text-muted)] font-mono leading-relaxed selectable-text whitespace-pre-wrap animate-fade-in">
+        <div className="mt-1 rounded-lg border-subtle bg-[var(--bg-input)] px-3 py-2 text-[11px] text-[var(--text-muted)] font-mono leading-relaxed selectable-text whitespace-pre-wrap animate-appear">
           {text}
         </div>
       )}
@@ -241,64 +682,38 @@ function ReasonBlock({ text }: { text: string }) {
   );
 }
 
+/* =========================================================================
+   Main MarkdownRenderer
+   ========================================================================= */
+
 function MarkdownRenderer({ content = "", role, meta, args, isStreaming }: MarkdownRendererProps) {
   const text = typeof content === "string" ? content : String(content ?? "");
-  const chunks = useMarkdownChunks(text);
+  const chunks = useMemo(() => parseChunks(text), [text]);
 
   if (role === "user") return <UserBubble text={text} />;
   if (role === "tool") return <ToolBlock content={text} meta={meta} args={args} />;
   if (role === "reason") return <ReasonBlock text={text} />;
-  if (role === "error") return <div className="my-2.5 px-3.5 py-2.5 rounded-xl bg-rose-500/10 border-subtle text-rose-400 text-xs font-mono">Error: {text}</div>;
+  if (role === "error") {
+    return (
+      <div className="my-2.5 px-3.5 py-2.5 rounded-xl bg-rose-500/10 border-subtle text-rose-400 text-xs font-mono animate-appear">
+        Error: {text}
+      </div>
+    );
+  }
 
   return (
-    <div className="my-4 selectable-text">
-      <div className="space-y-1">
+    <div className="my-4 selectable-text animate-appear">
+      <div className="space-y-2">
         {chunks.map((chunk, index) => {
-          if (chunk.type === "code") return <CodeBlock key={index} language={chunk.lang} code={chunk.content} />;
-
-          const lines = chunk.content.split("\n");
-          const elements: React.ReactNode[] = [];
-          let i = 0;
-          while (i < lines.length) {
-            const table = parseTable(lines, i);
-            if (table) {
-              elements.push(<Table key={`t-${index}-${i}`} headers={table.headers} rows={table.rows} />);
-              i = table.next;
-              continue;
-            }
-            const line = lines[i] ?? "";
-            const trimmed = line.trim();
-            if (!trimmed) {
-              elements.push(<div key={`s-${i}`} className="h-1.5" />);
-              i += 1;
-              continue;
-            }
-            if (trimmed.startsWith("## ")) {
-              elements.push(<h2 key={i} className="text-[15px] font-bold mt-4 mb-2"><Inline text={trimmed.slice(3)} /></h2>);
-              i += 1;
-              continue;
-            }
-            if (trimmed.startsWith("### ") || /^[0-9]+\.\s/.test(trimmed)) {
-              elements.push(<h3 key={i} className="text-[14px] font-semibold mt-3.5 mb-1.5"><Inline text={trimmed.replace(/^###\s+/, "")} /></h3>);
-              i += 1;
-              continue;
-            }
-            if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-              elements.push(
-                <div key={i} className="flex gap-2 pl-2 text-[13.5px] text-[var(--text-main)]">
-                  <span className="text-[var(--text-muted)]">•</span>
-                  <span><Inline text={trimmed.slice(2)} /></span>
-                </div>
-              );
-              i += 1;
-              continue;
-            }
-            elements.push(<p key={i} className="text-[13.5px] text-[var(--text-main)] leading-relaxed"><Inline text={line} /></p>);
-            i += 1;
+          if (chunk.type === "code") {
+            return <CodeBlock key={index} language={chunk.lang} code={chunk.content} />;
           }
-          return <div key={index} className="space-y-2">{elements}</div>;
+          const blocks = parseMarkdownBlocks(chunk.content);
+          return <RenderBlocks key={index} blocks={blocks} />;
         })}
-        {isStreaming && <span className="inline-block w-2 h-4 bg-[var(--accent)] animate-pulse ml-1 align-middle" aria-hidden />}
+        {isStreaming && (
+          <span className="inline-block w-2 h-4 bg-[var(--accent)] animate-pulse ml-1 align-middle" aria-hidden />
+        )}
       </div>
     </div>
   );

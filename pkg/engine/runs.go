@@ -2,13 +2,8 @@ package engine
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"path/filepath"
-	"runtime"
-	"strings"
 
-	"excelsior/internal/sessions"
+	"excelsior/internal/chat"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
@@ -24,81 +19,75 @@ type turnState struct {
 	pending                  *protocol.Envelope
 	response                 chan protocol.Envelope
 	interactionID            string
+	handle                   *chat.RunHandle
 }
 
 func canonicalWorkspace(path string) string {
-	if abs, err := filepath.Abs(path); err == nil {
-		path = abs
-	}
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		path = resolved
-	}
-	path = filepath.Clean(path)
-	if runtime.GOOS == "windows" {
-		path = strings.ToLower(path)
-	}
-	return path
+	return chat.CanonicalWorkspace(path)
 }
 
-func sessionKey(workspace, id string) string { return workspace + "\x00" + id }
+func sessionKey(workspace, id string) string { return canonicalWorkspace(workspace) + "\x00" + id }
 
 func (h *Hub) store(workspace string) session.Store {
-	h.runsMu.Lock()
-	defer h.runsMu.Unlock()
-	return h.storeLocked(workspace)
+	return h.Coordinator().Store(workspace)
 }
 
 func (h *Hub) storeLocked(workspace string) session.Store {
-	if h.SessionStore != nil {
-		return h.SessionStore
-	}
-	if h.stores[workspace] == nil {
-		h.stores[workspace] = session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
-	}
-	return h.stores[workspace]
+	return h.Coordinator().Store(workspace)
 }
 
 func (c *Conn) beginTurn(_ context.Context, id string, incoming ...llm.Message) (context.Context, *turnState, error) {
 	h := c.hub
-	h.runsMu.Lock()
-	defer h.runsMu.Unlock()
 	workspace := c.currentWorkspace()
-	key := sessionKey(workspace, id)
-	if h.stopped || h.turns[key] != nil {
-		return nil, nil, fmt.Errorf("session busy or engine stopped")
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	t := &turnState{id: newID(), workspace: workspace, sessionID: id, cancel: cancel, done: make(chan struct{})}
-	record, err := h.storeLocked(workspace).Load(id)
-	if err != nil && !errors.Is(err, session.ErrSessionNotFound) {
-		cancel()
+	turnCtx, handle, err := h.Coordinator().ReserveTurn(workspace, id, incoming...)
+	if err != nil {
 		return nil, nil, err
 	}
-	if errors.Is(err, session.ErrSessionNotFound) {
-		// Make a new run discoverable from another device before its first turn finishes.
-		record = session.Record{ID: id, Title: sessions.Title(incoming, "")}
-		if err := h.storeLocked(workspace).Save(record); err != nil {
-			cancel()
-			return nil, nil, err
-		}
+	t := &turnState{
+		id:        handle.ID,
+		workspace: workspace,
+		sessionID: id,
+		cancel:    handle.Cancel,
+		done:      handle.Done,
+		messages:  handle.Messages,
+		handle:    handle,
 	}
-	t.messages = append(record.Messages, incoming...)
-	h.turns[key] = t
-	return ctx, t, nil
+	h.runsMu.Lock()
+	h.turns[sessionKey(workspace, id)] = t
+	h.runsMu.Unlock()
+	return turnCtx, t, nil
 }
 
 func (c *Conn) endTurn(_ string, t *turnState) {
 	h := c.hub
 	h.runsMu.Lock()
-	defer h.runsMu.Unlock()
 	delete(h.turns, sessionKey(t.workspace, t.sessionID))
+	h.runsMu.Unlock()
+	if t.handle != nil {
+		h.Coordinator().EndTurn(t.handle, chat.Outcome{
+			SessionID: t.sessionID,
+			RunID:     t.id,
+			Status:    chat.OutcomeSucceeded,
+			Persisted: true,
+		})
+	}
 	t.cancel()
-	close(t.done)
-	h.BroadcastToSession(t.workspace, t.sessionID, protocol.NewEnvelope(protocol.TypeDone, map[string]string{"sessionId": t.sessionID, "runId": t.id}))
+	select {
+	case <-t.done:
+	default:
+		close(t.done)
+	}
+	h.BroadcastToSession(t.workspace, t.sessionID, protocol.NewEnvelope(protocol.TypeDone, protocol.DoneResp{
+		SessionID: t.sessionID,
+		RunID:     t.id,
+		Status:    chat.OutcomeSucceeded,
+		Persisted: true,
+	}))
 }
 
 // Close stops runs and sockets. Client disconnects never call this.
 func (h *Hub) Close() {
+	h.Coordinator().Close()
 	h.runsMu.Lock()
 	h.stopped = true
 	for _, t := range h.turns {
@@ -122,31 +111,58 @@ func (c *Conn) cancelTurn(env protocol.Envelope) {
 	}
 	h := c.hub
 	h.runsMu.Lock()
-	defer h.runsMu.Unlock()
 	t := h.turns[sessionKey(c.currentWorkspace(), req.SessionID)]
 	if t == nil || req.RunID != t.id {
+		h.runsMu.Unlock()
 		c.sendError(env.ID, "run no longer active")
 		return
 	}
 	t.cancel()
+	h.runsMu.Unlock()
+	_ = h.Coordinator().Cancel(c.currentWorkspace(), req.SessionID, req.RunID)
 }
 
 func (c *Conn) snapshot(env protocol.Envelope, id string) {
 	h := c.hub
-	h.runsMu.Lock()
-	defer h.runsMu.Unlock()
 	workspace := c.currentWorkspace()
 	data := protocol.SessionDataResp{ID: id, Messages: []llm.Message{}}
-	if t := h.turns[sessionKey(workspace, id)]; t != nil {
+
+	h.runsMu.Lock()
+	t := h.turns[sessionKey(workspace, id)]
+	if t != nil {
 		data.RunID, data.Running, data.Events, data.Pending = t.id, true, t.events, t.pending
 		data.Messages = t.messages
+		h.runsMu.Unlock()
 	} else {
-		record, err := h.storeLocked(workspace).Load(id)
+		h.runsMu.Unlock()
+		snap, err := h.Coordinator().Snapshot(workspace, id)
 		if err != nil {
 			c.sendError(env.ID, err.Error())
 			return
 		}
-		data.Messages = record.Messages
+		data.RunID = snap.RunID
+		data.Running = snap.Running
+		data.Messages = snap.Messages
+		for _, ev := range snap.Events {
+			d := protocol.Delta{
+				SessionID:    ev.SessionID,
+				RunID:        ev.RunID,
+				Type:         ev.Type,
+				Text:         ev.Text,
+				Reasoning:    ev.Reasoning,
+				ToolName:     ev.ToolName,
+				ToolCallID:   ev.ToolCallID,
+				ToolArgs:     ev.ToolArgs,
+				ToolResult:   ev.ToolResult,
+				FinishReason: ev.FinishReason,
+			}
+			if ev.Usage != nil {
+				d.PromptTokens = ev.Usage.PromptTokens
+				d.CompletionTokens = ev.Usage.CompletionTokens
+				d.TotalTokens = ev.Usage.TotalTokens
+			}
+			data.Events = append(data.Events, d)
+		}
 	}
 	c.subscribe(id)
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSessionData, data))

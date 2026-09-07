@@ -79,7 +79,7 @@ function MenuBar({
   return (
     <header
       ref={rootRef}
-      className="desktop-menubar h-10 flex items-center justify-between bg-[var(--bg-sidebar)] text-[var(--text-muted)] text-[12.5px] shrink-0 z-40 select-none"
+      className="desktop-menubar h-9 flex items-center justify-between bg-[var(--bg-sidebar)] text-[var(--text-muted)] text-[12px] shrink-0 z-40 select-none"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
@@ -91,7 +91,7 @@ function MenuBar({
                 onClick={() => toggleMenu(menu)}
                 aria-expanded={openMenu === menu}
                 aria-haspopup="menu"
-                className={`px-2.5 py-1 rounded-md hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-main)] capitalize transition-colors ${openMenu === menu ? "bg-[var(--bg-card-hover)] text-[var(--text-main)] font-semibold" : "text-[var(--text-muted)] font-medium"}`}
+                className={`px-2 py-0.5 rounded hover:bg-[var(--bg-card-hover)] hover:text-[var(--text-main)] capitalize transition-colors ${openMenu === menu ? "bg-[var(--bg-card-hover)] text-[var(--text-main)] font-semibold" : "text-[var(--text-muted)] font-medium"}`}
               >
                 {menu}
               </button>
@@ -99,7 +99,7 @@ function MenuBar({
               {openMenu === menu && (
                 <div
                   role="menu"
-                  className="absolute left-0 top-full mt-1.5 w-52 bg-[var(--bg-card)] rounded-xl shadow-[var(--popover-shadow)] p-1.5 text-xs z-50 animate-slide-down border-subtle"
+                  className="absolute left-0 top-full mt-1 w-48 bg-[var(--bg-card)] rounded-lg shadow-[var(--popover-shadow)] p-1 text-xs z-50 animate-appear border-subtle"
                   onClick={closeMenu}
                 >
                   {menu === "file" && (
@@ -151,7 +151,7 @@ function MenuBar({
         </nav>
       </div>
 
-      <span className="window-title">EXCELSIOR <span> / </span> {projectName}</span>
+      <span className="window-title">Excelsior <span>/</span> {projectName}</span>
       {/* Spacer */}
       <div className="flex-1" />
 

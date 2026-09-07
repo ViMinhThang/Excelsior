@@ -184,6 +184,16 @@ type SessionDeleteReq struct {
 	ID string `json:"id"`
 }
 
+// DoneResp is engine → client indicating completion of a turn with authoritative outcome.
+type DoneResp struct {
+	SessionID string `json:"sessionId"`
+	RunID     string `json:"runId"`
+	Status    string `json:"status,omitempty"` // succeeded | failed | canceled | persistence_failed
+	Persisted bool   `json:"persisted"`
+	Error     string `json:"error,omitempty"`
+	Code      string `json:"code,omitempty"`
+}
+
 // SessionDataReq requests the full message history for a session.
 type SessionDataReq struct {
 	ID string `json:"id"`
@@ -191,12 +201,14 @@ type SessionDataReq struct {
 
 // SessionDataResp contains the full message history for a session.
 type SessionDataResp struct {
-	RunID    string        `json:"runId,omitempty"`
-	Running  bool          `json:"running"`
-	Events   []Delta       `json:"events,omitempty"`
-	Pending  *Envelope     `json:"pending,omitempty"`
-	ID       string        `json:"id"`
-	Messages []llm.Message `json:"messages"`
+	RunID     string        `json:"runId,omitempty"`
+	Running   bool          `json:"running"`
+	Status    string        `json:"status,omitempty"`
+	Persisted bool          `json:"persisted,omitempty"`
+	Events    []Delta       `json:"events,omitempty"`
+	Pending   *Envelope     `json:"pending,omitempty"`
+	ID        string        `json:"id"`
+	Messages  []llm.Message `json:"messages"`
 }
 
 // SessionRenameReq renames a session.

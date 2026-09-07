@@ -6,6 +6,7 @@ import (
 	"excelsior/internal/permissions"
 	"excelsior/pkg/config"
 	"excelsior/pkg/protocol"
+	"excelsior/pkg/session"
 	"excelsior/pkg/tools"
 )
 
@@ -55,8 +56,15 @@ func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope, sessionID 
 		}
 		return tools.AskResponse{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}, err
 	})
-	_, err = (chat.Service{Runner: ag, Store: h.store(t.workspace)}).Run(ctx, chat.Request{
-		SessionID: sessionID, Messages: req.Messages,
+	rec := session.Record{ID: sessionID}
+	if t.handle != nil {
+		rec = t.handle.Record
+	}
+	_, err = (chat.Service{Runner: ag, Store: h.store(t.workspace)}).RunPrepared(ctx, chat.PreparedTurn{
+		SessionID: sessionID,
+		RunID:     t.id,
+		Messages:  t.messages,
+		Record:    rec,
 		OnEvent: func(ev chat.Event) {
 			d := protocol.Delta{SessionID: sessionID, RunID: t.id, Type: ev.Type, Text: ev.Text, Reasoning: ev.Reasoning, ToolName: ev.ToolName, ToolCallID: ev.ToolCallID, ToolArgs: ev.ToolArgs, ToolResult: ev.ToolResult, FinishReason: ev.FinishReason}
 			if ev.Usage != nil {

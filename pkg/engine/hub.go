@@ -6,11 +6,14 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 
+	"excelsior/internal/app"
+	"excelsior/internal/chat"
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
 	"excelsior/pkg/protocol"
@@ -34,9 +37,50 @@ type Hub struct {
 	// Persisted permission lives in workspace settings (env-seeded).
 	PermissionOverride config.PermissionMode
 
-	mu        sync.RWMutex
-	clients   map[*Conn]struct{}
-	workspace string
+	mu          sync.RWMutex
+	clients     map[*Conn]struct{}
+	workspace   string
+	coordinator *chat.Coordinator
+}
+
+// Coordinator returns the transport-neutral coordinator instance for this hub.
+func (h *Hub) Coordinator() *chat.Coordinator {
+	h.runsMu.Lock()
+	defer h.runsMu.Unlock()
+	if h.coordinator == nil {
+		h.coordinator = chat.NewCoordinator(chat.Config{
+			NewAgent: func(model, workspace string) (agent.Runner, error) {
+				if h.NewAgent != nil {
+					return h.NewAgent(model, workspace)
+				}
+				modelName := model
+				if modelName == "" {
+					modelName = h.Config.Model
+				}
+				if modelName == "" {
+					modelName = config.DefaultModel
+				}
+				return app.NewAgent(h.Config, workspace, modelName, agent.DefaultSystemPrompt, h.logger()), nil
+			},
+			SessionStore: h.SessionStore,
+			StoreFactory: func(workspace string) session.Store {
+				if h.SessionStore != nil {
+					return h.SessionStore
+				}
+				if h.stores[workspace] != nil {
+					return h.stores[workspace]
+				}
+				st := session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
+				h.stores[workspace] = st
+				return st
+			},
+			PermissionOverrideFunc: func() config.PermissionMode {
+				return h.PermissionOverride
+			},
+			Logger: h.logger(),
+		})
+	}
+	return h.coordinator
 }
 
 // NewHub initializes a Hub with configuration and workspace.

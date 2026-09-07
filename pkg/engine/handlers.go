@@ -3,12 +3,14 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"excelsior/internal/chat"
 	"excelsior/internal/permissions"
 	"excelsior/internal/sessions"
 	"excelsior/pkg/config"
@@ -144,14 +146,11 @@ func (c *Conn) handleSessionDelete(ctx context.Context, env protocol.Envelope) {
 	if !c.decodePayload(env, &req, "session.delete") {
 		return
 	}
-	h := c.hub
-	h.runsMu.Lock()
-	defer h.runsMu.Unlock()
-	if h.turns[sessionKey(c.currentWorkspace(), req.ID)] != nil {
-		c.sendError(env.ID, "session busy")
-		return
-	}
-	if err := (sessions.Service{Store: h.storeLocked(c.currentWorkspace())}).Delete(req.ID); err != nil {
+	if err := c.hub.Coordinator().DeleteSession(c.currentWorkspace(), req.ID); err != nil {
+		if errors.Is(err, chat.ErrSessionBusy) {
+			c.sendError(env.ID, "session busy")
+			return
+		}
 		c.sendError(env.ID, fmt.Sprintf("delete session: %v", err))
 		return
 	}
@@ -163,14 +162,11 @@ func (c *Conn) handleSessionRename(ctx context.Context, env protocol.Envelope) {
 	if !c.decodePayload(env, &req, "session.rename") {
 		return
 	}
-	h := c.hub
-	h.runsMu.Lock()
-	defer h.runsMu.Unlock()
-	if h.turns[sessionKey(c.currentWorkspace(), req.ID)] != nil {
-		c.sendError(env.ID, "session busy")
-		return
-	}
-	if err := (sessions.Service{Store: h.storeLocked(c.currentWorkspace())}).Rename(req.ID, req.Title); err != nil {
+	if err := c.hub.Coordinator().RenameSession(c.currentWorkspace(), req.ID, req.Title); err != nil {
+		if errors.Is(err, chat.ErrSessionBusy) {
+			c.sendError(env.ID, "session busy")
+			return
+		}
 		c.sendError(env.ID, fmt.Sprintf("rename session: %v", err))
 		return
 	}

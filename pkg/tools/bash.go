@@ -16,6 +16,34 @@ import (
 // On Windows it uses PowerShell, elsewhere sh. Output is stdout+stderr combined.
 type BashTool struct{ Root string }
 
+const maxShellOutput = 100_000
+
+// shellOutput keeps draining stdout/stderr after the capture limit is reached.
+// os/exec serializes writes because both streams share this writer.
+type shellOutput struct {
+	buf       bytes.Buffer
+	truncated bool
+}
+
+func (b *shellOutput) Write(p []byte) (int, error) {
+	n := len(p)
+	remaining := maxShellOutput - b.buf.Len()
+	if len(p) > remaining {
+		p = p[:remaining]
+		b.truncated = true
+	}
+	_, _ = b.buf.Write(p)
+	return n, nil
+}
+
+func (b *shellOutput) String() string {
+	out := b.buf.String()
+	if b.truncated {
+		out += "\n[truncated]"
+	}
+	return out
+}
+
 func (t *BashTool) Name() string { return "bash" }
 func (t *BashTool) Description() string {
 	return "Execute a shell command in the workspace (read/write/list/search/run files). Returns stdout+stderr. Timeout 1s-120s."
@@ -71,23 +99,17 @@ func runShell(ctx context.Context, dir, command string, timeoutMs *int) (string,
 		cmd = exec.CommandContext(ctx, "sh", "-c", command)
 	}
 	cmd.Dir = dir
-	var buf bytes.Buffer
+	var buf shellOutput
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
 		out := buf.String()
-		if len(out) > 100_000 {
-			out = out[:100_000] + "\n[truncated]"
-		}
 		if ctx.Err() == context.DeadlineExceeded {
 			return out + "\n[timeout]", nil
 		}
 		return fmt.Sprintf("%s\n[exit error: %v]", out, err), nil
 	}
 	out := buf.String()
-	if len(out) > 100_000 {
-		out = out[:100_000] + "\n[truncated]"
-	}
 	if out == "" {
 		return "Command finished with no output.", nil
 	}

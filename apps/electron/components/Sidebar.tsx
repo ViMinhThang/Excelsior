@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { Asterisk, ChevronRight, GitBranch, Plus, FolderOpen, Settings2, Search } from "lucide-react";
+import { ChevronRight, GitBranch, Plus, Settings2 } from "lucide-react";
 import { PencilIcon, TrashIcon } from "./Icons";
 import { cleanTitle } from "../lib/format";
 
@@ -60,17 +60,17 @@ const SessionRow = React.memo(function SessionRow({
           handleSelect();
         }
       }}
-      className={`session-row relative flex items-center justify-between px-2 py-1.5 rounded-xl select-none ${
+      className={`session-row w-full relative flex items-center justify-between px-2 py-1.5 rounded-md select-none animate-appear ${
         isActive
-          ? "bg-[var(--bg-card)] text-[var(--text-main)]"
+          ? "bg-[var(--bg-card)] text-[var(--text-main)] font-medium"
           : "text-[var(--text-muted)]"
       }`}
     >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 text-[13.5px] truncate">
+      <div className="min-w-0 flex-1 pl-1">
+        <div className="flex items-center gap-1.5 text-[12.5px] truncate">
           <span className="truncate">{cleanTitle(session.title)}</span>
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-[var(--text-dim)] mt-0.5">
+        <div className="flex items-center gap-2 text-[10.5px] text-[var(--text-dim)] mt-0.5">
           {session.updatedTime && <span>{session.updatedTime}</span>}
           {!!session.added && <span className="text-emerald-500">+{session.added}</span>}
           {!!session.deleted && <span className="text-rose-500">-{session.deleted}</span>}
@@ -83,13 +83,13 @@ const SessionRow = React.memo(function SessionRow({
         </div>
       </div>
 
-      <div className="flex items-center gap-1 text-[10px] shrink-0 ml-1 opacity-60">
+      <div className="session-actions flex items-center gap-0.5 text-[10px] shrink-0 ml-1">
         {onRenameSession && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onRenameSession(session.id); }}
             aria-label={`Rename ${session.title}`}
-            className="p-1 rounded hover:bg-[var(--bg-input)] text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"
+            className="p-1 rounded hover:bg-[var(--bg-card-hover)] text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"
           >
             <PencilIcon className="w-3 h-3" />
           </button>
@@ -117,10 +117,8 @@ function Sidebar({
   onNewSession,
   onDeleteSession,
   onRenameSession,
-  onOpenFolder,
   onOpenSettings,
 }: SidebarProps) {
-  const [query, setQuery] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
 
   const toggleFolder = useCallback((folderId: string) => {
@@ -130,17 +128,12 @@ function Sidebar({
   if (!isOpen) return null;
 
   return (
-    <aside className="studio-sidebar flex flex-col h-full shrink-0 z-20 select-none">
-      <div className="sidebar-brand"><Asterisk className="brand-mark" size={40} strokeWidth={1.4} aria-hidden="true" /><div>excelsior<span>THE CODING COMPANION</span></div></div>
-      <div className="sidebar-actions"><button className="new-task-button" onClick={() => onNewSession?.("")}><Plus size={17} /> New task <kbd>Ctrl N</kbd></button><label className="session-search"><Search size={14} /><input aria-label="Search sessions" placeholder="Find a task…" value={query} onChange={e => setQuery(e.target.value)} /></label></div>
-      <div className="sidebar-section-label">WORKSPACES<button className="studio-icon" title="Open folder" aria-label="Open folder" onClick={onOpenFolder}><Plus size={14} /></button></div>
-
-      <div className="flex-1 overflow-y-auto px-1.5 space-y-2 pt-0.5">
+    <aside className="studio-sidebar flex flex-col h-full shrink-0 z-20 select-none pt-2">
+      <div className="flex-1 overflow-y-auto px-1 space-y-1">
         {folders.map((folder) => {
-          const matches = folder.sessions.filter(session => cleanTitle(session.title).toLowerCase().includes(query.trim().toLowerCase()));
-          const isCollapsed = !query.trim() && !!collapsedFolders[folder.id];
+          const isCollapsed = !!collapsedFolders[folder.id];
           return (
-            <div key={folder.id} className="space-y-1">
+            <div key={folder.id} className="w-full space-y-0.5">
               <div
                 role="button"
                 tabIndex={0}
@@ -152,14 +145,14 @@ function Sidebar({
                     toggleFolder(folder.id);
                   }
                 }}
-                className="flex items-center justify-between px-1 py-1 text-[12px] font-semibold text-[var(--text-dim)] hover:text-[var(--text-main)] cursor-pointer rounded-lg hover:bg-[var(--bg-card-hover)] uppercase tracking-wider transition-colors"
+                className="w-full flex items-center justify-between px-2 py-1.5 text-[13.5px] font-semibold text-[var(--text-main)] cursor-pointer rounded-md hover:bg-[var(--bg-card-hover)] transition-colors"
               >
-                <span className="flex items-center gap-1.5 truncate">
-                  <ChevronRight className={`w-3 h-3 transition-transform duration-150 ${isCollapsed ? "" : "rotate-90"}`} />
-                  <span className="truncate">{folder.name}</span>
+                <span className="flex items-center gap-2 truncate">
+                  <ChevronRight className={`w-3.5 h-3.5 text-[var(--text-dim)] transition-transform duration-150 ${isCollapsed ? "" : "rotate-90"}`} />
+                  <span className="truncate tracking-tight">{folder.name}</span>
                 </span>
-                <span className="flex items-center gap-1">
-                  <span className="text-[10px] font-mono text-[var(--text-dim)]">
+                <span className="flex items-center gap-1.5">
+                  <span className="text-[11px] font-mono text-[var(--text-dim)] font-normal">
                     {folder.sessions.length}
                   </span>
                   {onNewSession && (
@@ -168,22 +161,22 @@ function Sidebar({
                       title="New session in this folder"
                       aria-label={`New session in ${folder.name}`}
                       onClick={(e) => { e.stopPropagation(); onNewSession(folder.id); }}
-                      className="p-0.5 rounded-md text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] transition-colors cursor-pointer"
+                      className="p-1 rounded text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] transition-colors cursor-pointer"
                     >
-                      <Plus className="w-3 h-3" />
+                      <Plus className="w-3.5 h-3.5" />
                     </button>
                   )}
                 </span>
               </div>
 
               {!isCollapsed && (
-                <div className="space-y-0.5 pl-1 animate-fade-in">
-                  {matches.length === 0 ? (
-                    <div className="text-[11px] text-[var(--text-dim)] py-2 text-center italic">
-                      {query.trim() ? "No matching tasks" : "Your next idea belongs here."}
+                <div className="w-full space-y-0.5 animate-appear">
+                  {folder.sessions.length === 0 ? (
+                    <div className="text-[11px] text-[var(--text-dim)] py-2 text-center">
+                      No sessions
                     </div>
                   ) : (
-                    matches.map((session) => (
+                    folder.sessions.map((session) => (
                       <SessionRow
                         key={session.id}
                         folderId={folder.id}
@@ -202,7 +195,13 @@ function Sidebar({
         })}
       </div>
 
-      <div className="sidebar-bottom"><button onClick={onOpenFolder}><FolderOpen size={16} /> Open a workspace <span>↗</span></button><button onClick={onOpenSettings}><Settings2 size={16} /> Preferences <kbd>Ctrl ,</kbd></button><div className="sidebar-footnote">EXCELSIOR <span>DESKTOP / 0.1</span></div></div>
+      <div className="sidebar-bottom">
+        <button onClick={onOpenSettings}>
+          <Settings2 size={14} />
+          <span>Preferences</span>
+          <kbd>Ctrl ,</kbd>
+        </button>
+      </div>
     </aside>
   );
 }

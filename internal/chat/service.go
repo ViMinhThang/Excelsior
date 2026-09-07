@@ -3,12 +3,16 @@ package chat
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"excelsior/pkg/agent"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/session"
 )
+
+// ErrPersistenceFailed indicates the model run generated a result but saving to disk failed.
+var ErrPersistenceFailed = errors.New("persistence failed")
 
 // Service owns one chat turn and its optional session persistence.
 // Transport code supplies the runner and event sink; it does not save history.
@@ -17,25 +21,32 @@ type Service struct {
 	Store  session.Store
 }
 
-// Request contains the already-loaded conversation for one turn.
+// Request contains the conversation for one turn.
 type Request struct {
 	SessionID string
 	Messages  []llm.Message
 	OnEvent   func(Event)
 }
 
-// Run executes a turn and persists the resulting replay-safe history when a
-// session store and session ID are provided.
-func (s Service) Run(ctx context.Context, req Request) (*agent.RunResult, error) {
-	messages, err := s.history(req.SessionID, req.Messages)
-	if err != nil {
-		return nil, err
-	}
+// PreparedTurn contains pre-loaded history and record for single-load execution.
+type PreparedTurn struct {
+	SessionID string
+	RunID     string
+	Messages  []llm.Message
+	Record    session.Record
+	OnEvent   func(Event)
+	OnPersist func()
+}
+
+// RunPrepared executes the turn using already loaded history and updates the provided record.
+func (s Service) RunPrepared(ctx context.Context, turn PreparedTurn) (*agent.RunResult, error) {
 	result, err := s.Runner.RunWithHistory(ctx, agent.RunOptions{
-		Messages: messages,
+		Messages: turn.Messages,
 		OnEvent: func(event agent.StreamEvent) {
-			if req.OnEvent != nil {
-				req.OnEvent(Event{
+			if turn.OnEvent != nil {
+				turn.OnEvent(Event{
+					SessionID:    turn.SessionID,
+					RunID:        turn.RunID,
 					Type:         event.Type,
 					Text:         event.Text,
 					Reasoning:    event.Reasoning,
@@ -49,43 +60,60 @@ func (s Service) Run(ctx context.Context, req Request) (*agent.RunResult, error)
 			}
 		},
 	})
-	if err != nil || result == nil || s.Store == nil || req.SessionID == "" {
+	if err != nil || result == nil {
 		return result, err
 	}
+	if s.Store == nil || turn.SessionID == "" {
+		return result, nil
+	}
 
-	persisted := withoutSystemMessages(result.Messages)
-	record, loadErr := s.Store.Load(req.SessionID)
-	if loadErr != nil && !errors.Is(loadErr, session.ErrSessionNotFound) {
-		return nil, loadErr
+	if turn.OnPersist != nil {
+		turn.OnPersist()
 	}
-	if loadErr != nil {
-		record = session.Record{ID: req.SessionID, CreatedAt: time.Now().UTC()}
+
+	rec := turn.Record
+	if rec.ID == "" {
+		rec.ID = turn.SessionID
 	}
-	record.Messages = persisted
-	if err := s.Store.Save(record); err != nil {
-		return nil, err
+	if rec.CreatedAt.IsZero() {
+		rec.CreatedAt = time.Now().UTC()
+	}
+	rec.Messages = withoutSystemMessages(result.Messages)
+	if saveErr := s.Store.Save(rec); saveErr != nil {
+		return result, fmt.Errorf("%w: %v", ErrPersistenceFailed, saveErr)
 	}
 	return result, nil
 }
 
-func (s Service) history(sessionID string, incoming []llm.Message) ([]llm.Message, error) {
-	if s.Store == nil || sessionID == "" {
-		return incoming, nil
-	}
+// Run executes a turn and persists the resulting replay-safe history when a
+// session store and session ID are provided. History is loaded only once.
+func (s Service) Run(ctx context.Context, req Request) (*agent.RunResult, error) {
+	var record session.Record
 	var history []llm.Message
-	record, err := s.Store.Load(sessionID)
-	if err != nil && !errors.Is(err, session.ErrSessionNotFound) {
-		return nil, err
-	}
-	if err == nil {
-		for _, message := range record.Messages {
-			if message.Role == "system" && (message.Content == "New session" || message.Content == "(empty)") {
-				continue
+	if s.Store != nil && req.SessionID != "" {
+		rec, err := s.Store.Load(req.SessionID)
+		if err != nil && !errors.Is(err, session.ErrSessionNotFound) {
+			return nil, err
+		}
+		if err == nil {
+			record = rec
+			for _, message := range record.Messages {
+				if message.Role == "system" && (message.Content == "New session" || message.Content == "(empty)") {
+					continue
+				}
+				history = append(history, message)
 			}
-			history = append(history, message)
+		} else {
+			record = session.Record{ID: req.SessionID, CreatedAt: time.Now().UTC()}
 		}
 	}
-	return append(history, incoming...), nil
+	messages := append(history, req.Messages...)
+	return s.RunPrepared(ctx, PreparedTurn{
+		SessionID: req.SessionID,
+		Messages:  messages,
+		Record:    record,
+		OnEvent:   req.OnEvent,
+	})
 }
 
 func withoutSystemMessages(messages []llm.Message) []llm.Message {
