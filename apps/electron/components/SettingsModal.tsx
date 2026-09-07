@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Check, Settings, ShieldAlert, Sparkles, X } from "lucide-react";
 import { AVAILABLE_MODELS } from "./Composer";
 import { AVAILABLE_THEMES } from "../contexts/ThemeContext";
@@ -30,10 +30,29 @@ function SettingsModal({
   allowAll,
   onSaveAllowAll,
 }: SettingsModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [draftToken, setDraftToken] = useState("");
   const [draftUrl, setDraftUrl] = useState(engineUrl);
   const [draftModel, setDraftModel] = useState(defaultModel);
   const [draftAllowAll, setDraftAllowAll] = useState(allowAll);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button, input, select, [tabindex="0"]') ?? []);
+    focusable()[0]?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); onClose(); }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      const first = items[0], last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    dialog?.addEventListener("keydown", onKey);
+    return () => { dialog?.removeEventListener("keydown", onKey); previous?.focus(); };
+  }, [isOpen, onClose]);
 
   // Keep drafts in sync when modal re-opens or props change
   useEffect(() => {
@@ -58,18 +77,19 @@ function SettingsModal({
 
   const statusBg =
     engineState === "connected"
-      ? "text-emerald-400 bg-emerald-500/10"
+      ? "text-[var(--text-main)] bg-emerald-500/10"
       : engineState === "error"
-        ? "text-rose-400 bg-rose-500/10"
-        : "text-amber-400 bg-amber-500/10";
+        ? "text-[var(--text-main)] bg-rose-500/10"
+        : "text-[var(--text-main)] bg-amber-500/10";
 
   return (
     <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-fade-in">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="settings-title"
-        className="w-full max-w-lg bg-[var(--bg-card)] rounded-2xl p-6 shadow-[var(--elevated-shadow)] border-subtle animate-slide-down text-[var(--text-main)]"
+        className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-[var(--bg-card)] rounded-2xl p-6 shadow-[var(--elevated-shadow)] border-subtle animate-slide-down text-[var(--text-main)]"
       >
         <div className="flex items-center justify-between pb-3 border-subtle-b mb-4">
           <div className="flex items-center gap-2">
@@ -101,10 +121,11 @@ function SettingsModal({
                   key={t.id}
                   type="button"
                   onClick={() => onSaveTheme(t.id)}
-                  className={`px-3 py-2 rounded-xl text-left border-subtle transition-all cursor-pointer flex items-center justify-between ${currentTheme === t.id ? "bg-[var(--bg-card-hover)] font-semibold" : "bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] text-[var(--text-main)]"}`}
+                  aria-pressed={currentTheme === t.id}
+                  className={`px-3 py-2 rounded-xl text-left border-subtle transition-all cursor-pointer ${currentTheme === t.id ? "bg-[var(--bg-card-hover)] font-semibold" : "bg-[var(--bg-input)] hover:bg-[var(--bg-card-hover)] text-[var(--text-main)]"}`}
                 >
-                  <span className="truncate">{t.name}</span>
-                  {currentTheme === t.id && <Check className="w-3.5 h-3.5 shrink-0" />}
+                  <span className="theme-preview" data-theme={t.id} aria-hidden="true" /><span className="inline-block">{t.name}</span>
+                  {currentTheme === t.id && <Check className="w-3.5 h-3.5 float-right" />}
                 </button>
               ))}
             </div>
@@ -112,8 +133,8 @@ function SettingsModal({
 
           {/* Model Selection */}
           <div className="space-y-1.5">
-            <label className="text-[var(--text-muted)] font-medium">Default Coding Model</label>
-            <select
+            <label htmlFor="default-model" className="text-[var(--text-muted)] font-medium">Default Coding Model</label>
+            <select id="default-model"
               value={draftModel}
               onChange={(e) => setDraftModel(e.target.value)}
               className="w-full bg-[var(--bg-input)] border-subtle rounded-xl px-3.5 py-2 text-xs outline-none text-[var(--text-main)] transition-colors"
@@ -129,12 +150,13 @@ function SettingsModal({
           {/* Engine WebSocket URL */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-[var(--text-muted)] font-medium">Engine WebSocket URL</label>
+              <label htmlFor="engine-url" className="text-[var(--text-muted)] font-medium">Engine WebSocket URL</label>
               <span className={`px-2 py-0.5 rounded-full font-mono text-[10.5px] ${statusBg}`}>
                 ● {engineState}
               </span>
             </div>
             <input
+              id="engine-url"
               value={draftUrl}
               onChange={(e) => setDraftUrl(e.target.value)}
               placeholder="ws://localhost:17812/v1/ws"
@@ -157,7 +179,7 @@ function SettingsModal({
               className="mt-0.5 accent-amber-500 w-4 h-4 cursor-pointer"
             />
             <span className="flex-1">
-              <span className="flex items-center gap-1.5 font-semibold text-amber-300 text-xs">
+              <span className="flex items-center gap-1.5 font-semibold text-[var(--text-main)] text-xs">
                 <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
                 Allow all actions automatically (YOLO mode)
               </span>
@@ -183,7 +205,7 @@ function SettingsModal({
             <button
               type="button"
               onClick={handleSave}
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold bg-[var(--accent)] text-white hover:opacity-90 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-xs font-semibold bg-[var(--accent)] text-[var(--accent-ink)] hover:opacity-90 transition-all cursor-pointer"
             >
               Save Preferences
             </button>

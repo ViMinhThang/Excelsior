@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import { ArrowUp, ChevronDown, Paperclip, Sparkles } from "lucide-react";
+import { ArrowUp, ChevronDown, Square, Sparkles } from "lucide-react";
 
 export const AVAILABLE_MODELS = [
   { id: "deepseek-v4-flash", name: "deepseek-v4-flash", badge: "Flash", desc: "Fast & lightweight for quick tasks" },
@@ -15,9 +15,10 @@ type ComposerProps = {
   onSend: (text: string) => void;
   disabled?: boolean;
   isStreaming?: boolean;
+  onStop: () => void;
 };
 
-function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStreaming }: ComposerProps) {
+function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStreaming, onStop }: ComposerProps) {
   const [text, setText] = useState("");
   const [modelOpen, setModelOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -51,7 +52,7 @@ function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStre
   );
 
   const card = (
-    <div className="w-full bg-[var(--bg-canvas)] rounded-2xl p-3 border-subtle flex flex-col">
+    <div className="studio-composer w-full p-4 flex flex-col">
       <textarea
         ref={textareaRef}
         rows={1}
@@ -61,24 +62,15 @@ function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStre
           resize();
         }}
         onKeyDown={handleKeyDown}
-        placeholder="Ask anything, describe a task, or request code changes…"
-        disabled={disabled || isStreaming}
+        placeholder="What would you like to make happen?"
+        disabled={isStreaming}
         aria-label="Composer input"
         className="w-full bg-transparent text-[var(--text-main)] placeholder-[var(--text-dim)] text-[13.5px] outline-none resize-none px-2 py-1.5 min-h-[48px] max-h-[240px] leading-relaxed selectable-text"
       />
 
       <div className="flex items-center justify-between pt-2 px-1 mt-1">
         <div className="flex items-center gap-2">
-          {/* Attach Button */}
-          <button
-            type="button"
-            aria-label="Attach file or context"
-            title="Attach file"
-            className="w-7 h-7 rounded-xl flex items-center justify-center text-[var(--text-dim)] hover:text-[var(--text-main)] hover:bg-[var(--bg-card-hover)] transition-colors"
-          >
-            <Paperclip className="w-3.5 h-3.5" />
-          </button>
-
+          <Sparkles size={15} className="text-[var(--accent)]" />
           {/* Model Selector Dropdown */}
           <div className="relative">
             <button
@@ -123,17 +115,17 @@ function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStre
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={handleSend}
-            disabled={!canSend}
-            aria-label="Send message"
+            onClick={isStreaming ? onStop : handleSend}
+            disabled={!isStreaming && !canSend}
+            aria-label={isStreaming ? "Stop generation" : "Send message"}
             className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all ${
-              canSend
-                ? "bg-[var(--accent)] text-white active:scale-95 cursor-pointer hover:opacity-90"
+              (canSend || isStreaming)
+                ? "bg-[var(--accent)] text-[var(--accent-ink)] active:scale-95 cursor-pointer hover:opacity-90"
                 : "bg-[var(--bg-input)] text-[var(--text-dim)] cursor-not-allowed border-subtle"
             }`}
           >
             {isStreaming ? (
-              <span className="w-2.5 h-2.5 rounded-sm bg-white animate-pulse" />
+              <Square size={12} fill="currentColor" />
             ) : (
               <ArrowUp className="w-4 h-4 stroke-[2.5]" />
             )}
@@ -146,7 +138,7 @@ function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStre
   if (mode === "docked") {
     return <div className="w-full max-w-3xl mx-auto px-4 pb-4">{card}</div>;
   }
-  return <div className="w-full max-w-2xl mx-auto">{card}</div>;
+  return <div className="w-full mx-auto">{card}</div>;
 }
 
 export default React.memo(Composer);

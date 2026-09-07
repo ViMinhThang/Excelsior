@@ -7,10 +7,10 @@ export const DEFAULT_THEME = "default-dark";
 
 // ponytail: single theme list (was 3 copies: MenuBar THEMES + SettingsModal AVAILABLE_THEMES + here)
 export const AVAILABLE_THEMES = [
-  { id: "default-dark", name: "Default Dark" },
-  { id: "default-light", name: "Default Light" },
-  { id: "rose-pine-dark", name: "Rosé Pine Dark" },
-  { id: "rose-pine-light", name: "Rosé Pine Light" },
+  { id: "default-dark", name: "Graphite" },
+  { id: "default-light", name: "Porcelain" },
+  { id: "rose-pine-dark", name: "Rosé at night" },
+  { id: "rose-pine-light", name: "Rosé dawn" },
 ] as const;
 
 type ThemeContextValue = {

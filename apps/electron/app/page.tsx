@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Asterisk, ArrowUpRight, FolderOpen, PanelLeft, Settings2, Compass, Bug, FlaskConical, Terminal, ShieldCheck } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Composer from "../components/Composer";
 import SettingsModal from "../components/SettingsModal";
@@ -17,22 +18,22 @@ import type { FolderWorkspace } from "../components/Sidebar";
 
 const SUGGESTIONS = [
   {
-    label: "Architecture survey",
+    label: "Explore the codebase", icon: Compass,
     desc: "Summarize workspace architecture and dependencies",
     prompt: "Inspect this project and explain the overall architecture, folder structure, and tech stack.",
   },
   {
-    label: "Find bugs & audit",
+    label: "Find the hidden bugs", icon: Bug,
     desc: "Scan recent files for potential errors and fixes",
     prompt: "Review the current codebase for potential bugs, unhandled errors, or logic issues.",
   },
   {
-    label: "Write tests",
+    label: "Build confidence", icon: FlaskConical,
     desc: "Generate unit or integration tests for core modules",
     prompt: "Identify the critical paths in this project and generate unit tests for them.",
   },
   {
-    label: "Run check & status",
+    label: "Check project health", icon: Terminal,
     desc: "Check git status and run build verification",
     prompt: "Run git status and run the project test or build command to verify project health.",
   },
@@ -49,6 +50,7 @@ function useDesktop(): boolean | null {
 export default function Page() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const closeSettings = useCallback(() => setSettingsOpen(false), []);
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [projectName, setProjectName] = useState(DEFAULT_PROJECT);
   const [engineUrl, setEngineUrl] = useState(ENGINE_URL_FALLBACK);
@@ -299,6 +301,7 @@ export default function Page() {
       selectedModel={model}
       onSelectModel={setModel}
       onSend={handleSendPrompt}
+      onStop={cancelRun}
       isStreaming={streaming}
       disabled={wsState !== "connected"}
     />
@@ -319,14 +322,6 @@ export default function Page() {
           projectName={projectName}
           sessionTitle={activeSession?.title ?? null}
         />
-        {isDesktop === false && (
-          <div className="mx-4 mt-2 px-3 py-2 rounded-xl bg-amber-500/10 border-subtle text-amber-200 text-xs text-center">
-            Desktop-only build — browser standalone is disabled. Run <code className="px-1 py-0.5 bg-black/20 rounded">npm run dev</code> (frontend) +{" "}
-            <code className="px-1 py-0.5 bg-black/20 rounded">npm run dev:engine</code> and{" "}
-            <code className="px-1 py-0.5 bg-black/20 rounded">npm run dev:desktop</code> in <code className="px-1 py-0.5 bg-black/20 rounded">apps/electron</code>.
-          </div>
-        )}
-
         <div className="flex flex-1 min-h-0 overflow-hidden bg-[var(--bg-sidebar)]">
           <Sidebar
             isOpen={sidebarOpen}
@@ -336,53 +331,21 @@ export default function Page() {
             onNewSession={handleNewChat}
             onDeleteSession={handleDeleteSession}
             onRenameSession={handleRenameSession}
+            onOpenFolder={() => void handleOpenFolder()}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
 
-          <main className="flex-1 flex flex-col h-full min-w-0 bg-[var(--bg-canvas)] border-subtle-t border-subtle-l rounded-tl-xl overflow-hidden">
+          <main className="studio-canvas flex-1 flex flex-col min-w-0 overflow-hidden">
+            <div className="workspace-toolbar">
+              <div className="flex items-center gap-3 min-w-0"><button className="studio-icon" aria-label="Toggle sidebar" title="Toggle sidebar (Ctrl+B)" onClick={() => setSidebarOpen(v => !v)}><PanelLeft size={17} /></button><span className="toolbar-divider" /><FolderOpen size={15} className="text-[var(--text-dim)]" /><span className="truncate">{projectName}</span><span className="text-[var(--text-dim)]">/</span><span className="text-[var(--text-muted)] truncate">{activeSession ? cleanTitle(activeSession.title) : "New task"}</span></div>
+              <button onClick={() => setSettingsOpen(true)} className="engine-status" title="Engine settings"><span className={wsState === "connected" ? "status-dot online" : "status-dot"} />{wsState === "connected" ? "Engine connected" : "Engine offline"}<Settings2 size={13} /></button>
+            </div>
             {isLanding ? (
-              <div className="flex-1 flex flex-col items-center justify-center p-6 max-w-2xl mx-auto w-full animate-fade-in space-y-6">
-                <div className="text-center space-y-2">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[var(--bg-card)] border-subtle text-xs text-[var(--text-muted)] mb-1 shadow-xs">
-                    <span className="w-2 h-2 rounded-full bg-[var(--text-dim)]" />
-                    <span className="font-mono text-[11.5px] font-semibold text-[var(--text-main)]">{projectName}</span>
-                  </div>
-                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--text-main)]">
-                    What are we building today?
-                  </h1>
-                  <p className="text-xs sm:text-sm text-[var(--text-muted)] max-w-md mx-auto leading-relaxed">
-                    Excelsior is paired with your codebase to inspect files, edit code, and run tasks directly.
-                  </p>
-                </div>
-
-                <div className="w-full">
-                  {composer("centered")}
-                  {wsState !== "connected" && (
-                    <div className="text-xs text-[var(--text-dim)] mt-3 flex items-center justify-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" aria-hidden />
-                      Connecting to engine at {engineUrl}…
-                    </div>
-                  )}
-                </div>
-
-                <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
-                  {SUGGESTIONS.map((chip) => (
-                    <button
-                      key={chip.label}
-                      type="button"
-                      onClick={() => handleSendPrompt(chip.prompt)}
-                      disabled={wsState !== "connected"}
-                      className="text-left p-3 rounded-2xl bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)] border-subtle shadow-[var(--card-shadow)] transition-all cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <div className="text-xs font-semibold text-[var(--text-main)] group-hover:text-[var(--accent)] transition-colors flex items-center justify-between">
-                        <span>{chip.label}</span>
-                        <span className="text-[11px] opacity-0 group-hover:opacity-100 transition-opacity">→</span>
-                      </div>
-                      <div className="text-[11px] text-[var(--text-dim)] mt-0.5 leading-snug truncate">
-                        {chip.desc}
-                      </div>
-                    </button>
-                  ))}
-                </div>
+              <div className="studio-landing animate-fade-in">
+                <div className="landing-heading"><div className="eyebrow"><Asterisk className="mini-star" aria-hidden="true" /> YOUR IDEAS. IN MOTION.</div><h1>Great work starts<br />with <span>a little ambition.</span></h1><p>A fresh perspective. A tricky fix. Your next big thing.<br />Make it happen with your coding companion.</p></div>
+                <div className="w-full">{composer("centered")}<div className="composer-caption"><span><ShieldCheck size={13} /> {allowAll ? "Automatic approvals enabled" : "You stay in control of every change"}</span><span>Enter to send · Shift + Enter for a new line</span></div>{wsState !== "connected" && <button className="connection-notice" onClick={() => setSettingsOpen(true)}><span className="status-dot" /> Connect your engine to start a task <ArrowUpRight size={14} /></button>}</div>
+                <div className="starter-section"><div className="section-label">A PLACE TO START <span>Choose a direction</span></div><div className="starter-grid">{SUGGESTIONS.map(chip => (<button key={chip.label} type="button" onClick={() => handleSendPrompt(chip.prompt)} disabled={wsState !== "connected"} className="starter-card"><div className="starter-top"><chip.icon size={19} strokeWidth={1.5} /><ArrowUpRight size={15} /></div><strong>{chip.label}</strong><p>{chip.desc}</p></button>))}</div></div>
+                <div className="landing-footer"><Asterisk className="mini-star" aria-hidden="true" /> A little more possible, every day.</div>
               </div>
             ) : (
               <div className="flex-1 flex flex-col h-full min-h-0">
@@ -404,7 +367,7 @@ export default function Page() {
 
         <SettingsModal
           isOpen={settingsOpen}
-          onClose={() => setSettingsOpen(false)}
+          onClose={closeSettings}
           engineUrl={engineUrl}
           onSaveEngineUrl={setEngineUrl}
           engineState={wsState}

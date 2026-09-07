@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ChevronRight, GitBranch, Plus } from "lucide-react";
+import { Asterisk, ChevronRight, GitBranch, Plus, FolderOpen, Settings2, Search } from "lucide-react";
 import { PencilIcon, TrashIcon } from "./Icons";
 import { cleanTitle } from "../lib/format";
 
@@ -28,6 +28,8 @@ type SidebarProps = {
   onNewSession?: (folderId: string) => void;
   onDeleteSession?: (id: string) => void;
   onRenameSession?: (id: string) => void;
+  onOpenFolder: () => void;
+  onOpenSettings: () => void;
 };
 
 const SessionRow = React.memo(function SessionRow({
@@ -53,12 +55,12 @@ const SessionRow = React.memo(function SessionRow({
       tabIndex={0}
       onClick={handleSelect}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           handleSelect();
         }
       }}
-      className={`relative flex items-center justify-between px-2 py-1.5 rounded-xl select-none ${
+      className={`session-row relative flex items-center justify-between px-2 py-1.5 rounded-xl select-none ${
         isActive
           ? "bg-[var(--bg-card)] text-[var(--text-main)]"
           : "text-[var(--text-muted)]"
@@ -115,7 +117,10 @@ function Sidebar({
   onNewSession,
   onDeleteSession,
   onRenameSession,
+  onOpenFolder,
+  onOpenSettings,
 }: SidebarProps) {
+  const [query, setQuery] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
 
   const toggleFolder = useCallback((folderId: string) => {
@@ -125,19 +130,24 @@ function Sidebar({
   if (!isOpen) return null;
 
   return (
-    <aside className="w-64 bg-[var(--bg-sidebar)] flex flex-col h-full shrink-0 z-20 select-none">
-      {/* Folders & Sessions List */}
+    <aside className="studio-sidebar flex flex-col h-full shrink-0 z-20 select-none">
+      <div className="sidebar-brand"><Asterisk className="brand-mark" size={40} strokeWidth={1.4} aria-hidden="true" /><div>excelsior<span>THE CODING COMPANION</span></div></div>
+      <div className="sidebar-actions"><button className="new-task-button" onClick={() => onNewSession?.("")}><Plus size={17} /> New task <kbd>Ctrl N</kbd></button><label className="session-search"><Search size={14} /><input aria-label="Search sessions" placeholder="Find a task…" value={query} onChange={e => setQuery(e.target.value)} /></label></div>
+      <div className="sidebar-section-label">WORKSPACES<button className="studio-icon" title="Open folder" aria-label="Open folder" onClick={onOpenFolder}><Plus size={14} /></button></div>
+
       <div className="flex-1 overflow-y-auto px-1.5 space-y-2 pt-0.5">
         {folders.map((folder) => {
-          const isCollapsed = !!collapsedFolders[folder.id];
+          const matches = folder.sessions.filter(session => cleanTitle(session.title).toLowerCase().includes(query.trim().toLowerCase()));
+          const isCollapsed = !query.trim() && !!collapsedFolders[folder.id];
           return (
             <div key={folder.id} className="space-y-1">
               <div
                 role="button"
                 tabIndex={0}
+                aria-expanded={!isCollapsed}
                 onClick={() => toggleFolder(folder.id)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
+                  if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
                     e.preventDefault();
                     toggleFolder(folder.id);
                   }
@@ -168,12 +178,12 @@ function Sidebar({
 
               {!isCollapsed && (
                 <div className="space-y-0.5 pl-1 animate-fade-in">
-                  {folder.sessions.length === 0 ? (
+                  {matches.length === 0 ? (
                     <div className="text-[11px] text-[var(--text-dim)] py-2 text-center italic">
-                      No sessions yet
+                      {query.trim() ? "No matching tasks" : "Your next idea belongs here."}
                     </div>
                   ) : (
-                    folder.sessions.map((session) => (
+                    matches.map((session) => (
                       <SessionRow
                         key={session.id}
                         folderId={folder.id}
@@ -192,6 +202,7 @@ function Sidebar({
         })}
       </div>
 
+      <div className="sidebar-bottom"><button onClick={onOpenFolder}><FolderOpen size={16} /> Open a workspace <span>↗</span></button><button onClick={onOpenSettings}><Settings2 size={16} /> Preferences <kbd>Ctrl ,</kbd></button><div className="sidebar-footnote">EXCELSIOR <span>DESKTOP / 0.1</span></div></div>
     </aside>
   );
 }

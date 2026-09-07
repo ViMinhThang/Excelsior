@@ -79,7 +79,7 @@ function MenuBar({
   return (
     <header
       ref={rootRef}
-      className="h-10 flex items-center justify-between bg-[var(--bg-sidebar)] text-[var(--text-muted)] text-[12.5px] shrink-0 z-40 select-none"
+      className="desktop-menubar h-10 flex items-center justify-between bg-[var(--bg-sidebar)] text-[var(--text-muted)] text-[12.5px] shrink-0 z-40 select-none"
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
@@ -151,6 +151,7 @@ function MenuBar({
         </nav>
       </div>
 
+      <span className="window-title">EXCELSIOR <span> / </span> {projectName}</span>
       {/* Spacer */}
       <div className="flex-1" />
 
