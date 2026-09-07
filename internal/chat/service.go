@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"excelsior/pkg/agent"
@@ -26,22 +27,25 @@ type Request struct {
 // Run executes a turn and persists the resulting replay-safe history when a
 // session store and session ID are provided.
 func (s Service) Run(ctx context.Context, req Request) (*agent.RunResult, error) {
-	messages := s.history(req.SessionID, req.Messages)
+	messages, err := s.history(req.SessionID, req.Messages)
+	if err != nil {
+		return nil, err
+	}
 	result, err := s.Runner.RunWithHistory(ctx, agent.RunOptions{
 		Messages: messages,
 		OnEvent: func(event agent.StreamEvent) {
 			if req.OnEvent != nil {
-			req.OnEvent(Event{
-				Type:         event.Type,
-				Text:         event.Text,
-				Reasoning:    event.Reasoning,
-				ToolName:     event.ToolName,
-				ToolCallID:   event.ToolCallID,
-				ToolArgs:     event.ToolArgs,
-				ToolResult:   event.ToolResult,
-				FinishReason: event.FinishReason,
-				Usage:        event.Usage,
-			})
+				req.OnEvent(Event{
+					Type:         event.Type,
+					Text:         event.Text,
+					Reasoning:    event.Reasoning,
+					ToolName:     event.ToolName,
+					ToolCallID:   event.ToolCallID,
+					ToolArgs:     event.ToolArgs,
+					ToolResult:   event.ToolResult,
+					FinishReason: event.FinishReason,
+					Usage:        event.Usage,
+				})
 			}
 		},
 	})
@@ -51,6 +55,9 @@ func (s Service) Run(ctx context.Context, req Request) (*agent.RunResult, error)
 
 	persisted := withoutSystemMessages(result.Messages)
 	record, loadErr := s.Store.Load(req.SessionID)
+	if loadErr != nil && !errors.Is(loadErr, session.ErrSessionNotFound) {
+		return nil, loadErr
+	}
 	if loadErr != nil {
 		record = session.Record{ID: req.SessionID, CreatedAt: time.Now().UTC()}
 	}
@@ -61,12 +68,16 @@ func (s Service) Run(ctx context.Context, req Request) (*agent.RunResult, error)
 	return result, nil
 }
 
-func (s Service) history(sessionID string, incoming []llm.Message) []llm.Message {
+func (s Service) history(sessionID string, incoming []llm.Message) ([]llm.Message, error) {
 	if s.Store == nil || sessionID == "" {
-		return incoming
+		return incoming, nil
 	}
 	var history []llm.Message
-	if record, err := s.Store.Load(sessionID); err == nil {
+	record, err := s.Store.Load(sessionID)
+	if err != nil && !errors.Is(err, session.ErrSessionNotFound) {
+		return nil, err
+	}
+	if err == nil {
 		for _, message := range record.Messages {
 			if message.Role == "system" && (message.Content == "New session" || message.Content == "(empty)") {
 				continue
@@ -74,7 +85,7 @@ func (s Service) history(sessionID string, incoming []llm.Message) []llm.Message
 			history = append(history, message)
 		}
 	}
-	return append(history, incoming...)
+	return append(history, incoming...), nil
 }
 
 func withoutSystemMessages(messages []llm.Message) []llm.Message {

@@ -4,6 +4,7 @@ builds:
   - id: excelsior
     main: ./cmd/excelsior
     binary: excelsior
+    flags: [-trimpath]
     ldflags: -s -w -X main.version={{.Version}}
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]

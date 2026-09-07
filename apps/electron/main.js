@@ -2,11 +2,11 @@ const { app, BrowserWindow, ipcMain, shell, dialog, Menu } = require('electron')
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 
 let engineProc = null, win = null;
 const ENGINE_URL = process.env.EXCELSIOR_ENGINE || 'ws://localhost:17812/v1/ws';
-const ENGINE_ADDR = process.env.EXCELSIOR_ENGINE_ADDR || ':17812';
+const ENGINE_ADDR = process.env.EXCELSIOR_ENGINE_ADDR || '127.0.0.1:17812';
 const IS_DEV = !app.isPackaged;
 
 function getEngineBin() {
@@ -17,7 +17,7 @@ function getEngineBin() {
 function startEngine() {
   // Desktop-only: dev (npm run dev) is frontend-only, engine must be started separately via `npm run dev:engine` or `go run`.
   // Auto-spawn only for packaged builds or when explicitly opted in.
-  if (process.env.EXCELSIOR_AUTO_ENGINE==='0') return;
+  if (process.env.EXCELSIOR_AUTO_ENGINE==='0' || process.env.EXCELSIOR_ENGINE) return;
   if (IS_DEV && process.env.EXCELSIOR_AUTO_ENGINE!=='1') {
     console.log('[engine] dev mode: not auto-spawning (run `npm run dev:engine` separately or set EXCELSIOR_AUTO_ENGINE=1)');
     return;
@@ -59,6 +59,13 @@ if(!app.requestSingleInstanceLock()) app.quit();
 else app.on('second-instance',()=>{if(win){if(win.isMinimized()) win.restore(); win.focus();}});
 
 ipcMain.handle('get-engine-url',()=>ENGINE_URL);
+ipcMain.handle('get-engine-token',async(_,url)=>{
+  if (url !== ENGINE_URL) return '';
+  if (process.env.EXCELSIOR_ENGINE_TOKEN) return process.env.EXCELSIOR_ENGINE_TOKEN;
+  if (!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname)) return '';
+  const bin=getEngineBin(); if (!bin) return '';
+  return new Promise((resolve,reject)=>execFile(bin,['engine','token'],{windowsHide:true},(err,stdout)=>err?reject(new Error('Could not load engine token')):resolve(stdout.trim())));
+});
 ipcMain.handle('open-folder-dialog',async()=>{if(!win||win.isDestroyed()) return null; const {canceled,filePaths}=await dialog.showOpenDialog(win,{properties:['openDirectory'],title:'Open Project Folder'}); return canceled||!filePaths[0]?null:filePaths[0];});
 ipcMain.on('window-control',(_,a)=>{if(!win||win.isDestroyed()) return; if(a==='minimize') win.minimize(); else if(a==='maximize') win.isMaximized()?win.unmaximize():win.maximize(); else if(a==='close') win.close();});
 ipcMain.on('toggle-devtools',()=>{if(win&&!win.isDestroyed()) win.webContents.toggleDevTools();});

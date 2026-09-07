@@ -20,5 +20,5 @@ jobs:
         with:
           version: v2.1
       - run: govulncheck ./... || echo "govulncheck not installed, skipping"
-      - run: go build -o excelsior ./cmd/excelsior
+      - run: go build -trimpath -ldflags "-s -w" -o excelsior ./cmd/excelsior
       - run: docker build -t excelsior:ci .

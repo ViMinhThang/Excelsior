@@ -2,8 +2,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
-
 	"excelsior/internal/chat"
 	"excelsior/internal/permissions"
 	"excelsior/pkg/config"
@@ -11,95 +9,73 @@ import (
 	"excelsior/pkg/tools"
 )
 
-func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope, sessionID string, turn *turnState) {
+func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope, sessionID string, t *turnState) {
 	var req protocol.ChatReq
 	if !c.decodePayload(env, &req, "chat.req") {
 		return
 	}
-
-	ctxWithTools := c.setupToolHandlers(ctx, sessionID, turn)
-	ag, err := c.getAgent(req.Model)
+	h := c.hub
+	fail := func(err error) {
+		h.BroadcastToSession(t.workspace, sessionID, protocol.NewEnvelopeWithID(env.ID, protocol.TypeError, map[string]string{"error": err.Error(), "sessionId": sessionID, "runId": t.id}))
+	}
+	h.runsMu.Lock()
+	h.BroadcastToSession(t.workspace, sessionID, protocol.NewEnvelope(protocol.TypeSessionData, protocol.SessionDataResp{ID: sessionID, Messages: t.messages, Running: true, RunID: t.id}))
+	h.runsMu.Unlock()
+	ag, err := c.agentFor(req.Model, t.workspace)
 	if err != nil {
-		c.sendError(env.ID, fmt.Sprintf("create agent: %v", err))
+		fail(err)
 		return
 	}
-
-	c.subscribe(sessionID)
-	_, err = (chat.Service{Runner: ag, Store: c.sessionStore()}).Run(ctxWithTools, chat.Request{
-		SessionID: sessionID,
-		Messages:  req.Messages,
-		OnEvent:   c.deltaForwarder(sessionID),
-	})
-	if err != nil {
-		c.sendError(env.ID, err.Error())
-		return
-	}
-
-	c.hub.BroadcastToSession(c.userID, sessionID, protocol.NewEnvelopeWithID(env.ID, protocol.TypeDone, map[string]string{"sessionId": sessionID}))
-}
-
-func (c *Conn) setupToolHandlers(ctx context.Context, sessionID string, turn *turnState) context.Context {
-	askCh := make(chan protocol.AskResp, 1)
-	permCh := make(chan protocol.PermissionResp, 1)
-	turn.interactions.ask.set(askCh)
-	turn.interactions.perm.set(permCh)
-
-	ctxWithTools := tools.WithPermissionHandler(ctx, c.permissionHandler(ctx, sessionID, permCh))
-	return tools.WithQuestionHandler(ctxWithTools, c.askHandler(ctx, sessionID, askCh))
-}
-
-func (c *Conn) deltaForwarder(sessionID string) func(chat.Event) {
-	return func(ev chat.Event) {
-		d := protocol.Delta{
-			SessionID: sessionID,
-			Type: ev.Type, Text: ev.Text, Reasoning: ev.Reasoning,
-			ToolName: ev.ToolName, ToolCallID: ev.ToolCallID,
-			ToolArgs: ev.ToolArgs, ToolResult: ev.ToolResult,
-			FinishReason: ev.FinishReason,
-		}
-		if ev.Usage != nil {
-			d.PromptTokens, d.CompletionTokens, d.TotalTokens = ev.Usage.PromptTokens, ev.Usage.CompletionTokens, ev.Usage.TotalTokens
-		}
-		c.hub.BroadcastToSession(c.userID, sessionID, protocol.NewEnvelope(protocol.TypeDelta, d))
-	}
-}
-
-func (c *Conn) askHandler(parentCtx context.Context, sessionID string, askCh chan protocol.AskResp) tools.QuestionHandler {
-	return func(hctx context.Context, rq tools.AskRequest) (tools.AskResponse, error) {
-		c.sendEnvelope(protocol.NewEnvelope(protocol.TypeAskReq, protocol.AskReq{SessionID: sessionID, Question: rq.Question, Options: rq.Options}))
-		c.hub.logger().Info("engine ask sent, awaiting client", "session", sessionID, "question", rq.Question)
-		select {
-		case resp := <-askCh:
-			return tools.AskResponse{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}, nil
-		case <-hctx.Done():
-			return tools.AskResponse{}, hctx.Err()
-		case <-parentCtx.Done():
-			return tools.AskResponse{}, parentCtx.Err()
-		}
-	}
-}
-
-func (c *Conn) permissionHandler(parentCtx context.Context, sessionID string, permCh chan protocol.PermissionResp) tools.PermissionHandler {
-	return func(hctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
-		// Resolve settings for this connection without mutating shared hub config.
-		perm, _ := permissions.Resolve(c.hub.PermissionOverride, config.LoadSettings(c.currentWorkspace()))
+	ctx = tools.WithPermissionHandler(ctx, func(ctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
+		perm, _ := permissions.Resolve(h.PermissionOverride, config.LoadSettings(t.workspace))
 		switch perm {
-		case "allow":
+		case config.PermissionAllow:
 			return tools.PermissionResponse{Approved: true}, nil
-		case "deny":
+		case config.PermissionDeny:
 			return tools.PermissionResponse{Approved: false}, nil
 		}
-		c.sendEnvelope(protocol.NewEnvelope(protocol.TypePermissionReq, protocol.PermissionReq{
-			SessionID: sessionID, Tool: rq.Tool, FilePath: rq.FilePath, Preview: rq.Preview, Command: rq.Command,
-		}))
-		c.hub.logger().Info("engine permission sent, awaiting client", "session", sessionID, "tool", rq.Tool, "file", rq.FilePath, "command", rq.Command)
-		select {
-		case resp := <-permCh:
-			return tools.PermissionResponse{Approved: resp.Approved}, nil
-		case <-hctx.Done():
-			return tools.PermissionResponse{}, hctx.Err()
-		case <-parentCtx.Done():
-			return tools.PermissionResponse{}, parentCtx.Err()
+		id := newID()
+		response, err := h.interaction(ctx, t, protocol.NewEnvelope(protocol.TypePermissionReq, protocol.PermissionReq{
+			SessionID: sessionID, RunID: t.id, InteractionID: id, Tool: rq.Tool, FilePath: rq.FilePath, Preview: rq.Preview, Command: rq.Command,
+		}), id)
+		var resp protocol.PermissionResp
+		if err == nil {
+			err = response.Decode(&resp)
 		}
+		return tools.PermissionResponse{Approved: resp.Approved}, err
+	})
+	ctx = tools.WithQuestionHandler(ctx, func(ctx context.Context, rq tools.AskRequest) (tools.AskResponse, error) {
+		id := newID()
+		response, err := h.interaction(ctx, t, protocol.NewEnvelope(protocol.TypeAskReq, protocol.AskReq{
+			SessionID: sessionID, RunID: t.id, InteractionID: id, Question: rq.Question, Options: rq.Options,
+		}), id)
+		var resp protocol.AskResp
+		if err == nil {
+			err = response.Decode(&resp)
+		}
+		return tools.AskResponse{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}, err
+	})
+	_, err = (chat.Service{Runner: ag, Store: h.store(t.workspace)}).Run(ctx, chat.Request{
+		SessionID: sessionID, Messages: req.Messages,
+		OnEvent: func(ev chat.Event) {
+			d := protocol.Delta{SessionID: sessionID, RunID: t.id, Type: ev.Type, Text: ev.Text, Reasoning: ev.Reasoning, ToolName: ev.ToolName, ToolCallID: ev.ToolCallID, ToolArgs: ev.ToolArgs, ToolResult: ev.ToolResult, FinishReason: ev.FinishReason}
+			if ev.Usage != nil {
+				d.PromptTokens, d.CompletionTokens, d.TotalTokens = ev.Usage.PromptTokens, ev.Usage.CompletionTokens, ev.Usage.TotalTokens
+			}
+			h.runsMu.Lock()
+			defer h.runsMu.Unlock()
+			// Coalesce text fragments; retain tool events to reconstruct the current turn.
+			n := len(t.events)
+			if n > 0 && (d.Type == "text" || d.Type == "reasoning") && t.events[n-1].Type == d.Type {
+				t.events[n-1].Text += d.Text
+				t.events[n-1].Reasoning += d.Reasoning
+			} else {
+				t.events = append(t.events, d)
+			}
+			h.BroadcastToSession(t.workspace, sessionID, protocol.NewEnvelope(protocol.TypeDelta, d))
+		},
+	})
+	if err != nil {
+		fail(err)
 	}
 }

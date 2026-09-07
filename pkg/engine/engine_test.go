@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -20,13 +19,14 @@ import (
 	"excelsior/pkg/llm"
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
-	"excelsior/pkg/tools"
 )
 
 func mustMarshal(v any) json.RawMessage { b, _ := json.Marshal(v); return b }
 
 func TestHub_HealthEndpoint(t *testing.T) {
 	hub := NewHub(config.Config{}, "/tmp")
+	hub.Token = "test-token"
+	t.Cleanup(hub.Close)
 	srv := httptest.NewServer(hub.Handler())
 	defer srv.Close()
 
@@ -51,6 +51,8 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 	hub := NewHub(cfg, wsDir)
 	hub.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 
+	hub.Token = "test-token"
+	t.Cleanup(hub.Close)
 	srv := httptest.NewServer(hub.Handler())
 	defer srv.Close()
 
@@ -60,6 +62,7 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 		t.Fatalf("websocket dial failed: %v", err)
 	}
 	defer ws.Close()
+	authenticateTest(t, ws, "test-token")
 
 	// Helper to send envelope
 	send := func(env protocol.Envelope) {
@@ -176,96 +179,22 @@ func TestHub_WebSocketSessionLifecycle(t *testing.T) {
 	}
 
 	// 7. workspace.set
-	newWS := filepath.Join(wsDir, "alt_workspace")
+	newWS := t.TempDir()
 	send(protocol.Envelope{
 		Ver:     protocol.Ver,
 		ID:      "req-7",
 		Type:    protocol.TypeWorkspaceSet,
 		Payload: mustMarshal(protocol.WorkspaceSetReq{Workspace: newWS}),
 	})
+	if ack := read(); ack.Type != protocol.TypeWorkspaceSet {
+		t.Fatalf("workspace acknowledgement: %+v", ack)
+	}
 	wsListEnv := read()
 	if wsListEnv.Type != protocol.TypeSessionList {
 		t.Fatalf("expected session.list response after workspace.set, got %s", wsListEnv.Type)
 	}
 	// workspace.set now only affects conn, not hub globally (per-conn isolation)
 	_ = wsListEnv
-}
-
-func TestConn_AskCorrelation(t *testing.T) {
-	hub := NewHub(config.Config{}, "/tmp")
-	c := newConn(hub, nil)
-
-	askCh := make(chan protocol.AskResp, 1)
-	_, turn, ok := c.beginTurn(context.Background(), "sess-1")
-	if !ok {
-		t.Fatal("expected turn to start")
-	}
-	turn.interactions.ask.set(askCh)
-
-	// Dispatch Ask response
-	env := protocol.Envelope{
-		Ver:     protocol.Ver,
-		Type:    protocol.TypeAskResp,
-		Payload: mustMarshal(protocol.AskResp{SessionID: "sess-1", Selected: 2, Answer: "Option C", Label: "Label C"}),
-	}
-	c.handleAskResp(env)
-
-	select {
-	case resp := <-askCh:
-		if resp.Selected != 2 || resp.Answer != "Option C" {
-			t.Fatalf("unexpected ask response: %+v", resp)
-		}
-	case <-time.After(1 * time.Second):
-		t.Fatal("timeout waiting for correlated ask response")
-	}
-
-	// After the turn ends, routing must fail (no pending turn)
-	c.endTurn("sess-1", turn)
-	env2 := protocol.Envelope{
-		Ver:     protocol.Ver,
-		Type:    protocol.TypeAskResp,
-		Payload: mustMarshal(protocol.AskResp{SessionID: "sess-1", Selected: 1}),
-	}
-	c.handleAskResp(env2) // must not panic; dropped with warning
-}
-
-func TestConn_ParallelTurns(t *testing.T) {
-	hub := NewHub(config.Config{}, "/tmp")
-	c := newConn(hub, nil)
-
-	// Two sessions can hold turns simultaneously
-	_, t1, ok := c.beginTurn(context.Background(), "a")
-	if !ok {
-		t.Fatal("expected first turn to start")
-	}
-	_, t2, ok := c.beginTurn(context.Background(), "b")
-	if !ok {
-		t.Fatal("expected second (parallel) turn to start")
-	}
-	// Same session is rejected
-	if _, _, ok := c.beginTurn(context.Background(), "a"); ok {
-		t.Fatal("expected duplicate turn for same session to be rejected")
-	}
-
-	// Responses route by session
-	ach := make(chan protocol.AskResp, 1)
-	bch := make(chan protocol.PermissionResp, 1)
-	t1.interactions.ask.set(ach)
-	t2.interactions.perm.set(bch)
-	c.handleAskResp(protocol.Envelope{Ver: protocol.Ver, Type: protocol.TypeAskResp, Payload: mustMarshal(protocol.AskResp{SessionID: "a", Selected: 0})})
-	c.handlePermissionResp(protocol.Envelope{Ver: protocol.Ver, Type: protocol.TypePermissionResp, Payload: mustMarshal(protocol.PermissionResp{SessionID: "b", Approved: true})})
-	if r := <-ach; r.SessionID != "a" {
-		t.Fatalf("ask routed to wrong turn: %+v", r)
-	}
-	if r := <-bch; !r.Approved {
-		t.Fatalf("permission routed to wrong turn: %+v", r)
-	}
-
-	c.endTurn("a", t1)
-	c.endTurn("b", t2)
-	if _, _, ok := c.beginTurn(context.Background(), "a"); !ok {
-		t.Fatal("expected turn to restart after end")
-	}
 }
 
 func TestEngine_AskHandlerEmptyOptionsGuard(t *testing.T) {
@@ -277,7 +206,9 @@ func TestEngine_AskHandlerEmptyOptionsGuard(t *testing.T) {
 		}
 		defer ws.Close()
 
-		// Read chat.req
+		// Complete the client authentication exchange, then read chat.req.
+		_, _, _ = ws.ReadMessage()
+		_ = ws.WriteJSON(protocol.NewEnvelope(protocol.TypeAuth, map[string]bool{"ok": true}))
 		_, _, _ = ws.ReadMessage()
 
 		// Send ask.req with empty options
@@ -322,7 +253,9 @@ func TestEngine_TypedEngineErrorInspection(t *testing.T) {
 		}
 		defer ws.Close()
 
-		// Read chat.req
+		// Complete the client authentication exchange, then read chat.req.
+		_, _, _ = ws.ReadMessage()
+		_ = ws.WriteJSON(protocol.NewEnvelope(protocol.TypeAuth, map[string]bool{"ok": true}))
 		_, _, _ = ws.ReadMessage()
 
 		// Send TypeError envelope
@@ -389,6 +322,8 @@ func TestHub_MockAgentFactory(t *testing.T) {
 	hub.NewAgent = func(model, workspace string) (agent.Runner, error) { return runner, nil }
 	hub.SessionStore = memStore
 
+	hub.Token = "test-token"
+	t.Cleanup(hub.Close)
 	srv := httptest.NewServer(hub.Handler())
 	defer srv.Close()
 
@@ -398,6 +333,7 @@ func TestHub_MockAgentFactory(t *testing.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer ws.Close()
+	authenticateTest(t, ws, "test-token")
 
 	// Send chat.req
 	chatReq := protocol.ChatReq{
@@ -413,7 +349,7 @@ func TestHub_MockAgentFactory(t *testing.T) {
 
 	// Expect delta (reasoning), delta (text), done
 	var receivedReasoning, receivedText, receivedDone bool
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 4; i++ {
 		_ = ws.SetReadDeadline(time.Now().Add(2 * time.Second))
 		_, data, err := ws.ReadMessage()
 		if err != nil {
@@ -457,6 +393,8 @@ func TestHub_MemorySessionStore(t *testing.T) {
 	hub.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	hub.SessionStore = memStore
 
+	hub.Token = "test-token"
+	t.Cleanup(hub.Close)
 	srv := httptest.NewServer(hub.Handler())
 	defer srv.Close()
 
@@ -466,6 +404,7 @@ func TestHub_MemorySessionStore(t *testing.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	defer ws.Close()
+	authenticateTest(t, ws, "test-token")
 
 	// 1. Create session
 	createEnv := protocol.NewEnvelopeWithID("c-1", protocol.TypeSessionCreate, protocol.SessionCreateReq{Title: "In-Memory Session"})
@@ -544,18 +483,22 @@ func TestEngine_HandleChat_ErrorBranch(t *testing.T) {
 	hub.SessionStore = session.NewMemoryStore()
 
 	conn := newConn(hub, nil)
+	hub.Register(conn)
+	defer hub.Unregister(conn)
 	env := protocol.NewEnvelopeWithID("err-chat-1", protocol.TypeChatReq, protocol.ChatReq{
 		SessionID: "sess-err",
 		Model:     "v4",
 		Messages:  []llm.Message{{Role: "user", Content: "Fail please"}},
 	})
 
-	turnCtx, turn, ok := conn.beginTurn(context.Background(), "sess-err")
-	if !ok {
+	turnCtx, turn, err := conn.beginTurn(context.Background(), "sess-err")
+	if err != nil {
 		t.Fatal("expected turn to start")
 	}
+	conn.subscribe("sess-err")
 	conn.handleChat(turnCtx, env, "sess-err", turn)
 	conn.endTurn("sess-err", turn)
+	<-conn.send // initial snapshot
 
 	select {
 	case msg := <-conn.send:
@@ -566,23 +509,6 @@ func TestEngine_HandleChat_ErrorBranch(t *testing.T) {
 		}
 	default:
 		t.Fatal("expected error envelope on conn.send")
-	}
-}
-
-func TestEngine_AskHandler_Cancellation(t *testing.T) {
-	hub := NewHub(config.Config{}, "/tmp")
-	hub.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
-	conn := newConn(hub, nil)
-
-	parentCtx, cancelParent := context.WithCancel(context.Background())
-	cancelParent()
-
-	askCh := make(chan protocol.AskResp, 1)
-	handler := conn.askHandler(parentCtx, "sess-x", askCh)
-
-	_, err := handler(context.Background(), tools.AskRequest{Question: "Choose?"})
-	if err == nil {
-		t.Fatal("expected error on canceled parentCtx")
 	}
 }
 
@@ -609,7 +535,3 @@ func TestEngine_DecodePayload_Error(t *testing.T) {
 		t.Fatal("expected error envelope on conn.send")
 	}
 }
-
-
-
-

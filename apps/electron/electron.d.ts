@@ -9,6 +9,7 @@
 
 export interface ElectronAPI {
   /** WS URL for the engine hub (pkg/protocol). Default ws://localhost:17812/v1/ws */
+  getEngineToken: (url: string) => Promise<string>;
   getEngineUrl: () => Promise<string>;
   /** Opens native folder picker, returns absolute path or null if canceled */
   openFolderDialog: () => Promise<string | null>;

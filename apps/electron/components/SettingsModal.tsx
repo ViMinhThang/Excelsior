@@ -30,6 +30,7 @@ function SettingsModal({
   allowAll,
   onSaveAllowAll,
 }: SettingsModalProps) {
+  const [draftToken, setDraftToken] = useState("");
   const [draftUrl, setDraftUrl] = useState(engineUrl);
   const [draftModel, setDraftModel] = useState(defaultModel);
   const [draftAllowAll, setDraftAllowAll] = useState(allowAll);
@@ -44,11 +45,14 @@ function SettingsModal({
   }, [isOpen, engineUrl, defaultModel, allowAll]);
 
   const handleSave = useCallback(() => {
+    if (draftToken.trim()) sessionStorage.setItem("engine-token:" + draftUrl.trim(), draftToken.trim());
+    window.dispatchEvent(new Event("engine-credentials"));
+    setDraftToken("");
     onSaveEngineUrl(draftUrl.trim());
     onSaveDefaultModel(draftModel);
     onSaveAllowAll(draftAllowAll);
     onClose();
-  }, [draftUrl, draftModel, draftAllowAll, onClose, onSaveDefaultModel, onSaveEngineUrl, onSaveAllowAll]);
+  }, [draftToken, draftUrl, draftModel, draftAllowAll, onClose, onSaveDefaultModel, onSaveEngineUrl, onSaveAllowAll]);
 
   if (!isOpen) return null;
 
@@ -140,6 +144,11 @@ function SettingsModal({
           </div>
 
           {/* Permission Mode */}
+          <div className="space-y-1.5">
+            <label htmlFor="engine-token">Owner token</label>
+            <input id="engine-token" type="password" autoComplete="off" value={draftToken} onChange={(e)=>setDraftToken(e.target.value)} placeholder="Automatic for local desktop; paste for remote" className="w-full bg-[var(--bg-input)] rounded-xl px-3.5 py-2" />
+            <p>Kept for this browser session. Leave blank to keep the current token.</p>
+          </div>
           <label className="flex items-start gap-3 p-3 bg-amber-500/10 border-subtle rounded-2xl cursor-pointer hover:bg-amber-500/15 transition-colors">
             <input
               type="checkbox"

@@ -6,12 +6,12 @@
   "private": true,
   "scripts": {
     "dev": "concurrently \"next dev -p 3000\" \"wait-on http://localhost:3000 && electron .\"",
-    "dev:engine": "go run ../../cmd/excelsior engine --addr :17812",
+    "dev:engine": "go run ../../cmd/excelsior engine",
     "build": "next build && electron-builder --win --linux",
     "build:win": "next build && electron-builder --win",
     "pack": "next build && electron-builder --dir",
     "lint": "tsc --noEmit",
-    "start:engine": "go run ../../cmd/excelsior engine --addr :17812"
+    "start:engine": "go run ../../cmd/excelsior engine"
   },
   "dependencies": {
     "highlight.js": "^11.12.0",

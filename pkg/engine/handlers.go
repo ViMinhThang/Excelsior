@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"excelsior/internal/permissions"
 	"excelsior/internal/sessions"
@@ -124,12 +123,7 @@ func (c *Conn) handleSessionData(ctx context.Context, env protocol.Envelope) {
 	if !c.decodePayload(env, &req, "session.data") {
 		return
 	}
-	nonSystem, err := (sessions.Service{Store: c.sessionStore()}).Data(req.ID)
-	if err != nil {
-		c.sendError(env.ID, fmt.Sprintf("load session: %v", err))
-		return
-	}
-	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSessionData, protocol.SessionDataResp{ID: req.ID, Messages: nonSystem}))
+	c.snapshot(env, req.ID)
 }
 
 func (c *Conn) handleSessionCreate(ctx context.Context, env protocol.Envelope) {
@@ -137,7 +131,7 @@ func (c *Conn) handleSessionCreate(ctx context.Context, env protocol.Envelope) {
 	if !c.decodePayload(env, &req, "session.create") {
 		return
 	}
-	id := fmt.Sprintf("%d", time.Now().UnixMilli())
+	id := newID()
 	if err := (sessions.Service{Store: c.sessionStore()}).Create(id, req.Title); err != nil {
 		c.sendError(env.ID, fmt.Sprintf("create session: %v", err))
 		return
@@ -150,7 +144,14 @@ func (c *Conn) handleSessionDelete(ctx context.Context, env protocol.Envelope) {
 	if !c.decodePayload(env, &req, "session.delete") {
 		return
 	}
-	if err := (sessions.Service{Store: c.sessionStore()}).Delete(req.ID); err != nil {
+	h := c.hub
+	h.runsMu.Lock()
+	defer h.runsMu.Unlock()
+	if h.turns[sessionKey(c.currentWorkspace(), req.ID)] != nil {
+		c.sendError(env.ID, "session busy")
+		return
+	}
+	if err := (sessions.Service{Store: h.storeLocked(c.currentWorkspace())}).Delete(req.ID); err != nil {
 		c.sendError(env.ID, fmt.Sprintf("delete session: %v", err))
 		return
 	}
@@ -162,7 +163,14 @@ func (c *Conn) handleSessionRename(ctx context.Context, env protocol.Envelope) {
 	if !c.decodePayload(env, &req, "session.rename") {
 		return
 	}
-	if err := (sessions.Service{Store: c.sessionStore()}).Rename(req.ID, req.Title); err != nil {
+	h := c.hub
+	h.runsMu.Lock()
+	defer h.runsMu.Unlock()
+	if h.turns[sessionKey(c.currentWorkspace(), req.ID)] != nil {
+		c.sendError(env.ID, "session busy")
+		return
+	}
+	if err := (sessions.Service{Store: h.storeLocked(c.currentWorkspace())}).Rename(req.ID, req.Title); err != nil {
 		c.sendError(env.ID, fmt.Sprintf("rename session: %v", err))
 		return
 	}
@@ -175,7 +183,8 @@ func (c *Conn) handleSessionSubscribe(env protocol.Envelope, subscribe bool) {
 		return
 	}
 	if subscribe {
-		c.subscribe(req.ID)
+		c.snapshot(env, req.ID)
+		return
 	} else {
 		c.unsubscribe(req.ID)
 	}
@@ -188,9 +197,18 @@ func (c *Conn) handleWorkspaceSet(ctx context.Context, env protocol.Envelope) {
 		return
 	}
 	if target := strings.TrimSpace(req.Workspace); target != "" {
-		c.workspace.Set(target)
+		resolved, err := config.ResolveWorkspace(target, "")
+		if err != nil {
+			c.sendError(env.ID, err.Error())
+			return
+		}
+		c.mu.Lock()
+		c.subscriptions = make(map[string]struct{})
+		c.mu.Unlock()
+		c.workspace.Set(canonicalWorkspace(resolved))
 		c.hub.logger().Info("switched workspace (per-conn)", "workspace", target)
 	}
+	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeWorkspaceSet, protocol.WorkspaceSetReq{Workspace: c.currentWorkspace()}))
 	c.handleSessionList(ctx, env)
 }
 

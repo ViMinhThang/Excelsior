@@ -1,6 +1,7 @@
 // Mirrors pkg/protocol v1 — keep in sync
 export type Envelope<T = unknown> = {
   ver: "v1";
+  workspace?: string;
   id?: string;
   type: string;
   payload?: T;
@@ -21,6 +22,7 @@ export type DeltaType =
   | string;
 
 export type Delta = {
+  runId?: string;
   sessionId?: string;
   type: DeltaType;
   text?: string;
@@ -38,12 +40,16 @@ export type Delta = {
 export type SessionUsage = { prompt: number; completion: number; total: number };
 
 export type AskReq = {
+  runId: string;
+  interactionId: string;
   sessionId?: string;
   question: string;
   options: string[];
 };
 
 export type AskResp = {
+  runId: string;
+  interactionId: string;
   sessionId?: string;
   selected: number;
   answer: string;
@@ -51,6 +57,8 @@ export type AskResp = {
 };
 
 export type PermissionReq = {
+  runId: string;
+  interactionId: string;
   sessionId?: string;
   tool: string;
   filePath?: string;
@@ -59,6 +67,8 @@ export type PermissionReq = {
 };
 
 export type PermissionResp = {
+  runId: string;
+  interactionId: string;
   sessionId?: string;
   approved: boolean;
 };

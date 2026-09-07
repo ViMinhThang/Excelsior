@@ -1,5 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('electronAPI', {
+  getEngineToken: (url) => ipcRenderer.invoke('get-engine-token', url),
   getEngineUrl: () => ipcRenderer.invoke('get-engine-url'),
   openFolderDialog: () => ipcRenderer.invoke('open-folder-dialog'),
   windowControl: (a) => { if (['minimize','maximize','close'].includes(a)) ipcRenderer.send('window-control', a); },

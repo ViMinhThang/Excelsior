@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/signal"
 
@@ -20,7 +21,9 @@ import (
 	"excelsior/internal/permissions"
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
+	"excelsior/pkg/engine"
 	"excelsior/pkg/llm"
+	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
 	"excelsior/pkg/tools"
 	"excelsior/pkg/util"
@@ -91,6 +94,29 @@ Examples:
 			prompt := resolvePrompt(args)
 			if prompt == "" {
 				return cmd.Help()
+			}
+			if *engineURL != "" {
+				token := os.Getenv("EXCELSIOR_ENGINE_TOKEN")
+				if token == "" {
+					remote, err := url.Parse(*engineURL)
+					if err != nil {
+						return err
+					}
+					switch remote.Hostname() {
+					case "localhost", "127.0.0.1", "::1":
+					default:
+						return fmt.Errorf("set EXCELSIOR_ENGINE_TOKEN for a remote engine")
+					}
+					token, err = engine.OwnerToken(false)
+					if err != nil {
+						return err
+					}
+				}
+				client := engine.WSClient{URL: *engineURL, Token: token, Workspace: *workspace}
+				return client.StreamRemote(cmd.Context(), protocol.ChatReq{SessionID: *sessionID, Model: normalizeModel(*model, cfg.Model), Messages: []llm.Message{{Role: "user", Content: prompt}}}, func(d protocol.Delta) error {
+					chatEventPrinter(chat.Event{Type: d.Type, Text: d.Text, Reasoning: d.Reasoning, ToolName: d.ToolName, ToolResult: d.ToolResult})
+					return nil
+				}, nil, nil)
 			}
 			return runAgent(cmd.Context(), cfg, permissionOverride, *model, *workspace, *system, *sessionID, prompt)
 		},

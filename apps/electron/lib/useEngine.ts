@@ -23,7 +23,13 @@ function pending<T extends object, P>(payload: P, set: (v: (P & { _resolve: (r: 
   void promise.then((resp) => { onDone(resp); set(null); });
 }
 
-export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
+export function useEngine(engineUrl: string, opts?: { onSettings?: (allowAll: boolean) => void }) {
+  const [credentialsVersion, setCredentialsVersion] = useState(0);
+  const workspaceRef = useRef<string>("");
+  const workspaceKeyRef = useRef<string | null>(null);
+  const authenticatedRef = useRef(false);
+  const runIds = useRef<Record<string,string>>({});
+  useEffect(()=>{ const refresh=()=>setCredentialsVersion(v=>v+1); window.addEventListener("engine-credentials",refresh); return ()=>window.removeEventListener("engine-credentials",refresh); },[]);
   const wsRef = useRef<WebSocket | null>(null);
   const activeIdRef = useRef<string | null>(null);
 
@@ -45,12 +51,18 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
   const ask = (activeId && asksBySession[activeId]) || null;
   const permission = (activeId && permsBySession[activeId]) || null;
 
-  const allowAllRef = useRef(!!opts?.allowAll);
-  allowAllRef.current = !!opts?.allowAll;
+  const settingsRef = useRef(opts?.onSettings);
+  settingsRef.current = opts?.onSettings;
 
   const send = useCallback((type: string, payload: unknown) => {
-    wsRef.current?.readyState === WebSocket.OPEN &&
-      wsRef.current.send(JSON.stringify({ ver: "v1", type, payload }));
+    if (type === "workspace.set") {
+      workspaceRef.current = (payload as {workspace:string}).workspace;
+      workspaceKeyRef.current = null;
+      activeIdRef.current = null; setActiveIdState(null);
+      setBlocksBySession({}); setStreamingSessions({}); setAsksBySession({}); setPermsBySession({}); runIds.current = {};
+    }
+    authenticatedRef.current && wsRef.current?.readyState === WebSocket.OPEN &&
+      wsRef.current.send(JSON.stringify({ ver: "v1", id: type === "workspace.set" ? "workspace.set" : undefined, type, payload }));
   }, []);
 
   const setActiveId = useCallback((id: string | null) => {
@@ -117,7 +129,24 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
     let timer: ReturnType<typeof setTimeout> | null = null;
     let dead = false;
 
+    const clearInteractions = (sid:string) => {
+      setAsksBySession(all=>{const next={...all};delete next[sid];return next});
+      setPermsBySession(all=>{const next={...all};delete next[sid];return next});
+    };
     const handlers: Record<string, (p: any) => void> = {
+      auth: (p:{workspace:string}) => {
+        workspaceKeyRef.current=p.workspace;
+        authenticatedRef.current=true; attempts=0; setWsState("connected");
+        const sid=activeIdRef.current;
+        if(workspaceRef.current) send("workspace.set",{workspace:workspaceRef.current});
+        else send("session.list",{});
+        send("settings.get",{});
+        if(sid) { activeIdRef.current=sid;setActiveIdState(sid);send("session.data",{id:sid}); }
+      },
+      "workspace.set": (p:{workspace:string}) => { workspaceKeyRef.current=p.workspace; },
+      "settings.get": (p:{allowAll:boolean}) => settingsRef.current?.(p.allowAll),
+      "settings.set": (p:{allowAll:boolean}) => settingsRef.current?.(p.allowAll),
+      "interaction.done": (p:{sessionId:string}) => clearInteractions(p.sessionId),
       delta: (d: Delta) => {
         const sid = d.sessionId ?? activeIdRef.current ?? "";
         if (d.type === "text") append(sid, "assistant", d.text ?? "");
@@ -154,7 +183,6 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
         }
         else if (d.type === "error") {
           append(sid, "error", d.text ?? "");
-          setStreamingFor(d.sessionId, false);
           return;
         }
         else if (d.type === "done") {
@@ -172,12 +200,12 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
               };
             });
           }
-          setStreamingFor(d.sessionId, false);
           return;
         }
         setStreamingFor(sid, true);
       },
       done: (p: { sessionId?: string }) => {
+        if(p?.sessionId) { clearInteractions(p.sessionId); delete runIds.current[p.sessionId]; }
         setStreamingFor(p?.sessionId, false);
         if (p?.sessionId && !activeIdRef.current) {
           activeIdRef.current = p.sessionId;
@@ -185,11 +213,11 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
         }
         send("session.list", {});
       },
-      error: (p: { error?: string }) => {
-        const sid = activeIdRef.current;
+      error: (p: { error?: string; sessionId?: string }) => {
+        const sid = p.sessionId ?? activeIdRef.current;
         if (!sid) return;
         append(sid, "error", p?.error ?? "Error");
-        setStreamingFor(sid, false);
+        if (!runIds.current[sid]) setStreamingFor(sid, false);
       },
       "session.list": (p: { sessions?: SessionInfo[] }) => {
         const list = p?.sessions ?? [];
@@ -202,6 +230,7 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
       },
       "session.data": (p: {
         id: string;
+        runId?: string; running?: boolean; events?: Delta[]; pending?: {type:string;payload:unknown};
         messages?: {
           role: string;
           content: string;
@@ -210,8 +239,10 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
           tool_calls?: { id?: string; function?: { name?: string; arguments?: string } }[];
         }[];
       }) => {
-        activeIdRef.current = p.id;
-        setActiveIdState(p.id);
+        if (!activeIdRef.current) { activeIdRef.current = p.id; setActiveIdState(p.id); }
+        runIds.current[p.id] = p.runId ?? "";
+        setUsageBySession(all=>({...all,[p.id]:NO_USAGE}));
+        clearInteractions(p.id);
         const msgs = p.messages ?? [];
         // map tool_call_id -> arguments so restored tool blocks can show their args
         const argsById = new Map<string, string>();
@@ -231,7 +262,9 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
               args: m.role === "tool" ? argsById.get(m.tool_call_id ?? "") : undefined,
             })),
         }));
-        send("session.subscribe", { id: p.id });
+        for (const d of p.events ?? []) handlers.delta(d);
+        setStreamingFor(p.id,!!p.running);
+        if(p.pending) handlers[p.pending.type]?.(p.pending.payload);
       },
       "session.create": (p: { id?: string }) => {
         if (!p?.id) return;
@@ -264,28 +297,23 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
           (v) => setAsksBySession((all) => {
             const next = { ...all };
             if (v) next[sid] = v as PendingAsk;
-            else delete next[sid];
+            else if (next[sid]?.interactionId === q.interactionId) delete next[sid];
             return next;
           }),
-          (r) => send("ask.resp", { ...r, sessionId: sid })
+          (r) => send("ask.resp", { ...r, sessionId: sid, runId:q.runId, interactionId:q.interactionId })
         );
       },
       "permission.req": (pr: PermissionReq) => {
         const sid = pr.sessionId ?? activeIdRef.current ?? "";
-        if (allowAllRef.current) {
-          send("permission.resp", { sessionId: sid, approved: true });
-          append(sid, "tool", `Auto-allowed ${pr.tool} (Allow-all setting)`, "permission →");
-          return;
-        }
         pending(
           pr,
           (v) => setPermsBySession((all) => {
             const next = { ...all };
             if (v) next[sid] = v as PendingPermission;
-            else delete next[sid];
+            else if (next[sid]?.interactionId === pr.interactionId) delete next[sid];
             return next;
           }),
-          (r) => send("permission.resp", { ...r, sessionId: sid })
+          (r) => send("permission.resp", { ...r, sessionId: sid, runId:pr.runId, interactionId:pr.interactionId })
         );
       },
     };
@@ -300,12 +328,25 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
         retry();
         return;
       }
-      ws.onopen = () => { attempts = 0; setWsState("connected"); send("session.list", {}); };
-      ws.onclose = () => { setWsState("disconnected"); if (!dead) retry(); };
+      const socket=ws;
+      ws.onopen = async () => {
+        try {
+          const token=sessionStorage.getItem("engine-token:"+engineUrl) || await window.electronAPI?.getEngineToken(engineUrl) || "";
+          if(!dead && socket.readyState===WebSocket.OPEN) socket.send(JSON.stringify({ver:"v1",type:"auth",payload:{token}}));
+        } catch { socket.close(); }
+      };
+      ws.onclose = () => { if(dead) return; authenticatedRef.current=false; setWsState("disconnected"); retry(); };
       ws.onerror = () => setWsState("error");
       ws.onmessage = (e: MessageEvent<string>) => {
         try {
-          const { type, payload } = JSON.parse(e.data) as { type: string; payload: any };
+          if(dead) return;
+          const { id, type, payload, workspace } = JSON.parse(e.data) as { type: string; payload: any; workspace?:string; id?:string };
+          if(type === "error" && id === "workspace.set") {
+            workspaceKeyRef.current=workspace ?? null; workspaceRef.current=workspace ?? "";
+            setWsState("error");
+            send("session.list",{});
+          }
+          if(type !== "auth" && type !== "workspace.set" && workspace !== workspaceKeyRef.current) return;
           handlers[type]?.(payload);
         } catch (err) { console.error("[useEngine] message handler error", err); }
       };
@@ -317,17 +358,18 @@ export function useEngine(engineUrl: string, opts?: { allowAll?: boolean }) {
 
     connect();
     return () => {
-      dead = true;
+      dead = true; authenticatedRef.current=false;
       if (timer) clearTimeout(timer);
       ws?.close();
       if (wsRef.current === ws) wsRef.current = null;
     };
-  }, [engineUrl, send, append, setStreamingFor, setBlocksBySession]);
+  }, [credentialsVersion, engineUrl, send, append, setStreamingFor, setBlocksBySession]);
 
   return {
     wsRef, wsState, sessions, blocks, setBlocks, streaming, setStreaming,
     ask, setAsk: setAsksBySession, permission, setPermission: setPermsBySession,
     send, activeIdRef, setActiveId, activeId,
     usage, resetUsage,
+    cancelRun: () => { const sid=activeIdRef.current;if(sid)send("chat.cancel",{sessionId:sid,runId:runIds.current[sid]}); },
   } as const;
 }

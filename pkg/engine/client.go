@@ -18,8 +18,10 @@ var sharedDialer = websocket.Dialer{HandshakeTimeout: 10 * time.Second}
 
 // WSClient dials the engine hub for remote TUI/desktop/mobile.
 type WSClient struct {
-	URL    string // e.g. ws://localhost:17812/v1/ws
-	Logger *slog.Logger
+	Token     string
+	Workspace string
+	URL       string // e.g. ws://localhost:17812/v1/ws
+	Logger    *slog.Logger
 }
 
 func (c *WSClient) logger() *slog.Logger {
@@ -57,7 +59,44 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 		return err
 	}
 	defer ws.Close()
-	ws.SetReadLimit(1 << 20)
+	ws.SetReadLimit(64 << 20)
+	if err := writeEnvelope(ws, protocol.NewEnvelope(protocol.TypeAuth, map[string]string{"token": c.Token})); err != nil {
+		return err
+	}
+	auth, err := c.readEnvelope(ws)
+	if err != nil {
+		return err
+	}
+	if auth.Type != protocol.TypeAuth {
+		return fmt.Errorf("engine authentication failed")
+	}
+	if c.Workspace != "" {
+		if err := writeEnvelope(ws, protocol.NewEnvelope(protocol.TypeWorkspaceSet, protocol.WorkspaceSetReq{Workspace: c.Workspace})); err != nil {
+			return err
+		}
+		reply, err := c.readEnvelope(ws)
+		if err != nil {
+			return err
+		}
+		if reply.Type == protocol.TypeError {
+			return c.handleRemoteError(reply)
+		}
+		if reply.Type != protocol.TypeWorkspaceSet {
+			return fmt.Errorf("engine workspace switch failed")
+		}
+		if _, err := c.readEnvelope(ws); err != nil {
+			return err
+		} // following session list
+	}
+	if req.SessionID == "" {
+		req.SessionID = newID()
+	}
+	// A control frame safely interrupts a blocking read when the caller cancels.
+	stop := context.AfterFunc(ctx, func() {
+		_ = ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(time.Second))
+		_ = ws.Close()
+	})
+	defer stop()
 
 	if err := writeEnvelope(ws, protocol.NewEnvelope(protocol.TypeChatReq, req)); err != nil {
 		return fmt.Errorf("engine write chat.req: %w: %v", ErrConnectionClosed, err)
@@ -167,7 +206,7 @@ func (c *WSClient) dispatchEnvelope(ctx context.Context, ws *websocket.Conn, in 
 		return false, c.handleAskReq(ctx, ws, in, askHandler)
 	case protocol.TypePermissionReq:
 		return false, c.handlePermissionReq(ctx, ws, in, permHandler)
-	case protocol.TypePong, protocol.TypePing:
+	case protocol.TypeSessionData, protocol.TypeInteractionDone, protocol.TypePong, protocol.TypePing:
 		return false, nil
 	default:
 		c.logger().Warn("ws unknown type", "type", in.Type)
@@ -208,7 +247,7 @@ func (c *WSClient) handleAskReq(ctx context.Context, ws *websocket.Conn, in prot
 		c.logger().Warn("ask handler error", "err", err)
 		resp = tools.AskResponse{Selected: -1, Answer: ""}
 	}
-	_ = writeEnvelope(ws, protocol.NewEnvelope(protocol.TypeAskResp, protocol.AskResp{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}))
+	_ = writeEnvelope(ws, protocol.NewEnvelope(protocol.TypeAskResp, protocol.AskResp{SessionID: ar.SessionID, RunID: ar.RunID, InteractionID: ar.InteractionID, Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}))
 	return nil
 }
 
@@ -223,6 +262,6 @@ func (c *WSClient) handlePermissionReq(ctx context.Context, ws *websocket.Conn, 
 		c.logger().Warn("permission handler error", "err", err)
 		presp = tools.PermissionResponse{Approved: false}
 	}
-	_ = writeEnvelope(ws, protocol.NewEnvelope(protocol.TypePermissionResp, protocol.PermissionResp{Approved: presp.Approved}))
+	_ = writeEnvelope(ws, protocol.NewEnvelope(protocol.TypePermissionResp, protocol.PermissionResp{SessionID: pr.SessionID, RunID: pr.RunID, InteractionID: pr.InteractionID, Approved: presp.Approved}))
 	return nil
 }

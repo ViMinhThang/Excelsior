@@ -6,7 +6,7 @@ Library + CLI coding agent with first-class [DeepSeek](https://api.deepseek.com)
 
 ```bash
 export DEEPSEEK_API_KEY=sk-...
-go build -o excelsior ./cmd/excelsior
+go build -trimpath -ldflags "-s -w" -o excelsior ./cmd/excelsior
 ./excelsior "explain this repo"
 ./excelsior -m deepseek-v4-pro "refactor pkg/llm to add retries"
 echo "add tests for pkg/tools" | ./excelsior
@@ -50,29 +50,32 @@ msg, err := ag.Run(ctx, agent.RunOptions{
 
 `view`, `ls`, `glob`, `grep`, `write`, `edit`, `bash`, `askQuestion` — all workspace-rooted (secureJoin, symlink-aware), exposed as DeepSeek function tools with JSON Schema. See `pkg/tools` docs for limits (MaxFileReadSize 5MB, MaxWriteSize 10MB, etc.).
 
-## Documentation
+## Architecture
 
-- **GoDoc**: `go doc excelsior/pkg/agent`, `go doc excelsior/pkg/llm`, etc. — every exported symbol is documented.
-- **Architecture**: [`ARCHITECTURE.md`](ARCHITECTURE.md) — dependency graph and invariants.
-- **CLI help**: `./excelsior --help`, `./excelsior run --help`, `./excelsior tui --help`, `./excelsior engine --help`.
-- **Package docs**: each `pkg/*/doc.go` has overview + examples; e.g. `pkg/agent/doc.go`, `pkg/llm/doc.go`.
+One personal Go engine serves desktop and future mobile clients. Runs belong to the engine and survive client disconnects. Sessions use atomic workspace JSON files; access uses a single owner token. See [ARCHITECTURE.md](ARCHITECTURE.md) for protocol and lifecycle details.
+
+```bash
+./excelsior engine --workspace .
+# In another terminal:
+./excelsior --engine ws://localhost:17812/v1/ws --session my-chat "explain this repo"
+```
+
+Local desktop authentication is automatic. For another device, obtain the token with `excelsior engine token` and supply it in client Settings or `EXCELSIOR_ENGINE_TOKEN`. Use an encrypted private connection for remote access. `--auth` and `--db` are retired; existing database files are left untouched.
 
 ## Project layout
 
+```text
+cmd/excelsior   CLI and daemon startup
+internal/app   shared agent construction
+internal/chat  turn execution and persistence
+internal/sessions, internal/permissions   session operations and permission policy
+pkg/engine     authenticated WebSocket transport and engine-owned runs
+pkg/protocol   shared message types
+pkg/agent, pkg/llm, pkg/tools   agent, GoAI adapter, workspace tools
+pkg/session    atomic JSON session storage
+pkg/config, pkg/util   configuration and shared helpers
+apps/electron  desktop shell and frontend
 ```
-cmd/excelsior   — cobra CLI (streaming, tool loop, TUI/engine subcommands)
-pkg/agent       — library: agentic loop (importable) — see pkg/agent/doc.go
-pkg/llm         — GoAI-backed DeepSeek adapter — pkg/llm/doc.go
-pkg/tools       — tool registry + 8 core tools — pkg/tools/doc.go
-pkg/session     — atomic JSON session store (.excelsior/sessions) — pkg/session/doc.go
-pkg/config      — env + flag config — pkg/config/doc.go
-pkg/protocol    — versioned WS envelope (v1) for engine↔clients — pkg/protocol/doc.go
-pkg/engine      — WebSocket hub owning agent + broadcasting — pkg/engine/doc.go
-pkg/tui         — Bubble Tea interactive UI — pkg/tui/doc.go
-pkg/util        — shared helpers (Truncate, WriteAtomic) — pkg/util/doc.go
-```
-
-Each package has a `doc.go` with package-level documentation; run `go doc ./pkg/...` for details.
 
 ## Env
 

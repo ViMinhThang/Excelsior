@@ -7,16 +7,14 @@ import (
 	"excelsior/pkg/protocol"
 )
 
-func TestBroadcastToSessionScopesByUserAndSubscription(t *testing.T) {
+func TestBroadcastToSessionScopesByWorkspaceAndSubscription(t *testing.T) {
 	hub := NewHub(config.Config{}, t.TempDir())
 	first := newConn(hub, nil)
-	first.userID = 1
 	first.subscribe("session-1")
 	second := newConn(hub, nil)
-	second.userID = 2
+	second.workspace.Set(t.TempDir())
 	second.subscribe("session-1")
 	otherSession := newConn(hub, nil)
-	otherSession.userID = 1
 	otherSession.subscribe("session-2")
 	hub.Register(first)
 	hub.Register(second)
@@ -25,7 +23,7 @@ func TestBroadcastToSessionScopesByUserAndSubscription(t *testing.T) {
 	defer hub.Unregister(second)
 	defer hub.Unregister(otherSession)
 
-	hub.BroadcastToSession(1, "session-1", protocol.NewEnvelope(protocol.TypeDelta, protocol.Delta{Type: "text", Text: "hello"}))
+	hub.BroadcastToSession(hub.Workspace(), "session-1", protocol.NewEnvelope(protocol.TypeDelta, protocol.Delta{Type: "text", Text: "hello"}))
 
 	select {
 	case <-first.send:

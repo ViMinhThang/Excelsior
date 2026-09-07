@@ -12,10 +12,11 @@ const Ver = "v1"
 
 // Envelope is the WS frame.
 type Envelope struct {
-	Ver     string          `json:"ver"`
-	ID      string          `json:"id,omitempty"`
-	Type    string          `json:"type"`
-	Payload json.RawMessage `json:"payload,omitempty"`
+	Workspace string          `json:"workspace,omitempty"`
+	Ver       string          `json:"ver"`
+	ID        string          `json:"id,omitempty"`
+	Type      string          `json:"type"`
+	Payload   json.RawMessage `json:"payload,omitempty"`
 }
 
 // Decode unmarshals Payload into v. Returns nil if payload is empty.
@@ -55,6 +56,9 @@ func NewEnvelopeWithID(id, typ string, payload any) Envelope {
 
 // Message types for [Envelope.Type].
 const (
+	TypeAuth               = "auth"
+	TypeChatCancel         = "chat.cancel"
+	TypeInteractionDone    = "interaction.done"
 	TypeChatReq            = "chat.req"
 	TypeDelta              = "delta"
 	TypeDone               = "done"
@@ -91,48 +95,57 @@ type ChatReq struct {
 
 // Delta is engine → client streaming fragment (maps to agent.StreamEvent).
 type Delta struct {
-	SessionID    string `json:"sessionId,omitempty"`
-	Type         string `json:"type"` // text|reasoning|tool_start|tool_result|done|error
-	Text         string `json:"text,omitempty"`
-	Reasoning    string `json:"reasoning,omitempty"`
-	ToolName     string `json:"toolName,omitempty"`
-	ToolCallID   string `json:"toolCallID,omitempty"`
-	ToolArgs     string `json:"toolArgs,omitempty"`
-	ToolResult   string `json:"toolResult,omitempty"`
-	FinishReason string `json:"finishReason,omitempty"`
-	PromptTokens int    `json:"promptTokens,omitempty"`
-	CompletionTokens int `json:"completionTokens,omitempty"`
-	TotalTokens  int    `json:"totalTokens,omitempty"`
+	RunID            string `json:"runId,omitempty"`
+	SessionID        string `json:"sessionId,omitempty"`
+	Type             string `json:"type"` // text|reasoning|tool_start|tool_result|done|error
+	Text             string `json:"text,omitempty"`
+	Reasoning        string `json:"reasoning,omitempty"`
+	ToolName         string `json:"toolName,omitempty"`
+	ToolCallID       string `json:"toolCallID,omitempty"`
+	ToolArgs         string `json:"toolArgs,omitempty"`
+	ToolResult       string `json:"toolResult,omitempty"`
+	FinishReason     string `json:"finishReason,omitempty"`
+	PromptTokens     int    `json:"promptTokens,omitempty"`
+	CompletionTokens int    `json:"completionTokens,omitempty"`
+	TotalTokens      int    `json:"totalTokens,omitempty"`
 }
 
 // AskReq is engine → client when agent calls askQuestion.
 type AskReq struct {
-	SessionID string   `json:"sessionId,omitempty"`
-	Question  string   `json:"question"`
-	Options   []string `json:"options"` // 3
+	RunID         string   `json:"runId"`
+	InteractionID string   `json:"interactionId"`
+	SessionID     string   `json:"sessionId,omitempty"`
+	Question      string   `json:"question"`
+	Options       []string `json:"options"` // 3
 }
 
 // AskResp is client → engine with user choice.
 type AskResp struct {
-	SessionID string `json:"sessionId,omitempty"`
-	Selected  int    `json:"selected"` // 0..2 or -1 for manual
-	Answer    string `json:"answer"`
-	Label     string `json:"label"`
+	RunID         string `json:"runId"`
+	InteractionID string `json:"interactionId"`
+	SessionID     string `json:"sessionId,omitempty"`
+	Selected      int    `json:"selected"` // 0..2 or -1 for manual
+	Answer        string `json:"answer"`
+	Label         string `json:"label"`
 }
 
 // PermissionReq is engine → client when agent requests mutating operation approval.
 type PermissionReq struct {
-	SessionID string `json:"sessionId,omitempty"`
-	Tool      string `json:"tool"` // "write" | "edit" | "bash"
-	FilePath  string `json:"filePath,omitempty"`
-	Preview   string `json:"preview,omitempty"`
-	Command   string `json:"command,omitempty"`
+	RunID         string `json:"runId"`
+	InteractionID string `json:"interactionId"`
+	SessionID     string `json:"sessionId,omitempty"`
+	Tool          string `json:"tool"` // "write" | "edit" | "bash"
+	FilePath      string `json:"filePath,omitempty"`
+	Preview       string `json:"preview,omitempty"`
+	Command       string `json:"command,omitempty"`
 }
 
 // PermissionResp is client → engine with user decision.
 type PermissionResp struct {
-	SessionID string `json:"sessionId,omitempty"`
-	Approved  bool   `json:"approved"`
+	RunID         string `json:"runId"`
+	InteractionID string `json:"interactionId"`
+	SessionID     string `json:"sessionId,omitempty"`
+	Approved      bool   `json:"approved"`
 }
 
 // Session management (unified for TUI/web/desktop).
@@ -178,6 +191,10 @@ type SessionDataReq struct {
 
 // SessionDataResp contains the full message history for a session.
 type SessionDataResp struct {
+	RunID    string        `json:"runId,omitempty"`
+	Running  bool          `json:"running"`
+	Events   []Delta       `json:"events,omitempty"`
+	Pending  *Envelope     `json:"pending,omitempty"`
 	ID       string        `json:"id"`
 	Messages []llm.Message `json:"messages"`
 }
@@ -192,7 +209,6 @@ type SessionRenameReq struct {
 type SessionSubscriptionReq struct {
 	ID string `json:"id"`
 }
-
 
 // SettingsGetResp returns current settings.
 type SettingsGetResp struct {

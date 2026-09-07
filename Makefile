@@ -8,12 +8,12 @@ EXT := $(if $(filter windows,$(GOOS)),.exe,)
 .PHONY: build vet lint test race vuln run tidy clean docker
 
 build:
-	go build -ldflags "$(LDFLAGS)" -o $(BIN)$(EXT) ./cmd/excelsior
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN)$(EXT) ./cmd/excelsior
 
 build-all:
-	GOOS=linux GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o dist/$(BIN)-linux-amd64 ./cmd/excelsior
-	GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o dist/$(BIN)-darwin-arm64 ./cmd/excelsior
-	GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o dist/$(BIN)-windows-amd64.exe ./cmd/excelsior
+	GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BIN)-linux-amd64 ./cmd/excelsior
+	GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BIN)-darwin-arm64 ./cmd/excelsior
+	GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$(LDFLAGS)" -o dist/$(BIN)-windows-amd64.exe ./cmd/excelsior
 
 vet:
 	go vet $(PKG)

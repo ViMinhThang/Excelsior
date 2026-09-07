@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -134,6 +135,7 @@ func TestCLI_SetupLogger(t *testing.T) {
 }
 
 func TestCLI_EngineCommand_Execution(t *testing.T) {
+	t.Setenv("EXCELSIOR_TOKEN_FILE", filepath.Join(t.TempDir(), "config", "owner-token"))
 	cfg := config.Config{APIKey: "sk-test", BaseURL: "https://api.deepseek.com", Model: "deepseek-v4-flash"}
 	ws := t.TempDir()
 
@@ -145,6 +147,3 @@ func TestCLI_EngineCommand_Execution(t *testing.T) {
 
 	_ = cmd.ExecuteContext(ctx)
 }
-
-
-
