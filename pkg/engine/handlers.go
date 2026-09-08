@@ -198,9 +198,7 @@ func (c *Conn) handleWorkspaceSet(ctx context.Context, env protocol.Envelope) {
 			c.sendError(env.ID, err.Error())
 			return
 		}
-		c.mu.Lock()
-		c.subscriptions = make(map[string]struct{})
-		c.mu.Unlock()
+		c.clearSubscriptions()
 		c.workspace.Set(canonicalWorkspace(resolved))
 		c.hub.logger().Info("switched workspace (per-conn)", "workspace", target)
 	}

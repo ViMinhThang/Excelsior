@@ -1,89 +1,125 @@
 package engine
 
 import (
-	"context"
 	"excelsior/internal/chat"
-	"excelsior/internal/permissions"
-	"excelsior/pkg/config"
+	"excelsior/pkg/llm"
 	"excelsior/pkg/protocol"
-	"excelsior/pkg/session"
-	"excelsior/pkg/tools"
 )
 
-func (c *Conn) handleChat(ctx context.Context, env protocol.Envelope, sessionID string, t *turnState) {
-	var req protocol.ChatReq
-	if !c.decodePayload(env, &req, "chat.req") {
+// Conn implements chat.Subscriber: coordinator events are converted to wire
+// envelopes and delivered to this connection only.
+
+func eventToDelta(ev chat.Event) protocol.Delta {
+	d := protocol.Delta{
+		SessionID:    ev.SessionID,
+		RunID:        ev.RunID,
+		Type:         ev.Type,
+		Text:         ev.Text,
+		Reasoning:    ev.Reasoning,
+		ToolName:     ev.ToolName,
+		ToolCallID:   ev.ToolCallID,
+		ToolArgs:     ev.ToolArgs,
+		ToolResult:   ev.ToolResult,
+		FinishReason: ev.FinishReason,
+	}
+	if ev.Usage != nil {
+		d.PromptTokens, d.CompletionTokens, d.TotalTokens = ev.Usage.PromptTokens, ev.Usage.CompletionTokens, ev.Usage.TotalTokens
+	}
+	return d
+}
+
+func pendingEnvelope(pi chat.PendingInteraction) protocol.Envelope {
+	if pi.Kind == chat.InteractionAsk {
+		req := protocol.AskReq{RunID: pi.RunID, InteractionID: pi.ID, SessionID: pi.SessionID}
+		if pi.Ask != nil {
+			req.Question, req.Options = pi.Ask.Question, pi.Ask.Options
+		}
+		return protocol.NewEnvelope(protocol.TypeAskReq, req)
+	}
+	req := protocol.PermissionReq{RunID: pi.RunID, InteractionID: pi.ID, SessionID: pi.SessionID}
+	if pi.Permission != nil {
+		req.Tool, req.FilePath, req.Preview, req.Command = pi.Permission.Tool, pi.Permission.FilePath, pi.Permission.Preview, pi.Permission.Command
+	}
+	return protocol.NewEnvelope(protocol.TypePermissionReq, req)
+}
+
+func snapshotToSessionData(snap chat.Snapshot, id string) protocol.SessionDataResp {
+	data := protocol.SessionDataResp{ID: id, RunID: snap.RunID, Running: snap.Running, Messages: snap.Messages}
+	if data.Messages == nil {
+		data.Messages = []llm.Message{}
+	}
+	for _, ev := range snap.Events {
+		data.Events = append(data.Events, eventToDelta(ev))
+	}
+	if snap.Pending != nil {
+		env := pendingEnvelope(*snap.Pending)
+		data.Pending = &env
+	}
+	return data
+}
+
+func (c *Conn) OnEvent(ev chat.Event) {
+	c.sendEnvelope(protocol.NewEnvelope(protocol.TypeDelta, eventToDelta(ev)))
+}
+
+func (c *Conn) OnInteraction(pi chat.PendingInteraction) {
+	c.sendEnvelope(pendingEnvelope(pi))
+}
+
+func (c *Conn) OnInteractionDone(sessionID, runID, interactionID string) {
+	c.sendEnvelope(protocol.NewEnvelope(protocol.TypeInteractionDone, map[string]string{
+		"sessionId": sessionID, "runId": runID, "interactionId": interactionID,
+	}))
+}
+
+func (c *Conn) OnDone(o chat.Outcome) {
+	c.mu.Lock()
+	delete(c.errIDs, o.SessionID)
+	c.mu.Unlock()
+	c.sendEnvelope(protocol.NewEnvelope(protocol.TypeDone, protocol.DoneResp{
+		SessionID: o.SessionID,
+		RunID:     o.RunID,
+		Status:    o.Status,
+		Persisted: o.Persisted,
+		Error:     o.Error,
+		Code:      o.Code,
+	}))
+}
+
+func (c *Conn) OnError(sessionID, runID, errMsg string) {
+	c.mu.Lock()
+	id := c.errIDs[sessionID]
+	delete(c.errIDs, sessionID)
+	c.mu.Unlock()
+	c.sendEnvelope(protocol.NewEnvelopeWithID(id, protocol.TypeError, map[string]string{
+		"error": errMsg, "sessionId": sessionID, "runId": runID,
+	}))
+}
+
+// dispatchChat reserves the turn and hands execution to the coordinator.
+func (c *Conn) dispatchChat(env protocol.Envelope, req protocol.ChatReq) {
+	workspace := c.currentWorkspace()
+	_, handle, err := c.hub.Coordinator().ReserveTurn(workspace, req.SessionID, req.Messages...)
+	if err != nil {
+		c.sendError(env.ID, err.Error())
 		return
 	}
-	h := c.hub
-	fail := func(err error) {
-		h.BroadcastToSession(t.workspace, sessionID, protocol.NewEnvelopeWithID(env.ID, protocol.TypeError, map[string]string{"error": err.Error(), "sessionId": sessionID, "runId": t.id}))
+	c.mu.Lock()
+	if c.errIDs == nil {
+		c.errIDs = make(map[string]string)
 	}
-	h.runsMu.Lock()
-	h.BroadcastToSession(t.workspace, sessionID, protocol.NewEnvelope(protocol.TypeSessionData, protocol.SessionDataResp{ID: sessionID, Messages: t.messages, Running: true, RunID: t.id}))
-	h.runsMu.Unlock()
-	ag, err := c.agentFor(req.Model, t.workspace)
-	if err != nil {
-		fail(err)
-		return
-	}
-	ctx = tools.WithPermissionHandler(ctx, func(ctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
-		perm, _ := permissions.Resolve(h.PermissionOverride, config.LoadSettings(t.workspace))
-		switch perm {
-		case config.PermissionAllow:
-			return tools.PermissionResponse{Approved: true}, nil
-		case config.PermissionDeny:
-			return tools.PermissionResponse{Approved: false}, nil
-		}
-		id := newID()
-		response, err := h.interaction(ctx, t, protocol.NewEnvelope(protocol.TypePermissionReq, protocol.PermissionReq{
-			SessionID: sessionID, RunID: t.id, InteractionID: id, Tool: rq.Tool, FilePath: rq.FilePath, Preview: rq.Preview, Command: rq.Command,
-		}), id)
-		var resp protocol.PermissionResp
-		if err == nil {
-			err = response.Decode(&resp)
-		}
-		return tools.PermissionResponse{Approved: resp.Approved}, err
-	})
-	ctx = tools.WithQuestionHandler(ctx, func(ctx context.Context, rq tools.AskRequest) (tools.AskResponse, error) {
-		id := newID()
-		response, err := h.interaction(ctx, t, protocol.NewEnvelope(protocol.TypeAskReq, protocol.AskReq{
-			SessionID: sessionID, RunID: t.id, InteractionID: id, Question: rq.Question, Options: rq.Options,
-		}), id)
-		var resp protocol.AskResp
-		if err == nil {
-			err = response.Decode(&resp)
-		}
-		return tools.AskResponse{Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}, err
-	})
-	rec := session.Record{ID: sessionID}
-	if t.handle != nil {
-		rec = t.handle.Record
-	}
-	_, err = (chat.Service{Runner: ag, Store: h.store(t.workspace)}).RunPrepared(ctx, chat.PreparedTurn{
-		SessionID: sessionID,
-		RunID:     t.id,
-		Messages:  t.messages,
-		Record:    rec,
-		OnEvent: func(ev chat.Event) {
-			d := protocol.Delta{SessionID: sessionID, RunID: t.id, Type: ev.Type, Text: ev.Text, Reasoning: ev.Reasoning, ToolName: ev.ToolName, ToolCallID: ev.ToolCallID, ToolArgs: ev.ToolArgs, ToolResult: ev.ToolResult, FinishReason: ev.FinishReason}
-			if ev.Usage != nil {
-				d.PromptTokens, d.CompletionTokens, d.TotalTokens = ev.Usage.PromptTokens, ev.Usage.CompletionTokens, ev.Usage.TotalTokens
-			}
-			h.runsMu.Lock()
-			defer h.runsMu.Unlock()
-			// Coalesce text fragments; retain tool events to reconstruct the current turn.
-			n := len(t.events)
-			if n > 0 && (d.Type == "text" || d.Type == "reasoning") && t.events[n-1].Type == d.Type {
-				t.events[n-1].Text += d.Text
-				t.events[n-1].Reasoning += d.Reasoning
-			} else {
-				t.events = append(t.events, d)
-			}
-			h.BroadcastToSession(t.workspace, sessionID, protocol.NewEnvelope(protocol.TypeDelta, d))
-		},
-	})
-	if err != nil {
-		fail(err)
-	}
+	c.errIDs[handle.SessionID] = env.ID
+	c.mu.Unlock()
+
+	c.subscribe(handle.SessionID)
+	c.hub.BroadcastToSession(workspace, handle.SessionID, protocol.NewEnvelope(protocol.TypeSessionData, protocol.SessionDataResp{
+		ID: handle.SessionID, RunID: handle.ID, Running: true, Messages: handle.Messages,
+	}))
+
+	go c.hub.Coordinator().ExecuteTurn(chat.StartCommand{
+		Workspace: handle.Workspace,
+		SessionID: handle.SessionID,
+		Model:     req.Model,
+		Messages:  req.Messages,
+	}, handle)
 }

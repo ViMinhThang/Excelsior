@@ -30,7 +30,6 @@ type Hub struct {
 	Token          string
 	AllowedOrigins []string
 	runsMu         sync.Mutex
-	turns          map[string]*turnState
 	stores         map[string]session.Store
 	stopped        bool
 	// PermissionOverride is a runtime-only CLI override (--yolo/--permission).
@@ -91,7 +90,6 @@ func NewHub(cfg config.Config, workspace string) *Hub {
 	return &Hub{
 		Config:    cfg,
 		Addr:      "127.0.0.1:17812",
-		turns:     make(map[string]*turnState),
 		stores:    make(map[string]session.Store),
 		Logger:    slog.Default(),
 		clients:   make(map[*Conn]struct{}),

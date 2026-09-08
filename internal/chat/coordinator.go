@@ -295,12 +295,18 @@ func (c *Coordinator) StartTurn(ctx context.Context, cmd StartCommand) (string, 
 	}
 
 	// Launch execution in background goroutine.
-	go c.executeTurnWithHandle(cmd, handle)
+	go c.ExecuteTurn(cmd, handle)
 
 	return handle.ID, nil
 }
 
-func (c *Coordinator) executeTurnWithHandle(cmd StartCommand, handle *RunHandle) {
+// ExecuteTurn runs a reserved turn to completion. Callers that need to control
+// the goroutine (e.g. the WS engine) invoke it directly after ReserveTurn.
+func (c *Coordinator) ExecuteTurn(cmd StartCommand, handle *RunHandle) {
+	c.executeTurn(cmd, handle)
+}
+
+func (c *Coordinator) executeTurn(cmd StartCommand, handle *RunHandle) {
 	defer func() {
 		c.mu.Lock()
 		delete(c.runs, sessionKey(handle.Workspace, handle.SessionID))
@@ -458,10 +464,12 @@ func (c *Coordinator) executeTurnWithHandle(cmd StartCommand, handle *RunHandle)
 		}
 	}
 
-	c.broadcastOutcome(run, outcome)
+	// Error is broadcast before the outcome so remote clients that stop on
+	// the first terminal error envelope still observe the failure.
 	if outcome.Status == OutcomeFailed {
 		c.broadcastError(run.workspace, run.sessionID, run.id, outcome.Error)
 	}
+	c.broadcastOutcome(run, outcome)
 }
 
 func (c *Coordinator) setPendingInteraction(run *activeRun, pi PendingInteraction) chan interactionResponse {

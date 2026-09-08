@@ -491,25 +491,48 @@ func TestEngine_HandleChat_ErrorBranch(t *testing.T) {
 		Messages:  []llm.Message{{Role: "user", Content: "Fail please"}},
 	})
 
-	turnCtx, turn, err := conn.beginTurn(context.Background(), "sess-err")
-	if err != nil {
-		t.Fatal("expected turn to start")
-	}
-	conn.subscribe("sess-err")
-	conn.handleChat(turnCtx, env, "sess-err", turn)
-	conn.endTurn("sess-err", turn)
-	<-conn.send // initial snapshot
+	conn.dispatchChat(env, mustDecodeChat(t, env))
 
-	select {
-	case msg := <-conn.send:
-		var resp protocol.Envelope
-		_ = json.Unmarshal(msg, &resp)
-		if resp.Type != protocol.TypeError || resp.ID != "err-chat-1" {
-			t.Errorf("expected TypeError with ID 'err-chat-1', got %+v", resp)
-		}
-	default:
-		t.Fatal("expected error envelope on conn.send")
+	// First message: initial session.data broadcast.
+	msg := <-conn.send
+	var first protocol.Envelope
+	_ = json.Unmarshal(msg, &first)
+	if first.Type != protocol.TypeSessionData {
+		t.Fatalf("expected initial session.data, got %s", first.Type)
 	}
+
+	// Then the terminal envelopes: error (with the originating envelope ID) and done.
+	var sawErr, sawDone bool
+	for i := 0; i < 10 && !(sawErr && sawDone); i++ {
+		select {
+		case msg := <-conn.send:
+			var resp protocol.Envelope
+			_ = json.Unmarshal(msg, &resp)
+			switch resp.Type {
+			case protocol.TypeError:
+				sawErr = true
+				if resp.ID != "err-chat-1" {
+					t.Errorf("expected TypeError with ID 'err-chat-1', got %+v", resp)
+				}
+			case protocol.TypeDone:
+				sawDone = true
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for terminal envelopes (err=%v done=%v)", sawErr, sawDone)
+		}
+	}
+	if !sawErr || !sawDone {
+		t.Fatalf("missing terminal envelopes: err=%v done=%v", sawErr, sawDone)
+	}
+}
+
+func mustDecodeChat(t *testing.T, env protocol.Envelope) protocol.ChatReq {
+	t.Helper()
+	var req protocol.ChatReq
+	if err := env.Decode(&req); err != nil {
+		t.Fatal(err)
+	}
+	return req
 }
 
 func TestEngine_DecodePayload_Error(t *testing.T) {

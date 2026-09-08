@@ -4,17 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 
-	"excelsior/internal/app"
 	"excelsior/internal/workspaces"
-	"excelsior/pkg/agent"
-	"excelsior/pkg/config"
 
 	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
@@ -30,6 +26,7 @@ type Conn struct {
 	done          chan struct{}
 	closeOnce     sync.Once
 	subscriptions map[string]struct{}
+	errIDs        map[string]string // session -> chat.req envelope ID for error correlation
 }
 
 func newConn(hub *Hub, ws *websocket.Conn) *Conn {
@@ -53,29 +50,40 @@ func (c *Conn) isClosed() bool {
 }
 
 func (c *Conn) subscribe(sessionID string) {
-	c.subscribeKey(sessionKey(c.currentWorkspace(), sessionID))
-}
-
-func (c *Conn) subscribeKey(key string) {
-	if key == "" {
-		return
-	}
+	workspace := c.currentWorkspace()
+	// Snapshot is discarded; registration is what matters here. A store load
+	// failure only means there is no persisted history yet.
+	_, _, _ = c.hub.Coordinator().SnapshotAndSubscribe(workspace, sessionID, c)
 	c.mu.Lock()
 	if c.subscriptions == nil {
 		c.subscriptions = make(map[string]struct{})
 	}
-	c.subscriptions[key] = struct{}{}
+	c.subscriptions[sessionKey(workspace, sessionID)] = struct{}{}
 	c.mu.Unlock()
 }
 
 func (c *Conn) unsubscribe(sessionID string) {
+	workspace := c.currentWorkspace()
+	c.hub.Coordinator().Unsubscribe(workspace, sessionID, c)
 	c.mu.Lock()
-	delete(c.subscriptions, sessionKey(c.currentWorkspace(), sessionID))
+	delete(c.subscriptions, sessionKey(workspace, sessionID))
 	c.mu.Unlock()
 }
 
-func (c *Conn) isSubscribed(sessionID string) bool {
-	return c.isSubscribedKey(sessionKey(c.currentWorkspace(), sessionID))
+// clearSubscriptions detaches the conn from every session it subscribed to.
+func (c *Conn) clearSubscriptions() {
+	c.mu.Lock()
+	keys := make([]string, 0, len(c.subscriptions))
+	for k := range c.subscriptions {
+		keys = append(keys, k)
+	}
+	c.subscriptions = make(map[string]struct{})
+	c.mu.Unlock()
+	coord := c.hub.Coordinator()
+	for _, k := range keys {
+		ws, id := splitSessionKey(k)
+		coord.Unsubscribe(ws, id, c)
+	}
 }
 
 func (c *Conn) isSubscribedKey(key string) bool {
@@ -90,28 +98,6 @@ func (c *Conn) currentWorkspace() string {
 }
 
 func (c *Conn) sessionStore() session.Store { return c.hub.store(c.currentWorkspace()) }
-
-func (c *Conn) getAgent(model string) (agent.Runner, error) {
-	return c.agentFor(model, c.currentWorkspace())
-}
-
-func (c *Conn) agentFor(model, workspace string) (agent.Runner, error) {
-	if c.hub.NewAgent != nil {
-		return c.hub.NewAgent(model, workspace)
-	}
-
-	if model == "" {
-		model = c.hub.Config.Model
-	}
-	if model == "" {
-		model = config.DefaultModel
-	}
-	logger := c.hub.Logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-	return app.NewAgent(c.hub.Config, workspace, model, agent.DefaultSystemPrompt, logger), nil
-}
 
 func (c *Conn) sendEnvelope(env protocol.Envelope) {
 	if env.Workspace == "" {
@@ -139,6 +125,7 @@ func (c *Conn) sendError(id, msg string) {
 
 func (c *Conn) close() {
 	c.closeOnce.Do(func() {
+		c.clearSubscriptions()
 		close(c.done)
 		if c.ws != nil {
 			_ = c.ws.Close()
@@ -218,7 +205,11 @@ func (c *Conn) dispatchEnvelope(ctx context.Context, env protocol.Envelope) {
 	case protocol.TypeChatCancel:
 		c.cancelTurn(env)
 	case protocol.TypeChatReq:
-		c.dispatchChat(ctx, env)
+		var req protocol.ChatReq
+		if !c.decodePayload(env, &req, "chat.req") {
+			return
+		}
+		c.dispatchChat(env, req)
 	case protocol.TypeAskResp:
 		c.handleAskResp(env)
 	case protocol.TypePermissionResp:
@@ -250,36 +241,22 @@ func (c *Conn) dispatchEnvelope(ctx context.Context, env protocol.Envelope) {
 	}
 }
 
-func (c *Conn) dispatchChat(ctx context.Context, env protocol.Envelope) {
-	var req protocol.ChatReq
-	if !c.decodePayload(env, &req, "chat.req") {
-		return
-	}
-	if req.SessionID == "" {
-		req.SessionID = newID()
-	}
-	turnCtx, t, err := c.beginTurn(ctx, req.SessionID, req.Messages...)
-	if err != nil {
-		c.sendError(env.ID, err.Error())
-		return
-	}
-	c.subscribeKey(sessionKey(t.workspace, t.sessionID))
-	go func(e protocol.Envelope, turnCtx context.Context) {
-		defer c.endTurn(req.SessionID, t)
-		c.handleChat(turnCtx, e, req.SessionID, t)
-	}(env, turnCtx)
-}
-
 func (c *Conn) handleAskResp(env protocol.Envelope) {
 	var resp protocol.AskResp
-	if c.decodePayload(env, &resp, "ask.resp") {
-		c.respond(env, resp.SessionID, resp.RunID, resp.InteractionID, protocol.TypeAskReq)
+	if !c.decodePayload(env, &resp, "ask.resp") {
+		return
+	}
+	if err := c.hub.Coordinator().ReplyAsk(c.currentWorkspace(), resp.SessionID, resp.RunID, resp.InteractionID, resp.Selected, resp.Answer, resp.Label); err != nil {
+		c.sendError(env.ID, err.Error())
 	}
 }
 
 func (c *Conn) handlePermissionResp(env protocol.Envelope) {
 	var resp protocol.PermissionResp
-	if c.decodePayload(env, &resp, "permission.resp") {
-		c.respond(env, resp.SessionID, resp.RunID, resp.InteractionID, protocol.TypePermissionReq)
+	if !c.decodePayload(env, &resp, "permission.resp") {
+		return
+	}
+	if err := c.hub.Coordinator().ReplyPermission(c.currentWorkspace(), resp.SessionID, resp.RunID, resp.InteractionID, resp.Approved); err != nil {
+		c.sendError(env.ID, err.Error())
 	}
 }
