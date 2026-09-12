@@ -3,22 +3,55 @@ on:
   push:
     branches: [main, rework, v2]
   pull_request:
-
 jobs:
-  ci:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go vet ./...
+      - run: go test ./... -count=1
+      - run: go build ./...
+      - run: go test -race ./... -count=1
+        if: runner.os == 'Linux'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/electron/package-lock.json
+      - run: npm ci
+        working-directory: apps/electron
+      - run: npm test
+        working-directory: apps/electron
+      - run: npm run lint
+        working-directory: apps/electron
+      - run: npm run pack
+        working-directory: apps/electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - run: node tests/installed-smoke.cjs release/win-unpacked/Excelsior.exe
+        if: runner.os == 'Windows'
+        working-directory: apps/electron
+      - run: xvfb-run -a node tests/installed-smoke.cjs release/linux-unpacked/excelsior
+        if: runner.os == 'Linux'
+        working-directory: apps/electron
+      - run: node tests/installed-smoke.cjs release/mac-arm64/Excelsior.app/Contents/MacOS/Excelsior
+        if: runner.os == 'macOS'
+        working-directory: apps/electron
+  security:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
-          cache: true
-      - run: go vet ./...
-      - run: go test ./... -count=1
-      - run: go test -race ./... -count=1
-      - uses: golangci/golangci-lint-action@v6
-        with:
-          version: v2.1
-      - run: govulncheck ./... || echo "govulncheck not installed, skipping"
-      - run: go build -trimpath -ldflags "-s -w" -o excelsior ./cmd/excelsior
+          go-version-file: go.mod
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...
       - run: docker build -t excelsior:ci .

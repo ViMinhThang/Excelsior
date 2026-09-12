@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -40,7 +41,7 @@ func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if err != nil {
 		return "", errf("edit", "security", a.FilePath, err)
 	}
-	content, err := readEditFile(p, a.FilePath)
+	content, mode, err := readEditFile(p, a.FilePath)
 	if err != nil {
 		return "", err
 	}
@@ -51,7 +52,10 @@ func (t *EditTool) Execute(ctx context.Context, args json.RawMessage) (string, e
 	if len(content) > MaxWriteSize {
 		return "", errf("edit", "replace", a.FilePath, fmt.Errorf("%w: resulting file too large (%d > %d)", ErrFileTooLarge, len(content), MaxWriteSize))
 	}
-	if err := util.WriteAtomic(p, []byte(content), 0o644); err != nil {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if err := util.WriteAtomic(p, []byte(content), mode); err != nil {
 		return "", errf("edit", "write", a.FilePath, err)
 	}
 	slog.Info("edit", "path", a.FilePath)
@@ -90,15 +94,27 @@ func checkEditPermission(ctx context.Context, a *editArgs) error {
 	return checkPermission(ctx, "edit", PermissionRequest{Tool: "edit", FilePath: a.FilePath, Preview: preview})
 }
 
-func readEditFile(p, filePath string) (string, error) {
-	b, err := os.ReadFile(p)
+func readEditFile(p, filePath string) (string, os.FileMode, error) {
+	f, err := os.Open(p)
 	if err != nil {
-		return "", errf("edit", "read", filePath, err)
+		return "", 0, errf("edit", "read", filePath, err)
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return "", 0, err
+	}
+	if !info.Mode().IsRegular() {
+		return "", 0, fmt.Errorf("edit requires a regular file")
+	}
+	b, err := io.ReadAll(io.LimitReader(f, MaxWriteSize+1))
+	if err != nil {
+		return "", 0, errf("edit", "read", filePath, err)
 	}
 	if len(b) > MaxWriteSize {
-		return "", errf("edit", "read", filePath, fmt.Errorf("%w: file too large (%d > %d)", ErrFileTooLarge, len(b), MaxWriteSize))
+		return "", 0, errf("edit", "read", filePath, fmt.Errorf("%w: file too large (%d > %d)", ErrFileTooLarge, len(b), MaxWriteSize))
 	}
-	return string(b), nil
+	return string(b), info.Mode().Perm(), nil
 }
 
 func validateEditUniqueness(content string, a *editArgs) error {

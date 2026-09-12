@@ -12,15 +12,14 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"excelsior/internal/app"
 	"excelsior/internal/chat"
 	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
-	"excelsior/pkg/protocol"
 	"excelsior/pkg/session"
 )
 
-// Hub is the WS daemon. One Hub serves many clients; each turn is per-conn.
+// Hub is the WS daemon. One Hub serves many clients; run lifecycle lives in the
+// chat coordinator. The hub owns authentication, connections, and wire mapping.
 type Hub struct {
 	Addr           string // e.g. :17812
 	Config         config.Config
@@ -29,56 +28,19 @@ type Hub struct {
 	SessionStore   session.Store                                       // Injectable store for tests and embedded use.
 	Token          string
 	AllowedOrigins []string
-	runsMu         sync.Mutex
-	stores         map[string]session.Store
-	stopped        bool
 	// PermissionOverride is a runtime-only CLI override (--yolo/--permission).
 	// Persisted permission lives in workspace settings (env-seeded).
 	PermissionOverride config.PermissionMode
 
 	mu          sync.RWMutex
 	clients     map[*Conn]struct{}
+	stopped     bool
 	workspace   string
 	coordinator *chat.Coordinator
 }
 
 // Coordinator returns the transport-neutral coordinator instance for this hub.
 func (h *Hub) Coordinator() *chat.Coordinator {
-	h.runsMu.Lock()
-	defer h.runsMu.Unlock()
-	if h.coordinator == nil {
-		h.coordinator = chat.NewCoordinator(chat.Config{
-			NewAgent: func(model, workspace string) (agent.Runner, error) {
-				if h.NewAgent != nil {
-					return h.NewAgent(model, workspace)
-				}
-				modelName := model
-				if modelName == "" {
-					modelName = h.Config.Model
-				}
-				if modelName == "" {
-					modelName = config.DefaultModel
-				}
-				return app.NewAgent(h.Config, workspace, modelName, agent.DefaultSystemPrompt, h.logger()), nil
-			},
-			SessionStore: h.SessionStore,
-			StoreFactory: func(workspace string) session.Store {
-				if h.SessionStore != nil {
-					return h.SessionStore
-				}
-				if h.stores[workspace] != nil {
-					return h.stores[workspace]
-				}
-				st := session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
-				h.stores[workspace] = st
-				return st
-			},
-			PermissionOverrideFunc: func() config.PermissionMode {
-				return h.PermissionOverride
-			},
-			Logger: h.logger(),
-		})
-	}
 	return h.coordinator
 }
 
@@ -87,14 +49,32 @@ func NewHub(cfg config.Config, workspace string) *Hub {
 	if workspace == "" {
 		workspace = cfg.Workspace
 	}
-	return &Hub{
+	h := &Hub{
 		Config:    cfg,
 		Addr:      "127.0.0.1:17812",
-		stores:    make(map[string]session.Store),
 		Logger:    slog.Default(),
 		clients:   make(map[*Conn]struct{}),
 		workspace: canonicalWorkspace(workspace),
 	}
+	h.coordinator = chat.NewCoordinator(chat.Config{
+		NewAgent: func(model, workspace string) (agent.Runner, error) {
+			if h.NewAgent != nil {
+				return h.NewAgent(model, workspace)
+			}
+			return nil, errors.New("no agent factory supplied by application startup")
+		},
+		StoreFactory: func(workspace string) session.Store {
+			if h.SessionStore != nil {
+				return h.SessionStore
+			}
+			return session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
+		},
+		PermissionOverrideFunc: func() config.PermissionMode {
+			return h.PermissionOverride
+		},
+		Logger: h.logger(),
+	})
+	return h
 }
 
 func (h *Hub) logger() *slog.Logger {
@@ -111,15 +91,38 @@ func (h *Hub) Workspace() string {
 	return h.workspace
 }
 
+// Close stops runs and sockets. Client disconnects never call this.
+func (h *Hub) Close() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := h.Shutdown(ctx); err != nil {
+		h.logger().Error("engine shutdown incomplete", "error", err)
+	}
+}
+
+func (h *Hub) Shutdown(ctx context.Context) error {
+	h.mu.Lock()
+	h.stopped = true
+	clients := make([]*Conn, 0, len(h.clients))
+	for c := range h.clients {
+		clients = append(clients, c)
+	}
+	h.mu.Unlock()
+	err := h.Coordinator().Shutdown(ctx)
+	for _, c := range clients {
+		c.close()
+	}
+	return err
+}
+
 // Register registers a connection with the hub.
 func (h *Hub) Register(c *Conn) {
-	h.runsMu.Lock()
-	defer h.runsMu.Unlock()
+	h.mu.Lock()
 	if h.stopped {
+		h.mu.Unlock()
 		c.close()
 		return
 	}
-	h.mu.Lock()
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()
 }
@@ -129,18 +132,6 @@ func (h *Hub) Unregister(c *Conn) {
 	h.mu.Lock()
 	delete(h.clients, c)
 	h.mu.Unlock()
-}
-
-// BroadcastToSession delivers only to subscribers in the same workspace.
-func (h *Hub) BroadcastToSession(workspace, sessionID string, env protocol.Envelope) {
-	env.Workspace = workspace
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for c := range h.clients {
-		if c.isSubscribedKey(sessionKey(workspace, sessionID)) {
-			c.sendEnvelope(env)
-		}
-	}
 }
 
 // Handler returns the HTTP handler for the engine daemon.
@@ -156,22 +147,23 @@ func (h *Hub) Handler() http.Handler {
 
 // Serve runs the engine on an existing listener (e.g. 127.0.0.1:0 for embedded use).
 func (h *Hub) Serve(ctx context.Context, ln net.Listener) error {
-	defer h.Close()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	srv := &http.Server{Handler: h.Handler()}
 	go func() {
 		<-ctx.Done()
-		h.Close()
 		shCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shCtx)
 	}()
 	h.logger().Info("engine serving", "addr", ln.Addr(), "workspace", h.Workspace(), "model", h.Config.Model)
-	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return err
+	serveErr := srv.Serve(ln)
+	if errors.Is(serveErr, http.ErrServerClosed) {
+		serveErr = nil
 	}
-	return nil
+	shutdownCtx, stop := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stop()
+	return errors.Join(serveErr, h.Shutdown(shutdownCtx))
 }
 
 // ListenAndServe starts the HTTP and WebSocket server.

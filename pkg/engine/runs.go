@@ -1,62 +1,73 @@
 package engine
 
 import (
-	"strings"
-
 	"excelsior/internal/chat"
 	"excelsior/pkg/protocol"
-	"excelsior/pkg/session"
 )
 
 func canonicalWorkspace(path string) string {
 	return chat.CanonicalWorkspace(path)
 }
 
-func sessionKey(workspace, id string) string { return canonicalWorkspace(workspace) + "\x00" + id }
-
-func splitSessionKey(key string) (workspace, id string) {
-	ws, rest, _ := strings.Cut(key, "\x00")
-	return ws, rest
+func deltaFromEvent(ev chat.Event) protocol.Delta {
+	d := protocol.Delta{
+		RunID:        ev.RunID,
+		SessionID:    ev.SessionID,
+		Type:         ev.Type,
+		Text:         ev.Text,
+		Reasoning:    ev.Reasoning,
+		ToolName:     ev.ToolName,
+		ToolCallID:   ev.ToolCallID,
+		ToolArgs:     ev.ToolArgs,
+		ToolResult:   ev.ToolResult,
+		FinishReason: ev.FinishReason,
+	}
+	if ev.Usage != nil {
+		d.PromptTokens = ev.Usage.PromptTokens
+		d.CompletionTokens = ev.Usage.CompletionTokens
+		d.TotalTokens = ev.Usage.TotalTokens
+	}
+	return d
 }
 
-func (h *Hub) store(workspace string) session.Store {
-	return h.Coordinator().Store(workspace)
+func interactionEnvelope(pi *chat.PendingInteraction) (protocol.Envelope, bool) {
+	switch {
+	case pi.Kind == chat.InteractionPermission && pi.Permission != nil:
+		return protocol.NewEnvelope(protocol.TypePermissionReq, protocol.PermissionReq{
+			RunID: pi.RunID, InteractionID: pi.ID, SessionID: pi.SessionID,
+			Tool: pi.Permission.Tool, FilePath: pi.Permission.FilePath, Preview: pi.Permission.Preview, Command: pi.Permission.Command,
+		}), true
+	case pi.Kind == chat.InteractionAsk && pi.Ask != nil:
+		return protocol.NewEnvelope(protocol.TypeAskReq, protocol.AskReq{
+			RunID: pi.RunID, InteractionID: pi.ID, SessionID: pi.SessionID,
+			Question: pi.Ask.Question, Options: pi.Ask.Options,
+		}), true
+	}
+	return protocol.Envelope{}, false
 }
 
-// Close stops runs and sockets. Client disconnects never call this.
-func (h *Hub) Close() {
-	h.Coordinator().Close()
-	h.runsMu.Lock()
-	h.stopped = true
-	h.runsMu.Unlock()
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for c := range h.clients {
-		c.close()
+func sessionDataFromSnapshot(snap chat.Snapshot) protocol.SessionDataResp {
+	data := protocol.SessionDataResp{
+		ID:                    snap.SessionID,
+		RunID:                 snap.RunID,
+		Running:               snap.Running,
+		Messages:              snap.Messages,
+		Events:                make([]protocol.Delta, 0, len(snap.Events)),
+		UnsavedAvailable:      snap.UnsavedAvailable,
+		ProjectionUnavailable: snap.ProjectionUnavailable,
 	}
-}
-
-func (c *Conn) cancelTurn(env protocol.Envelope) {
-	var req struct {
-		SessionID string `json:"sessionId"`
-		RunID     string `json:"runId"`
+	if o := snap.Outcome; o != nil {
+		data.Outcome = &protocol.DoneResp{SessionID: o.SessionID, RunID: o.RunID, Status: o.Status, Persisted: o.Persisted, Error: o.Error, Code: o.Code}
+		data.Status = o.Status
+		data.Persisted = o.Persisted
 	}
-	if !c.decodePayload(env, &req, "chat.cancel") {
-		return
+	for _, ev := range snap.Events {
+		data.Events = append(data.Events, deltaFromEvent(ev))
 	}
-	if err := c.hub.Coordinator().Cancel(c.currentWorkspace(), req.SessionID, req.RunID); err != nil {
-		c.sendError(env.ID, err.Error())
+	if snap.Pending != nil {
+		if env, ok := interactionEnvelope(snap.Pending); ok {
+			data.Pending = &env
+		}
 	}
-}
-
-func (c *Conn) snapshot(env protocol.Envelope, id string) {
-	// Read the snapshot first so the reply is ordered before any live event
-	// delivered to this conn, then register the subscription.
-	snap, err := c.hub.Coordinator().Snapshot(c.currentWorkspace(), id)
-	if err != nil {
-		c.sendError(env.ID, err.Error())
-		return
-	}
-	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSessionData, snapshotToSessionData(snap, id)))
-	c.subscribe(id)
+	return data
 }

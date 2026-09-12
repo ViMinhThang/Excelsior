@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 	"runtime"
@@ -21,17 +22,20 @@ import (
 	"excelsior/pkg/tools"
 )
 
-// Sentinel errors for coordinator operations.
 var (
-	ErrSessionBusy       = errors.New("session busy")
-	ErrEngineStopped     = errors.New("engine stopped")
-	ErrRunNotFound       = errors.New("run no longer active")
-	ErrStaleInteraction  = errors.New("interaction no longer pending")
-	ErrSessionNotFound   = session.ErrSessionNotFound
-	ErrCorruptedSession  = session.ErrCorruptedSession
+	ErrSessionBusy      = errors.New("session busy")
+	ErrEngineStopped    = errors.New("engine stopped")
+	ErrRunNotFound      = errors.New("run no longer active")
+	ErrStaleInteraction = errors.New("interaction no longer pending")
+	ErrSessionNotFound  = session.ErrSessionNotFound
+	ErrCorruptedSession = session.ErrCorruptedSession
+	ErrProjectionLimit  = errors.New("run projection exceeded 4 MiB; start a shorter turn")
 )
 
-// CanonicalWorkspace normalizes workspace paths across platforms.
+const MaxProjectionBytes = 4 << 20
+const MaxRetainedBytes = 32 << 20
+const MaxRetainedSessions = 64
+
 func CanonicalWorkspace(path string) string {
 	if abs, err := filepath.Abs(path); err == nil {
 		path = abs
@@ -45,444 +49,330 @@ func CanonicalWorkspace(path string) string {
 	}
 	return path
 }
-
-func sessionKey(workspace, id string) string {
-	return CanonicalWorkspace(workspace) + "\x00" + id
-}
-
-func newID() string {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-// Subscriber receives application events for subscribed sessions.
-type Subscriber interface {
-	OnEvent(Event)
-	OnInteraction(PendingInteraction)
-	OnInteractionDone(sessionID, runID, interactionID string)
-	OnDone(Outcome)
-	OnError(sessionID, runID, errMsg string)
-}
+func sessionKey(workspace, id string) string { return CanonicalWorkspace(workspace) + "\x00" + id }
+func newID() string                          { b := make([]byte, 16); _, _ = rand.Read(b); return hex.EncodeToString(b) }
 
 type activeRun struct {
-	id        string
-	workspace string
-	sessionID string
-	ctx       context.Context
-	cancel    context.CancelFunc
-	done      chan struct{}
-	messages  []llm.Message
-	events    []Event
-	pending   *PendingInteraction
-	response  chan interactionResponse
-	state     string // "preparing" | "running" | "waiting_for_interaction" | "persisting"
+	id, workspace, sessionID, state string
+	ctx                             context.Context
+	cancel                          context.CancelFunc
+	done                            chan struct{}
+	messages                        []llm.Message
+	record                          session.Record
+	events                          []Event
+	pending                         *PendingInteraction
+	response                        chan interactionResponse
+	projectionBytes                 int
+	projectionErr                   error
 }
-
 type interactionResponse struct {
-	PermissionApproved bool
-	AskSelected        int
-	AskAnswer          string
-	AskLabel           string
+	PermissionApproved  bool
+	AskSelected         int
+	AskAnswer, AskLabel string
 }
-
-// StartCommand defines the parameters required to start a chat turn.
 type StartCommand struct {
-	Workspace string
-	SessionID string
-	Model     string
-	Messages  []llm.Message
+	Workspace, SessionID, Model string
+	Messages                    []llm.Message
 }
-
-// Config configures the Coordinator.
 type Config struct {
 	NewAgent               func(model, workspace string) (agent.Runner, error)
 	SessionStore           session.Store
 	StoreFactory           func(workspace string) session.Store
-	PermissionOverride     config.PermissionMode
 	PermissionOverrideFunc func() config.PermissionMode
+	PermissionHandler      tools.PermissionHandler
+	QuestionHandler        tools.QuestionHandler
+	Ephemeral              bool
 	Logger                 *slog.Logger
 }
 
-// Coordinator is the transport-neutral owner of run lifecycles, session reservations,
-// and interaction routing.
+// Coordinator owns execution and ordered delivery. The registry mutex is also
+// the ordering boundary. Keep it until measured contention justifies a split.
 type Coordinator struct {
+	listWorkers            sync.WaitGroup
 	mu                     sync.Mutex
-	newAgent               func(model, workspace string) (agent.Runner, error)
+	newAgent               func(string, string) (agent.Runner, error)
 	sessionStore           session.Store
-	storeFactory           func(workspace string) session.Store
-	permissionOverride     config.PermissionMode
+	storeFactory           func(string) session.Store
 	permissionOverrideFunc func() config.PermissionMode
+	permissionHandler      tools.PermissionHandler
+	questionHandler        tools.QuestionHandler
+	ephemeral              bool
 	logger                 *slog.Logger
 	runs                   map[string]*activeRun
-	subs                   map[string]map[Subscriber]struct{}
+	subs                   map[string]map[*Subscription]struct{}
 	stores                 map[string]session.Store
+	terminal               map[string]Snapshot
+	retainedOrder          []string
+	retainedBytes          int
 	stopped                bool
 }
-
-// RunHandle represents an active turn reservation.
 type RunHandle struct {
-	ID        string
-	Workspace string
-	SessionID string
-	Context   context.Context
-	Cancel    context.CancelFunc
-	Done      chan struct{}
-	Messages  []llm.Message
-	Record    session.Record
-	run       *activeRun
+	ID, Workspace, SessionID string
+	Context                  context.Context
+	Cancel                   context.CancelFunc
+	Done                     chan struct{}
+	run                      *activeRun
 }
 
-// NewCoordinator creates a new Coordinator instance.
 func NewCoordinator(cfg Config) *Coordinator {
-	logger := cfg.Logger
-	if logger == nil {
-		logger = slog.Default()
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
+	}
+	if cfg.Ephemeral {
+		cfg.SessionStore = session.NewMemoryStore()
 	}
 	return &Coordinator{
-		newAgent:               cfg.NewAgent,
-		sessionStore:           cfg.SessionStore,
-		storeFactory:           cfg.StoreFactory,
-		permissionOverride:     cfg.PermissionOverride,
-		permissionOverrideFunc: cfg.PermissionOverrideFunc,
-		logger:                 logger,
-		runs:                   make(map[string]*activeRun),
-		subs:                   make(map[string]map[Subscriber]struct{}),
-		stores:                 make(map[string]session.Store),
+		newAgent: cfg.NewAgent, sessionStore: cfg.SessionStore, storeFactory: cfg.StoreFactory,
+		permissionOverrideFunc: cfg.PermissionOverrideFunc, permissionHandler: cfg.PermissionHandler,
+		questionHandler: cfg.QuestionHandler, ephemeral: cfg.Ephemeral, logger: cfg.Logger,
+		runs: map[string]*activeRun{}, subs: map[string]map[*Subscription]struct{}{},
+		stores: map[string]session.Store{}, terminal: map[string]Snapshot{},
 	}
 }
-
 func (c *Coordinator) effectivePermissionOverride() config.PermissionMode {
 	if c.permissionOverrideFunc != nil {
 		return c.permissionOverrideFunc()
 	}
-	return c.permissionOverride
+	return ""
 }
-
-// Store returns the session store for the given workspace.
 func (c *Coordinator) Store(workspace string) session.Store {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.storeLocked(workspace)
 }
-
 func (c *Coordinator) storeLocked(workspace string) session.Store {
 	workspace = CanonicalWorkspace(workspace)
 	if c.sessionStore != nil {
 		return c.sessionStore
 	}
-	if store, ok := c.stores[workspace]; ok {
-		return store
-	}
-	if c.storeFactory != nil {
-		st := c.storeFactory(workspace)
-		c.stores[workspace] = st
+	if st := c.stores[workspace]; st != nil {
 		return st
 	}
-	st := session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
+	var st session.Store
+	if c.storeFactory != nil {
+		st = c.storeFactory(workspace)
+	} else {
+		st = session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
+	}
 	c.stores[workspace] = st
 	return st
 }
-
-// ReserveTurn reserves a session for a turn, preparing history and active run state.
-func (c *Coordinator) ReserveTurn(workspace, sessionID string, incoming ...llm.Message) (context.Context, *RunHandle, error) {
+func (c *Coordinator) ReserveTurn(workspace, sessionID string, incoming ...llm.Message) (*RunHandle, error) {
+	if len(incoming) == 0 {
+		return nil, errors.New("chat requires at least one message")
+	}
 	if sessionID == "" {
 		sessionID = newID()
 	}
 	ws := CanonicalWorkspace(workspace)
 	key := sessionKey(ws, sessionID)
-
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.stopped {
-		c.mu.Unlock()
-		return nil, nil, ErrEngineStopped
+		return nil, ErrEngineStopped
 	}
 	if c.runs[key] != nil {
-		c.mu.Unlock()
-		return nil, nil, ErrSessionBusy
+		return nil, ErrSessionBusy
 	}
-
-	runID := newID()
-	runCtx, cancel := context.WithCancel(context.Background())
-	run := &activeRun{
-		id:        runID,
-		workspace: ws,
-		sessionID: sessionID,
-		ctx:       runCtx,
-		cancel:    cancel,
-		done:      make(chan struct{}),
-		state:     "preparing",
-	}
-
 	st := c.storeLocked(ws)
+	if err := session.CheckLease(st); err != nil {
+		return nil, err
+	}
 	record, err := st.Load(sessionID)
 	if err != nil && !errors.Is(err, session.ErrSessionNotFound) {
-		cancel()
-		c.mu.Unlock()
-		return nil, nil, err
+		return nil, err
 	}
 	if errors.Is(err, session.ErrSessionNotFound) {
-		record = session.Record{
-			ID:        sessionID,
-			Title:     sessions.Title(incoming, ""),
-			CreatedAt: time.Now().UTC(),
-		}
-		if saveErr := st.Save(record); saveErr != nil {
-			cancel()
-			c.mu.Unlock()
-			return nil, nil, saveErr
+		record = session.Record{ID: sessionID, Title: sessions.Title(incoming, ""), CreatedAt: time.Now().UTC()}
+		if err = st.Save(record); err != nil {
+			return nil, err
 		}
 	}
-
-	var history []llm.Message
-	for _, m := range record.Messages {
-		if m.Role == "system" && (m.Content == "New session" || m.Content == "(empty)") {
-			continue
-		}
-		history = append(history, m)
+	messages := cloneMessages(append(historyFrom(record), incoming...))
+	if messageBytes(messages) > MaxProjectionBytes {
+		return nil, ErrProjectionLimit
 	}
-	run.messages = append(history, incoming...)
+	ctx, cancel := context.WithCancel(context.Background())
+	run := &activeRun{id: newID(), workspace: ws, sessionID: sessionID, ctx: ctx, cancel: cancel, done: make(chan struct{}), state: "preparing", record: record, messages: messages, projectionBytes: messageBytes(messages)}
+	c.dropTerminalLocked(key)
 	c.runs[key] = run
-	c.mu.Unlock()
-
-	handle := &RunHandle{
-		ID:        runID,
-		Workspace: ws,
-		SessionID: sessionID,
-		Context:   runCtx,
-		Cancel:    cancel,
-		Done:      run.done,
-		Messages:  run.messages,
-		Record:    record,
-		run:       run,
-	}
-	return runCtx, handle, nil
+	// Existing subscribers must learn the new run before its first delta.
+	snap := c.runSnapshot(run)
+	c.publishLocked(key, Update{Snapshot: &snap})
+	return &RunHandle{ID: run.id, Workspace: ws, SessionID: sessionID, Context: ctx, Cancel: func() { _ = c.Cancel(ws, sessionID, run.id) }, Done: run.done, run: run}, nil
 }
-
-// EndTurn finalizes a reserved turn, broadcasts the outcome, and releases the session reservation.
-func (c *Coordinator) EndTurn(h *RunHandle, outcome Outcome) {
-	if h == nil {
-		return
-	}
-	key := sessionKey(h.Workspace, h.SessionID)
-	c.mu.Lock()
-	if outcome.SessionID == "" {
-		outcome.SessionID = h.SessionID
-	}
-	if outcome.RunID == "" {
-		outcome.RunID = h.ID
-	}
-	delete(c.runs, key)
-	c.mu.Unlock()
-
-	if h.run != nil {
-		c.broadcastOutcome(h.run, outcome)
-	}
-
-	h.Cancel()
-	select {
-	case <-h.Done:
-	default:
-		close(h.Done)
-	}
-}
-
-// StartTurn initiates a turn under a session reservation.
 func (c *Coordinator) StartTurn(ctx context.Context, cmd StartCommand) (string, error) {
-	_, handle, err := c.ReserveTurn(cmd.Workspace, cmd.SessionID, cmd.Messages...)
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	h, err := c.ReserveTurn(cmd.Workspace, cmd.SessionID, cmd.Messages...)
 	if err != nil {
 		return "", err
 	}
-
-	// Launch execution in background goroutine.
-	go c.ExecuteTurn(cmd, handle)
-
-	return handle.ID, nil
+	go c.ExecuteTurn(cmd, h)
+	return h.ID, nil
 }
 
-// ExecuteTurn runs a reserved turn to completion. Callers that need to control
-// the goroutine (e.g. the WS engine) invoke it directly after ReserveTurn.
-func (c *Coordinator) ExecuteTurn(cmd StartCommand, handle *RunHandle) {
-	c.executeTurn(cmd, handle)
-}
-
-func (c *Coordinator) executeTurn(cmd StartCommand, handle *RunHandle) {
-	defer func() {
-		c.mu.Lock()
-		delete(c.runs, sessionKey(handle.Workspace, handle.SessionID))
-		handle.Cancel()
-		select {
-		case <-handle.Done:
-		default:
-			close(handle.Done)
+// Run is the standalone CLI entry point. Remote disconnects use StartTurn instead.
+func (c *Coordinator) Run(ctx context.Context, cmd StartCommand, onEvent func(Event)) (*agent.RunResult, Outcome, error) {
+	h, err := c.ReserveTurn(cmd.Workspace, cmd.SessionID, cmd.Messages...)
+	if err != nil {
+		return nil, Outcome{}, err
+	}
+	sub, err := c.Subscribe(h.Workspace, h.SessionID, "")
+	if err != nil {
+		h.Cancel()
+		_, o := c.ExecuteTurn(cmd, h)
+		return nil, o, err
+	}
+	defer sub.Close()
+	stop := context.AfterFunc(ctx, h.Cancel)
+	defer stop()
+	type completed struct {
+		result  *agent.RunResult
+		outcome Outcome
+	}
+	finished := make(chan completed, 1)
+	go func() { r, o := c.ExecuteTurn(cmd, h); finished <- completed{r, o} }()
+	for {
+		u, err := sub.Next(context.Background())
+		if err != nil {
+			h.Cancel()
+			return nil, Outcome{}, err
 		}
-		c.mu.Unlock()
-	}()
-
-	run := handle.run
-	record := handle.Record
-
+		if u.Event != nil && onEvent != nil {
+			onEvent(*u.Event)
+		}
+		if u.Outcome != nil {
+			break
+		}
+	}
+	result := <-finished
+	if result.outcome.Status != OutcomeSucceeded {
+		return result.result, result.outcome, fmt.Errorf("%s: %s", result.outcome.Code, result.outcome.Error)
+	}
+	return result.result, result.outcome, nil
+}
+func (c *Coordinator) ExecuteTurn(cmd StartCommand, h *RunHandle) (*agent.RunResult, Outcome) {
+	run := h.run
+	outcome := Outcome{SessionID: run.sessionID, RunID: run.id, Status: OutcomeFailed, Code: "runner_creation_failed"}
 	var runner agent.Runner
 	var err error
-	if c.newAgent != nil {
-		runner, err = c.newAgent(cmd.Model, run.workspace)
-	} else {
+	if c.newAgent == nil {
 		err = errors.New("no agent runner factory configured")
+	} else {
+		runner, err = c.newAgent(cmd.Model, run.workspace)
 	}
-
 	if err != nil {
-		c.broadcastOutcome(run, Outcome{
-			SessionID: run.sessionID,
-			RunID:     run.id,
-			Status:    OutcomeFailed,
-			Persisted: false,
-			Error:     err.Error(),
-			Code:      "runner_creation_failed",
-		})
-		c.broadcastError(run.workspace, run.sessionID, run.id, err.Error())
-		return
+		outcome.Error = err.Error()
+		c.finish(run, outcome, nil)
+		return nil, outcome
 	}
-
 	c.mu.Lock()
 	run.state = "running"
 	c.mu.Unlock()
-
-	turnCtx := run.ctx
-
-	// Install permission handler
-	turnCtx = tools.WithPermissionHandler(turnCtx, func(ctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
+	turnCtx := tools.WithPermissionHandler(run.ctx, func(ctx context.Context, rq tools.PermissionRequest) (tools.PermissionResponse, error) {
+		if c.permissionHandler != nil {
+			return c.permissionHandler(ctx, rq)
+		}
 		perm, _ := permissions.Resolve(c.effectivePermissionOverride(), config.LoadSettings(run.workspace))
-		switch perm {
-		case config.PermissionAllow:
+		if perm == config.PermissionAllow {
 			return tools.PermissionResponse{Approved: true}, nil
-		case config.PermissionDeny:
+		}
+		if perm == config.PermissionDeny {
 			return tools.PermissionResponse{Approved: false}, nil
 		}
-
-		interactionID := newID()
-		pi := PendingInteraction{
-			ID:        interactionID,
-			Kind:      InteractionPermission,
-			SessionID: run.sessionID,
-			RunID:     run.id,
-			Permission: &PermissionData{
-				Tool:     rq.Tool,
-				FilePath: rq.FilePath,
-				Preview:  rq.Preview,
-				Command:  rq.Command,
-			},
-		}
-
-		respChan := c.setPendingInteraction(run, pi)
-		c.broadcastInteraction(run.workspace, pi)
-
-		select {
-		case resp := <-respChan:
-			return tools.PermissionResponse{Approved: resp.PermissionApproved}, nil
-		case <-ctx.Done():
-			return tools.PermissionResponse{Approved: false}, ctx.Err()
-		}
+		pi := PendingInteraction{ID: newID(), Kind: InteractionPermission, SessionID: run.sessionID, RunID: run.id, Permission: &PermissionData{Tool: rq.Tool, FilePath: rq.FilePath, Preview: rq.Preview, Command: rq.Command}}
+		resp, err := c.waitInteraction(ctx, run, pi)
+		return tools.PermissionResponse{Approved: resp.PermissionApproved}, err
 	})
-
-	// Install question handler
 	turnCtx = tools.WithQuestionHandler(turnCtx, func(ctx context.Context, rq tools.AskRequest) (tools.AskResponse, error) {
-		interactionID := newID()
-		pi := PendingInteraction{
-			ID:        interactionID,
-			Kind:      InteractionAsk,
-			SessionID: run.sessionID,
-			RunID:     run.id,
-			Ask: &AskData{
-				Question: rq.Question,
-				Options:  rq.Options,
-			},
+		if c.questionHandler != nil {
+			return c.questionHandler(ctx, rq)
 		}
-
-		respChan := c.setPendingInteraction(run, pi)
-		c.broadcastInteraction(run.workspace, pi)
-
-		select {
-		case resp := <-respChan:
-			return tools.AskResponse{Selected: resp.AskSelected, Answer: resp.AskAnswer, Label: resp.AskLabel}, nil
-		case <-ctx.Done():
-			return tools.AskResponse{Selected: -1}, ctx.Err()
-		}
+		pi := PendingInteraction{ID: newID(), Kind: InteractionAsk, SessionID: run.sessionID, RunID: run.id, Ask: &AskData{Question: rq.Question, Options: append([]string(nil), rq.Options...)}}
+		resp, err := c.waitInteraction(ctx, run, pi)
+		return tools.AskResponse{Selected: resp.AskSelected, Answer: resp.AskAnswer, Label: resp.AskLabel}, err
 	})
-
 	svc := Service{Runner: runner, Store: c.Store(run.workspace)}
-	_, execErr := svc.RunPrepared(turnCtx, PreparedTurn{
-		SessionID: run.sessionID,
-		RunID:     run.id,
-		Messages:  run.messages,
-		Record:    record,
-		OnEvent: func(ev Event) {
-			ev.SessionID = run.sessionID
-			ev.RunID = run.id
-			c.appendAndBroadcastEvent(run, ev)
-		},
-		OnPersist: func() {
+	if c.ephemeral {
+		svc.Store = nil
+	}
+	result, execErr := svc.RunPrepared(turnCtx, PreparedTurn{
+		SessionID: run.sessionID, RunID: run.id, Messages: cloneMessages(run.messages), Record: run.record,
+		OnEvent: func(ev Event) { ev.SessionID = run.sessionID; ev.RunID = run.id; c.appendAndBroadcastEvent(run, ev) },
+		OnPersist: func() error {
 			c.mu.Lock()
+			defer c.mu.Unlock()
+			if err := run.ctx.Err(); err != nil {
+				return err
+			}
 			run.state = "persisting"
-			c.mu.Unlock()
+			return nil
 		},
 	})
-
-	var outcome Outcome
-	if run.ctx.Err() != nil {
-		outcome = Outcome{
-			SessionID: run.sessionID,
-			RunID:     run.id,
-			Status:    OutcomeCanceled,
-			Persisted: false,
-			Error:     "run canceled",
-			Code:      "canceled",
-		}
-	} else if errors.Is(execErr, ErrPersistenceFailed) {
-		outcome = Outcome{
-			SessionID: run.sessionID,
-			RunID:     run.id,
-			Status:    OutcomePersistenceFailed,
-			Persisted: false,
-			Error:     execErr.Error(),
-			Code:      "persistence_failed",
-		}
-	} else if execErr != nil {
-		outcome = Outcome{
-			SessionID: run.sessionID,
-			RunID:     run.id,
-			Status:    OutcomeFailed,
-			Persisted: false,
-			Error:     execErr.Error(),
-			Code:      "execution_failed",
-		}
-	} else {
-		outcome = Outcome{
-			SessionID: run.sessionID,
-			RunID:     run.id,
-			Status:    OutcomeSucceeded,
-			Persisted: true,
-		}
-	}
-
-	// Error is broadcast before the outcome so remote clients that stop on
-	// the first terminal error envelope still observe the failure.
-	if outcome.Status == OutcomeFailed {
-		c.broadcastError(run.workspace, run.sessionID, run.id, outcome.Error)
-	}
-	c.broadcastOutcome(run, outcome)
-}
-
-func (c *Coordinator) setPendingInteraction(run *activeRun, pi PendingInteraction) chan interactionResponse {
 	c.mu.Lock()
-	defer c.mu.Unlock()
+	projectionErr := run.projectionErr
+	persisting := run.state == "persisting"
+	c.mu.Unlock()
+	switch {
+	case projectionErr != nil:
+		outcome.Status = OutcomeFailed
+		outcome.Code = "projection_limit"
+		outcome.Error = projectionErr.Error()
+	case errors.Is(execErr, ErrPersistenceFailed):
+		outcome.Status = OutcomePersistenceFailed
+		outcome.Code = "persistence_failed"
+		outcome.Error = execErr.Error()
+	case !persisting && run.ctx.Err() != nil:
+		outcome.Status = OutcomeCanceled
+		outcome.Code = "canceled"
+		outcome.Error = "run canceled"
+	case execErr != nil:
+		outcome.Status = OutcomeFailed
+		outcome.Code = "execution_failed"
+		outcome.Error = execErr.Error()
+	default:
+		outcome.Status = OutcomeSucceeded
+		outcome.Persisted = !c.ephemeral
+		outcome.Code = ""
+	}
+	c.finish(run, outcome, result)
+	return result, outcome
+}
+func (c *Coordinator) waitInteraction(ctx context.Context, run *activeRun, pi PendingInteraction) (interactionResponse, error) {
+	c.mu.Lock()
+	if err := ctx.Err(); err != nil {
+		c.mu.Unlock()
+		return interactionResponse{}, err
+	}
 	run.state = "waiting_for_interaction"
 	run.pending = &pi
 	run.response = make(chan interactionResponse, 1)
-	return run.response
+	response := run.response
+	c.publishLocked(sessionKey(run.workspace, run.sessionID), Update{Interaction: &pi})
+	c.mu.Unlock()
+	select {
+	case resp := <-response:
+		return resp, nil
+	case <-ctx.Done():
+		return interactionResponse{}, ctx.Err()
+	}
 }
-
 func (c *Coordinator) appendAndBroadcastEvent(run *activeRun, ev Event) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	if run.projectionErr != nil {
+		return
+	}
+	ev = cloneEvent(ev)
+	size := eventBytes(ev)
+	if run.projectionBytes+size > MaxProjectionBytes {
+		run.projectionErr = ErrProjectionLimit
+		run.cancel()
+		return
+	}
+	run.projectionBytes += size
 	n := len(run.events)
 	if n > 0 && (ev.Type == "text" || ev.Type == "reasoning") && run.events[n-1].Type == ev.Type {
 		run.events[n-1].Text += ev.Text
@@ -490,294 +380,292 @@ func (c *Coordinator) appendAndBroadcastEvent(run *activeRun, ev Event) {
 	} else {
 		run.events = append(run.events, ev)
 	}
-	key := sessionKey(run.workspace, run.sessionID)
-	subs := c.copySubscribersLocked(key)
-	c.mu.Unlock()
-
-	for _, sub := range subs {
-		sub.OnEvent(ev)
+	c.publishLocked(sessionKey(run.workspace, run.sessionID), Update{Event: &ev})
+}
+func (c *Coordinator) publishLocked(key string, u Update) {
+	for sub := range c.subs[key] {
+		if !sub.enqueue(u) {
+			delete(c.subs[key], sub)
+			c.logger.Warn("subscriber overflow", "workspace", sub.Workspace, "session", sub.SessionID)
+		}
 	}
 }
-
-func (c *Coordinator) broadcastInteraction(workspace string, pi PendingInteraction) {
-	c.mu.Lock()
-	key := sessionKey(workspace, pi.SessionID)
-	subs := c.copySubscribersLocked(key)
-	c.mu.Unlock()
-
-	for _, sub := range subs {
-		sub.OnInteraction(pi)
-	}
-}
-
-func (c *Coordinator) broadcastOutcome(run *activeRun, outcome Outcome) {
-	c.mu.Lock()
-	key := sessionKey(run.workspace, run.sessionID)
-	subs := c.copySubscribersLocked(key)
-	c.mu.Unlock()
-
-	for _, sub := range subs {
-		sub.OnDone(outcome)
-	}
-}
-
-func (c *Coordinator) broadcastError(workspace, sessionID, runID, errMsg string) {
-	c.mu.Lock()
-	key := sessionKey(workspace, sessionID)
-	subs := c.copySubscribersLocked(key)
-	c.mu.Unlock()
-
-	for _, sub := range subs {
-		sub.OnError(sessionID, runID, errMsg)
-	}
-}
-
-func (c *Coordinator) copySubscribersLocked(key string) []Subscriber {
-	subMap := c.subs[key]
-	if len(subMap) == 0 {
-		return nil
-	}
-	out := make([]Subscriber, 0, len(subMap))
-	for s := range subMap {
-		out = append(out, s)
-	}
-	return out
-}
-
-// Cancel terminates an active run.
-func (c *Coordinator) Cancel(workspace, sessionID, runID string) error {
-	key := sessionKey(workspace, sessionID)
+func (c *Coordinator) finish(run *activeRun, outcome Outcome, result *agent.RunResult) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	run := c.runs[key]
-	if run == nil || (runID != "" && run.id != runID) {
+	key := sessionKey(run.workspace, run.sessionID)
+	snap := c.runSnapshot(run)
+	snap.Running = false
+	snap.Pending = nil
+	snap.Outcome = &outcome
+	snap.UnsavedAvailable = outcome.Status != OutcomeSucceeded
+	if result != nil && (outcome.Status == OutcomeSucceeded || outcome.Status == OutcomePersistenceFailed) {
+		snap.Messages = cloneMessages(withoutSystemMessages(result.Messages))
+		snap.Events = nil
+	}
+	c.retainLocked(key, snap)
+	// Terminal delivery and release are a single ordered transition.
+	c.publishLocked(key, Update{Outcome: &outcome})
+	delete(c.runs, key)
+	run.cancel()
+	close(run.done)
+	c.logger.Info("run finished", "workspace", run.workspace, "session", run.sessionID, "run", run.id, "status", outcome.Status, "persisted", outcome.Persisted)
+}
+func (c *Coordinator) Cancel(workspace, sessionID, runID string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	run := c.runs[sessionKey(workspace, sessionID)]
+	if run == nil || runID == "" || run.id != runID {
 		return ErrRunNotFound
 	}
-	if run.state == "persisting" {
-		return nil // Persistence cannot be canceled once commit starts
+	if run.state != "persisting" {
+		run.cancel()
 	}
-	run.cancel()
 	return nil
 }
-
-// SnapshotAndSubscribe registers a subscriber and returns an immutable snapshot.
-func (c *Coordinator) SnapshotAndSubscribe(workspace, sessionID string, sub Subscriber) (Snapshot, func(), error) {
+func (c *Coordinator) Subscribe(workspace, sessionID, requestID string) (*Subscription, error) {
 	ws := CanonicalWorkspace(workspace)
 	key := sessionKey(ws, sessionID)
-
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	if c.subs[key] == nil {
-		c.subs[key] = make(map[Subscriber]struct{})
+	if c.stopped {
+		return nil, ErrEngineStopped
 	}
-	c.subs[key][sub] = struct{}{}
-
-	unsub := func() {
-		c.Unsubscribe(ws, sessionID, sub)
-	}
-
-	snap := Snapshot{SessionID: sessionID}
-	if run := c.runs[key]; run != nil {
-		snap.RunID = run.id
-		snap.Running = true
-		snap.Messages = append([]llm.Message(nil), run.messages...)
-		snap.Events = append([]Event(nil), run.events...)
-		if run.pending != nil {
-			pCopy := *run.pending
-			snap.Pending = &pCopy
-		}
-		return snap, unsub, nil
-	}
-
-	record, err := c.storeLocked(ws).Load(sessionID)
+	snap, err := c.snapshotLocked(ws, sessionID)
 	if err != nil {
-		if errors.Is(err, session.ErrSessionNotFound) {
-			snap.Messages = []llm.Message{}
-			return snap, unsub, nil
-		}
-		delete(c.subs[key], sub)
-		return Snapshot{}, nil, err
+		return nil, err
 	}
-
-	snap.Messages = append([]llm.Message(nil), record.Messages...)
-	return snap, unsub, nil
-}
-
-// Snapshot returns an immutable snapshot without registering a subscription.
-func (c *Coordinator) Snapshot(workspace, sessionID string) (Snapshot, error) {
-	ws := CanonicalWorkspace(workspace)
-	key := sessionKey(ws, sessionID)
-
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	snap := Snapshot{SessionID: sessionID}
-	if run := c.runs[key]; run != nil {
-		snap.RunID = run.id
-		snap.Running = true
-		snap.Messages = append([]llm.Message(nil), run.messages...)
-		snap.Events = append([]Event(nil), run.events...)
-		if run.pending != nil {
-			pCopy := *run.pending
-			snap.Pending = &pCopy
-		}
-		return snap, nil
-	}
-
-	record, err := c.storeLocked(ws).Load(sessionID)
-	if err != nil {
-		if errors.Is(err, session.ErrSessionNotFound) {
-			snap.Messages = []llm.Message{}
-			return snap, nil
-		}
-		return Snapshot{}, err
-	}
-
-	snap.Messages = append([]llm.Message(nil), record.Messages...)
-	return snap, nil
-}
-
-// Interaction posts an interaction and blocks until resolved or canceled.
-func (c *Coordinator) Interaction(ctx context.Context, h *RunHandle, pi PendingInteraction) (interactionResponse, error) {
-	if h == nil || h.run == nil {
-		return interactionResponse{}, ErrRunNotFound
-	}
-	respChan := c.setPendingInteraction(h.run, pi)
-	c.broadcastInteraction(h.Workspace, pi)
-	select {
-	case resp := <-respChan:
-		return resp, nil
-	case <-ctx.Done():
-		return interactionResponse{}, ctx.Err()
-	}
-}
-
-// AppendEvent appends an event to an active run and broadcasts it.
-func (c *Coordinator) AppendEvent(h *RunHandle, ev Event) {
-	if h != nil && h.run != nil {
-		ev.SessionID = h.SessionID
-		ev.RunID = h.ID
-		c.appendAndBroadcastEvent(h.run, ev)
-	}
-}
-
-// Unsubscribe removes a subscriber from a session.
-func (c *Coordinator) Unsubscribe(workspace, sessionID string, sub Subscriber) {
-	key := sessionKey(workspace, sessionID)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.subs[key] != nil {
+	sub := &Subscription{Workspace: ws, SessionID: sessionID, queue: make(chan queuedUpdate, 128)}
+	sub.unsubscribe = func() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
 		delete(c.subs[key], sub)
 		if len(c.subs[key]) == 0 {
 			delete(c.subs, key)
 		}
+		sub.closeQueue()
 	}
+	if c.subs[key] == nil {
+		c.subs[key] = map[*Subscription]struct{}{}
+	}
+	c.subs[key][sub] = struct{}{}
+	if !sub.enqueue(Update{RequestID: requestID, Snapshot: &snap}) {
+		delete(c.subs[key], sub)
+		return nil, ErrSlowSubscriber
+	}
+	return sub, nil
 }
 
-// ReplyPermission resolves a pending permission interaction.
-func (c *Coordinator) ReplyPermission(workspace, sessionID, runID, interactionID string, approved bool) error {
-	key := sessionKey(workspace, sessionID)
+// Resnapshot uses the existing queue so queued terminal events cannot be
+// overtaken by a replacement subscription's initial snapshot.
+func (c *Coordinator) Resnapshot(sub *Subscription, requestID string) error {
 	c.mu.Lock()
-	run := c.runs[key]
-	if run == nil || run.id != runID || run.pending == nil || run.pending.Kind != InteractionPermission || run.pending.ID != interactionID {
-		c.mu.Unlock()
-		return ErrStaleInteraction
+	defer c.mu.Unlock()
+	key := sessionKey(sub.Workspace, sub.SessionID)
+	if _, ok := c.subs[key][sub]; !ok {
+		return ErrSlowSubscriber
 	}
-	respChan := run.response
-	run.pending = nil
-	run.state = "running"
-	subs := c.copySubscribersLocked(key)
-	c.mu.Unlock()
-
-	respChan <- interactionResponse{PermissionApproved: approved}
-	for _, sub := range subs {
-		sub.OnInteractionDone(sessionID, runID, interactionID)
+	snap, err := c.snapshotLocked(sub.Workspace, sub.SessionID)
+	if err != nil {
+		return err
+	}
+	if !sub.enqueue(Update{RequestID: requestID, Snapshot: &snap}) {
+		delete(c.subs[key], sub)
+		return ErrSlowSubscriber
 	}
 	return nil
 }
-
-// ReplyAsk resolves a pending ask question interaction.
-func (c *Coordinator) ReplyAsk(workspace, sessionID, runID, interactionID string, selected int, answer, label string) error {
-	key := sessionKey(workspace, sessionID)
+func (c *Coordinator) Snapshot(workspace, sessionID string) (Snapshot, error) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.snapshotLocked(CanonicalWorkspace(workspace), sessionID)
+}
+func (c *Coordinator) runSnapshot(run *activeRun) Snapshot {
+	snap := Snapshot{SessionID: run.sessionID, RunID: run.id, Running: true, Messages: cloneMessages(run.messages), Events: cloneEvents(run.events)}
+	if run.pending != nil {
+		p := *run.pending
+		if p.Ask != nil {
+			a := *p.Ask
+			a.Options = append([]string(nil), a.Options...)
+			p.Ask = &a
+		}
+		if p.Permission != nil {
+			v := *p.Permission
+			p.Permission = &v
+		}
+		snap.Pending = &p
+	}
+	return snap
+}
+func (c *Coordinator) snapshotLocked(ws, id string) (Snapshot, error) {
+	key := sessionKey(ws, id)
+	if run := c.runs[key]; run != nil {
+		return c.runSnapshot(run), nil
+	}
+	if snap, ok := c.terminal[key]; ok {
+		return cloneSnapshot(snap), nil
+	}
+	st := c.storeLocked(ws)
+	if err := session.CheckLease(st); err != nil {
+		return Snapshot{}, err
+	}
+	record, err := st.Load(id)
+	if err != nil && !errors.Is(err, session.ErrSessionNotFound) {
+		return Snapshot{}, err
+	}
+	// A missing terminal record means prior unsaved output is unavailable.
+	return Snapshot{SessionID: id, Messages: cloneMessages(record.Messages)}, nil
+}
+func (c *Coordinator) dropTerminalLocked(key string) {
+	if snap, ok := c.terminal[key]; ok {
+		c.retainedBytes -= snapshotBytes(snap)
+		delete(c.terminal, key)
+	}
+	for i, k := range c.retainedOrder {
+		if k == key {
+			c.retainedOrder = append(c.retainedOrder[:i], c.retainedOrder[i+1:]...)
+			break
+		}
+	}
+}
+func (c *Coordinator) retainLocked(key string, snap Snapshot) {
+	c.dropTerminalLocked(key)
+	size := snapshotBytes(snap)
+	if size > MaxProjectionBytes {
+		snap.Messages = nil
+		snap.Events = nil
+		snap.UnsavedAvailable = false
+		snap.ProjectionUnavailable = true
+		size = snapshotBytes(snap)
+	}
+	for len(c.retainedOrder) > 0 && (len(c.retainedOrder) >= MaxRetainedSessions || c.retainedBytes+size > MaxRetainedBytes) {
+		c.dropTerminalLocked(c.retainedOrder[0])
+	}
+	c.terminal[key] = snap
+	c.retainedOrder = append(c.retainedOrder, key)
+	c.retainedBytes += size
+}
+func (c *Coordinator) ReplyPermission(ws, id, runID, interactionID string, approved bool) error {
+	return c.reply(ws, id, runID, interactionID, InteractionPermission, interactionResponse{PermissionApproved: approved})
+}
+func (c *Coordinator) ReplyAsk(ws, id, runID, interactionID string, selected int, answer, label string) error {
+	return c.reply(ws, id, runID, interactionID, InteractionAsk, interactionResponse{AskSelected: selected, AskAnswer: answer, AskLabel: label})
+}
+func (c *Coordinator) reply(ws, id, runID, interactionID, kind string, resp interactionResponse) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := sessionKey(ws, id)
 	run := c.runs[key]
-	if run == nil || run.id != runID || run.pending == nil || run.pending.Kind != InteractionAsk || run.pending.ID != interactionID {
-		c.mu.Unlock()
+	if run == nil || run.id != runID || run.pending == nil || run.pending.ID != interactionID || run.pending.Kind != kind || run.ctx.Err() != nil {
 		return ErrStaleInteraction
 	}
-	respChan := run.response
+	if kind == InteractionAsk && (resp.AskSelected < -1 || resp.AskSelected >= len(run.pending.Ask.Options)) {
+		return errors.New("invalid question selection")
+	}
+	pi := *run.pending
 	run.pending = nil
 	run.state = "running"
-	subs := c.copySubscribersLocked(key)
-	c.mu.Unlock()
-
-	respChan <- interactionResponse{AskSelected: selected, AskAnswer: answer, AskLabel: label}
-	for _, sub := range subs {
-		sub.OnInteractionDone(sessionID, runID, interactionID)
-	}
+	c.publishLocked(key, Update{Resolved: &pi})
+	run.response <- resp
 	return nil
 }
-
-// ListSessions lists all sessions in the workspace without working-tree scans.
-func (c *Coordinator) ListSessions(workspace string) ([]session.SessionMeta, error) {
-	st := c.Store(workspace)
+func (c *Coordinator) ListSessions(ws string) ([]session.SessionMeta, error) {
+	c.mu.Lock()
+	if c.stopped {
+		c.mu.Unlock()
+		return nil, ErrEngineStopped
+	}
+	st := c.storeLocked(ws)
+	c.listWorkers.Add(1)
+	c.mu.Unlock()
+	defer c.listWorkers.Done()
+	if err := session.CheckLease(st); err != nil {
+		return nil, err
+	}
 	return (sessions.Service{Store: st}).List()
 }
-
-// SessionData loads messages for a session.
-func (c *Coordinator) SessionData(workspace, sessionID string) ([]llm.Message, error) {
-	st := c.Store(workspace)
-	return (sessions.Service{Store: st}).Data(sessionID)
-}
-
-// CreateSession creates a new session record under reservation.
-func (c *Coordinator) CreateSession(workspace, id, title string) error {
-	key := sessionKey(workspace, id)
+func (c *Coordinator) mutate(ws, id string, discardProjection bool, fn func(sessions.Service) error) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if c.stopped {
+		return ErrEngineStopped
+	}
+	key := sessionKey(ws, id)
 	if c.runs[key] != nil {
 		return ErrSessionBusy
 	}
-	st := c.storeLocked(workspace)
-	return (sessions.Service{Store: st}).Create(id, title)
-}
-
-// DeleteSession removes a session if it is not currently active.
-func (c *Coordinator) DeleteSession(workspace, id string) error {
-	key := sessionKey(workspace, id)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.runs[key] != nil {
-		return ErrSessionBusy
+	st := c.storeLocked(ws)
+	if err := session.CheckLease(st); err != nil {
+		return err
 	}
-	st := c.storeLocked(workspace)
-	return (sessions.Service{Store: st}).Delete(id)
-}
-
-// RenameSession updates the session title if it is not currently active.
-func (c *Coordinator) RenameSession(workspace, id, title string) error {
-	key := sessionKey(workspace, id)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.runs[key] != nil {
-		return ErrSessionBusy
+	if err := fn(sessions.Service{Store: st}); err != nil {
+		return err
 	}
-	st := c.storeLocked(workspace)
-	return (sessions.Service{Store: st}).Rename(id, title)
+	if discardProjection {
+		c.dropTerminalLocked(key)
+	}
+	return nil
+}
+func (c *Coordinator) CreateSession(ws, id, title string) error {
+	return c.mutate(ws, id, true, func(s sessions.Service) error { return s.Create(id, title) })
+}
+func (c *Coordinator) DeleteSession(ws, id string) error {
+	return c.mutate(ws, id, true, func(s sessions.Service) error { return s.Delete(id) })
+}
+func (c *Coordinator) RenameSession(ws, id, title string) error {
+	return c.mutate(ws, id, false, func(s sessions.Service) error { return s.Rename(id, title) })
 }
 
-// Close gracefully stops the coordinator, canceling active runs.
-func (c *Coordinator) Close() {
+// Shutdown retains ownership on timeout; the owning executable must then exit.
+func (c *Coordinator) Shutdown(ctx context.Context) error {
+	started := time.Now()
 	c.mu.Lock()
 	c.stopped = true
 	runs := make([]*activeRun, 0, len(c.runs))
 	for _, r := range c.runs {
 		runs = append(runs, r)
+		if r.state != "persisting" {
+			r.cancel()
+		}
 	}
 	c.mu.Unlock()
-
 	for _, r := range runs {
-		r.cancel()
+		select {
+		case <-r.done:
+		case <-ctx.Done():
+			c.logger.Error("shutdown incomplete", "elapsed", time.Since(started))
+			return fmt.Errorf("shutdown incomplete: %w", ctx.Err())
+		}
 	}
+	listsDone := make(chan struct{})
+	go func() { c.listWorkers.Wait(); close(listsDone) }()
+	select {
+	case <-listsDone:
+	case <-ctx.Done():
+		return fmt.Errorf("shutdown incomplete: %w", ctx.Err())
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key, subs := range c.subs {
+		for sub := range subs {
+			sub.closeQueue()
+		}
+		delete(c.subs, key)
+	}
+	for key, st := range c.stores {
+		if closer, ok := st.(interface{ Close() }); ok {
+			closer.Close()
+		}
+		delete(c.stores, key)
+	}
+	if closer, ok := c.sessionStore.(interface{ Close() }); ok {
+		closer.Close()
+	}
+	c.logger.Info("shutdown drained", "elapsed", time.Since(started))
+	return nil
+}
+func (c *Coordinator) Close() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = c.Shutdown(ctx)
 }

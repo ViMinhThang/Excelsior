@@ -12,7 +12,7 @@ type ComposerProps = {
   mode: ComposerMode;
   selectedModel: string;
   onSelectModel: (id: string) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string) => Promise<boolean>;
   disabled?: boolean;
   isStreaming?: boolean;
   onStop: () => void;
@@ -20,11 +20,13 @@ type ComposerProps = {
 
 function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStreaming, onStop }: ComposerProps) {
   const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
   const [modelOpen, setModelOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const activeModel = AVAILABLE_MODELS.find((m) => m.id === selectedModel) ?? AVAILABLE_MODELS[0];
-  const canSend = text.trim().length > 0 && !disabled && !isStreaming;
+  const canSend = text.trim().length > 0 && !disabled && !isStreaming && !sending;
 
   const resize = useCallback(() => {
     const el = textareaRef.current;
@@ -33,11 +35,12 @@ function Composer({ mode, selectedModel, onSelectModel, onSend, disabled, isStre
     el.style.height = `${Math.min(Math.max(el.scrollHeight, 40), 200)}px`;
   }, []);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const trimmed = text.trim();
-    if (!trimmed || !canSend) return;
-    onSend(trimmed);
-    setText("");
+    if (!trimmed || !canSend || sendingRef.current) return;
+    sendingRef.current=true; setSending(true);
+    try { if (await onSend(trimmed)) setText(current => current === text ? "" : current); }
+    finally { sendingRef.current=false; setSending(false); }
     if (textareaRef.current) textareaRef.current.style.height = "auto";
   }, [canSend, onSend, text]);
 

@@ -109,7 +109,7 @@ func TestCoordinator_SessionBusyAndMutationsBlocked(t *testing.T) {
 
 	ws := t.TempDir()
 	sub := &testSubscriber{}
-	snap, unsub, err := coord.SnapshotAndSubscribe(ws, "sess-1", sub)
+	snap, unsub, err := subscribeTest(coord, ws, "sess-1", sub)
 	if err != nil {
 		t.Fatalf("snapshot error: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestCoordinator_InjectedSaveFailureOutcomes(t *testing.T) {
 
 	ws := t.TempDir()
 	sub := &testSubscriber{}
-	_, unsub, err := coord.SnapshotAndSubscribe(ws, "sess-fail", sub)
+	_, unsub, err := subscribeTest(coord, ws, "sess-fail", sub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +330,7 @@ func TestCoordinator_Cancellation(t *testing.T) {
 
 	ws := t.TempDir()
 	sub := &testSubscriber{}
-	_, unsub, _ := coord.SnapshotAndSubscribe(ws, "sess-cancel", sub)
+	_, unsub, _ := subscribeTest(coord, ws, "sess-cancel", sub)
 	defer unsub()
 
 	runID, err := coord.StartTurn(context.Background(), StartCommand{
@@ -414,7 +414,7 @@ func TestCoordinator_QuestionInteraction(t *testing.T) {
 
 	ws := t.TempDir()
 	sub := &testSubscriber{}
-	_, unsub, _ := coord.SnapshotAndSubscribe(ws, "sess-ask", sub)
+	_, unsub, _ := subscribeTest(coord, ws, "sess-ask", sub)
 	defer unsub()
 
 	runID, err := coord.StartTurn(context.Background(), StartCommand{
@@ -477,7 +477,7 @@ func TestCoordinator_DisconnectSurvival(t *testing.T) {
 
 	ws := t.TempDir()
 	firstSub := &testSubscriber{}
-	_, firstUnsub, err := coord.SnapshotAndSubscribe(ws, "sess-survive", firstSub)
+	_, firstUnsub, err := subscribeTest(coord, ws, "sess-survive", firstSub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -498,7 +498,7 @@ func TestCoordinator_DisconnectSurvival(t *testing.T) {
 
 	// Second subscriber connects and requests snapshot
 	secondSub := &testSubscriber{}
-	snap, secondUnsub, err := coord.SnapshotAndSubscribe(ws, "sess-survive", secondSub)
+	snap, secondUnsub, err := subscribeTest(coord, ws, "sess-survive", secondSub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,3 +544,32 @@ func TestCoordinator_DisconnectSurvival(t *testing.T) {
 	}
 }
 
+func subscribeTest(c *Coordinator, ws, id string, s *testSubscriber) (Snapshot, func(), error) {
+	q, err := c.Subscribe(ws, id, "")
+	if err != nil {
+		return Snapshot{}, nil, err
+	}
+	u, err := q.Next(context.Background())
+	if err != nil {
+		return Snapshot{}, nil, err
+	}
+	go func() {
+		for {
+			u, err := q.Next(context.Background())
+			if err != nil {
+				return
+			}
+			switch {
+			case u.Event != nil:
+				s.OnEvent(*u.Event)
+			case u.Interaction != nil:
+				s.OnInteraction(*u.Interaction)
+			case u.Resolved != nil:
+				s.OnInteractionDone(u.Resolved.SessionID, u.Resolved.RunID, u.Resolved.ID)
+			case u.Outcome != nil:
+				s.OnDone(*u.Outcome)
+			}
+		}
+	}()
+	return *u.Snapshot, q.Close, nil
+}

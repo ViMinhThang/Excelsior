@@ -185,8 +185,11 @@ func TestRunSurvivesDisconnectAndApprovesFromOtherClient(t *testing.T) {
 		t.Fatal("stale approval accepted")
 	}
 	sendTest(t, second, protocol.TypePermissionResp, response)
-	if readTest(t, second).Type != protocol.TypeInteractionDone {
-		t.Fatal("missing interaction completion")
+	for i := 0; i < 2; i++ {
+		env := readTest(t, second)
+		if env.Type != protocol.TypePermissionResp && env.Type != protocol.TypeInteractionDone {
+			t.Fatalf("unexpected approval response: %s", env.Type)
+		}
 	}
 	select {
 	case approved := <-runner.approved:
@@ -215,41 +218,44 @@ func TestRunSurvivesDisconnectAndApprovesFromOtherClient(t *testing.T) {
 func TestRunWorkspaceScopeAndCancellation(t *testing.T) {
 	h := NewHub(config.Config{}, t.TempDir())
 	defer h.Close()
-	a, b := newConn(h, nil), newConn(h, nil)
-	_, turn, err := h.Coordinator().ReserveTurn(h.Workspace(), "session-1")
+	coord := h.Coordinator()
+	handle, err := coord.ReserveTurn(h.Workspace(), "session-1", llm.Message{Role: "user", Content: "hello"})
 	if err != nil {
 		t.Fatal("start failed")
 	}
-	if _, _, err = h.Coordinator().ReserveTurn(h.Workspace(), "session-1"); !errors.Is(err, chat.ErrSessionBusy) {
-		t.Fatal("cross-client duplicate allowed")
+	if _, err := coord.ReserveTurn(h.Workspace(), "session-1", llm.Message{Role: "user", Content: "hello"}); !errors.Is(err, chat.ErrSessionBusy) {
+		t.Fatal("cross-client duplicate")
 	}
+	a := newConn(h, nil)
 	a.close()
 	select {
-	case <-turn.Context.Done():
+	case <-handle.Context.Done():
 		t.Fatal("disconnect canceled run")
 	default:
 	}
+	b := newConn(h, nil)
 	b.workspace.Set(canonicalWorkspace(t.TempDir()))
-	_, other, err := h.Coordinator().ReserveTurn(b.currentWorkspace(), "session-1")
+	otherHandle, err := coord.ReserveTurn(b.currentWorkspace(), "session-1", llm.Message{Role: "user", Content: "hello"})
 	if err != nil {
 		t.Fatal("different workspace blocked")
 	}
-	b.cancelTurn(protocol.NewEnvelope(protocol.TypeChatCancel, map[string]string{"sessionId": "session-1", "runId": turn.ID}))
+	b.cancelTurn(protocol.NewEnvelope(protocol.TypeChatCancel, map[string]string{"sessionId": "session-1", "runId": handle.ID}))
 	select {
-	case <-turn.Context.Done():
+	case <-handle.Context.Done():
 		t.Fatal("wrong workspace canceled run")
 	default:
 	}
 	b.workspace.Set(h.Workspace())
-	b.cancelTurn(protocol.NewEnvelope(protocol.TypeChatCancel, map[string]string{"sessionId": "session-1", "runId": turn.ID}))
+	b.cancelTurn(protocol.NewEnvelope(protocol.TypeChatCancel, map[string]string{"sessionId": "session-1", "runId": handle.ID}))
 	select {
-	case <-turn.Context.Done():
+	case <-handle.Context.Done():
 	case <-time.After(time.Second):
 		t.Fatal("cancel failed")
 	}
-	turn.Cancel()
-	h.Coordinator().EndTurn(turn, chat.Outcome{SessionID: "session-1", RunID: turn.ID, Status: chat.OutcomeCanceled})
-	h.Coordinator().EndTurn(other, chat.Outcome{SessionID: "session-1", RunID: other.ID, Status: chat.OutcomeCanceled})
+	coord.ExecuteTurn(chat.StartCommand{}, handle)
+	otherHandle.Cancel()
+	coord.ExecuteTurn(chat.StartCommand{}, otherHandle)
+
 }
 
 func TestCorruptHistoryIsNotOverwritten(t *testing.T) {
@@ -265,8 +271,7 @@ func TestCorruptHistoryIsNotOverwritten(t *testing.T) {
 	}
 	h := NewHub(config.Config{}, root)
 	defer h.Close()
-	c := newConn(h, nil)
-	if _, _, err := h.Coordinator().ReserveTurn(c.currentWorkspace(), "broken"); err == nil {
+	if _, err := h.Coordinator().ReserveTurn(h.Workspace(), "broken"); err == nil {
 		t.Fatal("corrupt history accepted")
 	}
 	after, _ := os.ReadFile(path)

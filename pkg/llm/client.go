@@ -45,7 +45,7 @@ func (c *Client) model(reqModel string) provider.LanguageModel {
 		opts = append(opts, deepseek.WithHTTPClient(c.HTTPClient))
 	}
 	// Build the chat model with the resolved name and options.
-	return deepseek.Chat(model, opts...)
+	return budgetedModel{LanguageModel: deepseek.Chat(model, opts...)}
 }
 
 // StreamChatWithTools delegates the complete tool loop to GoAI.
@@ -60,6 +60,8 @@ func (c *Client) StreamChatWithTools(
 	onToolStart func(ToolCall),
 	onToolResult func(ToolCall, string, error),
 ) (*Message, []Message, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	// Convert app messages to provider messages.
 	messages, err := toProviderMessages(req.Messages)
 	// Bail on unsupported roles.
@@ -318,12 +320,3 @@ func classifyStatus(status int) error {
 	}
 }
 
-// IsRetryable reports whether GoAI classified an error as transient.
-func IsRetryable(err error) bool {
-	var apiErr *goai.APIError
-	if errors.As(err, &apiErr) {
-		return apiErr.IsRetryable
-	}
-	var llmErr *LLMError
-	return errors.As(err, &llmErr) && llmErr.IsRetryable()
-}

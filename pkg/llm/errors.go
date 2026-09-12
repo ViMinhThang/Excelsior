@@ -1,7 +1,6 @@
 package llm
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -45,7 +44,6 @@ func (e *LLMError) Error() string {
 	}
 	return "deepseek error"
 }
-
 func (e *LLMError) Unwrap() error {
 	return e.Err
 }
@@ -71,30 +69,3 @@ func (e *LLMError) Is(target error) bool {
 	}
 }
 
-// IsRetryable reports whether the failure is transient and eligible for retry.
-func (e *LLMError) IsRetryable() bool {
-	if errors.Is(e.Err, context.Canceled) {
-		return false
-	}
-	if errors.Is(e.Err, ErrMissingAPIKey) ||
-		errors.Is(e.Err, ErrLineTooLarge) ||
-		errors.Is(e.Err, ErrInvalidRequest) ||
-		errors.Is(e.Err, ErrAuthFailed) ||
-		errors.Is(e.Err, ErrInvalidBaseURL) {
-		return false
-	}
-	if errors.Is(e.Err, context.DeadlineExceeded) ||
-		errors.Is(e.Err, ErrRateLimit) ||
-		errors.Is(e.Err, ErrServerUnavailable) ||
-		errors.Is(e.Err, ErrStreamInterrupted) {
-		return true
-	}
-	switch e.StatusCode {
-	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable,
-		http.StatusGatewayTimeout, http.StatusInternalServerError:
-		return true
-	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden, http.StatusNotFound:
-		return false
-	}
-	return e.Err != nil
-}

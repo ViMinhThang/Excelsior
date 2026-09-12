@@ -95,5 +95,5 @@ func (h *Hub) authenticate(ws *websocket.Conn) bool {
 	}
 	_ = ws.SetReadDeadline(time.Time{})
 	_ = ws.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	return ws.WriteJSON(protocol.NewEnvelope(protocol.TypeAuth, map[string]any{"ok": true, "workspace": h.Workspace()})) == nil
+	return ws.WriteJSON(protocol.NewEnvelope(protocol.TypeAuth, map[string]any{"ok": true, "workspace": h.Workspace(), "capabilities": []string{protocol.RunLifecycleCapability}})) == nil
 }

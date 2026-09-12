@@ -35,14 +35,59 @@ func sanitizeID(id string) (string, error) {
 type DirStore struct {
 	Dir string // Directory path e.g. .excelsior/sessions
 	mu  sync.RWMutex
+	// lease state: writes require an owned store lease (see lease.go).
+	leaseErr error
+	holds    bool
+	closed   bool
 }
 
 // Compile-time interface check.
 var _ Store = (*DirStore)(nil)
 
-// NewDirStore returns a DirStore rooted at dir.
+// NewDirStore returns a DirStore rooted at dir. It immediately acquires an
+// OS-held exclusive lease on the store; a second process gets ErrStoreOwned
+// on its first write (see LeaseError to fail fast).
 func NewDirStore(dir string) *DirStore {
-	return &DirStore{Dir: dir}
+	s := &DirStore{Dir: dir}
+	s.ensureLease()
+	return s
+}
+
+func (s *DirStore) ensureLease() error {
+	if s.closed {
+		return fmt.Errorf("session store closed")
+	}
+	if s.holds {
+		return nil
+	}
+	if strings.TrimSpace(s.Dir) == "" {
+		return nil // path() reports ErrStoreDirEmpty on write
+	}
+	if err := acquireStoreLease(s.Dir); err != nil {
+		s.leaseErr = err
+		return err
+	}
+	s.leaseErr, s.holds = nil, true
+	return nil
+}
+
+// LeaseError reports why writes to this store currently fail (nil if owned).
+func (s *DirStore) LeaseError() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ensureLease()
+}
+
+// Close releases the store lease. The OS also releases it when the process
+// exits, so a crash never leaves a stale lock.
+func (s *DirStore) Close() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.closed = true
+	if s.holds {
+		s.holds = false
+		releaseStoreLease(s.Dir)
+	}
 }
 
 func (s *DirStore) path(id string) (string, error) {
@@ -61,6 +106,9 @@ func (s *DirStore) Save(rec Record) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if err := s.ensureLease(); err != nil {
+		return fmt.Errorf("session save %q: %w", rec.ID, err)
+	}
 	p, err := s.path(rec.ID)
 	if err != nil {
 		return err
@@ -103,8 +151,11 @@ func lastRecord(b []byte) (Record, bool) {
 
 // Load retrieves a session record by ID from disk.
 func (s *DirStore) Load(id string) (Record, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureLease(); err != nil {
+		return Record{}, err
+	}
 
 	p, err := s.path(id)
 	if err != nil {
@@ -135,8 +186,11 @@ func (s *DirStore) Load(id string) (Record, error) {
 
 // List returns metadata summaries for all sessions, sorted by UpdatedAt descending.
 func (s *DirStore) List() ([]SessionMeta, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureLease(); err != nil {
+		return nil, err
+	}
 
 	if strings.TrimSpace(s.Dir) == "" {
 		return nil, fmt.Errorf("session list: %w", ErrStoreDirEmpty)
@@ -197,6 +251,9 @@ func (s *DirStore) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if err := s.ensureLease(); err != nil {
+		return fmt.Errorf("session delete %q: %w", id, err)
+	}
 	p, err := s.path(id)
 	if err != nil {
 		return err

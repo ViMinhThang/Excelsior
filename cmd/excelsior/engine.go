@@ -1,17 +1,24 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
 
 	"github.com/spf13/cobra"
 
+	"excelsior/internal/app"
+	"excelsior/pkg/agent"
 	"excelsior/pkg/config"
 	"excelsior/pkg/engine"
+	"excelsior/pkg/session"
 )
 
 func newEngineCommand(cfg config.Config, workspaceFlag *string) *cobra.Command {
 	var addr string
+	var parentPipe bool
 	var dbPath string
 	var authEnabled bool
 	var origins []string
@@ -47,6 +54,12 @@ func newEngineCommand(cfg config.Config, workspaceFlag *string) *cobra.Command {
 				slog.Warn("engine config", "err", err)
 			}
 			h := engine.NewHub(cfg, ws)
+			h.NewAgent = func(model, workspace string) (agent.Runner, error) {
+				return app.NewAgent(cfg, workspace, normalizeModel(model, cfg.Model), agent.DefaultSystemPrompt, slog.Default()), nil
+			}
+			if err := session.CheckLease(h.Coordinator().Store(ws)); err != nil {
+				return err
+			}
 			h.Addr = addr
 			h.Logger = slog.Default()
 			h.PermissionOverride = override
@@ -56,15 +69,21 @@ func newEngineCommand(cfg config.Config, workspaceFlag *string) *cobra.Command {
 			}
 			h.Token, h.AllowedOrigins = token, origins
 			slog.Info("starting engine", "addr", addr, "workspace", ws, "model", cfg.Model)
-			return h.ListenAndServe(cmd.Context())
+			ctx, cancel := context.WithCancel(cmd.Context())
+			defer cancel()
+			if parentPipe {
+				go func() { _, _ = io.Copy(io.Discard, os.Stdin); cancel() }()
+			}
+			return h.ListenAndServe(ctx)
 		},
 	}
+	cmd.Flags().BoolVar(&parentPipe, "parent-pipe", false, "Stop when the owning desktop closes stdin")
 	cmd.Flags().StringVar(&addr, "addr", "127.0.0.1:17812", "Listen address for WS hub (e.g. :17812)")
 	cmd.Flags().BoolVar(&authEnabled, "auth", false, "Retired: owner-token authentication is always required")
 	cmd.Flags().StringVar(&dbPath, "db", "", "Retired: sessions use workspace JSON files")
 	_ = cmd.Flags().MarkHidden("auth")
 	_ = cmd.Flags().MarkHidden("db")
-	cmd.Flags().StringSliceVar(&origins, "origin", []string{"null", "http://localhost:3000"}, "Allowed browser origins (repeat or comma-separate)")
+	cmd.Flags().StringSliceVar(&origins, "origin", []string{"null", "excelsior://desktop", "http://localhost:3000"}, "Allowed browser origins (repeat or comma-separate)")
 	cmd.AddCommand(&cobra.Command{Use: "token", Short: "Print the owner token (keep private)", RunE: func(cmd *cobra.Command, args []string) error {
 		token, err := engine.OwnerToken(false)
 		if err == nil {

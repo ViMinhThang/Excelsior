@@ -90,4 +90,3 @@ func jsonSchema(props map[string]any, required []string) map[string]any {
 		"required":   required,
 	}
 }
-

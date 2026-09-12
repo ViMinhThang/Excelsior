@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -17,8 +16,9 @@ func TestCorruptSessionFailsBeforeRunner(t *testing.T) {
 	if err := os.WriteFile(path, []byte("corrupt"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	// A nil runner would panic if corrupt history were silently treated as empty.
-	_, err := (Service{Store: session.NewDirStore(dir)}).Run(context.Background(), Request{SessionID: "broken", Messages: []llm.Message{{Role: "user", Content: "hello"}}})
+	coord := NewCoordinator(Config{StoreFactory: func(string) session.Store { return session.NewDirStore(dir) }})
+	// A nil runner factory would panic in ExecuteTurn if corrupt history were silently treated as empty.
+	_, err := coord.ReserveTurn(dir, "broken", llm.Message{Role: "user", Content: "hello"})
 	if !errors.Is(err, session.ErrCorruptedSession) {
 		t.Fatalf("got %v", err)
 	}

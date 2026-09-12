@@ -1,0 +1,142 @@
+[
+  {
+    "ver": "v1",
+    "type": "auth",
+    "payload": {
+      "capabilities": [
+        "run-lifecycle-v1"
+      ],
+      "ok": true,
+      "workspace": "fixture-workspace"
+    }
+  },
+  {
+    "workspace": "fixture-workspace",
+    "ver": "v1",
+    "id": "workspace-one",
+    "type": "workspace.set",
+    "payload": {
+      "workspace": "fixture-workspace"
+    }
+  },
+  {
+    "workspace": "fixture-workspace",
+    "ver": "v1",
+    "id": "snapshot-one",
+    "type": "session.data",
+    "payload": {
+      "unsavedAvailable": false,
+      "projectionUnavailable": false,
+      "runId": "run-one",
+      "running": true,
+      "events": [
+        {
+          "runId": "run-one",
+          "sessionId": "session-one",
+          "type": "text",
+          "text": "working"
+        }
+      ],
+      "pending": {
+        "ver": "v1",
+        "type": "permission.req",
+        "payload": {
+          "runId": "run-one",
+          "interactionId": "approval-one",
+          "sessionId": "session-one",
+          "tool": "edit",
+          "filePath": "file.go",
+          "preview": "replace"
+        }
+      },
+      "id": "session-one",
+      "messages": [
+        {
+          "role": "user",
+          "content": "edit file"
+        }
+      ]
+    }
+  },
+  {
+    "workspace": "fixture-workspace",
+    "ver": "v1",
+    "type": "permission.req",
+    "payload": {
+      "runId": "run-one",
+      "interactionId": "approval-one",
+      "sessionId": "session-one",
+      "tool": "edit",
+      "filePath": "file.go",
+      "preview": "replace"
+    }
+  },
+  {
+    "workspace": "fixture-workspace",
+    "ver": "v1",
+    "type": "interaction.done",
+    "payload": {
+      "interactionId": "approval-one",
+      "runId": "run-one",
+      "sessionId": "session-one"
+    }
+  },
+  {
+    "workspace": "fixture-workspace",
+    "ver": "v1",
+    "type": "delta",
+    "payload": {
+      "runId": "run-one",
+      "sessionId": "session-one",
+      "type": "generation",
+      "promptTokens": 30,
+      "completionTokens": 12,
+      "totalTokens": 42
+    }
+  },
+  {
+    "workspace": "fixture-workspace",
+    "ver": "v1",
+    "type": "done",
+    "payload": {
+      "sessionId": "session-one",
+      "runId": "run-one",
+      "status": "persistence_failed",
+      "persisted": false,
+      "error": "disk full",
+      "code": "persistence_failed"
+    }
+  },
+  {
+    "workspace": "fixture-workspace",
+    "ver": "v1",
+    "id": "reconnect-one",
+    "type": "session.data",
+    "payload": {
+      "outcome": {
+        "sessionId": "session-one",
+        "runId": "run-one",
+        "status": "persistence_failed",
+        "persisted": false,
+        "error": "disk full",
+        "code": "persistence_failed"
+      },
+      "unsavedAvailable": true,
+      "projectionUnavailable": false,
+      "runId": "run-one",
+      "running": false,
+      "status": "persistence_failed",
+      "id": "session-one",
+      "messages": [
+        {
+          "role": "user",
+          "content": "edit file"
+        },
+        {
+          "role": "assistant",
+          "content": "generated result"
+        }
+      ]
+    }
+  }
+]

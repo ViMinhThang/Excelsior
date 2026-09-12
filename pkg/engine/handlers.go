@@ -2,70 +2,17 @@ package engine
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os/exec"
-	"path/filepath"
-	"strconv"
 	"strings"
+	"time"
 
 	"excelsior/internal/chat"
 	"excelsior/internal/permissions"
-	"excelsior/internal/sessions"
 	"excelsior/pkg/config"
-	"excelsior/pkg/llm"
 	"excelsior/pkg/protocol"
 )
-
-// editedFiles lists files touched by edit-tool calls in the session history.
-func editedFiles(messages []llm.Message) []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, m := range messages {
-		if m.Role != "assistant" {
-			continue
-		}
-		for _, tc := range m.ToolCalls {
-			if tc.Function.Name != "edit" {
-				continue
-			}
-			var a struct {
-				FilePath string `json:"filePath"`
-			}
-			if json.Unmarshal([]byte(tc.Function.Arguments), &a) != nil || a.FilePath == "" || seen[a.FilePath] {
-				continue
-			}
-			seen[a.FilePath] = true
-			out = append(out, a.FilePath)
-		}
-	}
-	return out
-}
-
-// gitNumstat maps path -> (added, deleted) from the workspace's pending diff
-// (staged + unstaged). ponytail: session stats only cover changes not yet committed.
-func gitNumstat(dir string) map[string][2]int {
-	res := map[string][2]int{}
-	for _, args := range [][]string{{"diff", "--numstat"}, {"diff", "--cached", "--numstat"}} {
-		cmd := append([]string{"-C", dir}, args...)
-		out, err := exec.Command("git", cmd...).Output()
-		if err != nil {
-			continue
-		}
-		for _, line := range strings.Split(string(out), "\n") {
-			parts := strings.Split(strings.TrimSpace(line), "\t")
-			if len(parts) < 3 {
-				continue
-			}
-			a, _ := strconv.Atoi(parts[0]) // "-" for binaries parses to 0
-			d, _ := strconv.Atoi(parts[1])
-			cur := res[parts[2]]
-			res[parts[2]] = [2]int{cur[0] + a, cur[1] + d}
-		}
-	}
-	return res
-}
 
 // decodePayload unmarshals envelope payload into v, reporting error via sendError on failure.
 func (c *Conn) decodePayload(env protocol.Envelope, v any, label string) bool {
@@ -78,43 +25,33 @@ func (c *Conn) decodePayload(env protocol.Envelope, v any, label string) bool {
 
 // branchOf returns the current git branch of dir, or "" if not a git repo.
 // ponytail: one branch per workspace (current HEAD), not the branch at session creation; persist per-session if that matters later.
-func branchOf(dir string) string {
-	out, err := exec.Command("git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD").Output()
+func branchOf(ctx context.Context, dir string) string {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "rev-parse", "--abbrev-ref", "HEAD").Output()
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(out))
 }
 
+// handleSessionList returns basic session metadata plus the workspace's
+// current branch. Working-tree analysis is deliberately not part of the list:
+// it cannot establish which session caused an edit, and scanning histories
+// for it costs a full read of every session file.
 func (c *Conn) handleSessionList(ctx context.Context, env protocol.Envelope) {
-	metas, err := (sessions.Service{Store: c.sessionStore()}).List()
+	metas, err := c.hub.Coordinator().ListSessions(c.currentWorkspace())
 	if err != nil {
 		c.sendError(env.ID, fmt.Sprintf("list sessions: %v", err))
 		return
 	}
-	root := c.currentWorkspace()
-	branch := branchOf(root)
-	numstat := gitNumstat(root)
-	svc := sessions.Service{Store: c.sessionStore()}
+
 	sessionsList := make([]protocol.SessionInfo, 0, len(metas))
 	for _, meta := range metas {
-		added, deleted := 0, 0
-		// ponytail: loads full history per session to find touched files; cache if list feels slow
-		if msgs, err := svc.Data(meta.ID); err == nil {
-			for _, f := range editedFiles(msgs) {
-				if st, ok := numstat[filepath.Base(f)]; ok {
-					added += st[0]
-					deleted += st[1]
-				}
-			}
-		}
 		sessionsList = append(sessionsList, protocol.SessionInfo{
-			ID:      meta.ID,
-			Title:   meta.Title,
-			Count:   meta.MsgCount,
-			Branch:  branch,
-			Added:   added,
-			Deleted: deleted,
+			ID:    meta.ID,
+			Title: meta.Title,
+			Count: meta.MsgCount,
 		})
 	}
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, protocol.TypeSessionList, protocol.SessionListResp{Sessions: sessionsList}))
@@ -134,7 +71,7 @@ func (c *Conn) handleSessionCreate(ctx context.Context, env protocol.Envelope) {
 		return
 	}
 	id := newID()
-	if err := (sessions.Service{Store: c.sessionStore()}).Create(id, req.Title); err != nil {
+	if err := c.hub.Coordinator().CreateSession(c.currentWorkspace(), id, req.Title); err != nil {
 		c.sendError(env.ID, fmt.Sprintf("create session: %v", err))
 		return
 	}
@@ -148,7 +85,7 @@ func (c *Conn) handleSessionDelete(ctx context.Context, env protocol.Envelope) {
 	}
 	if err := c.hub.Coordinator().DeleteSession(c.currentWorkspace(), req.ID); err != nil {
 		if errors.Is(err, chat.ErrSessionBusy) {
-			c.sendError(env.ID, "session busy")
+			c.sendCommandError(env.ID, chat.ErrSessionBusy)
 			return
 		}
 		c.sendError(env.ID, fmt.Sprintf("delete session: %v", err))
@@ -181,9 +118,8 @@ func (c *Conn) handleSessionSubscribe(env protocol.Envelope, subscribe bool) {
 	if subscribe {
 		c.snapshot(env, req.ID)
 		return
-	} else {
-		c.unsubscribe(req.ID)
 	}
+	c.unsubscribeSession(req.ID)
 	c.sendEnvelope(protocol.NewEnvelopeWithID(env.ID, env.Type, map[string]string{"id": req.ID}))
 }
 
@@ -198,7 +134,13 @@ func (c *Conn) handleWorkspaceSet(ctx context.Context, env protocol.Envelope) {
 			c.sendError(env.ID, err.Error())
 			return
 		}
-		c.clearSubscriptions()
+		c.mu.Lock()
+		subs := c.subs
+		c.subs = make(map[string]*chat.Subscription)
+		c.mu.Unlock()
+		for _, sub := range subs {
+			sub.Close()
+		}
 		c.workspace.Set(canonicalWorkspace(resolved))
 		c.hub.logger().Info("switched workspace (per-conn)", "workspace", target)
 	}

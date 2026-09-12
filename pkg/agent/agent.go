@@ -116,6 +116,9 @@ func totalChars(msgs []llm.Message) int {
 	n := 0
 	for _, m := range msgs {
 		n += len(m.Content) + len(m.ReasoningContent)
+		for _, call := range m.ToolCalls {
+			n += len(call.ID) + len(call.Function.Name) + len(call.Function.Arguments)
+		}
 	}
 	return n
 }

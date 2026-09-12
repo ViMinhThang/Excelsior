@@ -54,28 +54,34 @@ export default function Page() {
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [projectName, setProjectName] = useState(DEFAULT_PROJECT);
   const [engineUrl, setEngineUrl] = useState(ENGINE_URL_FALLBACK);
-  const [allowAll, setAllowAll] = useState<boolean>(false);
 
   const { theme, setTheme } = useThemeContext();
   const { knownFolders, setKnownFolders } = useKnownFolders();
 
   const {
-    wsRef,
     wsState,
     sessions,
     blocks,
-    setBlocks,
     streaming,
-    setStreaming,
     ask,
     permission,
-    send,
     activeId,
-    setActiveId,
+    selectSession,
+    createSession,
+    setWorkspace,
+    deleteSession,
+    renameSession,
+    setSettings,
+    error,
+    workspace,
+    allowAll,
     usage,
-    resetUsage,
+    pushLocal,
+    startChat,
     cancelRun,
-  } = useEngine(engineUrl, { onSettings: setAllowAll });
+    replyAsk,
+    replyPermission,
+  } = useEngine(engineUrl);
 
   const isDesktop = useDesktop();
   const transcriptRef = useRef<HTMLDivElement>(null);
@@ -91,13 +97,13 @@ export default function Page() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (ask) ask._resolve({ selected: -1, answer: "", label: "" });
-      else if (permission) permission._resolve({ approved: false });
+      if (ask) replyAsk(ask, -1, "", "");
+      else if (permission) replyPermission(permission, false);
       else if (streaming) cancelRun();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ask, permission, streaming, cancelRun]);
+  }, [ask, permission, streaming, cancelRun, replyAsk, replyPermission]);
 
   // Auto-scroll transcript on new blocks / streaming state
   useEffect(() => {
@@ -112,19 +118,17 @@ export default function Page() {
         name: kf.name,
         path: kf.path,
         sessions:
-          kf.name.toLowerCase() === projectName.toLowerCase()
+          kf.path === workspace
             ? sessions.map((s) => ({
                 id: s.id,
                 title: cleanTitle(s.title),
                 updatedTime: formatTimeAgo(s.updatedAt, s.id),
                 count: s.count,
                 branch: s.branch,
-                added: s.added,
-                deleted: s.deleted,
               }))
             : [],
       })),
-    [knownFolders, projectName, sessions]
+    [knownFolders, workspace, sessions]
   );
 
   const activeSession = useMemo(
@@ -132,143 +136,60 @@ export default function Page() {
     [sessions, activeId]
   );
 
-  // One reset for "leave this session's transcript behind"
-  const resetSessionView = useCallback(() => {
-    setBlocks([]);
-    resetUsage();
-  }, [setBlocks, resetUsage]);
+  const switchWorkspace = useCallback(async (folderId?: string) => {
+    if (!folderId) return true;
+    const folder = knownFolders.find(f => f.id === folderId);
+    if (!folder?.path) return false;
+    const confirmed = await setWorkspace(folder.path);
+    if (!confirmed) return false;
+    setProjectName(folder.name); return true;
+  }, [knownFolders, setWorkspace]);
 
-  // Point the engine at another workspace when the target folder differs
-  const switchWorkspace = useCallback(
-    (folderId?: string) => {
-      if (!folderId) return;
-      const folder = knownFolders.find((f) => f.id === folderId);
-      if (folder && folder.name.toLowerCase() !== projectName.toLowerCase()) {
-        setProjectName(folder.name);
-        if (folder.path) send("workspace.set", { workspace: folder.path });
-      }
-    },
-    [knownFolders, projectName, send]
-  );
-
-  const handleSelectSession = useCallback(
-    (folderId: string, sessionId: string) => {
-      switchWorkspace(folderId);
-      setActiveId(sessionId);
-      resetSessionView();
-      send("session.data", { id: sessionId });
-    },
-    [switchWorkspace, setActiveId, resetSessionView, send]
-  );
-
-  const handleNewChat = useCallback(
-    (folderId?: string) => {
-      switchWorkspace(folderId);
-      setActiveId(null);
-      resetSessionView();
-      send("session.create", { title: "New session" });
-    },
-    [switchWorkspace, setActiveId, resetSessionView, send]
-  );
-
+  const handleSelectSession = useCallback(async (folderId:string,sessionId:string) => {
+    if (await switchWorkspace(folderId)) await selectSession(sessionId);
+  }, [switchWorkspace,selectSession]);
+  const handleNewChat = useCallback(async (folderId?:string) => {
+    if (await switchWorkspace(folderId)) await createSession();
+  }, [switchWorkspace,createSession]);
   const handleOpenFolder = useCallback(async () => {
-    if (isDesktop === false) {
-      setBlocks((prev) => [...prev, { role: "error" as const, content: "Open folder is desktop-only. Run the Electron app (`apps/electron`) to use the file dialog." }]);
-      return;
-    }
-    const picked = await window.electronAPI?.openFolderDialog?.();
-    if (!picked) return;
-
+    if (isDesktop === false) { pushLocal("Open folder is available in the desktop app."); return; }
+    const picked = await window.electronAPI?.openFolderDialog?.(); if (!picked) return;
+    if (!await setWorkspace(picked)) return;
     const name = picked.split(/[/\\]/).filter(Boolean).pop() ?? picked;
     setProjectName(name);
-    setKnownFolders((prev) => {
-      if (prev.some((f) => f.name.toLowerCase() === name.toLowerCase())) return prev;
-      const next = [...prev, { id: name.toLowerCase(), name, path: picked }];
-      try {
-        localStorage.setItem(STORAGE_KEYS.knownFolders, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
-
-    setActiveId(null);
-    resetSessionView();
-    send("workspace.set", { workspace: picked });
-    send("session.create", { title: `${name} session` });
-  }, [isDesktop, setBlocks, setKnownFolders, setActiveId, resetSessionView, send]);
-
-  const handleSendPrompt = useCallback(
-    (raw: string) => {
-      const text = raw.trim();
-      if (!text) return;
-
-      if (wsState !== "connected") {
-        setBlocks((prev) => [
-          ...prev,
-          { role: "user" as const, content: text },
-          { role: "error" as const, content: `Engine disconnected (${engineUrl}). Check Settings.` },
-        ]);
-        return;
-      }
-
-      let sessionId = activeId;
-      if (!sessionId) {
-        sessionId = String(Date.now());
-        setActiveId(sessionId);
-      }
-
-      setBlocks((prev) => [...prev, { role: "user" as const, content: text }]);
-      wsRef.current?.send(
-        JSON.stringify({
-          ver: "v1",
-          type: "chat.req",
-          payload: { sessionId, model, messages: [{ role: "user", content: text }] },
-        })
-      );
-      setStreaming(true);
-    },
-    [wsState, activeId, engineUrl, model, setBlocks, setActiveId, setStreaming, wsRef]
-  );
-
-  const handleDeleteSession = useCallback(
-    (id: string) => {
-      send("session.delete", { id });
-      if (activeId === id) {
-        setActiveId(null);
-        resetSessionView();
-      }
-    },
-    [activeId, send, setActiveId, resetSessionView]
-  );
-
-  const handleRenameSession = useCallback(
-    (id: string) => {
-      const nextTitle = window.prompt("Rename session:");
-      if (nextTitle) send("session.rename", { id, title: nextTitle });
-    },
-    [send]
-  );
-
+    setKnownFolders(prev => prev.some(f=>f.path===picked) ? prev : [...prev,{id:picked,name,path:picked}]);
+    await createSession(name+" session");
+  }, [isDesktop,pushLocal,setWorkspace,setKnownFolders,createSession]);
+  useEffect(()=>{
+    if(!workspace)return;
+    const name=workspace.split(/[/\\]/).filter(Boolean).pop()??workspace;
+    setProjectName(name);
+    setKnownFolders(prev=>prev.some(f=>f.path===workspace)?prev:[...prev.filter(f=>f.path),{id:workspace,name,path:workspace}]);
+  },[workspace,setKnownFolders]);
+  const handleSendPrompt = useCallback((raw:string) => startChat(raw,model), [startChat,model]);
+  const handleDeleteSession = useCallback((id:string) => { void deleteSession(id); }, [deleteSession]);
+  const handleRenameSession = useCallback((id:string) => { const title=window.prompt("Rename session:"); if(title)void renameSession(id,title); }, [renameSession]);
   const handleAnswerAsk = useCallback(
     (selected: number, label: string, input: string) => {
       if (!ask) return;
       const answer = selected === -1 ? input.trim() : label;
       if (!answer) return;
-      ask._resolve({ selected, answer, label: answer });
+      replyAsk(ask, selected, answer, answer);
     },
-    [ask]
+    [ask, replyAsk]
   );
 
   const handlePermissionDecision = useCallback(
     (approved: boolean) => {
-      permission?._resolve({ approved });
+      if (!permission) return;
+      replyPermission(permission, approved);
     },
-    [permission]
+    [permission, replyPermission]
   );
 
   const handleSaveAllowAll = useCallback((next: boolean) => {
-    setAllowAll(next);
-    send("settings.set", { allowAll: next, permission: next ? "allow" : "ask" });
-  }, [send]);
+    void setSettings({ allowAll: next, permission: next ? "allow" : "ask" });
+  }, [setSettings]);
 
   // Global keyboard shortcuts (below the handlers they call — no stale closures)
   useEffect(() => {
@@ -310,6 +231,7 @@ export default function Page() {
   return (
     <ErrorBoundary>
       <div className="flex flex-col h-screen w-screen bg-[var(--bg-sidebar)] text-[var(--text-main)] overflow-hidden font-sans select-none">
+        {error && <div role="alert" className="px-4 py-2 text-sm text-red-400">{error}</div>}
         <MenuBar
           onNewChat={() => handleNewChat()}
           onOpenFolder={() => void handleOpenFolder()}

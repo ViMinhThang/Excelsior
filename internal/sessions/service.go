@@ -34,20 +34,6 @@ func (s Service) List() ([]session.SessionMeta, error) {
 	return metas, nil
 }
 
-func (s Service) Data(id string) ([]llm.Message, error) {
-	record, err := s.Store.Load(id)
-	if err != nil {
-		return nil, err
-	}
-	messages := make([]llm.Message, 0, len(record.Messages))
-	for _, message := range record.Messages {
-		if message.Role != "system" {
-			messages = append(messages, message)
-		}
-	}
-	return messages, nil
-}
-
 func (s Service) Create(id, title string) error {
 	return s.Store.Save(session.Record{
 		ID:        id,

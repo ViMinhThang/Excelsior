@@ -1,6 +1,9 @@
 package chat
 
-import "excelsior/pkg/llm"
+import (
+	"encoding/json"
+	"excelsior/pkg/llm"
+)
 
 // Terminal outcome statuses.
 const (
@@ -67,11 +70,44 @@ type PendingInteraction struct {
 
 // Snapshot contains the authoritative state of a session at subscription time.
 type Snapshot struct {
-	SessionID string              `json:"sessionId"`
-	RunID     string              `json:"runId,omitempty"`
-	Running   bool                `json:"running"`
-	Messages  []llm.Message       `json:"messages"`
-	Events    []Event             `json:"events,omitempty"`
-	Pending   *PendingInteraction `json:"pending,omitempty"`
+	SessionID             string              `json:"sessionId"`
+	RunID                 string              `json:"runId,omitempty"`
+	Running               bool                `json:"running"`
+	Messages              []llm.Message       `json:"messages"`
+	Events                []Event             `json:"events,omitempty"`
+	Pending               *PendingInteraction `json:"pending,omitempty"`
+	Outcome               *Outcome            `json:"outcome,omitempty"`
+	UnsavedAvailable      bool                `json:"unsavedAvailable"`
+	ProjectionUnavailable bool                `json:"projectionUnavailable"`
 }
 
+func cloneMessages(in []llm.Message) []llm.Message {
+	out := append([]llm.Message{}, in...)
+	for i := range out {
+		out[i].ToolCalls = append([]llm.ToolCall(nil), out[i].ToolCalls...)
+	}
+	return out
+}
+func cloneEvent(e Event) Event {
+	if e.Usage != nil {
+		u := *e.Usage
+		e.Usage = &u
+	}
+	return e
+}
+func cloneEvents(in []Event) []Event {
+	out := append([]Event(nil), in...)
+	for i := range out {
+		out[i] = cloneEvent(out[i])
+	}
+	return out
+}
+func cloneSnapshot(s Snapshot) Snapshot {
+	b, _ := json.Marshal(s)
+	var out Snapshot
+	_ = json.Unmarshal(b, &out)
+	return out
+}
+func messageBytes(m []llm.Message) int { b, _ := json.Marshal(m); return len(b) }
+func eventBytes(e Event) int           { b, _ := json.Marshal(e); return len(b) }
+func snapshotBytes(s Snapshot) int     { b, _ := json.Marshal(s); return len(b) }

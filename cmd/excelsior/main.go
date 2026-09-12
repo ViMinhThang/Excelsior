@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"path/filepath"
 
 	"fmt"
 	"io"
@@ -24,7 +23,6 @@ import (
 	"excelsior/pkg/engine"
 	"excelsior/pkg/llm"
 	"excelsior/pkg/protocol"
-	"excelsior/pkg/session"
 	"excelsior/pkg/tools"
 	"excelsior/pkg/util"
 )
@@ -236,15 +234,15 @@ func runAgent(ctx context.Context, cfg config.Config, override config.Permission
 	messages := []llm.Message{{Role: "user", Content: prompt}}
 	slog.Info("agent run", "model", model, "workspace", workspace, "session", sessionID, "permission", perm)
 
-	service := chat.Service{Runner: ag}
-	if sessionID != "" {
-		service.Store = session.NewDirStore(filepath.Join(workspace, ".excelsior", "sessions"))
-	}
-	if _, err := service.Run(ctx, chat.Request{
-		SessionID: sessionID,
-		Messages:  messages,
-		OnEvent:   chatEventPrinter,
-	}); err != nil {
+	coord := chat.NewCoordinator(chat.Config{
+		NewAgent:  func(string, string) (agent.Runner, error) { return ag, nil },
+		Ephemeral: sessionID == "", PermissionHandler: permHandler,
+		QuestionHandler: func(context.Context, tools.AskRequest) (tools.AskResponse, error) {
+			return tools.AskResponse{Selected: -1}, fmt.Errorf("question needs an interactive client")
+		},
+	})
+	defer coord.Close()
+	if _, _, err := coord.Run(ctx, chat.StartCommand{Workspace: workspace, SessionID: sessionID, Model: model, Messages: messages}, chatEventPrinter); err != nil {
 		return fmt.Errorf("agent: %w", err)
 	}
 	fmt.Fprintln(os.Stderr, "")

@@ -21,13 +21,6 @@ type Service struct {
 	Store  session.Store
 }
 
-// Request contains the conversation for one turn.
-type Request struct {
-	SessionID string
-	Messages  []llm.Message
-	OnEvent   func(Event)
-}
-
 // PreparedTurn contains pre-loaded history and record for single-load execution.
 type PreparedTurn struct {
 	SessionID string
@@ -35,7 +28,7 @@ type PreparedTurn struct {
 	Messages  []llm.Message
 	Record    session.Record
 	OnEvent   func(Event)
-	OnPersist func()
+	OnPersist func() error
 }
 
 // RunPrepared executes the turn using already loaded history and updates the provided record.
@@ -44,6 +37,9 @@ func (s Service) RunPrepared(ctx context.Context, turn PreparedTurn) (*agent.Run
 		Messages: turn.Messages,
 		OnEvent: func(event agent.StreamEvent) {
 			if turn.OnEvent != nil {
+				if event.Type == "done" {
+					event.Type = "generation"
+				}
 				turn.OnEvent(Event{
 					SessionID:    turn.SessionID,
 					RunID:        turn.RunID,
@@ -60,7 +56,13 @@ func (s Service) RunPrepared(ctx context.Context, turn PreparedTurn) (*agent.Run
 			}
 		},
 	})
-	if err != nil || result == nil {
+	if err != nil {
+		return result, err
+	}
+	if result == nil {
+		return nil, errors.New("runner returned no result")
+	}
+	if err := ctx.Err(); err != nil {
 		return result, err
 	}
 	if s.Store == nil || turn.SessionID == "" {
@@ -68,7 +70,9 @@ func (s Service) RunPrepared(ctx context.Context, turn PreparedTurn) (*agent.Run
 	}
 
 	if turn.OnPersist != nil {
-		turn.OnPersist()
+		if err := turn.OnPersist(); err != nil {
+			return result, err
+		}
 	}
 
 	rec := turn.Record
@@ -85,35 +89,16 @@ func (s Service) RunPrepared(ctx context.Context, turn PreparedTurn) (*agent.Run
 	return result, nil
 }
 
-// Run executes a turn and persists the resulting replay-safe history when a
-// session store and session ID are provided. History is loaded only once.
-func (s Service) Run(ctx context.Context, req Request) (*agent.RunResult, error) {
-	var record session.Record
+// historyFrom strips placeholder system messages from a stored record.
+func historyFrom(record session.Record) []llm.Message {
 	var history []llm.Message
-	if s.Store != nil && req.SessionID != "" {
-		rec, err := s.Store.Load(req.SessionID)
-		if err != nil && !errors.Is(err, session.ErrSessionNotFound) {
-			return nil, err
+	for _, message := range record.Messages {
+		if message.Role == "system" && (message.Content == "New session" || message.Content == "(empty)") {
+			continue
 		}
-		if err == nil {
-			record = rec
-			for _, message := range record.Messages {
-				if message.Role == "system" && (message.Content == "New session" || message.Content == "(empty)") {
-					continue
-				}
-				history = append(history, message)
-			}
-		} else {
-			record = session.Record{ID: req.SessionID, CreatedAt: time.Now().UTC()}
-		}
+		history = append(history, message)
 	}
-	messages := append(history, req.Messages...)
-	return s.RunPrepared(ctx, PreparedTurn{
-		SessionID: req.SessionID,
-		Messages:  messages,
-		Record:    record,
-		OnEvent:   req.OnEvent,
-	})
+	return history
 }
 
 func withoutSystemMessages(messages []llm.Message) []llm.Message {

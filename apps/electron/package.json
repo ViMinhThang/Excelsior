@@ -7,11 +7,14 @@
   "scripts": {
     "dev": "concurrently \"next dev -p 3000\" \"wait-on http://localhost:3000 && electron .\"",
     "dev:engine": "go run ../../cmd/excelsior engine",
-    "build": "next build && electron-builder --win --linux",
+    "build": "next build && electron-builder",
     "build:win": "next build && electron-builder --win",
     "pack": "next build && electron-builder --dir",
     "lint": "tsc --noEmit",
-    "start:engine": "go run ../../cmd/excelsior engine"
+    "start:engine": "go run ../../cmd/excelsior engine",
+    "build:linux": "next build && electron-builder --linux",
+    "build:mac": "next build && electron-builder --mac",
+    "test": "node --test tests/*.test.cjs"
   },
   "dependencies": {
     "highlight.js": "^11.12.0",
@@ -26,24 +29,35 @@
     "files": [
       "main.js",
       "preload.js",
+      "desktop-runtime.cjs",
       "dist/**/*"
     ],
     "extraResources": [
       {
-        "from": "../../excelsior.exe",
-        "to": "excelsior.exe"
+        "from": "build/engine",
+        "to": "engine",
+        "filter": [
+          "excelsior",
+          "excelsior.exe"
+        ]
       }
     ],
     "win": {
       "target": "nsis"
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "executableName": "excelsior"
     },
     "directories": {
-      "buildResources": "build"
+      "buildResources": "build",
+      "output": "release"
     },
-    "asar": true
+    "asar": true,
+    "beforePack": "./build-engine.cjs",
+    "mac": {
+      "target": "dmg"
+    }
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -10,6 +10,8 @@ import (
 // Ver is the protocol version string applied to every [Envelope].
 const Ver = "v1"
 
+const RunLifecycleCapability = "run-lifecycle-v1"
+
 // Envelope is the WS frame.
 type Envelope struct {
 	Workspace string          `json:"workspace,omitempty"`
@@ -201,6 +203,9 @@ type SessionDataReq struct {
 
 // SessionDataResp contains the full message history for a session.
 type SessionDataResp struct {
+	Outcome *DoneResp `json:"outcome,omitempty"`
+	UnsavedAvailable bool `json:"unsavedAvailable"`
+	ProjectionUnavailable bool `json:"projectionUnavailable"`
 	RunID     string        `json:"runId,omitempty"`
 	Running   bool          `json:"running"`
 	Status    string        `json:"status,omitempty"`

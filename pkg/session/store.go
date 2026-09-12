@@ -56,3 +56,12 @@ type Store interface {
 	// Latest returns the most recently updated session record. Returns ErrSessionNotFound if empty.
 	Latest() (Record, error)
 }
+
+// CheckLease must succeed before any persistent read/modify/write operation.
+// In-memory and injected stores do not require an OS ownership lease.
+func CheckLease(s Store) error {
+	if leased, ok := s.(interface{ LeaseError() error }); ok {
+		return leased.LeaseError()
+	}
+	return nil
+}

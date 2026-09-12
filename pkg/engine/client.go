@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"slices"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -22,6 +24,8 @@ type WSClient struct {
 	Workspace string
 	URL       string // e.g. ws://localhost:17812/v1/ws
 	Logger    *slog.Logger
+
+	writeMu sync.Mutex // serializes writes with the Ctrl+C cancel path
 }
 
 func (c *WSClient) logger() *slog.Logger {
@@ -59,19 +63,25 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 		return err
 	}
 	defer ws.Close()
-	ws.SetReadLimit(64 << 20)
-	if err := writeEnvelope(ws, protocol.NewEnvelope(protocol.TypeAuth, map[string]string{"token": c.Token})); err != nil {
+	ws.SetReadLimit(32 << 20)
+	stopHandshake := context.AfterFunc(ctx, func() { _ = ws.Close() })
+	defer stopHandshake()
+	if err = c.write(ws, protocol.NewEnvelope(protocol.TypeAuth, map[string]string{"token": c.Token})); err != nil {
 		return err
 	}
 	auth, err := c.readEnvelope(ws)
 	if err != nil {
 		return err
 	}
-	if auth.Type != protocol.TypeAuth {
-		return fmt.Errorf("engine authentication failed")
+	var capabilities struct {
+		OK           bool
+		Capabilities []string
+	}
+	if auth.Type != protocol.TypeAuth || auth.Decode(&capabilities) != nil || !capabilities.OK || !slices.Contains(capabilities.Capabilities, protocol.RunLifecycleCapability) {
+		return fmt.Errorf("engine lacks required run lifecycle capability; update the engine")
 	}
 	if c.Workspace != "" {
-		if err := writeEnvelope(ws, protocol.NewEnvelope(protocol.TypeWorkspaceSet, protocol.WorkspaceSetReq{Workspace: c.Workspace})); err != nil {
+		if err = c.write(ws, protocol.NewEnvelopeWithID("workspace", protocol.TypeWorkspaceSet, protocol.WorkspaceSetReq{Workspace: c.Workspace})); err != nil {
 			return err
 		}
 		reply, err := c.readEnvelope(ws)
@@ -82,24 +92,31 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 			return c.handleRemoteError(reply)
 		}
 		if reply.Type != protocol.TypeWorkspaceSet {
-			return fmt.Errorf("engine workspace switch failed")
+			return fmt.Errorf("workspace selection failed")
 		}
-		if _, err := c.readEnvelope(ws); err != nil {
+		if _, err = c.readEnvelope(ws); err != nil {
 			return err
-		} // following session list
+		}
 	}
 	if req.SessionID == "" {
-		req.SessionID = newID()
+		if err = c.write(ws, protocol.NewEnvelopeWithID("create", protocol.TypeSessionCreate, protocol.SessionCreateReq{})); err != nil {
+			return err
+		}
+		reply, err := c.readEnvelope(ws)
+		if err != nil {
+			return err
+		}
+		if reply.Type == protocol.TypeError {
+			return c.handleRemoteError(reply)
+		}
+		var created protocol.SessionCreateResp
+		if reply.Type != protocol.TypeSessionCreate || reply.Decode(&created) != nil || created.ID == "" {
+			return fmt.Errorf("session creation was not acknowledged")
+		}
+		req.SessionID = created.ID
 	}
-	// A control frame safely interrupts a blocking read when the caller cancels.
-	stop := context.AfterFunc(ctx, func() {
-		_ = ws.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""), time.Now().Add(time.Second))
-		_ = ws.Close()
-	})
-	defer stop()
-
-	if err := writeEnvelope(ws, protocol.NewEnvelope(protocol.TypeChatReq, req)); err != nil {
-		return fmt.Errorf("engine write chat.req: %w: %v", ErrConnectionClosed, err)
+	if !stopHandshake() {
+		return ctx.Err()
 	}
 	if askHandler == nil {
 		askHandler = defaultAskHandler
@@ -107,9 +124,131 @@ func (c *WSClient) StreamRemote(ctx context.Context, req protocol.ChatReq, onDel
 	if permHandler == nil {
 		permHandler = defaultPermHandler
 	}
-	return c.streamLoop(ctx, ws, onDelta, askHandler, permHandler)
+	if err = c.write(ws, protocol.NewEnvelopeWithID("start", protocol.TypeChatReq, req)); err != nil {
+		return fmt.Errorf("chat.req was not sent: %w", err)
+	}
+	type received struct {
+		env protocol.Envelope
+		err error
+	}
+	incoming := make(chan received, 1)
+	finished := make(chan struct{})
+	defer close(finished)
+	go func() {
+		for {
+			env, err := c.readEnvelope(ws)
+			select {
+			case incoming <- received{env, err}:
+			case <-finished:
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	var runID string
+	var cancelDeadline <-chan time.Time
+	cancelSignal := ctx.Done()
+	var timer *time.Timer
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
+	cancelRun := func() error {
+		return c.write(ws, protocol.NewEnvelopeWithID("cancel", protocol.TypeChatCancel, map[string]string{"sessionId": req.SessionID, "runId": runID}))
+	}
+	for {
+		select {
+		case <-cancelSignal:
+			cancelSignal = nil
+			timer = time.NewTimer(3 * time.Second)
+			cancelDeadline = timer.C
+			if runID != "" {
+				if err = cancelRun(); err != nil {
+					return fmt.Errorf("chat.cancel could not be sent; run may still be active: %w", err)
+				}
+			}
+		case <-cancelDeadline:
+			return fmt.Errorf("cancellation not confirmed; inspect session %s before retrying: %w", req.SessionID, context.DeadlineExceeded)
+		case got := <-incoming:
+			if got.err != nil {
+				if ctx.Err() != nil {
+					return fmt.Errorf("cancellation not confirmed: %w", got.err)
+				}
+				return got.err
+			}
+			env := got.env
+			if env.Type == protocol.TypeSessionData {
+				if env.ID != "start" {
+					continue
+				}
+				var snap protocol.SessionDataResp
+				if err = env.Decode(&snap); err != nil {
+					return err
+				}
+				if snap.ID != req.SessionID || snap.RunID == "" {
+					return fmt.Errorf("invalid start acknowledgement")
+				}
+				runID = snap.RunID
+				if ctx.Err() != nil {
+					if err = cancelRun(); err != nil {
+						return fmt.Errorf("chat.cancel could not be sent: %w", err)
+					}
+				}
+				continue
+			}
+			if env.Type == protocol.TypeDone {
+				var o protocol.DoneResp
+				if err = env.Decode(&o); err != nil {
+					return err
+				}
+				if o.SessionID != req.SessionID || o.RunID != runID {
+					continue
+				}
+				return outcomeError(o)
+			}
+			if env.Type == protocol.TypeDelta {
+				var d protocol.Delta
+				if env.Decode(&d) != nil || d.SessionID != req.SessionID || d.RunID != runID {
+					continue
+				}
+			}
+			if env.Type == protocol.TypeAskReq || env.Type == protocol.TypePermissionReq {
+				var identity protocol.AskReq
+				if env.Decode(&identity) != nil || runID == "" || identity.SessionID != req.SessionID || identity.RunID != runID || identity.InteractionID == "" {
+					continue
+				}
+			}
+			if env.Type == protocol.TypeChatCancel {
+				continue
+			}
+			if _, err = c.dispatchEnvelope(ctx, ws, env, onDelta, askHandler, permHandler); err != nil && err != errNeedContinue {
+				return err
+			}
+		}
+	}
 }
-
+func outcomeError(o protocol.DoneResp) error {
+	if o.Status == "succeeded" && o.Persisted {
+		return nil
+	}
+	if o.Status == "canceled" {
+		return fmt.Errorf("run canceled: %w", context.Canceled)
+	}
+	return fmt.Errorf("engine run %s (%s, persisted=%t): %s", o.RunID, o.Status, o.Persisted, o.Error)
+}
+func (c *WSClient) write(ws *websocket.Conn, env protocol.Envelope) error {
+	b, err := json.Marshal(env)
+	if err != nil {
+		return err
+	}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	_ = ws.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	return ws.WriteMessage(websocket.TextMessage, b)
+}
 func parseWSURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -135,49 +274,6 @@ func dialWS(ctx context.Context, u *url.URL) (*websocket.Conn, error) {
 	return ws, nil
 }
 
-func writeEnvelope(ws *websocket.Conn, env protocol.Envelope) error {
-	b, err := json.Marshal(env)
-	if err != nil {
-		return err
-	}
-	return ws.WriteMessage(websocket.TextMessage, b)
-}
-
-func (c *WSClient) streamLoop(ctx context.Context, ws *websocket.Conn, onDelta func(protocol.Delta) error, askHandler tools.QuestionHandler, permHandler tools.PermissionHandler) error {
-	for {
-		if err := c.checkStreamContext(ctx, ws); err != nil {
-			return err
-		}
-		env, err := c.readEnvelope(ws)
-		if err != nil {
-			if err == errNeedContinue {
-				continue
-			}
-			return err
-		}
-		done, err := c.dispatchEnvelope(ctx, ws, env, onDelta, askHandler, permHandler)
-		if err == errNeedContinue {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		if done {
-			return nil
-		}
-	}
-}
-
-func (c *WSClient) checkStreamContext(ctx context.Context, ws *websocket.Conn) error {
-	select {
-	case <-ctx.Done():
-		_ = ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		return fmt.Errorf("engine read: ws context canceled: %w", ctx.Err())
-	default:
-		return nil
-	}
-}
-
 var errNeedContinue = fmt.Errorf("continue")
 
 func (c *WSClient) readEnvelope(ws *websocket.Conn) (protocol.Envelope, error) {
@@ -199,14 +295,18 @@ func (c *WSClient) dispatchEnvelope(ctx context.Context, ws *websocket.Conn, in 
 	case protocol.TypeDelta:
 		return false, c.handleDelta(in, onDelta)
 	case protocol.TypeDone:
-		return true, nil
+		var o protocol.DoneResp
+		if err := in.Decode(&o); err != nil {
+			return true, err
+		}
+		return true, outcomeError(o)
 	case protocol.TypeError:
 		return false, c.handleRemoteError(in)
 	case protocol.TypeAskReq:
 		return false, c.handleAskReq(ctx, ws, in, askHandler)
 	case protocol.TypePermissionReq:
 		return false, c.handlePermissionReq(ctx, ws, in, permHandler)
-	case protocol.TypeSessionData, protocol.TypeInteractionDone, protocol.TypePong, protocol.TypePing:
+	case protocol.TypeSessionData, protocol.TypeInteractionDone, protocol.TypePong, protocol.TypePing, protocol.TypeAskResp, protocol.TypePermissionResp, protocol.TypeChatCancel:
 		return false, nil
 	default:
 		c.logger().Warn("ws unknown type", "type", in.Type)
@@ -247,7 +347,7 @@ func (c *WSClient) handleAskReq(ctx context.Context, ws *websocket.Conn, in prot
 		c.logger().Warn("ask handler error", "err", err)
 		resp = tools.AskResponse{Selected: -1, Answer: ""}
 	}
-	_ = writeEnvelope(ws, protocol.NewEnvelope(protocol.TypeAskResp, protocol.AskResp{SessionID: ar.SessionID, RunID: ar.RunID, InteractionID: ar.InteractionID, Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}))
+	_ = c.write(ws, protocol.NewEnvelope(protocol.TypeAskResp, protocol.AskResp{SessionID: ar.SessionID, RunID: ar.RunID, InteractionID: ar.InteractionID, Selected: resp.Selected, Answer: resp.Answer, Label: resp.Label}))
 	return nil
 }
 
@@ -262,6 +362,6 @@ func (c *WSClient) handlePermissionReq(ctx context.Context, ws *websocket.Conn, 
 		c.logger().Warn("permission handler error", "err", err)
 		presp = tools.PermissionResponse{Approved: false}
 	}
-	_ = writeEnvelope(ws, protocol.NewEnvelope(protocol.TypePermissionResp, protocol.PermissionResp{SessionID: pr.SessionID, RunID: pr.RunID, InteractionID: pr.InteractionID, Approved: presp.Approved}))
+	_ = c.write(ws, protocol.NewEnvelope(protocol.TypePermissionResp, protocol.PermissionResp{SessionID: pr.SessionID, RunID: pr.RunID, InteractionID: pr.InteractionID, Approved: presp.Approved}))
 	return nil
 }

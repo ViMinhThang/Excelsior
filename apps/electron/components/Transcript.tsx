@@ -5,12 +5,12 @@ import { ArrowDown } from "lucide-react";
 import MarkdownRenderer from "./MarkdownRenderer";
 import PermissionInline from "./PermissionInline";
 import type { PermissionReq } from "../lib/protocol";
-import type { Block } from "../lib/useEngine";
+import type { Block } from "../lib/engineState";
 
 type TranscriptProps = {
   blocks: Block[];
   streaming: boolean;
-  permission?: (PermissionReq & { _resolve: (r: { approved: boolean }) => void }) | null;
+  permission?: PermissionReq | null;
   onPermissionDecision?: (approved: boolean) => void;
   onAllowAll?: () => void;
 };

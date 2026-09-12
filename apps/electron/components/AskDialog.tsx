@@ -5,7 +5,7 @@ import { HelpCircle, Send } from "lucide-react";
 import type { AskReq } from "../lib/protocol";
 
 type AskDialogProps = {
-  ask: AskReq & { _resolve: (r: { selected: number; answer: string; label: string }) => void };
+  ask: AskReq;
   onAnswer: (selected: number, label: string, input: string) => void;
 };
 

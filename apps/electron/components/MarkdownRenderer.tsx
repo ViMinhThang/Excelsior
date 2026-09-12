@@ -11,7 +11,7 @@ import {
   Square,
 } from "lucide-react";
 import CodeBlock from "./CodeBlock";
-import { parseChunks } from "../lib/markdown";
+import { parseChunks, parseMarkdownBlocks, type AlertType, type BlockToken, type TableAlign } from "../lib/markdown";
 
 type Role = "user" | "assistant" | "system" | "tool" | "reason" | "error";
 
@@ -31,7 +31,7 @@ const Inline = React.memo(function Inline({ text }: { text: string }) {
   if (!text) return null;
 
   const parts = text.split(
-    /(`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_|\[[^\]]+\]\([^)]+\)|<kbd>[^<]+<\/kbd>|https?:\/\/[^\s<)]+)/g
+    /(`[^`]+`|\*\*\*[^*]+\*\*\*|\*\*[^*]+\*\*|(?<!\w)__[^_]+__(?!\w)|~~[^~]+~~|\*[^*]+\*|(?<!\w)_[^_]+_(?!\w)|\[[^\]]+\]\([^)]+\)|<kbd>[^<]+<\/kbd>|https?:\/\/[^\s<)]+)/g
   );
 
   return (
@@ -109,16 +109,24 @@ const Inline = React.memo(function Inline({ text }: { text: string }) {
           );
         }
         if (part.startsWith("http://") || part.startsWith("https://")) {
+          let url = part;
+          let trail = "";
+          while (/[.,;:!?)]$/.test(url) && !(url.endsWith(")") && url.includes("("))) {
+            trail = url.slice(-1) + trail;
+            url = url.slice(0, -1);
+          }
           return (
-            <a
-              key={index}
-              href={part}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[var(--accent)] hover:underline break-all"
-            >
-              {part}
-            </a>
+            <React.Fragment key={index}>
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[var(--accent)] hover:underline break-all"
+              >
+                {url}
+              </a>
+              {trail}
+            </React.Fragment>
           );
         }
         return <span key={index}>{part}</span>;
@@ -128,47 +136,8 @@ const Inline = React.memo(function Inline({ text }: { text: string }) {
 });
 
 /* =========================================================================
-   Table Parser & Renderer
+   Table Renderer
    ========================================================================= */
-
-type TableAlign = "left" | "center" | "right";
-
-function parseTable(
-  lines: string[],
-  startIndex: number
-): { headers: string[]; aligns: TableAlign[]; rows: string[][]; next: number } | null {
-  if (startIndex + 1 >= lines.length) return null;
-  const header = lines[startIndex].trim();
-  const divider = lines[startIndex + 1].trim();
-  if (!header.includes("|") || !divider.includes("|") || !divider.includes("-")) return null;
-
-  const divParts = divider.split("|").map((s) => s.trim()).filter(Boolean);
-  if (divParts.length === 0 || !divParts.every((p) => /^:?-+:?$/.test(p))) return null;
-
-  const aligns: TableAlign[] = divParts.map((p) => {
-    const start = p.startsWith(":");
-    const end = p.endsWith(":");
-    if (start && end) return "center";
-    if (end) return "right";
-    return "left";
-  });
-
-  const rawHeaders = header.split("|").map((s) => s.trim());
-  const hasPipes = header.startsWith("|") && header.endsWith("|");
-  const headers = hasPipes ? rawHeaders.filter(Boolean) : rawHeaders.map((s) => s.trim()).filter(Boolean);
-  if (headers.length === 0) return null;
-
-  const rows: string[][] = [];
-  let current = startIndex + 2;
-  while (current < lines.length && lines[current].trim().includes("|") && lines[current].trim()) {
-    const cells = lines[current].split("|").map((s) => s.trim());
-    const withoutLead = lines[current].trim().startsWith("|") ? cells.slice(1) : cells;
-    const cleaned = lines[current].trim().endsWith("|") ? withoutLead.slice(0, -1) : withoutLead;
-    rows.push(cleaned);
-    current += 1;
-  }
-  return { headers, aligns, rows, next: current };
-}
 
 const Table = React.memo(function Table({
   headers,
@@ -222,149 +191,6 @@ const Table = React.memo(function Table({
     </div>
   );
 });
-
-/* =========================================================================
-   Block-level Parser & Tokens
-   ========================================================================= */
-
-type AlertType = "note" | "tip" | "important" | "warning" | "caution";
-
-type BlockToken =
-  | { type: "h"; level: number; text: string }
-  | { type: "hr" }
-  | { type: "alert"; alertType: AlertType; title: string; content: string }
-  | { type: "quote"; content: string }
-  | { type: "table"; headers: string[]; aligns: TableAlign[]; rows: string[][] }
-  | { type: "ul"; items: { text: string; checked?: boolean; level: number }[] }
-  | { type: "ol"; items: { num: number; text: string; level: number }[] }
-  | { type: "p"; text: string };
-
-function parseMarkdownBlocks(rawText: string): BlockToken[] {
-  const lines = rawText.split("\n");
-  const tokens: BlockToken[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i] ?? "";
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      i++;
-      continue;
-    }
-
-    // Horizontal Rule
-    if (/^(?:---+|\*\*\*+|___+)\s*$/.test(trimmed)) {
-      tokens.push({ type: "hr" });
-      i++;
-      continue;
-    }
-
-    // Headings # to ######
-    const hMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
-    if (hMatch) {
-      tokens.push({ type: "h", level: hMatch[1].length, text: hMatch[2].trim() });
-      i++;
-      continue;
-    }
-
-    // Table
-    const table = parseTable(lines, i);
-    if (table) {
-      tokens.push({ type: "table", headers: table.headers, aligns: table.aligns, rows: table.rows });
-      i = table.next;
-      continue;
-    }
-
-    // Blockquote or GitHub Alert
-    if (trimmed.startsWith(">")) {
-      const alertMatch = trimmed.match(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\s*(.*))?$/i);
-      if (alertMatch) {
-        const alertType = alertMatch[1].toLowerCase() as AlertType;
-        const customTitle = alertMatch[2]?.trim() || alertMatch[1].toUpperCase();
-        const contentLines: string[] = [];
-        i++;
-        while (i < lines.length && lines[i].trim().startsWith(">")) {
-          contentLines.push(lines[i].trim().replace(/^>\s?/, ""));
-          i++;
-        }
-        tokens.push({
-          type: "alert",
-          alertType,
-          title: customTitle,
-          content: contentLines.join("\n"),
-        });
-        continue;
-      } else {
-        const quoteLines: string[] = [];
-        while (i < lines.length && lines[i].trim().startsWith(">")) {
-          quoteLines.push(lines[i].trim().replace(/^>\s?/, ""));
-          i++;
-        }
-        tokens.push({ type: "quote", content: quoteLines.join("\n") });
-        continue;
-      }
-    }
-
-    // Unordered List & Task List
-    const ulMatch = line.match(/^(\s*)([-*+])\s+(.*)$/);
-    if (ulMatch) {
-      const items: { text: string; checked?: boolean; level: number }[] = [];
-      while (i < lines.length) {
-        const m = lines[i].match(/^(\s*)([-*+])\s+(.*)$/);
-        if (!m) break;
-        const indent = m[1].length;
-        const level = Math.floor(indent / 2);
-        const rest = m[3];
-        const taskMatch = rest.match(/^\[([ xX])\]\s+(.*)$/);
-        if (taskMatch) {
-          items.push({ checked: taskMatch[1].toLowerCase() === "x", text: taskMatch[2], level });
-        } else {
-          items.push({ text: rest, level });
-        }
-        i++;
-      }
-      tokens.push({ type: "ul", items });
-      continue;
-    }
-
-    // Ordered List
-    const olMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
-    if (olMatch) {
-      const items: { num: number; text: string; level: number }[] = [];
-      while (i < lines.length) {
-        const m = lines[i].match(/^(\s*)(\d+)\.\s+(.*)$/);
-        if (!m) break;
-        const indent = m[1].length;
-        const level = Math.floor(indent / 2);
-        items.push({ num: parseInt(m[2], 10), text: m[3], level });
-        i++;
-      }
-      tokens.push({ type: "ol", items });
-      continue;
-    }
-
-    // Paragraph (collect non-special lines)
-    const pLines: string[] = [];
-    while (
-      i < lines.length &&
-      lines[i].trim() &&
-      !lines[i].trim().match(/^#{1,6}\s/) &&
-      !lines[i].trim().match(/^(?:---+|\*\*\*+|___+)\s*$/) &&
-      !lines[i].trim().startsWith(">") &&
-      !lines[i].match(/^(\s*)([-*+]|\d+\.)\s/) &&
-      !parseTable(lines, i)
-    ) {
-      pLines.push(lines[i].trim());
-      i++;
-    }
-    if (pLines.length > 0) {
-      tokens.push({ type: "p", text: pLines.join(" ") });
-    }
-  }
-
-  return tokens;
-}
 
 /* =========================================================================
    Block Elements Components
@@ -463,9 +289,13 @@ function RenderBlocks({ blocks }: { blocks: BlockToken[] }) {
             return (
               <blockquote
                 key={index}
-                className="border-l-2 border-[var(--accent)] bg-[var(--bg-input)]/30 rounded-r-lg px-3.5 py-2 my-2.5 text-[13px] text-[var(--text-muted)] italic leading-relaxed"
+                className="border-l-2 border-[var(--accent)] bg-[var(--bg-input)]/30 rounded-r-lg px-3.5 py-2 my-2.5 text-[13px] text-[var(--text-muted)] italic leading-relaxed space-y-1"
               >
-                <Inline text={token.content} />
+                {token.content.split("\n").map((line, lineIdx) => (
+                  <p key={lineIdx}>
+                    <Inline text={line} />
+                  </p>
+                ))}
               </blockquote>
             );
           case "table":

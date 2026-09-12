@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os/exec"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -92,20 +90,26 @@ func runShell(ctx context.Context, dir, command string, timeoutMs *int) (string,
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(ctx, "powershell", "-NoProfile", "-Command", command)
-	} else {
-		cmd = exec.CommandContext(ctx, "sh", "-c", command)
+	cmd, start, cleanup, err := shellCommand(ctx, command)
+	if err != nil {
+		return "", err
 	}
+	defer cleanup()
+	cmd.WaitDelay = time.Second
 	cmd.Dir = dir
 	var buf shellOutput
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
-	if err := cmd.Run(); err != nil {
+	if err := start(); err != nil {
+		return "", err
+	}
+	if err := cmd.Wait(); err != nil {
 		out := buf.String()
 		if ctx.Err() == context.DeadlineExceeded {
 			return out + "\n[timeout]", nil
+		}
+		if ctx.Err() != nil {
+			return out, ctx.Err()
 		}
 		return fmt.Sprintf("%s\n[exit error: %v]", out, err), nil
 	}

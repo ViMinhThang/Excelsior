@@ -27,15 +27,18 @@ npm run build:win   # Next.js static export and Windows installer
 npm run pack       # unpacked application
 ```
 
-Build the Go executable first. Packaging copies `excelsior.exe` alongside `dist/`; frontend assets are not embedded in Go. Packaged desktop auto-spawns the local engine unless external mode is selected. An engine spawned by Electron stops when Electron exits.
+The packaging hook builds the matching Go executable for each target and copies it into resources/engine. Use build:linux or build:mac for those native targets. Frontend assets are served from the packaged excelsior://desktop origin and are not embedded in Go. Packaged desktop auto-spawns the local engine unless external mode is selected. An engine spawned by Electron stops when Electron exits.
 
 ## Environment
 
 - `EXCELSIOR_ENGINE`: external engine URL (default connection: `ws://localhost:17812/v1/ws`).
 - `EXCELSIOR_ENGINE_TOKEN`: token for that configured engine.
-- `EXCELSIOR_ENGINE_ADDR`: auto-spawn listen address, default `127.0.0.1:17812`.
+- `EXCELSIOR_ENGINE_ADDR`: shared listener/client address, default `127.0.0.1:17812`.
 - `EXCELSIOR_AUTO_ENGINE=0`: disable auto-spawn; `1` enables it in development.
 - `EXCELSIOR_TOKEN_FILE`: shared Go token-file override in a dedicated configuration directory.
-- `ELECTRON_START_URL`: renderer URL override.
+- `EXCELSIOR_WORKSPACE`: writable engine workspace; packaged default is under userData.
+- `ELECTRON_START_URL`: development renderer URL override.
 
 See the root [architecture document](../../ARCHITECTURE.md) for the protocol and process limits.
+
+Run npm test and npm run lint for contract/client/native-trust checks. After npm run pack, run node tests/installed-smoke.cjs with the unpacked executable path. This uses a temporary workspace and local fake provider to check the real renderer, persistence and owned-engine shutdown.

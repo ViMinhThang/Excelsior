@@ -67,12 +67,12 @@ Local desktop authentication is automatic. For another device, obtain the token 
 ```text
 cmd/excelsior   CLI and daemon startup
 internal/app   shared agent construction
-internal/chat  turn execution and persistence
+internal/chat  run ownership, ordered subscriptions and persistence
 internal/sessions, internal/permissions   session operations and permission policy
-pkg/engine     authenticated WebSocket transport and engine-owned runs
+pkg/engine     authenticated WebSocket transport
 pkg/protocol   shared message types
 pkg/agent, pkg/llm, pkg/tools   agent, GoAI adapter, workspace tools
-pkg/session    atomic JSON session storage
+pkg/session    leased atomic JSON session storage
 pkg/config, pkg/util   configuration and shared helpers
 apps/electron  desktop shell and frontend
 ```
@@ -92,3 +92,7 @@ go vet ./...
 go build ./...
 go test ./...
 ```
+
+### Desktop verification
+
+In apps/electron, run npm ci, npm test, npm run lint, and npm run pack. Packaging builds the matching native Go engine. Run node tests/installed-smoke.cjs with the unpacked executable path to exercise packaged startup, the mounted transcript, local test-provider persistence and shutdown. The smoke test uses temporary files and no real provider credentials.

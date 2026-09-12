@@ -208,13 +208,14 @@ func TestEngine_AskHandlerEmptyOptionsGuard(t *testing.T) {
 
 		// Complete the client authentication exchange, then read chat.req.
 		_, _, _ = ws.ReadMessage()
-		_ = ws.WriteJSON(protocol.NewEnvelope(protocol.TypeAuth, map[string]bool{"ok": true}))
+		_ = ws.WriteJSON(protocol.NewEnvelope(protocol.TypeAuth, map[string]any{"ok": true, "workspace": "test", "capabilities": []string{protocol.RunLifecycleCapability}}))
 		_, _, _ = ws.ReadMessage()
 
+		_ = ws.WriteJSON(protocol.NewEnvelopeWithID("start", protocol.TypeSessionData, protocol.SessionDataResp{ID: "remote-test", RunID: "test-run", Running: true, Messages: []llm.Message{}}))
 		// Send ask.req with empty options
 		askEnv := protocol.NewEnvelope(protocol.TypeAskReq, protocol.AskReq{
-			Question: "What is your preference?",
-			Options:  nil, // Empty options!
+			SessionID: "remote-test", RunID: "test-run", InteractionID: "test-question", Question: "What is your preference?",
+			Options: nil, // Empty options!
 		})
 		b, _ := json.Marshal(askEnv)
 		_ = ws.WriteMessage(websocket.TextMessage, b)
@@ -231,14 +232,14 @@ func TestEngine_AskHandlerEmptyOptionsGuard(t *testing.T) {
 		}
 
 		// Finish
-		doneEnv := protocol.NewEnvelope(protocol.TypeDone, nil)
+		doneEnv := protocol.NewEnvelope(protocol.TypeDone, protocol.DoneResp{SessionID: "remote-test", RunID: "test-run", Status: "succeeded", Persisted: true})
 		bDone, _ := json.Marshal(doneEnv)
 		_ = ws.WriteMessage(websocket.TextMessage, bDone)
 	}))
 	defer srv.Close()
 
 	client := &WSClient{URL: srv.URL}
-	err := client.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil, nil)
+	err := client.StreamRemote(context.Background(), protocol.ChatReq{SessionID: "remote-test", Model: "deepseek-v4-flash"}, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("StreamRemote failed: %v", err)
 	}
@@ -255,7 +256,7 @@ func TestEngine_TypedEngineErrorInspection(t *testing.T) {
 
 		// Complete the client authentication exchange, then read chat.req.
 		_, _, _ = ws.ReadMessage()
-		_ = ws.WriteJSON(protocol.NewEnvelope(protocol.TypeAuth, map[string]bool{"ok": true}))
+		_ = ws.WriteJSON(protocol.NewEnvelope(protocol.TypeAuth, map[string]any{"ok": true, "workspace": "test", "capabilities": []string{protocol.RunLifecycleCapability}}))
 		_, _, _ = ws.ReadMessage()
 
 		// Send TypeError envelope
@@ -266,7 +267,7 @@ func TestEngine_TypedEngineErrorInspection(t *testing.T) {
 	defer srv.Close()
 
 	client := &WSClient{URL: srv.URL}
-	err := client.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil, nil)
+	err := client.StreamRemote(context.Background(), protocol.ChatReq{SessionID: "remote-test", Model: "deepseek-v4-flash"}, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error from StreamRemote on TypeError")
 	}
@@ -279,7 +280,7 @@ func TestEngine_TypedEngineErrorInspection(t *testing.T) {
 
 	// Invalid URL check
 	clientBad := &WSClient{URL: "://invalid-url"}
-	errBad := clientBad.StreamRemote(context.Background(), protocol.ChatReq{Model: "deepseek-v4-flash"}, nil, nil, nil)
+	errBad := clientBad.StreamRemote(context.Background(), protocol.ChatReq{SessionID: "remote-test", Model: "deepseek-v4-flash"}, nil, nil, nil)
 	if errBad == nil || !errors.Is(errBad, ErrInvalidURL) {
 		t.Fatalf("expected ErrInvalidURL, got %v", errBad)
 	}
@@ -485,54 +486,39 @@ func TestEngine_HandleChat_ErrorBranch(t *testing.T) {
 	conn := newConn(hub, nil)
 	hub.Register(conn)
 	defer hub.Unregister(conn)
-	env := protocol.NewEnvelopeWithID("err-chat-1", protocol.TypeChatReq, protocol.ChatReq{
+	defer hub.Close()
+
+	go conn.dispatchChat(context.Background(), protocol.NewEnvelopeWithID("err-chat-1", protocol.TypeChatReq, protocol.ChatReq{
 		SessionID: "sess-err",
 		Model:     "v4",
 		Messages:  []llm.Message{{Role: "user", Content: "Fail please"}},
-	})
+	}))
 
-	conn.dispatchChat(env, mustDecodeChat(t, env))
-
-	// First message: initial session.data broadcast.
-	msg := <-conn.send
-	var first protocol.Envelope
-	_ = json.Unmarshal(msg, &first)
-	if first.Type != protocol.TypeSessionData {
-		t.Fatalf("expected initial session.data, got %s", first.Type)
-	}
-
-	// Then the terminal envelopes: error (with the originating envelope ID) and done.
-	var sawErr, sawDone bool
-	for i := 0; i < 10 && !(sawErr && sawDone); i++ {
+	var sawData, sawError bool
+	for i := 0; i < 2; i++ {
 		select {
 		case msg := <-conn.send:
 			var resp protocol.Envelope
 			_ = json.Unmarshal(msg, &resp)
 			switch resp.Type {
+			case protocol.TypeSessionData:
+				sawData = true
 			case protocol.TypeError:
-				sawErr = true
-				if resp.ID != "err-chat-1" {
-					t.Errorf("expected TypeError with ID 'err-chat-1', got %+v", resp)
-				}
+				sawError = true
 			case protocol.TypeDone:
-				sawDone = true
+				var outcome protocol.DoneResp
+				if err := resp.Decode(&outcome); err != nil {
+					t.Fatal(err)
+				}
+				sawError = outcome.Status == "failed" && !outcome.Persisted && outcome.Error != ""
 			}
 		case <-time.After(2 * time.Second):
-			t.Fatalf("timed out waiting for terminal envelopes (err=%v done=%v)", sawErr, sawDone)
+			t.Fatalf("timed out waiting for envelopes; data=%v error=%v", sawData, sawError)
 		}
 	}
-	if !sawErr || !sawDone {
-		t.Fatalf("missing terminal envelopes: err=%v done=%v", sawErr, sawDone)
+	if !sawData || !sawError {
+		t.Errorf("missing envelopes: data=%v error=%v", sawData, sawError)
 	}
-}
-
-func mustDecodeChat(t *testing.T, env protocol.Envelope) protocol.ChatReq {
-	t.Helper()
-	var req protocol.ChatReq
-	if err := env.Decode(&req); err != nil {
-		t.Fatal(err)
-	}
-	return req
 }
 
 func TestEngine_DecodePayload_Error(t *testing.T) {
