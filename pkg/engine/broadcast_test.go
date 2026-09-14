@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -50,13 +49,11 @@ func TestSessionEventsScopedByWorkspaceAndSubscription(t *testing.T) {
 	defer other.close()
 	defer hub.Close()
 
-	if _, err := coord.StartTurn(context.Background(), chat.StartCommand{
-		Workspace: ws,
-		SessionID: "session-1",
-		Messages:  []llm.Message{{Role: "user", Content: "hello"}},
-	}); err != nil {
+	h, err := coord.ReserveTurn(ws, "session-1", llm.Message{Role: "user", Content: "hello"})
+	if err != nil {
 		t.Fatal(err)
 	}
+	go coord.ExecuteTurn(chat.StartCommand{}, h)
 
 	// Drain until the terminal outcome reaches the subscribed connection.
 	for {

@@ -118,14 +118,12 @@ func TestCoordinator_SessionBusyAndMutationsBlocked(t *testing.T) {
 		t.Fatal("session should not be running yet")
 	}
 
-	runID, err := coord.StartTurn(context.Background(), StartCommand{
-		Workspace: ws,
-		SessionID: "sess-1",
-		Messages:  []llm.Message{{Role: "user", Content: "hello"}},
-	})
+	h, err := coord.ReserveTurn(ws, "sess-1", llm.Message{Role: "user", Content: "hello"})
 	if err != nil {
-		t.Fatalf("StartTurn failed: %v", err)
+		t.Fatalf("ReserveTurn failed: %v", err)
 	}
+	go coord.ExecuteTurn(StartCommand{}, h)
+	runID := h.ID
 	if runID == "" {
 		t.Fatal("empty run ID")
 	}
@@ -133,11 +131,7 @@ func TestCoordinator_SessionBusyAndMutationsBlocked(t *testing.T) {
 	<-runner.started
 
 	// Verify duplicate turn is rejected with ErrSessionBusy
-	_, dupErr := coord.StartTurn(context.Background(), StartCommand{
-		Workspace: ws,
-		SessionID: "sess-1",
-		Messages:  []llm.Message{{Role: "user", Content: "hello again"}},
-	})
+	_, dupErr := coord.ReserveTurn(ws, "sess-1", llm.Message{Role: "user", Content: "hello again"})
 	if !errors.Is(dupErr, ErrSessionBusy) {
 		t.Fatalf("expected ErrSessionBusy, got %v", dupErr)
 	}
@@ -265,14 +259,11 @@ func TestCoordinator_InjectedSaveFailureOutcomes(t *testing.T) {
 	}
 	defer unsub()
 
-	_, err = coord.StartTurn(context.Background(), StartCommand{
-		Workspace: ws,
-		SessionID: "sess-fail",
-		Messages:  []llm.Message{{Role: "user", Content: "hi"}},
-	})
+	h, err := coord.ReserveTurn(ws, "sess-fail", llm.Message{Role: "user", Content: "hi"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	go coord.ExecuteTurn(StartCommand{}, h)
 
 	// Wait for terminal outcome
 	for i := 0; i < 50; i++ {
@@ -302,14 +293,11 @@ func TestCoordinator_InjectedSaveFailureOutcomes(t *testing.T) {
 
 	// Verify next run is allowed (reservation was released)
 	coord.sessionStore = memStore
-	_, nextErr := coord.StartTurn(context.Background(), StartCommand{
-		Workspace: ws,
-		SessionID: "sess-fail",
-		Messages:  []llm.Message{{Role: "user", Content: "try again"}},
-	})
+	h2, nextErr := coord.ReserveTurn(ws, "sess-fail", llm.Message{Role: "user", Content: "try again"})
 	if nextErr != nil {
 		t.Fatalf("expected next turn to start cleanly, got %v", nextErr)
 	}
+	go coord.ExecuteTurn(StartCommand{}, h2)
 }
 
 func TestCoordinator_Cancellation(t *testing.T) {
@@ -333,14 +321,12 @@ func TestCoordinator_Cancellation(t *testing.T) {
 	_, unsub, _ := subscribeTest(coord, ws, "sess-cancel", sub)
 	defer unsub()
 
-	runID, err := coord.StartTurn(context.Background(), StartCommand{
-		Workspace: ws,
-		SessionID: "sess-cancel",
-		Messages:  []llm.Message{{Role: "user", Content: "cancel me"}},
-	})
+	h, err := coord.ReserveTurn(ws, "sess-cancel", llm.Message{Role: "user", Content: "cancel me"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	go coord.ExecuteTurn(StartCommand{}, h)
+	runID := h.ID
 
 	<-runner.started
 
@@ -417,14 +403,12 @@ func TestCoordinator_QuestionInteraction(t *testing.T) {
 	_, unsub, _ := subscribeTest(coord, ws, "sess-ask", sub)
 	defer unsub()
 
-	runID, err := coord.StartTurn(context.Background(), StartCommand{
-		Workspace: ws,
-		SessionID: "sess-ask",
-		Messages:  []llm.Message{{Role: "user", Content: "pick a db"}},
-	})
+	h, err := coord.ReserveTurn(ws, "sess-ask", llm.Message{Role: "user", Content: "pick a db"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	go coord.ExecuteTurn(StartCommand{}, h)
+	runID := h.ID
 
 	<-runner.started
 
@@ -482,14 +466,12 @@ func TestCoordinator_DisconnectSurvival(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	runID, err := coord.StartTurn(context.Background(), StartCommand{
-		Workspace: ws,
-		SessionID: "sess-survive",
-		Messages:  []llm.Message{{Role: "user", Content: "long task"}},
-	})
+	h, err := coord.ReserveTurn(ws, "sess-survive", llm.Message{Role: "user", Content: "long task"})
 	if err != nil {
 		t.Fatal(err)
 	}
+	go coord.ExecuteTurn(StartCommand{}, h)
+	runID := h.ID
 
 	<-runner.started
 

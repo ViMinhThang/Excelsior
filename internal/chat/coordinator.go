@@ -157,6 +157,18 @@ func (c *Coordinator) storeLocked(workspace string) session.Store {
 	c.stores[workspace] = st
 	return st
 }
+
+// ReserveTurn atomically claims the single active run slot for
+// (workspace, sessionID) and publishes its initial snapshot, without
+// starting the agent. The caller must pass the returned handle to
+// ExecuteTurn; if reservation fails no run is created.
+//
+// It validates incoming is non-empty, canonicalizes the workspace,
+// rejects when stopped (ErrEngineStopped) or a run is already active
+// (ErrSessionBusy), checks the store lease, loads or creates the
+// session record, appends incoming to history (ErrProjectionLimit if
+// over budget), inserts the run in "preparing" state, drops any stale
+// terminal snapshot, and notifies existing subscribers before first delta.
 func (c *Coordinator) ReserveTurn(workspace, sessionID string, incoming ...llm.Message) (*RunHandle, error) {
 	if len(incoming) == 0 {
 		return nil, errors.New("chat requires at least one message")
@@ -201,19 +213,9 @@ func (c *Coordinator) ReserveTurn(workspace, sessionID string, incoming ...llm.M
 	c.publishLocked(key, Update{Snapshot: &snap})
 	return &RunHandle{ID: run.id, Workspace: ws, SessionID: sessionID, Context: ctx, Cancel: func() { _ = c.Cancel(ws, sessionID, run.id) }, Done: run.done, run: run}, nil
 }
-func (c *Coordinator) StartTurn(ctx context.Context, cmd StartCommand) (string, error) {
-	if err := ctx.Err(); err != nil {
-		return "", err
-	}
-	h, err := c.ReserveTurn(cmd.Workspace, cmd.SessionID, cmd.Messages...)
-	if err != nil {
-		return "", err
-	}
-	go c.ExecuteTurn(cmd, h)
-	return h.ID, nil
-}
 
-// Run is the standalone CLI entry point. Remote disconnects use StartTurn instead.
+// Run is the standalone CLI entry point. Fire-and-forget callers use
+// ReserveTurn plus async ExecuteTurn instead.
 func (c *Coordinator) Run(ctx context.Context, cmd StartCommand, onEvent func(Event)) (*agent.RunResult, Outcome, error) {
 	h, err := c.ReserveTurn(cmd.Workspace, cmd.SessionID, cmd.Messages...)
 	if err != nil {
@@ -382,6 +384,11 @@ func (c *Coordinator) appendAndBroadcastEvent(run *activeRun, ev Event) {
 	}
 	c.publishLocked(sessionKey(run.workspace, run.sessionID), Update{Event: &ev})
 }
+
+// publishLocked fans one update out to every Subscription on the session key,
+// copying into each queue. A slow client's full queue evicts only that client
+// (ErrSlowSubscriber; it must Resnapshot) so one bad network never stalls the
+// rest. Caller must hold c.mu: the mutex is the delivery ordering boundary.
 func (c *Coordinator) publishLocked(key string, u Update) {
 	for sub := range c.subs[key] {
 		if !sub.enqueue(u) {
@@ -404,7 +411,6 @@ func (c *Coordinator) finish(run *activeRun, outcome Outcome, result *agent.RunR
 		snap.Events = nil
 	}
 	c.retainLocked(key, snap)
-	// Terminal delivery and release are a single ordered transition.
 	c.publishLocked(key, Update{Outcome: &outcome})
 	delete(c.runs, key)
 	run.cancel()
@@ -423,6 +429,11 @@ func (c *Coordinator) Cancel(workspace, sessionID, runID string) error {
 	}
 	return nil
 }
+
+// Subscribe registers one connection's cursor on a session. Many connections
+// (desktop, mobile, CLI) share one session key; each gets its own Subscription
+// with its own bounded queue, fed snapshot-first so late joiners and
+// reconnects see current state before live deltas.
 func (c *Coordinator) Subscribe(workspace, sessionID, requestID string) (*Subscription, error) {
 	ws := CanonicalWorkspace(workspace)
 	key := sessionKey(ws, sessionID)

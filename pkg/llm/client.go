@@ -319,4 +319,3 @@ func classifyStatus(status int) error {
 		return ErrStreamInterrupted
 	}
 }
-

@@ -277,12 +277,8 @@ func (c *Conn) snapshot(env protocol.Envelope, id string) {
 		return
 	}
 	c.mu.Lock()
-	old := c.subs[id]
 	c.subs[id] = sub
 	c.mu.Unlock()
-	if old != nil {
-		old.Close()
-	}
 	if c.isClosed() {
 		sub.Close()
 		return

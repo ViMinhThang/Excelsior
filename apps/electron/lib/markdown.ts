@@ -1,5 +1,7 @@
 // ponytail: single chunker reused by MarkdownRenderer + ToolBlock (was duplicated verbatim)
-export type ContentChunk = { type: "code"; content: string; lang?: string } | { type: "text"; content: string };
+export type ContentChunk =
+  | { type: "code"; content: string; lang?: string }
+  | { type: "text"; content: string };
 
 export function parseChunks(text: string): ContentChunk[] {
   const chunks: ContentChunk[] = [];
@@ -10,7 +12,8 @@ export function parseChunks(text: string): ContentChunk[] {
       chunks.push({ type: "text", content: remaining });
       break;
     }
-    if (start > 0) chunks.push({ type: "text", content: remaining.slice(0, start) });
+    if (start > 0)
+      chunks.push({ type: "text", content: remaining.slice(0, start) });
     const after = remaining.slice(start + 3);
     const end = after.indexOf("```");
     if (end === -1) {
@@ -53,15 +56,25 @@ export type BlockToken =
 
 function parseTable(
   lines: string[],
-  startIndex: number
-): { headers: string[]; aligns: TableAlign[]; rows: string[][]; next: number } | null {
+  startIndex: number,
+): {
+  headers: string[];
+  aligns: TableAlign[];
+  rows: string[][];
+  next: number;
+} | null {
   if (startIndex + 1 >= lines.length) return null;
   const header = lines[startIndex].trim();
   const divider = lines[startIndex + 1].trim();
-  if (!header.includes("|") || !divider.includes("|") || !divider.includes("-")) return null;
+  if (!header.includes("|") || !divider.includes("|") || !divider.includes("-"))
+    return null;
 
-  const divParts = divider.split("|").map((s) => s.trim()).filter(Boolean);
-  if (divParts.length === 0 || !divParts.every((p) => /^:?-+:?$/.test(p))) return null;
+  const divParts = divider
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (divParts.length === 0 || !divParts.every((p) => /^:?-+:?$/.test(p)))
+    return null;
 
   const aligns: TableAlign[] = divParts.map((p) => {
     const start = p.startsWith(":");
@@ -74,7 +87,9 @@ function parseTable(
   // ponytail: \u0001 sentinel so escaped \| survives the split
   const splitCells = (line: string) => {
     const replaced = line.trim().replace(/\\\|/g, "\u0001");
-    let cells = replaced.split("|").map((s) => s.trim().replace(/\u0001/g, "|"));
+    let cells = replaced
+      .split("|")
+      .map((s) => s.trim().replace(/\u0001/g, "|"));
     if (replaced.startsWith("|")) cells = cells.slice(1);
     if (replaced.endsWith("|")) cells = cells.slice(0, -1);
     return cells;
@@ -85,14 +100,19 @@ function parseTable(
 
   const rows: string[][] = [];
   let current = startIndex + 2;
-  while (current < lines.length && lines[current].trim().includes("|") && lines[current].trim()) {
+  while (
+    current < lines.length &&
+    lines[current].trim().includes("|") &&
+    lines[current].trim()
+  ) {
     rows.push(splitCells(lines[current]));
     current += 1;
   }
   return { headers, aligns, rows, next: current };
 }
 
-const listLevel = (indent: string) => Math.round(indent.replace(/\t/g, "  ").length / 4);
+const listLevel = (indent: string) =>
+  Math.round(indent.replace(/\t/g, "  ").length / 4);
 
 export function parseMarkdownBlocks(rawText: string): BlockToken[] {
   const lines = rawText.split("\n");
@@ -118,7 +138,11 @@ export function parseMarkdownBlocks(rawText: string): BlockToken[] {
     // Headings # to ######
     const hMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (hMatch) {
-      tokens.push({ type: "h", level: hMatch[1].length, text: hMatch[2].replace(/\s+#+\s*$/, "").trim() });
+      tokens.push({
+        type: "h",
+        level: hMatch[1].length,
+        text: hMatch[2].replace(/\s+#+\s*$/, "").trim(),
+      });
       i++;
       continue;
     }
@@ -126,14 +150,21 @@ export function parseMarkdownBlocks(rawText: string): BlockToken[] {
     // Table
     const table = parseTable(lines, i);
     if (table) {
-      tokens.push({ type: "table", headers: table.headers, aligns: table.aligns, rows: table.rows });
+      tokens.push({
+        type: "table",
+        headers: table.headers,
+        aligns: table.aligns,
+        rows: table.rows,
+      });
       i = table.next;
       continue;
     }
 
     // Blockquote or GitHub Alert
     if (trimmed.startsWith(">")) {
-      const alertMatch = trimmed.match(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\s*(.*))?$/i);
+      const alertMatch = trimmed.match(
+        /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\s*(.*))?$/i,
+      );
       const isAlert = !!alertMatch;
       const collected: string[] = [];
       while (i < lines.length && lines[i].trim().startsWith(">")) {
@@ -142,8 +173,14 @@ export function parseMarkdownBlocks(rawText: string): BlockToken[] {
       }
       if (isAlert) {
         const alertType = alertMatch![1].toLowerCase() as AlertType;
-        const customTitle = alertMatch![2]?.trim() || alertMatch![1].toUpperCase();
-        tokens.push({ type: "alert", alertType, title: customTitle, content: collected.join("\n") });
+        const customTitle =
+          alertMatch![2]?.trim() || alertMatch![1].toUpperCase();
+        tokens.push({
+          type: "alert",
+          alertType,
+          title: customTitle,
+          content: collected.join("\n"),
+        });
       } else {
         tokens.push({ type: "quote", content: collected.join("\n") });
       }
@@ -161,7 +198,11 @@ export function parseMarkdownBlocks(rawText: string): BlockToken[] {
         const rest = m[3];
         const taskMatch = rest.match(/^\[([ xX])\]\s+(.*)$/);
         if (taskMatch) {
-          items.push({ checked: taskMatch[1].toLowerCase() === "x", text: taskMatch[2], level });
+          items.push({
+            checked: taskMatch[1].toLowerCase() === "x",
+            text: taskMatch[2],
+            level,
+          });
         } else {
           items.push({ text: rest, level });
         }
@@ -178,7 +219,11 @@ export function parseMarkdownBlocks(rawText: string): BlockToken[] {
       while (i < lines.length) {
         const m = lines[i].match(/^(\s*)(\d+)\.\s+(.*)$/);
         if (!m) break;
-        items.push({ num: parseInt(m[2], 10), text: m[3], level: listLevel(m[1]) });
+        items.push({
+          num: parseInt(m[2], 10),
+          text: m[3],
+          level: listLevel(m[1]),
+        });
         i++;
       }
       tokens.push({ type: "ol", items });

@@ -10,7 +10,8 @@ export function formatTimeAgo(updatedAt?: string, id?: string): string {
 
   if (updatedAt) {
     const date = new Date(updatedAt);
-    if (!Number.isNaN(date.getTime())) return formatDiff(Date.now() - date.getTime());
+    if (!Number.isNaN(date.getTime()))
+      return formatDiff(Date.now() - date.getTime());
   }
 
   if (id && /^\d+$/.test(id)) {
