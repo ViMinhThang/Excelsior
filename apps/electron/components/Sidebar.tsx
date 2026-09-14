@@ -27,7 +27,7 @@ type SidebarProps = {
   onSelectSession: (folderId: string, sessionId: string) => void;
   onNewSession?: (folderId: string) => void;
   onDeleteSession?: (id: string) => void;
-  onRenameSession?: (id: string) => void;
+  onRenameSession?: (id: string, title: string) => void;
   onOpenFolder: () => void;
   onOpenSettings: () => void;
 };
@@ -48,13 +48,40 @@ const SessionRow = React.memo(function SessionRow({
   onRenameSession?: SidebarProps["onRenameSession"];
 }) {
   const handleSelect = useCallback(() => onSelectSession(folderId, session.id), [folderId, onSelectSession, session.id]);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(session.title);
+
+  const startEdit = useCallback(() => {
+    setDraft(session.title);
+    setEditing(true);
+  }, [session.title]);
+
+  const commit = useCallback(() => {
+    const trimmed = draft.trim();
+    setEditing(false);
+    if (trimmed && trimmed !== session.title) {
+      onRenameSession?.(session.id, trimmed);
+    }
+  }, [draft, session.id, session.title, onRenameSession]);
+
+  const cancel = useCallback(() => {
+    setEditing(false);
+  }, []);
 
   return (
     <div
       role="button"
       tabIndex={0}
       onClick={handleSelect}
+      onDoubleClick={() => {
+        if (onRenameSession) {
+          startEdit();
+        }
+      }}
       onKeyDown={(e) => {
+        if (editing) {
+          return;
+        }
         if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           handleSelect();
@@ -68,7 +95,30 @@ const SessionRow = React.memo(function SessionRow({
     >
       <div className="min-w-0 flex-1 pl-1">
         <div className="flex items-center gap-1.5 text-[12.5px] truncate">
-          <span className="truncate">{cleanTitle(session.title)}</span>
+          {editing ? (
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commit}
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commit();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancel();
+                }
+              }}
+              aria-label={`Rename ${session.title}`}
+              className="w-full bg-transparent outline-none border-b border-[var(--text-dim)] text-[var(--text-main)]"
+            />
+          ) : (
+            <span className="truncate">{cleanTitle(session.title)}</span>
+          )}
         </div>
         <div className="flex items-center gap-2 text-[10.5px] text-[var(--text-dim)] mt-0.5">
           {session.updatedTime && <span>{session.updatedTime}</span>}
@@ -87,7 +137,7 @@ const SessionRow = React.memo(function SessionRow({
         {onRenameSession && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onRenameSession(session.id); }}
+            onClick={(e) => { e.stopPropagation(); startEdit(); }}
             aria-label={`Rename ${session.title}`}
             className="p-1 rounded hover:bg-[var(--bg-card-hover)] text-[var(--text-dim)] hover:text-[var(--text-main)] transition-colors"
           >

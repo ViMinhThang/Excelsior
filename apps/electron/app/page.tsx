@@ -168,7 +168,7 @@ export default function Page() {
   },[workspace,setKnownFolders]);
   const handleSendPrompt = useCallback((raw:string) => startChat(raw,model), [startChat,model]);
   const handleDeleteSession = useCallback((id:string) => { void deleteSession(id); }, [deleteSession]);
-  const handleRenameSession = useCallback((id:string) => { const title=window.prompt("Rename session:"); if(title)void renameSession(id,title); }, [renameSession]);
+  const handleRenameSession = useCallback((id:string, title:string) => { const trimmed=title.trim(); if(trimmed)void renameSession(id,trimmed); }, [renameSession]);
   const handleAnswerAsk = useCallback(
     (selected: number, label: string, input: string) => {
       if (!ask) return;

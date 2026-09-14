@@ -19,14 +19,14 @@ const Transcript = forwardRef<HTMLDivElement, TranscriptProps>(function Transcri
   { blocks, streaming, permission, onPermissionDecision, onAllowAll },
   ref
 ) {
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [showJump, setShowJump] = useState(false);
+
   const visible = blocks.filter((b) => b.role !== "system");
 
   if (visible.length === 0) {
     return <div className="flex-1" />;
   }
-
-  const innerRef = useRef<HTMLDivElement | null>(null);
-  const [showJump, setShowJump] = useState(false);
 
   const setRef = (el: HTMLDivElement | null) => {
     innerRef.current = el;
